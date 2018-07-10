@@ -1,0 +1,27 @@
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "allowSyntheticDefaultImports": true,
+    "allowUnreachableCode": false,
+    "experimentalDecorators": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "declaration": true,
+    "moduleResolution": "node",
+    "target": "es2015",
+    "module": "es2015",
+    "lib": [
+      "dom",
+      "es2017"
+    ],
+    "outDir": "lib"
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "src/**/*.spec.*",
+    "src/**/*.test.*"
+  ]
+}
