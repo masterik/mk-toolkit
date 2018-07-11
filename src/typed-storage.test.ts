@@ -1,5 +1,5 @@
-import { TypedStorage } from '../typed-storage';
-import { TypedKey } from '../types';
+import { TypedStorage } from './typed-storage';
+import { TypedKey } from './types';
 
 class TestClass {
   readonly foo: string;
@@ -54,8 +54,7 @@ describe('setItem', () => {
     expect(localStorage.getItem('test_key')).toBe(expectedValue);
   });
 
-  it.each(['', 'test', 0, 1, true, false, new Date() ])
-  ('should serialize primitive values to json: %o', value => {
+  it.each(['', 'test', 0, 1, true, false, new Date() ])('should serialize primitive values to json: %o', value => {
     const storage = new TypedStorage(localStorage);
 
     storage.setItem('test_key', value);
@@ -64,8 +63,7 @@ describe('setItem', () => {
     expect(localStorage.getItem('test_key')).toBe(expectedValue);
   });
 
-  it.each([{}, new TestClass(), [], { foo: 'bar' }])
-  ('should serialize other values to json: %o', value => {
+  it.each([{}, new TestClass(), [], { foo: 'bar' }])('should serialize other values to json: %o', value => {
     const storage = new TypedStorage(localStorage);
 
     storage.setItem('test_key', value);
@@ -74,8 +72,7 @@ describe('setItem', () => {
     expect(localStorage.getItem('test_key')).toBe(expectedValue);
   });
 
-  it.each([undefined, null])
-  ('should not store non-serializable values: %o', value => {
+  it.each([undefined, null])('should not store non-serializable values: %o', value => {
     const storage = new TypedStorage(localStorage);
 
     storage.setItem('test_key', value);

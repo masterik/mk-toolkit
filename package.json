@@ -9,12 +9,12 @@
   ],
   "scripts": {
     "start": "tsc --watch",
-    "build": "npm run clean && tsc",
-    "clean": "rm -rf ./lib ./coverage",
+    "build": "npm run clean && npm run lint && tsc",
+    "clean": "rm -rf ./lib",
     "test": "jest",
     "test.watch": "jest --watch",
     "lint": "tslint --project ./tsconfig.json",
-    "prepublishOnly": "npm run lint && npm run build"
+    "prepublishOnly": "npm test && npm run build"
   },
   "devDependencies": {
     "@types/jest": "^23.1.5",
