@@ -1,40 +1,41 @@
 import { TypedKey } from './types';
-import { isPrimitive } from './helpers';
 
 export class TypedStorage {
   constructor(private readonly storage: Storage) { }
 
-  // getItem<T extends Primitive>(key: string): T
-  // getItem<T extends Copyable>(key: TypedKey<T>): T
-  // getItem<T>(key: string | TypedKey<T>): T {
-  //   const stringValue = this.storage.getItem(key);
-  //   if (!stringValue) {
-  //     return null;
-  //   }
+  getItem<T = string>(key: string | TypedKey<T>): T {
+    const storageKey = getStorageKey(key);
 
-  //   try {
-  //     const value: T = JSON.parse(stringValue);
+    const stringValue = this.storage.getItem(storageKey);
+    if (!stringValue) {
+      return null;
+    }
 
-  //     if (klass) {
-  //       return new klass(value);
-  //     } else {
-  //       return value;
-  //     }
-  //   } catch (error) {
-  //     return null;
-  //   }
-  // }
+    try {
+      const value: T = JSON.parse(stringValue);
 
-  setItem<T>(key: string | TypedKey<T>, item: any): void {
+      if (typeof key === 'string') {
+        return value;
+      } else {
+        return new key.type(value);
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  setItem<T>(key: string | TypedKey<T>, item: T): void {
     if (item === undefined || item === null || typeof item === 'function') {
       return;
     }
 
-    const storageKey = typeof key === 'string' ? key : key.key;
-    const storageValue = isPrimitive(item)
-      ? '' + item
-      : JSON.stringify(item);
+    const storageKey = getStorageKey(key);
+    const storageValue = JSON.stringify(item);
 
     this.storage.setItem(storageKey, storageValue);
   }
+}
+
+function getStorageKey<T>(key: string | TypedKey<T>) {
+  return typeof key === 'string' ? key : key.key;
 }

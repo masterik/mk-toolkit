@@ -10,6 +10,7 @@
     "quotemark": [true, "single", "jsx-double"],
     "trailing-comma": false,
     "arrow-parens": false,
-    "no-string-literal": false
+    "no-string-literal": false,
+    "no-consecutive-blank-lines": false
   }
 }
