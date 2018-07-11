@@ -34,6 +34,15 @@ export class TypedStorage {
 
     this.storage.setItem(storageKey, storageValue);
   }
+
+  removeItem<T>(key: string | TypedKey<T>): void {
+    const storageKey = getStorageKey(key);
+    this.storage.removeItem(storageKey);
+  }
+
+  clear(): void {
+    this.storage.clear();
+  }
 }
 
 function getStorageKey<T>(key: string | TypedKey<T>) {

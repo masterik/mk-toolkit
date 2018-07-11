@@ -12,9 +12,21 @@ class TestClass {
 describe('setItem', () => {
   beforeEach(() => localStorage.clear());
 
-  it('should store value to web storage', () => {
+  it('should store item to web storage', () => {
     const storage = new TypedStorage(localStorage);
 
+    storage.setItem('test_key', 'test_value');
+
+    const expectedValue = JSON.stringify('test_value');
+    expect(localStorage.setItem).toHaveBeenLastCalledWith('test_key', expectedValue);
+    expect(localStorage.getItem('test_key')).toBe(expectedValue);
+  });
+
+  it('should replace item when exists', () => {
+    localStorage.setItem('test_key', 'initial_value');
+    expect(localStorage.getItem('test_key')).toBe('initial_value');
+
+    const storage = new TypedStorage(localStorage);
     storage.setItem('test_key', 'test_value');
 
     const expectedValue = JSON.stringify('test_value');
@@ -153,5 +165,46 @@ describe('getItem', () => {
 
     expect(value).toEqual(testValue);
     expect(value instanceof TestClass).toBe(true);
+  });
+});
+
+
+describe('removeItem', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('should remove item from web storage', () => {
+    const storage = new TypedStorage(localStorage);
+    storage.setItem('test_key', 'test_value');
+    expect(localStorage.getItem('test_key')).toBeTruthy();
+
+    storage.removeItem('test_key');
+
+    expect(localStorage.removeItem).toHaveBeenLastCalledWith('test_key');
+    expect(localStorage.getItem('test_key')).toBeFalsy();
+  });
+
+  it('should not throw when item not exists', () => {
+    const storage = new TypedStorage(localStorage);
+    expect(localStorage.getItem('test_key')).toBeFalsy();
+
+    expect(() => storage.removeItem('test_key')).not.toThrow();
+    expect(localStorage.removeItem).toHaveBeenLastCalledWith('test_key');
+  });
+});
+
+
+describe('clear', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('should clear web storage', () => {
+    localStorage.setItem('test_key', 'test_value');
+    expect(localStorage.getItem('test_key')).toBeTruthy();
+
+    const storage = new TypedStorage(localStorage);
+    const value = storage.clear();
+
+    expect(localStorage.clear).toHaveBeenLastCalledWith();
+    expect(localStorage.getItem('test_key')).toBeFalsy();
+    expect(localStorage.length).toBe(0);
   });
 });
