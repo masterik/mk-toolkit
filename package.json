@@ -1,50 +1,17 @@
 {
-  "name": "typed-storage",
-  "version": "0.1.0",
-  "description": "Typescript strong-typed wrapper for web storage (localStorage or sessionStorage)",
-  "main": "./lib/index.js",
-  "typings": "./lib/index.d.ts",
-  "files": [
-    "lib"
-  ],
-  "scripts": {
-    "start": "tsc --watch",
-    "build": "npm run clean && npm run lint && tsc",
-    "clean": "rm -rf ./lib",
-    "test": "jest",
-    "test.watch": "jest --watch",
-    "lint": "tslint --project ./tsconfig.json",
-    "prepublishOnly": "npm test && npm run build"
-  },
+  "name": "@mk/toolkit",
+  "version": "0.0.0",
+  "private": true,
   "devDependencies": {
     "@types/jest": "^23.1.5",
     "jest": "^23.4.0",
-    "jest-localstorage-mock": "^2.2.0",
+    "lerna": "^2.11.0",
     "ts-jest": "^23.0.0",
     "tslint": "^5.10.0",
-    "tslint-language-service": "0.9.9",
-    "typescript": "~2.9.2"
+    "tslint-language-service": "^0.9.9",
+    "typescript": "^2.9.2"
   },
-  "jest": {
-    "moduleFileExtensions": [
-      "ts",
-      "tsx",
-      "js"
-    ],
-    "transform": {
-      "^.+\\.(ts|tsx)$": "ts-jest"
-    },
-    "globals": {
-      "ts-jest": {
-        "tsConfigFile": "tsconfig.jest.json"
-      }
-    },
-    "testMatch": [
-      "**/__tests__/*.+(ts|tsx|js)",
-      "**/?(*.)+(spec|test).+(ts|tsx|js)"
-    ],
-    "setupFiles": [
-      "jest-localstorage-mock"
-    ]
-  }
+  "workspaces": [
+    "packages/*"
+  ]
 }
