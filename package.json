@@ -2,6 +2,10 @@
   "name": "@mk/toolkit",
   "version": "0.0.0",
   "private": true,
+  "scripts": {
+    "test": "cd ./packages/typed-storage && yarn test",
+    "build": "cd ./packages/typed-storage && yarn build"
+  },
   "devDependencies": {
     "@types/jest": "^23.1.5",
     "jest": "^23.4.0",
