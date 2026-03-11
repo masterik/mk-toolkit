@@ -1,39 +1,88 @@
 # ForgeZ — Phase 1
 
 ## Overview
-Phase 1 delivers a personal CLI wrapper (`forge-zed`, aliased as `fz`) that orchestrates Worktrunk, GitHub CLI, and Claude Code into a single fast workflow helper.
+Phase 1 adds worktree support to the Phase 0 CLI. Every feature can now optionally live in a parallel filesystem worktree, enabling true multi-feature parallelism without stashing or switching branches. Phase 0 commands continue to work unchanged; worktrees are opt-in via `--worktree`.
 
-## Command Specification
+---
 
-### Feature lifecycle
+## New Use Cases
 
-| Command | Description |
-|---------|-------------|
-| `fz start <branch-name> [--no-worktree]` | Create/switch feature branch, with or without worktree |
-| `fz finish` | Local merge flow with clean-tree guardrail |
-| `fz archive` | Remove feature branch/worktree that was already merged remotely |
+See [`docs/use-cases.md`](use-cases.md) — Phase 1 enables the worktree variants: **UC3b** and **UC4** with `--worktree`, and extends UC5 with `fz start --on <branch> --worktree`.
 
-### Daily workflow
+---
 
-| Command | Description |
-|---------|-------------|
-| `fz commit` | AI-assisted commit |
-| `fz pr` | AI-assisted PR creation with clean-tree guardrail |
+## Command Changes
 
-### Visibility
+### Modified Commands
 
-| Command | Description |
-|---------|-------------|
-| `fz list` | List active features/worktrees with branch and PR status |
-| `fz log` | Show git log for current feature |
-| `fz status` | Show PR status if a PR is attached to the current branch |
+| Command | Phase 0 | Phase 1 addition |
+|---------|---------|-----------------|
+| `fz start <name>` | Creates branch | `--worktree` flag: also creates a parallel worktree and switches to it |
+| `fz merge [<name>]` | Merges branch, deletes it | Also removes worktree if present |
+| `fz close [<name>]` | Deletes branch | Also removes worktree if present |
+| `fz drop [<name>]` | Deletes branch | Also removes worktree if present |
+| `fz list` | Lists branches + PR status | Also shows worktree path |
 
-## Implementation
+No new top-level commands are introduced in Phase 1.
 
-### Stack
-**Bun + openTUI.** The `list`, `status`, and `log` commands require structured output formatting and `gh` JSON parsing that becomes awkward in bash. openTUI provides the rendering layer for these views and establishes the foundation for Phase 2's persistent multi-session workspace without requiring a rewrite.
+---
 
-### Tool integrations
-- **Worktrunk** — branch/worktree flows
-- **GitHub CLI** — remote operations (push/PR/status)
-- **Claude Code** — agent-assisted commit and PR workflows
+## Detailed Behaviour Changes
+
+### `fz start --worktree`
+1. All Phase 0 `fz start` steps apply.
+2. Additionally: use `wt` (Worktrunk) to create a worktree at `../<repo>-<name>`.
+3. Switch terminal to the new worktree directory.
+4. Store worktree path in feature metadata.
+
+### `fz merge` (worktree-aware)
+After the merge succeeds:
+- If a worktree is registered for the feature, remove it (`wt remove` or `git worktree remove`).
+- Then delete the branch as before.
+
+### `fz close` (worktree-aware)
+After branch deletion:
+- If a worktree is registered, remove it.
+
+### `fz drop` (worktree-aware)
+After branch deletion:
+- If a worktree is registered, remove it.
+
+---
+
+## Feature Metadata
+
+Phase 1 adds a `worktree` field to the existing metadata schema:
+
+```json
+{
+  "features": [
+    {
+      "name": "feature-b",
+      "branch": "feature-b",
+      "base": "feature-a",
+      "worktree": "../project-feature-b",
+      "pr": 42
+    }
+  ]
+}
+```
+
+`worktree` is omitted (or `null`) for features created without `--worktree`.
+
+---
+
+## Tool Integrations Added
+
+| Tool | Used for |
+|------|----------|
+| **Worktrunk (`wt`)** | Worktree creation and removal via `fz start --worktree` |
+
+All Phase 0 integrations (git, gh, Claude Code, serie) remain unchanged.
+
+---
+
+## Phased delivery
+1. `fz start --worktree` — worktree creation
+2. `fz merge` / `fz close` / `fz drop` worktree cleanup
+3. `fz list` worktree path column
