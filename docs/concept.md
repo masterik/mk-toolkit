@@ -1,7 +1,7 @@
-# Feature Workflow Tool Concept
+# ForgeZ — Concept
 
 ## Summary
-`feat` starts as a personal workflow helper around tools that already work well: Worktrunk, GitHub CLI, and Claude Code (with other agents/tools evaluated over time).
+`forge-zed` (ForgeZ) starts as a personal workflow helper around tools that already work well: Worktrunk, GitHub CLI, and Claude Code (with other agents/tools evaluated over time).
 The goal is faster iteration with fewer manual steps, then gradual evolution into a local-first app.
 
 ## Phase 1: Personal Wrapper on Existing Tools
@@ -18,24 +18,7 @@ Phase 1 is intentionally narrow: this is a wrapper/helper for my own workflow, n
 - Claude Code for agent-assisted actions (commit/PR workflows).
 - Other agents can be evaluated and plugged in later.
 
-### Command model
-
-**Feature lifecycle:**
-- `feat start <branch-name> [--no-worktree]`: create/switch feature branch, with or without worktree.
-- `feat finish`: local merge flow with clean-tree guardrail.
-- `feat archive`: remove feature branch/worktree that was already merged remotely.
-
-**Daily workflow:**
-- `feat commit`: AI-assisted commit.
-- `feat pr`: AI-assisted PR creation with clean-tree guardrail.
-
-**Visibility:**
-- `feat list`: list active features/worktrees with branch and PR status.
-- `feat log`: show git log for current feature.
-- `feat status`: show PR status if a PR is attached to the current branch.
-
-### Tooling decision
-Phase 1 uses **Bun + openTUI**. The `list`, `status`, and `log` commands require structured output formatting and `gh` JSON parsing that becomes awkward in bash. openTUI provides the rendering layer for these views and establishes the foundation for Phase 2's persistent multi-session workspace without requiring a rewrite.
+See [prd-phase-1.md](./prd-phase-1.md) for command specification and implementation details.
 
 ## Phase 2: Local App (Desktop or TUI)
 Phase 2 expands from helper to workspace control plane, similar in spirit to the Codex macOS app but centered on Claude Code.
