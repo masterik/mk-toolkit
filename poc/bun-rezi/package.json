@@ -1,0 +1,17 @@
+{
+  "name": "poc-bun-rezi",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/main.ts"
+  },
+  "dependencies": {
+    "@rezi-ui/core": "latest",
+    "@rezi-ui/node": "latest"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.0.0"
+  }
+}
