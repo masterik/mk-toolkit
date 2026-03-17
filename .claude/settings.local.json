@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bun:*)",
+      "Bash(cp:*)",
+      "Bash(cd:*)",
+      "Read(//Users/mk/.cargo/bin/**)",
+      "Read(//Users/mk/.rustup/toolchains/**)",
+      "Bash(export:*)",
+      "Bash(gtimeout:*)",
+      "Bash(rsync:*)"
+    ]
+  }
+}
