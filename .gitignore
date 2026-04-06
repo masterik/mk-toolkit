@@ -28,3 +28,10 @@ bun-debug.log*
 # POC build artifacts
 poc/go-charm/fz-commit
 poc/rust-ratatui/target/
+
+# Agent and Claude config (local only)
+.agents/
+.claude/
+!.claude/
+.claude/*
+!.claude/settings.json
