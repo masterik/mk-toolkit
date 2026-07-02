@@ -1,9 +1,4 @@
 {
   "name": "forge-zed",
-  "private": true,
-  "workspaces": ["apps/*"],
-  "scripts": {
-    "dev": "bun run apps/cli/src/index.tsx",
-    "typecheck": "tsc --build"
-  }
+  "private": true
 }
