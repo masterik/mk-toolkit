@@ -1,6 +1,6 @@
 {
-  "name": "forgez",
-  "description": "ForgeZ — a git feature-workflow plugin for Claude Code: a cohesive set of skills that take work from edits → committed → integrated (commit, create-pr, review-changes, finish-feature) sharing one git-safety/conventions reference bundle.",
+  "name": "flowkit",
+  "description": "flowkit — an agent coding-workflow plugin for Claude Code: a cohesive kit of skills that take work from edits → committed → reviewed → integrated (commit, review-changes, finish-feature, create-pr) sharing one git-safety/conventions reference bundle.",
   "version": "0.1.0",
   "author": {
     "name": "Malik Amurlayev",
@@ -10,8 +10,8 @@
   "repository": "https://github.com/masterik/workflow_tool",
   "license": "MIT",
   "keywords": [
-    "git",
     "workflow",
+    "git",
     "commit",
     "pull-request",
     "code-review",

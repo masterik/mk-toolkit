@@ -1,8 +1,9 @@
-# ForgeZ
+# flowkit
 
-A **Claude Code plugin** — a cohesive set of git feature-workflow skills that take work from
-**edits → committed → integrated**. Composition over replacement: the skills orchestrate
-`git`, GitHub CLI (`gh`), and Worktrunk (`wt`); they don't reimplement git.
+A **Claude Code plugin** — a cohesive kit of agent coding-workflow skills that take work from
+**edits → committed → reviewed → integrated**. Composition over replacement: the skills
+orchestrate `git`, GitHub CLI (`gh`), Worktrunk (`wt`), and code-review tools
+(CodeRabbit/Codex); they don't reimplement them.
 
 Claude-only for now; other agents (Codex, opencode, …) are a later, thin packaging step.
 
@@ -23,7 +24,7 @@ skill.
 
 ```
 /plugin marketplace add masterik/workflow_tool
-/plugin install forgez@forgez
+/plugin install flowkit@masterik
 ```
 
 ## Docs

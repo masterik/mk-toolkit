@@ -2,10 +2,10 @@
 
 This file provides guidance to agents when working with code in this repository.
 
-**ForgeZ** — a **Claude Code plugin** packaging a cohesive set of git feature-workflow
+**flowkit** — a **Claude Code plugin** packaging a cohesive kit of agent coding-workflow
 skills (`commit`, `review-changes`, `finish-feature`, `create-pr`) plus a shared
 `git-flow/references/` bundle. Composition over replacement: the skills orchestrate `git`,
-`gh`, and `wt` — no new git logic.
+`gh`, `wt`, and code-review tools — no new git logic.
 
 ## Layout
 - `.claude-plugin/plugin.json` — plugin manifest (skills auto-discovered from `skills/`).

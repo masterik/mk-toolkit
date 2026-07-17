@@ -1,13 +1,13 @@
 {
-  "name": "forgez",
+  "name": "masterik",
   "owner": {
     "name": "Malik Amurlayev"
   },
   "plugins": [
     {
-      "name": "forgez",
+      "name": "flowkit",
       "source": "./",
-      "description": "Git feature-workflow skills for Claude Code: commit, create-pr, review-changes, finish-feature, plus a shared git-flow reference bundle."
+      "description": "Agent coding-workflow skills for Claude Code: commit, review-changes, finish-feature, create-pr, plus a shared git-flow reference bundle."
     }
   ]
 }

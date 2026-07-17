@@ -1,10 +1,14 @@
-# ForgeZ — Concept
+# flowkit — Concept
 
 ## Summary
-ForgeZ is a **Claude Code plugin** — a cohesive **set of skills** for the git feature
-workflow. It gives Claude a safe, repeatable way to take work from **edits → committed →
+flowkit is a **Claude Code plugin** — a cohesive **kit of agent coding-workflow skills**. It
+gives Claude a safe, repeatable way to take work from **edits → committed → reviewed →
 integrated**: stage and commit cleanly, review the diff, then either merge back locally or
 open a PR — without re-deriving fragile `git` + `gh` + `wt` command sequences on every task.
+
+It's a *workflow* toolkit, not just a git one: `review-changes` drives CodeRabbit/Codex,
+`create-pr` drives GitHub, and `finish-feature` handles worktree cleanup — the parts of the
+dev loop the agent runs, git-centric but not git-limited.
 
 There is no CLI, no runtime, and nothing to install into the repo's toolchain. The plugin is
 just **knowledge + procedure**: each skill tells Claude *when* it applies and *how* to drive
@@ -82,7 +86,7 @@ worktree, a Claude Code agent worktree, or a plain checkout, and use the matchin
 path.
 
 ## Distribution
-ForgeZ ships as a standard Claude Code plugin:
+flowkit ships as a standard Claude Code plugin:
 
 ```
 .claude-plugin/
@@ -100,10 +104,10 @@ Install it with:
 
 ```
 /plugin marketplace add masterik/workflow_tool
-/plugin install forgez@forgez
+/plugin install flowkit@masterik
 ```
 
-Plugin skills are namespaced (`forgez:commit`), which avoids clashing with any repo-local
+Plugin skills are namespaced (`flowkit:commit`), which avoids clashing with any repo-local
 skills of the same name.
 
 ## Roadmap
