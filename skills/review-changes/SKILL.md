@@ -1,11 +1,9 @@
 ---
 name: review-changes
 description: >-
-  Review your own uncommitted changes or recent commits using the CodeRabbit and Codex review tools, then fix what's
-  worth fixing and report findings. Use before finishing a feature or opening a PR, or when the user says "review my
-  changes", "review the diff", "review the last N commits", "code review before I commit/PR", "run codex and
-  coderabbit", or "/review-changes". This reviews local work — for reviewing an existing GitHub PR, use the PR review
-  tools directly.
+  Review local uncommitted changes or recent commits with CodeRabbit + Codex, fix what's worth fixing, report findings.
+  Trigger on "review my changes", "review the diff", "review last N commits", "run codex and coderabbit", or before a
+  commit/PR. Local work only — for a GitHub PR use the PR review tools.
 model: sonnet
 ---
 

@@ -1,10 +1,9 @@
 ---
 name: create-pr
 description: >-
-  End-to-end pull request flow: commit remaining work, push the branch to the remote, open a GitHub PR with a clear
-  title/description, and assign reviewers if needed. Use whenever the user asks to open a PR, create a pull request,
-  submit work for review, push a branch up for merge, or says "create a PR", "open a PR", "make a PR", "submit for
-  review", or "/create-pr".
+  Pull request flow: commit remaining work, push branch, open a GitHub PR with title/description, assign reviewers.
+  Trigger on "create a PR", "open a PR", "make a PR", "submit for review", "push a branch for merge". Remote review path
+  — for a local merge use finish-feature.
 model: sonnet
 ---
 

@@ -1,9 +1,9 @@
 ---
 name: commit
 description: >-
-  Full git commit workflow: inspect working tree, stage only intended changes, split into logical commits, and write
-  Conventional Commit messages. Use this skill whenever the user says "commit", "make a commit", "split into commits",
-  or asks what the commit message should be — even if they haven't explicitly said "commit" yet.
+  Git commit workflow: inspect tree, stage intended changes, split into logical Conventional Commits. Trigger on
+  "commit", "make a commit", "split into commits", or asking what the commit message should be. Commits only — merge with
+  finish-feature, PR with create-pr.
 model: sonnet
 ---
 

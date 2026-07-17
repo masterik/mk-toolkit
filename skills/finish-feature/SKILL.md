@@ -1,10 +1,9 @@
 ---
 name: finish-feature
 description: >-
-  Finish a feature branch locally: commit any remaining work, merge the branch back into its base (usually main), then
-  delete the feature branch and remove its worktree. Use when the user says "finish this feature", "wrap up and merge
-  back", "merge into main and clean up", "finish the branch", "done with this feature", or "/finish-feature". This is the
-  local merge-and-cleanup path — for a reviewed remote merge use create-pr instead.
+  Finish a feature branch locally: commit remaining work, merge into base (usually main), delete branch, remove
+  worktree. Trigger on "finish this feature", "merge back and clean up", "merge into main and clean up", "done with this
+  feature". Local merge-and-cleanup path — for reviewed remote merge use create-pr.
 model: sonnet
 ---
 
