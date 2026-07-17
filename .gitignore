@@ -1,37 +1,7 @@
-# Dependencies
-node_modules/
-
-# Bun
-.bun/
-bun-error.txt
-
-# Build outputs
-dist/
-*.tsbuildinfo
-
-# Environment files
-.env
-.env.local
-.env.*.local
-
 # OS files
 .DS_Store
 Thumbs.db
 
-# Debug logs
-npm-debug.log*
-pnpm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-bun-debug.log*
-
-# POC build artifacts
-poc/go-charm/fz-commit
-poc/rust-ratatui/target/
-
-# Agent and Claude config (local only)
-.agents/
-.claude/
-!.claude/
+# Claude Code local config — ignore local state, keep a shared settings.json if one is added
 .claude/*
 !.claude/settings.json
