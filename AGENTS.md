@@ -20,4 +20,4 @@ skills (`commit`, `review-changes`, `finish-feature`, `create-pr`) plus the shar
 - Nothing project-specific is hardcoded: quality-gate commands, commit scopes, and reviewers
   are discovered from the target repo.
 
-- Direction & roadmap: [`docs/concept.md`](docs/concept.md)
+- Direction & roadmap: [`concept.md`](concept.md)

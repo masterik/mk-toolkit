@@ -42,4 +42,4 @@ Pick the finisher by **destination** — `finish-feature` merges it yourself loc
 - **Degrades gracefully** — `review-changes` calls the `coderabbit` and `codex` plugins when
   present and falls back to the built-in `/code-review` otherwise.
 
-For the plugin's overall design and roadmap, see [`docs/concept.md`](../../docs/concept.md).
+For the plugin's overall design and roadmap, see [`concept.md`](../../concept.md).

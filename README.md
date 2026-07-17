@@ -29,4 +29,4 @@ skill.
 
 ## Docs
 
-- [Concept](docs/concept.md)
+- [Concept](concept.md)
