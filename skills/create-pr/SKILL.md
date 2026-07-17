@@ -135,10 +135,31 @@ Then remove the temp file.
 
 ### 9. Post-creation
 
-- Print the PR URL.
-- Mention CI will run automatically if applicable.
 - Add reviewers/labels after the fact if not set at creation:
   `gh pr edit <url> --add-reviewer <handle> --add-label <label>`.
+- Mention CI will run automatically if applicable.
+
+## Final report (always, at the end)
+
+Always close with a full report, even if step 1 made no new commits:
+
+```
+PR:        <url>
+Base:      <base> ← <feature-branch>
+Draft:     <yes/no>
+Reviewers: <handles or "none">
+
+Title: <title>
+
+<full PR description>
+
+Commits (<base>..HEAD):
+<short-sha>  <subject>
+<short-sha>  <subject>
+...
+```
+
+Get the commit list from `git log --oneline <base>..HEAD` (from step 4) — don't just say "N commits pushed."
 
 ## Common failure scenarios
 

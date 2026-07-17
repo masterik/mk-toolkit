@@ -57,13 +57,18 @@ Make commits that are easy to review and safe to ship:
      before moving on.
 8. Repeat for the next commit until the working tree is clean
 
-## Deliverable
+## Final report (always, at the end)
 
-Provide:
+After the last commit, run `git log --oneline -n <N>` (N = commits made this run) to confirm exact hashes, then report
+every commit created this run — never skip this, even for a single commit:
 
-- the final commit message(s)
-- a short summary per commit (what/why)
-- the commands used to stage/review (at minimum: `git diff --cached`, plus any checks run)
+```
+<short-sha>  <type>(<scope>): <summary>
+  <what/why, 1 sentence>
+```
+
+One block per commit, in order. If any staged changes were intentionally left out (e.g. deferred to a later commit),
+say so.
 
 ## Conventional Commit Format
 
