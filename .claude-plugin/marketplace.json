@@ -1,0 +1,13 @@
+{
+  "name": "forgez",
+  "owner": {
+    "name": "Malik Amurlayev"
+  },
+  "plugins": [
+    {
+      "name": "forgez",
+      "source": "./",
+      "description": "Git feature-workflow skills for Claude Code: commit, create-pr, review-changes, finish-feature, plus a shared git-flow reference bundle."
+    }
+  ]
+}

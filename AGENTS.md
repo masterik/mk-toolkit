@@ -2,9 +2,22 @@
 
 This file provides guidance to agents when working with code in this repository.
 
-**ForgeZ (`fz`)** — a personal CLI wrapper that orchestrates Worktrunk, GitHub CLI, and Claude Code into a single workflow helper. Composition over replacement: no new git logic, just sequencing.
+**ForgeZ** — a **Claude Code plugin** packaging a cohesive set of git feature-workflow
+skills (`commit`, `review-changes`, `finish-feature`, `create-pr`) plus a shared
+`git-flow/references/` bundle. Composition over replacement: the skills orchestrate `git`,
+`gh`, and `wt` — no new git logic.
 
-- Current implementation: `fz-function.sh` (shell function, source to use)
-- Planned stack for full Phase 1: Bun + openTUI
-- Roadmap: [`docs/concept.md`](docs/concept.md)
-- Phase 1 spec: [`docs/phase-1.md`](docs/phase-1.md)
+## Layout
+- `.claude-plugin/plugin.json` — plugin manifest (skills auto-discovered from `skills/`).
+- `.claude-plugin/marketplace.json` — marketplace entry (`source: "./"`).
+- `skills/<name>/SKILL.md` — the four triggerable skills.
+- `skills/git-flow/` — shared references (no `SKILL.md`); the skills link into it via
+  `../git-flow/references/…`. **Keep those relative paths intact** — they're what makes the
+  bundle portable.
+
+## Conventions
+- Skills are Markdown only — no build step, no runtime.
+- Nothing project-specific is hardcoded: quality-gate commands, commit scopes, and reviewers
+  are discovered from the target repo.
+
+- Direction & roadmap: [`docs/concept.md`](docs/concept.md)

@@ -1,20 +1,31 @@
-# ForgeZ (`fz`)
+# ForgeZ
 
-Personal agentic workflow CLI — a thin orchestration layer over Worktrunk, GitHub CLI, and Claude Code.
+A **Claude Code plugin** — a cohesive set of git feature-workflow skills that take work from
+**edits → committed → integrated**. Composition over replacement: the skills orchestrate
+`git`, GitHub CLI (`gh`), and Worktrunk (`wt`); they don't reimplement git.
 
-## Commands
+Claude-only for now; other agents (Codex, opencode, …) are a later, thin packaging step.
 
-| Command | Description |
-|---------|-------------|
-| `fz start <branch>` | Create/switch feature branch (with worktree) |
-| `fz finish` | Merge current feature branch |
-| `fz archive` | Remove already-merged feature branch/worktree |
-| `fz commit` | AI-assisted commit |
-| `fz pr` | AI-assisted PR creation |
-| `fz list` | List active features with branch and PR status |
-| `fz log` | Git log for current feature |
-| `fz status` | PR status for current branch |
+## Skills
+
+| Skill | Does |
+|-------|------|
+| `commit` | Inspect the tree, stage intentionally, split into logical Conventional Commits. |
+| `review-changes` | Review the local diff/commits with CodeRabbit + Codex, fix what's worth fixing, summarize. |
+| `finish-feature` | Commit → merge the branch back into its base → delete branch / remove worktree (local, no PR). |
+| `create-pr` | Commit → push → open a GitHub PR → assign reviewers (remote review path). |
+
+`git-flow/` is a shared **references** bundle (git safety, Conventional Commits, quality
+gate, worktree detection, branching) that the four skills link into — not a triggerable
+skill.
+
+## Install
+
+```
+/plugin marketplace add masterik/workflow_tool
+/plugin install forgez@forgez
+```
 
 ## Docs
 
-- [Concept & Roadmap](docs/concept.md)
+- [Concept](docs/concept.md)
