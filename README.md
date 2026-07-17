@@ -1,4 +1,4 @@
-# flowkit
+# mkit
 
 A **Claude Code plugin** — a cohesive kit of agent coding-workflow skills that take work from
 **edits → committed → reviewed → integrated**. Composition over replacement: the skills
@@ -24,7 +24,7 @@ skill.
 
 ```
 /plugin marketplace add masterik/workflow_tool
-/plugin install flowkit@masterik
+/plugin install mkit@masterik
 ```
 
 ## Docs

@@ -1,7 +1,7 @@
-# flowkit — Concept
+# mkit — Concept
 
 ## Summary
-flowkit is a **Claude Code plugin** — a cohesive **kit of agent coding-workflow skills**. It
+mkit is a **Claude Code plugin** — a cohesive **kit of agent coding-workflow skills**. It
 gives Claude a safe, repeatable way to take work from **edits → committed → reviewed →
 integrated**: stage and commit cleanly, review the diff, then either merge back locally or
 open a PR — without re-deriving fragile `git` + `gh` + `wt` command sequences on every task.
@@ -86,7 +86,7 @@ worktree, a Claude Code agent worktree, or a plain checkout, and use the matchin
 path.
 
 ## Distribution
-flowkit ships as a standard Claude Code plugin:
+mkit ships as a standard Claude Code plugin:
 
 ```
 .claude-plugin/
@@ -104,10 +104,10 @@ Install it with:
 
 ```
 /plugin marketplace add masterik/workflow_tool
-/plugin install flowkit@masterik
+/plugin install mkit@masterik
 ```
 
-Plugin skills are namespaced (`flowkit:commit`), which avoids clashing with any repo-local
+Plugin skills are namespaced (`mkit:commit`), which avoids clashing with any repo-local
 skills of the same name.
 
 ## Roadmap

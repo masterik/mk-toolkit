@@ -2,7 +2,7 @@
 
 This file provides guidance to agents when working with code in this repository.
 
-**flowkit** — a **Claude Code plugin** packaging a cohesive kit of agent coding-workflow
+**mkit** — a **Claude Code plugin** packaging a cohesive kit of agent coding-workflow
 skills (`commit`, `review-changes`, `finish-feature`, `create-pr`) plus a shared
 `git-flow/references/` bundle. Composition over replacement: the skills orchestrate `git`,
 `gh`, `wt`, and code-review tools — no new git logic.

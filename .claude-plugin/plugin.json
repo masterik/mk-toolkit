@@ -1,6 +1,6 @@
 {
-  "name": "flowkit",
-  "description": "flowkit — an agent coding-workflow plugin for Claude Code: a cohesive kit of skills that take work from edits → committed → reviewed → integrated (commit, review-changes, finish-feature, create-pr) sharing one git-safety/conventions reference bundle.",
+  "name": "mkit",
+  "description": "mkit — an agent coding-workflow plugin for Claude Code: a cohesive kit of skills that take work from edits → committed → reviewed → integrated (commit, review-changes, finish-feature, create-pr) sharing one git-safety/conventions reference bundle.",
   "version": "0.1.0",
   "author": {
     "name": "Malik Amurlayev",
