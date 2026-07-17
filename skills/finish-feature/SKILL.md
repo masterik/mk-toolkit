@@ -10,12 +10,12 @@ model: sonnet
 
 # Finish a feature (local merge + cleanup)
 
-Part of the **git-flow** bundle. This is the "merge it back myself" path: no remote PR, no reviewers — commit, fast
+Part of the **mkit** workflow bundle. This is the "merge it back myself" path: no remote PR, no reviewers — commit, fast
 integrate into the base branch, and tear down the feature branch/worktree. For the review path, use `create-pr`.
 
-Shared references (read the ones you need): `../git-flow/references/worktree.md`,
-`../git-flow/references/quality-gate.md`, `../git-flow/references/conventional-commits.md`,
-`../git-flow/references/git-safety.md`, `../git-flow/references/branching.md`.
+Shared references (read the ones you need): `../_shared/references/worktree.md`,
+`../_shared/references/quality-gate.md`, `../_shared/references/conventional-commits.md`,
+`../_shared/references/git-safety.md`, `../_shared/references/branching.md`.
 
 ## When NOT to use this
 
@@ -28,9 +28,9 @@ Shared references (read the ones you need): `../git-flow/references/worktree.md`
 1. Determine the **current branch** and confirm it is a feature/bugfix branch, not the base itself
    (`git branch --show-current`). If it's `main`/`master`, stop — there is nothing to finish.
 2. Determine the **base branch** to merge into — default `main`; the branch this feature was cut from. If ambiguous,
-   ask. See `../git-flow/references/branching.md` for the common branch model and how to detect a repo's own.
+   ask. See `../_shared/references/branching.md` for the common branch model and how to detect a repo's own.
 3. Detect the **worktree context** (worktrunk `wt` / Claude Code `.claude/worktrees/` / plain git / none) per
-   `../git-flow/references/worktree.md`. This decides the cleanup path.
+   `../_shared/references/worktree.md`. This decides the cleanup path.
 
 ## Workflow
 
@@ -41,7 +41,7 @@ messages). The tree must be clean before merging. Never merge with uncommitted c
 
 ### 2. Verify before merging
 
-Run the project **full quality gate** (`../git-flow/references/quality-gate.md`) — lint → test → build, or the repo's
+Run the project **full quality gate** (`../_shared/references/quality-gate.md`) — lint → test → build, or the repo's
 equivalent, stop on first failure. A local merge skips review, so this gate is the only safety net. Report any failure
 and do not merge past it without an explicit user OK.
 
@@ -108,6 +108,6 @@ onto current base.
 
 ## Git safety
 
-Follow `../git-flow/references/git-safety.md`. Specifically: never delete an unmerged branch or force-remove a dirty
+Follow `../_shared/references/git-safety.md`. Specifically: never delete an unmerged branch or force-remove a dirty
 worktree without an explicit request; never push to or force-update the base; confirm branch/tree state before each
 irreversible step.

@@ -1,6 +1,6 @@
 # Git safety protocol
 
-Shared by every git-flow skill. When a skill references "the git safety protocol", it means this.
+Shared by every mkit workflow skill. When a skill references "the git safety protocol", it means this.
 
 - **NEVER** push directly to `main`/`master`, or to the repo's default branch.
 - **NEVER** force-push (`--force`, `--force-with-lease`) unless the user explicitly asks.

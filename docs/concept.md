@@ -25,7 +25,7 @@ are plain Markdown, so support for another agent is a thin packaging step, not a
   (`wt`); never reimplement what they already do well.
 - **Safe by default:** irreversible actions (force-push, branch delete, history rewrite,
   hook-skipping) are gated by an explicit safety protocol the skills share.
-- **DRY via shared references:** the skills link into one `git-flow/references/` bundle
+- **DRY via shared references:** the skills link into one `_shared/references/` bundle
   instead of each restating the same safety and convention rules.
 - **Portable:** nothing project-specific is hardcoded — quality-gate commands, commit
   scopes, and reviewers are all *discovered* from the target repo.
@@ -42,9 +42,9 @@ A cohesive bundle that moves work through its lifecycle. `commit` is the shared 
 | **`finish-feature`** | Commit → merge the branch back into its base → delete branch / remove worktree. **Local**, no PR. | "finish this feature", "merge back and clean up" |
 | **`create-pr`** | Commit → push → open a GitHub PR → assign reviewers. **Remote review** path. | "create a PR", "open a pull request", "submit for review" |
 
-### Shared references — `skills/git-flow/`
-`git-flow/` is **not** a triggerable skill (it has no `SKILL.md`); it is the shared library
-the four skills link into via `../git-flow/references/…`:
+### Shared references — `skills/_shared/`
+`_shared/` is **not** a triggerable skill (it has no `SKILL.md`); it is the shared library
+the four skills link into via `../_shared/references/…`:
 
 - `git-safety.md` — the non-negotiable git safety protocol (no force-push, no config edits,
   no AI attribution, don't skip hooks, …).
@@ -63,7 +63,7 @@ the four skills link into via `../git-flow/references/…`:
  commit · review-changes · finish-feature · create-pr   ← SKILL.md (when & how)
    │   all link into
    ▼
- git-flow/references/*.md   (safety · conventions · quality gate · worktree · branching)
+ _shared/references/*.md   (safety · conventions · quality gate · worktree · branching)
    │   drive
    ▼
  git   +   gh (GitHub CLI)   +   wt (Worktrunk)
@@ -97,7 +97,7 @@ skills/
   create-pr/SKILL.md
   review-changes/SKILL.md
   finish-feature/SKILL.md
-  git-flow/            # shared references (README + references/*.md) — no SKILL.md
+  _shared/            # shared references (README + references/*.md) — no SKILL.md
 ```
 
 Install it with:

@@ -9,8 +9,8 @@ model: sonnet
 
 # Commit work
 
-Part of the **git-flow** bundle (`commit` · `finish-feature` · `create-pr` · `review-changes`). Shared references live in
-`../git-flow/references/`. This skill only commits — for merge-and-cleanup use `finish-feature`, for a PR use `create-pr`.
+Part of the **mkit** workflow bundle (`commit` · `finish-feature` · `create-pr` · `review-changes`). Shared references live in
+`../_shared/references/`. This skill only commits — for merge-and-cleanup use `finish-feature`, for a PR use `create-pr`.
 
 ## Goal
 
@@ -50,10 +50,10 @@ Make commits that are easy to review and safe to ship:
    - "What changed?" + "Why?"
    - If you cannot describe it cleanly, the commit is probably too big or mixed; go back to step 2.
 6. Write the commit message
-   - Use Conventional Commits (required) — format and type/scope guidance: `../git-flow/references/conventional-commits.md`.
+   - Use Conventional Commits (required) — format and type/scope guidance: `../_shared/references/conventional-commits.md`.
    - Prefer an editor or a message file for multi-line messages: `git commit -v` or `git commit -F <file>`.
 7. Run the smallest relevant verification
-   - Run the repo's fastest meaningful check (see `../git-flow/references/quality-gate.md` — the "fast check" tier)
+   - Run the repo's fastest meaningful check (see `../_shared/references/quality-gate.md` — the "fast check" tier)
      before moving on.
 8. Repeat for the next commit until the working tree is clean
 
@@ -75,9 +75,9 @@ Provide:
 ```
 
 Keep the summary imperative and specific. Full type table and scope-detection guidance:
-`../git-flow/references/conventional-commits.md`.
+`../_shared/references/conventional-commits.md`.
 
 ## Git safety
 
-Follow the git safety protocol: `../git-flow/references/git-safety.md`. In short — never update git config, never skip
+Follow the git safety protocol: `../_shared/references/git-safety.md`. In short — never update git config, never skip
 hooks unless asked, never force-push, never add AI co-authorship, and if a hook fails, fix it and make a NEW commit.

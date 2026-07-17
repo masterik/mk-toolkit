@@ -10,11 +10,11 @@ model: sonnet
 
 # Create a Pull Request (commit → push → PR → reviewers)
 
-Part of the **git-flow** bundle. This is the review path: it commits, pushes, opens the PR, and requests reviewers. For a
+Part of the **mkit** workflow bundle. This is the review path: it commits, pushes, opens the PR, and requests reviewers. For a
 local merge with no review, use `finish-feature` instead.
 
-Shared references: `../git-flow/references/conventional-commits.md`, `../git-flow/references/quality-gate.md`,
-`../git-flow/references/worktree.md`, `../git-flow/references/git-safety.md`, `../git-flow/references/branching.md`.
+Shared references: `../_shared/references/conventional-commits.md`, `../_shared/references/quality-gate.md`,
+`../_shared/references/worktree.md`, `../_shared/references/git-safety.md`, `../_shared/references/branching.md`.
 
 ## Goal
 
@@ -46,9 +46,9 @@ left behind. Works the same inside a worktree — just confirm `git branch --sho
 Before writing any PR description, verify:
 
 1. **Not on the base branch** — if `git branch --show-current` is `main`/`master`/the default branch, stop and warn;
-   PRs come from feature/bugfix branches (see `../git-flow/references/branching.md` for how to tell them apart).
+   PRs come from feature/bugfix branches (see `../_shared/references/branching.md` for how to tell them apart).
 2. **Commits exist ahead of base** — `git log --oneline <base>..HEAD`; if empty, there's nothing to PR.
-3. **Full quality gate** — run the project gate (`../git-flow/references/quality-gate.md`): lint → test → build or the
+3. **Full quality gate** — run the project gate (`../_shared/references/quality-gate.md`): lint → test → build or the
    repo equivalent, in order, stop on failure. Report which step failed. The user may proceed anyway for a draft PR.
 
 ### 3. Push the branch
@@ -154,5 +154,5 @@ Then remove the temp file.
 
 ## Git safety
 
-Follow `../git-flow/references/git-safety.md`: never push to the base branch directly, never force-push without an
+Follow `../_shared/references/git-safety.md`: never push to the base branch directly, never force-push without an
 explicit request, never skip hooks unless asked, never add AI attribution to the PR.

@@ -16,7 +16,7 @@ Claude-only for now; other agents (Codex, opencode, …) are a later, thin packa
 | `finish-feature` | Commit → merge the branch back into its base → delete branch / remove worktree (local, no PR). |
 | `create-pr` | Commit → push → open a GitHub PR → assign reviewers (remote review path). |
 
-`git-flow/` is a shared **references** bundle (git safety, Conventional Commits, quality
+`_shared/` is the shared **references** bundle (git safety, Conventional Commits, quality
 gate, worktree detection, branching) that the four skills link into — not a triggerable
 skill.
 

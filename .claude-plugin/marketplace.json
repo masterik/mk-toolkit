@@ -7,7 +7,7 @@
     {
       "name": "mkit",
       "source": "./",
-      "description": "Agent coding-workflow skills for Claude Code: commit, review-changes, finish-feature, create-pr, plus a shared git-flow reference bundle."
+      "description": "Agent coding-workflow skills for Claude Code: commit, review-changes, finish-feature, create-pr, plus a shared reference bundle."
     }
   ]
 }

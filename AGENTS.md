@@ -3,16 +3,16 @@
 This file provides guidance to agents when working with code in this repository.
 
 **mkit** — a **Claude Code plugin** packaging a cohesive kit of agent coding-workflow
-skills (`commit`, `review-changes`, `finish-feature`, `create-pr`) plus a shared
-`git-flow/references/` bundle. Composition over replacement: the skills orchestrate `git`,
+skills (`commit`, `review-changes`, `finish-feature`, `create-pr`) plus the shared
+`_shared/references/` bundle. Composition over replacement: the skills orchestrate `git`,
 `gh`, `wt`, and code-review tools — no new git logic.
 
 ## Layout
 - `.claude-plugin/plugin.json` — plugin manifest (skills auto-discovered from `skills/`).
 - `.claude-plugin/marketplace.json` — marketplace entry (`source: "./"`).
 - `skills/<name>/SKILL.md` — the four triggerable skills.
-- `skills/git-flow/` — shared references (no `SKILL.md`); the skills link into it via
-  `../git-flow/references/…`. **Keep those relative paths intact** — they're what makes the
+- `skills/_shared/` — shared references (no `SKILL.md`); the skills link into it via
+  `../_shared/references/…`. **Keep those relative paths intact** — they're what makes the
   bundle portable.
 
 ## Conventions

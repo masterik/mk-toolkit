@@ -11,11 +11,11 @@ model: sonnet
 
 # Review changes (CodeRabbit + Codex, then fix)
 
-Part of the **git-flow** bundle. Runs a two-tool review pass over local work, applies safe fixes automatically, asks
+Part of the **mkit** workflow bundle. Runs a two-tool review pass over local work, applies safe fixes automatically, asks
 before risky ones, and hands back a findings + fixes summary. Typically run right before `commit`, `finish-feature`, or
 `create-pr`.
 
-Shared references: `../git-flow/references/quality-gate.md`, `../git-flow/references/git-safety.md`.
+Shared references: `../_shared/references/quality-gate.md`, `../_shared/references/git-safety.md`.
 
 ## 1. Establish the review scope
 
@@ -68,7 +68,7 @@ Group related safe fixes and apply them in coherent edits. Keep fixes minimal an
 
 ## 5. Re-verify
 
-After applying fixes, run the repo's fast check (`../git-flow/references/quality-gate.md` — fast tier: lint/typecheck or
+After applying fixes, run the repo's fast check (`../_shared/references/quality-gate.md` — fast tier: lint/typecheck or
 the touched package's tests) to confirm nothing broke. Report the result. If a fix introduced a failure, revert or
 correct it before summarizing.
 
@@ -88,5 +88,5 @@ Do not commit as part of this skill unless asked — leave the fixes staged/unst
 
 ## Git safety
 
-Follow `../git-flow/references/git-safety.md`. Apply only fixes to the working tree; never rewrite pushed history, never
+Follow `../_shared/references/git-safety.md`. Apply only fixes to the working tree; never rewrite pushed history, never
 force-push, never commit or push as a side effect of the review unless explicitly asked.
