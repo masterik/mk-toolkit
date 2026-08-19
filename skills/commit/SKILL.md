@@ -12,6 +12,9 @@ model: sonnet
 Part of the **mkit** workflow bundle (`commit` · `finish-feature` · `create-pr` · `review-changes`). Shared references live in
 `../_shared/references/`. This skill only commits — for merge-and-cleanup use `finish-feature`, for a PR use `create-pr`.
 
+Keep command output bounded throughout — `../_shared/references/output-discipline.md`. It is the one reference to read
+before step 1, because `commit` is the front-end both finishers call, so what it loads they load too.
+
 ## Goal
 
 Make commits that are easy to review and safe to ship:
@@ -31,8 +34,11 @@ Make commits that are easy to review and safe to ship:
 1. Inspect the working tree before staging
    - `git status`
    - Confirm you are on the branch you intend (`git branch --show-current`) — matters when running inside a worktree.
-   - `git diff` (unstaged)
-   - If many changes: `git diff --stat`
+   - **`git diff --stat` first**, then the full diff per file for the files you actually have to judge — never the whole
+     tree at once (`../_shared/references/output-discipline.md`).
+   - On a large mixed tree (roughly >10 files or >400 changed lines), delegate the read: hand a subagent the file list
+     and have it return a **commit plan** — groups of paths with one line of rationale each — then do the staging here.
+     Below that threshold the round trip costs more than it saves.
 2. Decide commit boundaries (split if needed)
    - Split by: feature vs refactor, backend vs frontend, formatting vs logic, tests vs prod code, dependency bumps vs
      behavior changes.
@@ -41,7 +47,9 @@ Make commits that are easy to review and safe to ship:
    - Prefer patch staging for mixed changes: `git add -p`
    - To unstage a hunk/file: `git restore --staged -p` or `git restore --staged <path>`
 4. Review what will actually be committed
-   - `git diff --cached`
+   - `git diff --cached --stat` to plan, then `git diff --cached -- <path>` **file by file, skipping none**. This is the
+     one read that must not be truncated — the checks below only work on the actual hunks
+     (`../_shared/references/output-discipline.md`, "what must never be capped").
    - Sanity checks:
      - no secrets or tokens
      - no accidental debug logging
@@ -55,6 +63,8 @@ Make commits that are easy to review and safe to ship:
 7. Run the smallest relevant verification
    - Run the repo's fastest meaningful check (see `../_shared/references/quality-gate.md` — the "fast check" tier)
      before moving on.
+   - Redirect its output to a log and report pass/fail plus the failing step only — not the log
+     (`../_shared/references/output-discipline.md`).
 8. Repeat for the next commit until the working tree is clean
 
 ## Final report (always, at the end)

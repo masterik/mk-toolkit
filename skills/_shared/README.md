@@ -12,10 +12,10 @@ This folder is the **shared library** for the mkit plugin's four workflow skills
 
 | Skill            | Does                                                                         | Consumes                                                                 |
 | ---------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `commit`         | Inspect tree, stage intentionally, split into logical Conventional Commits.  | `conventional-commits`, `quality-gate` (fast tier), `git-safety`        |
-| `review-changes` | Review local diff/commits with CodeRabbit + Codex + Claude, verify, auto-fix safe, summarize. | `review-severity`, `review-lenses`, `finding-triage`, `agent-delegation`, `quality-gate` (fast tier), `git-safety` |
-| `finish-feature` | Commit → merge branch back into base → delete branch / remove worktree.      | `worktree`, `quality-gate` (full gate), `branching`, all of the above   |
-| `create-pr`      | Commit → push → open GitHub PR → assign reviewers.                           | `worktree`, `quality-gate` (full gate), `branching`, all of the above   |
+| `commit`         | Inspect tree, stage intentionally, split into logical Conventional Commits.  | `conventional-commits`, `quality-gate` (fast tier), `git-safety`, `output-discipline` |
+| `review-changes` | Review local diff/commits with CodeRabbit + Codex + Claude, verify, auto-fix safe, summarize. | `review-severity`, `review-lenses`, `finding-triage`, `agent-delegation`, `output-discipline`, `quality-gate` (fast tier), `git-safety` |
+| `finish-feature` | Commit → merge branch back into base → delete branch / remove worktree.      | `worktree`, `quality-gate` (full gate), `branching`, `output-discipline`, all of the above |
+| `create-pr`      | Commit → push → open GitHub PR → assign reviewers.                           | `worktree`, `quality-gate` (full gate), `branching`, `output-discipline`, `agent-delegation`, all of the above |
 
 `commit` is the shared front-end: `finish-feature` and `create-pr` both start by committing.
 Pick the finisher by **destination** — `finish-feature` merges it yourself locally,
@@ -41,6 +41,9 @@ Pick the finisher by **destination** — `finish-feature` merges it yourself loc
 - `agent-delegation.md` — how a skill runs heavy work without paying for it in context: the
   per-run directory inside the git dir, subagent return budgets, resolved reference paths,
   one-writer-at-a-time, and model-per-stage.
+- `output-discipline.md` — bounding command output: gate logs to a file and read the tail,
+  `--stat` before any diff, never a full branch diff to write prose — and what must never be
+  capped (a staged diff you are approving, a body the user acts on).
 
 ## Design invariants
 
@@ -57,6 +60,7 @@ Pick the finisher by **destination** — `finish-feature` merges it yourself loc
   their lists mergeable and corroboration meaningful.
 - **The main session holds decisions, not evidence** — stages that read a lot and decide a
   little run in subagents and hand back a summary; diffs, transcripts and findings bodies live
-  in a per-run directory under the git dir (`agent-delegation.md`).
+  in a per-run directory under the git dir (`agent-delegation.md`), and command output is
+  bounded before it ever arrives (`output-discipline.md`).
 
 For the plugin's overall design and roadmap, see [`concept.md`](../../concept.md).

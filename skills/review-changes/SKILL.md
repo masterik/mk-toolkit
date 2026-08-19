@@ -21,6 +21,7 @@ Shared references — **read the first four before running anything; they are wh
 - `../_shared/references/review-lenses.md` — the eight lenses and which reviewer carries which.
 - `../_shared/references/finding-triage.md` — reconcile, verify, and the three checks on every fix.
 - `../_shared/references/agent-delegation.md` — the run directory, return budgets, and how to write a brief.
+- `../_shared/references/output-discipline.md` — how to keep gate logs and diffs out of this session.
 - `../_shared/references/quality-gate.md`, `../_shared/references/git-safety.md`.
 
 The pipeline is **gate → find → reconcile → verify → fix → re-check → report**. Each stage exists to keep the next one
@@ -88,7 +89,8 @@ Run the repo's fast check (`../_shared/references/quality-gate.md`, fast tier) *
 - If it fails, fix that first (or stop and report it) — reviewing a red tree wastes three reviewers on lint output.
 - Once it passes, **tell every reviewer it passed**, and that they must not run the tests, the build or the linter. That
   is what earns the right to reject "anything a linter catches" as a finding.
-- Keep the output out of this session: pass/fail and, on failure, the failing step and its last few lines.
+- Keep the output out of this session: redirect each step to `$RUN_DIR/gate-<step>.log`, then report pass/fail and, on
+  failure, the failing step and the tail (`../_shared/references/output-discipline.md`).
 
 ## 3. Run three reviewers in parallel
 
@@ -172,7 +174,8 @@ fixes into coherent edits, in the style of the surrounding code.
 
 ## 7. Re-check
 
-Re-run the fast check from step 2 and report the result — pass/fail, plus the failing step if it broke. If a fix
+Re-run the fast check from step 2 and report the result — pass/fail, plus the failing step and the tail of its log if it
+broke. If a fix
 introduced a failure, revert or correct it before summarizing. Never fabricate a passing result.
 
 If the user wants another review round after fixing, keep the bar narrow: re-review with `bugs` + `impl` and **report

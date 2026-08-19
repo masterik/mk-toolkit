@@ -14,7 +14,8 @@ integrate into the base branch, and tear down the feature branch/worktree. For t
 
 Shared references (read the ones you need): `../_shared/references/worktree.md`,
 `../_shared/references/quality-gate.md`, `../_shared/references/conventional-commits.md`,
-`../_shared/references/git-safety.md`, `../_shared/references/branching.md`.
+`../_shared/references/git-safety.md`, `../_shared/references/branching.md`,
+`../_shared/references/output-discipline.md`.
 
 ## When NOT to use this
 
@@ -43,6 +44,10 @@ messages). The tree must be clean before merging. Never merge with uncommitted c
 Run the project **full quality gate** (`../_shared/references/quality-gate.md`) — lint → test → build, or the repo's
 equivalent, stop on first failure. A local merge skips review, so this gate is the only safety net. Report any failure
 and do not merge past it without an explicit user OK.
+
+Redirect each step to its own log and keep the output out of context — one line per passing step, and on a failure the
+step, the exit code and the tail (`../_shared/references/output-discipline.md`). A failing suite is thousands of lines,
+and none of them change the decision, which is "fix it or get an explicit OK".
 
 ### 3. Show the plan and confirm
 

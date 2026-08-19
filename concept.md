@@ -63,6 +63,9 @@ the four skills link into via `../_shared/references/…`:
 - `agent-delegation.md` — context discipline: the per-run directory inside the git dir as the
   transport between stages, subagent return budgets, resolved reference paths, parallel-vs-
   sequential rules, and which model each stage shape wants.
+- `output-discipline.md` — bounding command output: gate logs written to a file and read by
+  their tail, `--stat` before any diff, never a full branch diff to write prose — plus what
+  must never be capped.
 
 ## Architecture
 ```
@@ -73,7 +76,8 @@ the four skills link into via `../_shared/references/…`:
    │   all link into
    ▼
  _shared/references/*.md   (safety · conventions · quality gate · worktree · branching
-                            severity bar · lenses · finding triage · agent delegation)
+                            severity bar · lenses · finding triage
+                            agent delegation · output discipline)
    │   drive
    ▼
  git   +   gh (GitHub CLI)   +   wt (Worktrunk)
