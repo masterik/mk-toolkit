@@ -49,6 +49,10 @@ Redirect each step to its own log and keep the output out of context — one lin
 step, the exit code and the tail (`../_shared/references/output-discipline.md`). A failing suite is thousands of lines,
 and none of them change the decision, which is "fix it or get an explicit OK".
 
+On a long failure log, delegate the diagnosis — `../_shared/references/quality-gate.md`, "when a step fails" — and put
+its verdict (what failed, probable cause, whether the change caused it, suggested fix) to the user. That verdict is what
+they decide from; the log stays on disk.
+
 ### 3. Show the plan and confirm
 
 Before merging or deleting anything, print a one-screen summary and get a go-ahead (unless the user already said

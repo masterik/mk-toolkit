@@ -12,7 +12,7 @@ This folder is the **shared library** for the mkit plugin's four workflow skills
 
 | Skill            | Does                                                                         | Consumes                                                                 |
 | ---------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `commit`         | Inspect tree, stage intentionally, split into logical Conventional Commits.  | `conventional-commits`, `quality-gate` (fast tier), `git-safety`, `output-discipline` |
+| `commit`         | Inspect tree, stage intentionally, split into logical Conventional Commits.  | `conventional-commits`, `quality-gate` (fast tier), `git-safety`, `output-discipline`, `agent-delegation` |
 | `review-changes` | Review local diff/commits with CodeRabbit + Codex + Claude, verify, auto-fix safe, summarize. | `review-severity`, `review-lenses`, `finding-triage`, `agent-delegation`, `output-discipline`, `quality-gate` (fast tier), `git-safety` |
 | `finish-feature` | Commit → merge branch back into base → delete branch / remove worktree.      | `worktree`, `quality-gate` (full gate), `branching`, `output-discipline`, all of the above |
 | `create-pr`      | Commit → push → open GitHub PR → assign reviewers.                           | `worktree`, `quality-gate` (full gate), `branching`, `output-discipline`, `agent-delegation`, all of the above |
@@ -27,7 +27,8 @@ Pick the finisher by **destination** — `finish-feature` merges it yourself loc
   no AI attribution, don't skip hooks, confirm before irreversible steps).
 - `conventional-commits.md` — commit message format, type table, scope detection.
 - `quality-gate.md` — how to **detect** (not hardcode) the repo's fast check and full
-  lint/test/build gate.
+  lint/test/build gate, and how to triage a failing step (delegate the diagnosis, report a
+  cause and a suggested fix, never the log).
 - `worktree.md` — detect the worktree origin (worktrunk `wt` / Claude Code
   `.claude/worktrees/` / plain `git worktree`) and clean up correctly.
 - `branching.md` — the default branch model to assume when a repo doesn't document its own.

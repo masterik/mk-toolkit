@@ -51,7 +51,9 @@ Before writing any PR description, verify:
 3. **Full quality gate** — run the project gate (`../_shared/references/quality-gate.md`): lint → test → build or the
    repo equivalent, in order, stop on failure. Report which step failed. The user may proceed anyway for a draft PR.
    Redirect each step to its own log: one line per passing step, and on failure the step, the exit code and the tail —
-   never the log itself (`../_shared/references/output-discipline.md`).
+   never the log itself (`../_shared/references/output-discipline.md`). On a long failure log, delegate the diagnosis
+   (`../_shared/references/quality-gate.md`, "when a step fails") — the user needs a cause and a suggested fix to choose
+   between fixing it and opening a draft, not a transcript.
 
 ### 3. Push the branch
 

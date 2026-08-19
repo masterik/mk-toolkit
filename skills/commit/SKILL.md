@@ -64,7 +64,8 @@ Make commits that are easy to review and safe to ship:
    - Run the repo's fastest meaningful check (see `../_shared/references/quality-gate.md` — the "fast check" tier)
      before moving on.
    - Redirect its output to a log and report pass/fail plus the failing step only — not the log
-     (`../_shared/references/output-discipline.md`).
+     (`../_shared/references/output-discipline.md`). On a long failure log, triage it per
+     `../_shared/references/quality-gate.md` ("when a step fails") rather than reading it here.
 8. Repeat for the next commit until the working tree is clean
 
 ## Final report (always, at the end)

@@ -50,7 +50,7 @@ the four skills link into via `../_shared/references/…`:
   no AI attribution, don't skip hooks, …).
 - `conventional-commits.md` — commit message format, type table, scope detection.
 - `quality-gate.md` — how to **detect** (not hardcode) the repo's fast check + full
-  lint/test/build gate.
+  lint/test/build gate, and how to triage a failing step.
 - `worktree.md` — detect the worktree origin (Worktrunk `wt` / Claude Code
   `.claude/worktrees/` / plain `git worktree`) and clean up correctly.
 - `branching.md` — the default branch model to assume when a repo doesn't document its own.

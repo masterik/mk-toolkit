@@ -39,6 +39,7 @@ technique; this is the roster.
 | --- | --- | --- | --- |
 | 1 scope | this session — 3 git commands | — | range, shortstat, file count, goal |
 | 2 gate | this session — Bash | — | pass/fail and the failing step only |
+| 2a gate triage (on failure) | 1 subagent, reads the log | Sonnet | what failed, cause, suggested fix — ≤15 lines |
 | 3 find | 3 subagents, parallel | Opus | 3 × ≤10 lines: path written + counts by tag + lenses not covered |
 | 4 reconcile | 1 subagent, text only | Sonnet | path written + counts + what it dropped and why |
 | 5 verify | 1 subagent per directory group, parallel | Opus | one line per finding: id + verdict (+ corrected fields) |
@@ -86,7 +87,8 @@ Every later stage reads that file instead of being told again.
 
 Run the repo's fast check (`../_shared/references/quality-gate.md`, fast tier) **before** the review, not after.
 
-- If it fails, fix that first (or stop and report it) — reviewing a red tree wastes three reviewers on lint output.
+- If it fails, fix that first (or stop and report it) — reviewing a red tree wastes three reviewers on lint output. On a
+  long failure log, triage it in a subagent per `../_shared/references/quality-gate.md` ("when a step fails").
 - Once it passes, **tell every reviewer it passed**, and that they must not run the tests, the build or the linter. That
   is what earns the right to reject "anything a linter catches" as a finding.
 - Keep the output out of this session: redirect each step to `$RUN_DIR/gate-<step>.log`, then report pass/fail and, on
