@@ -13,7 +13,8 @@ Part of the **mkit** workflow bundle. This is the review path: it commits, pushe
 local merge with no review, use `finish-feature` instead.
 
 Shared references: `../_shared/references/conventional-commits.md`, `../_shared/references/quality-gate.md`,
-`../_shared/references/worktree.md`, `../_shared/references/git-safety.md`, `../_shared/references/branching.md`.
+`../_shared/references/worktree.md`, `../_shared/references/git-safety.md`, `../_shared/references/branching.md`,
+`../_shared/references/output-discipline.md`, `../_shared/references/agent-delegation.md`.
 
 ## Goal
 
@@ -49,6 +50,8 @@ Before writing any PR description, verify:
 2. **Commits exist ahead of base** — `git log --oneline <base>..HEAD`; if empty, there's nothing to PR.
 3. **Full quality gate** — run the project gate (`../_shared/references/quality-gate.md`): lint → test → build or the
    repo equivalent, in order, stop on failure. Report which step failed. The user may proceed anyway for a draft PR.
+   Redirect each step to its own log: one line per passing step, and on failure the step, the exit code and the tail —
+   never the log itself (`../_shared/references/output-discipline.md`).
 
 ### 3. Push the branch
 
@@ -61,17 +64,33 @@ diverged, stop and surface it rather than force-pushing.
 
 ### 4. Gather context for the PR
 
-Run in parallel:
+Two commands here, and no more:
 
 ```bash
 git log --oneline <base>..HEAD
 git diff <base> --stat
-git diff <base> -- . ':(exclude)*.lock' ':(exclude)*.snap'
 ```
 
-Commit messages are the primary source for the title and description.
+**Commit messages are the primary source for the title and description** — the diff is a fallback for the one thing they
+do not explain. **Do not load the branch diff into this session.** On a real branch it is tens of thousands of tokens
+spent to produce a dozen lines of prose; on the smallest possible change it is already 100× the size of the log it would
+supplement (`../_shared/references/output-discipline.md`).
 
-### 5. Craft title + description
+### 5. Draft title + description — in a subagent
+
+Hand the drafting to a subagent, which reads what it needs and returns only the draft. Spawn it **in the same message as
+step 6's reviewer lookup** — both are read-only and independent.
+
+Its brief carries: the base and branch names, the `git log --oneline <base>..HEAD` output, the `--stat`, the format spec
+below, and its return budget. It runs the full diff itself
+(`git diff <base> -- . ':(exclude)*.lock' ':(exclude)*.snap'`) and **returns at most 25 lines**: the title, the
+description, and any note about what it could not explain from the commits. No diff, no file contents, no narration.
+
+**Draft inline instead when the branch is small** — roughly ≤5 files or ≤100 changed lines, where the log plus the
+`--stat` already tell the whole story and a round trip costs more than it saves.
+
+Then review the draft here, and fix it if it drifts from the format — **this session owns the wording**, since it is what
+step 7 shows the user and step 8 puts on the PR.
 
 **Title**: imperative, verb-first (`Add`, `Fix`, `Update`, `Remove`, `Refactor`), ~≤ 70 chars, optional `[area]` prefix.
 Derive from the highest-impact commit. Not a commit-format string (`feat(web): …` is a commit subject, not a PR title).
@@ -96,7 +115,8 @@ Keep it honest and brief. **Never** include co-authorship lines or any mention o
 
 ### 6. Determine reviewers
 
-"Assign reviewers if needed" — figure out who, without hardcoding handles:
+Runs alongside step 5's draft — spawn both in one message, or do it inline here when the lookup is a `CODEOWNERS` read
+and nothing more. "Assign reviewers if needed" — figure out who, without hardcoding handles:
 
 1. Check for a `CODEOWNERS` file (`.github/`, repo root, or `docs/`) — owners of the changed paths are the natural
    reviewers.
@@ -159,7 +179,8 @@ Commits (<base>..HEAD):
 ...
 ```
 
-Get the commit list from `git log --oneline <base>..HEAD` (from step 4) — don't just say "N commits pushed."
+Get the commit list from `git log --oneline <base>..HEAD` (from step 4 — it is already in context, and it is cheap
+precisely because the diff never was) — don't just say "N commits pushed."
 
 ## Common failure scenarios
 
