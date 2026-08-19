@@ -13,7 +13,7 @@ This folder is the **shared library** for the mkit plugin's four workflow skills
 | Skill            | Does                                                                         | Consumes                                                                 |
 | ---------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | `commit`         | Inspect tree, stage intentionally, split into logical Conventional Commits.  | `conventional-commits`, `quality-gate` (fast tier), `git-safety`, `output-discipline`, `agent-delegation` |
-| `review-changes` | Review local diff/commits with CodeRabbit + Codex + Claude, verify, auto-fix safe, summarize. | `review-severity`, `review-lenses`, `finding-triage`, `agent-delegation`, `output-discipline`, `quality-gate` (fast tier), `git-safety` |
+| `review-changes` | Review local diff/commits with CodeRabbit + Codex + Claude, verify, auto-fix safe, summarize. | `review-severity`, `lenses-correctness`/`lenses-craft`, `triage-reconcile`/`triage-verify`/`fix-checks`, `agent-delegation`, `output-discipline`, `quality-gate` (fast tier), `git-safety` |
 | `finish-feature` | Commit → merge branch back into base → delete branch / remove worktree.      | `worktree`, `quality-gate` (full gate), `branching`, `output-discipline`, all of the above |
 | `create-pr`      | Commit → push → open GitHub PR → assign reviewers.                           | `worktree`, `quality-gate` (full gate), `branching`, `output-discipline`, `agent-delegation`, all of the above |
 
@@ -35,10 +35,14 @@ Pick the finisher by **destination** — `finish-feature` merges it yourself loc
 - `review-severity.md` — the severity bar (`critical`/`major`/`minor`, prose is minor), the
   `[surface, severity]` tag, the read-only reviewer contract, what not to report, and why a
   partial review is never reported as clean.
-- `review-lenses.md` — the eight review lenses and which reviewer carries which.
-- `finding-triage.md` — what happens after the reviewers return: reconcile (dedupe +
-  corroboration arithmetic), verify (five verdicts + the materiality test), and the three
-  checks on every fix.
+- `lenses-correctness.md` / `lenses-craft.md` — the eight review lenses, split along the
+  reviewer that carries each set: `bugs`/`impl`/`adversarial` go to Codex, and
+  `architecture`/`quality`/`tests`/`docs`/`comments` to the Claude subagent. Split so a
+  reviewer loads only the lenses it carries.
+- `triage-reconcile.md`, `triage-verify.md`, `fix-checks.md` — what happens after the reviewers
+  return, one file per stage and per consumer: reconcile (dedupe + corroboration arithmetic, in
+  a subagent), verify (five verdicts + the materiality test, one subagent per group), and the
+  three checks on every fix plus what gates (the main session).
 - `agent-delegation.md` — how a skill runs heavy work without paying for it in context: using the
   run directory as transport between stages, subagent return budgets, resolved reference paths,
   one-writer-per-file, and model-per-stage.

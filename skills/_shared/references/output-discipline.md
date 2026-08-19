@@ -107,7 +107,7 @@ Bounding output must not turn into skipping the thing you are judging. Two cases
   targeted sweep for what a reading might miss (`git diff --cached -S'<pattern>'`, or grep the staged
   patch for token/key shapes) rather than trusting a scroll.
 - **A finding, message or description you are handing the user to act on.** Full body, where they act on
-  it. `finding-triage.md` and the review summary rules cover which those are.
+  it. `triage-verify.md` and the review summary rules cover which those are.
 
 ## Say what you read
 

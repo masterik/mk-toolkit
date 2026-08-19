@@ -18,8 +18,10 @@ Shared references — **read the first four before running anything; they are wh
 
 - `../_shared/references/review-severity.md` — the severity bar, the `[surface, severity]` tag, the reviewer contract,
   what not to report, and the partial-review rule.
-- `../_shared/references/review-lenses.md` — the eight lenses and which reviewer carries which.
-- `../_shared/references/finding-triage.md` — reconcile, verify, and the three checks on every fix.
+- `../_shared/references/lenses-correctness.md` / `../_shared/references/lenses-craft.md` — the eight
+  lenses, split along the reviewer that carries each set.
+- `../_shared/references/triage-reconcile.md`, `../_shared/references/triage-verify.md`,
+  `../_shared/references/fix-checks.md` — reconcile, verify, and the three checks on every fix.
 - `../_shared/references/agent-delegation.md` — the run directory, return budgets, and how to write a brief.
 - `../_shared/references/output-discipline.md` — how to keep gate logs and diffs out of this session.
 - `../_shared/references/quality-gate.md`, `../_shared/references/git-safety.md`.
@@ -114,8 +116,10 @@ Spawn all three in **one message** so they run concurrently and no reviewer sees
 | **Codex** | the Codex review path (`codex:rescue` skill / `codex:codex-rescue` agent), prompted for a review pass | `bugs`, `impl`, `adversarial` |
 | **Claude** | a subagent over the same diff — or the built-in `code-review` skill at a high effort level | `architecture`, `quality`, `tests`, `docs`, `comments` |
 
-Each brief carries: `<run-dir>/scope.md`, its lens set, the **resolved absolute paths** of `review-severity.md` and
-`review-lenses.md` with an instruction to read them, and the fact that the gate already passed.
+Each brief carries: `<run-dir>/scope.md`, the **resolved absolute paths** of `review-severity.md` and of **its own
+lens file** — `lenses-correctness.md` for Codex, `lenses-craft.md` for Claude — with an instruction to read them, and
+the fact that the gate already passed. A reviewer gets the lens file it carries and not the other; hand over both only
+when it is covering for a missing reviewer.
 
 Each reviewer **writes** `<run-dir>/findings-<source>.md` — one entry per finding: `[surface, severity]`, file + line,
 confidence (0–100), the lens(es) that raised it, a title naming the mechanism, a body giving trigger + consequence, and a
@@ -136,7 +140,7 @@ partial review as "clean" — `../_shared/references/review-severity.md`, last s
 
 One subagent, on a cheaper model: this stage is mechanical, and the answer is entirely in its input.
 
-Its brief: read the `findings-*.md` files and `../_shared/references/finding-triage.md` §1 (resolved path), write
+Its brief: read the `findings-*.md` files and `../_shared/references/triage-reconcile.md` (resolved path), write
 `<run-dir>/reconciled.md`, and **read nothing else** — no source files, no `git diff`, no `rg`. Which findings are the
 same issue and which singletons are too weak is answerable from the text; verification comes next with the code in front
 of it, and an opinion formed here contaminates the set the verifier is handed.
@@ -152,7 +156,7 @@ It returns: the path, the counts, and one line per dropped finding.
 
 Group the reconciled findings **by directory**, then spawn **one subagent per group in a single message**. Each gets only
 its own group — a verifier that sees the whole set anchors on it — plus `scope.md` and the resolved path to
-`finding-triage.md` §2.
+`triage-verify.md`.
 
 Each returns one line per finding: `id → confirmed | refined | rejected | immaterial | pre_existing`, with corrected
 fields on a `refined` and one clause of reasoning on a `rejected` or `immaterial`. Verdicts also go to
@@ -182,7 +186,7 @@ place in context.
   fix, and get a decision before editing.
 - **Not worth fixing → skip**, with a one-line reason. `immaterial` verdicts are already here by definition.
 
-**Every fix gets the three checks in `../_shared/references/finding-triage.md` §3.** The first one — sweep for the
+**Every fix gets the three checks in `../_shared/references/fix-checks.md`.** The first one — sweep for the
 *shape* not the site — is a read-only repo search, so **delegate it**: hand a subagent the construct in words ("a switch
 over a three-value enum that only tests one end") and have it return the occurrence list, file:line only. Then enumerate
 the input space you touched (every enum value, struct field, error class — and a test that tells them apart), and re-read

@@ -64,10 +64,12 @@ the four skills link into via `../_shared/references/…`:
 - `branching.md` — the default branch model to assume when a repo doesn't document its own.
 - `review-severity.md` — the severity bar (`critical`/`major`/`minor`), the `[surface, severity]`
   tag, the read-only reviewer contract, what not to report, and the partial-review rule.
-- `review-lenses.md` — the eight review lenses (`bugs`, `impl`, `quality`, `architecture`,
-  `tests`, `docs`, `comments`, `adversarial`) and which reviewer carries which.
-- `finding-triage.md` — reconcile (dedupe + corroboration), verify (five verdicts + the
-  materiality test), and the three checks on every fix.
+- `lenses-correctness.md` / `lenses-craft.md` — the eight review lenses, split along the reviewer
+  that carries each set: `bugs`/`impl`/`adversarial` (Codex) and
+  `architecture`/`quality`/`tests`/`docs`/`comments` (the Claude subagent).
+- `triage-reconcile.md` / `triage-verify.md` / `fix-checks.md` — reconcile (dedupe +
+  corroboration), verify (five verdicts + the materiality test), and the three checks on every
+  fix — one file per stage, so each stage loads only its own.
 - `agent-delegation.md` — context discipline: the per-run directory inside the git dir as the
   transport between stages, subagent return budgets, resolved reference paths, parallel-vs-
   sequential rules, and which model each stage shape wants.
