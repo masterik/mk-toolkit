@@ -12,7 +12,7 @@ Claude-only for now; other agents (Codex, opencode, …) are a later, thin packa
 | Skill | Does |
 |-------|------|
 | `commit` | Inspect the tree, stage intentionally, split into logical Conventional Commits. |
-| `review-changes` | Review the local diff/commits with CodeRabbit + Codex, fix what's worth fixing, summarize. |
+| `review-changes` | Review the local diff/commits with three independent reviewers (CodeRabbit + Codex + Claude), verify the findings, fix what's worth fixing, summarize. |
 | `finish-feature` | Commit → merge the branch back into its base → delete branch / remove worktree (local, no PR). |
 | `create-pr` | Commit → push → open a GitHub PR → assign reviewers (remote review path). |
 

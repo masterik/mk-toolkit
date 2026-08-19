@@ -6,7 +6,7 @@ gives Claude a safe, repeatable way to take work from **edits → committed → 
 integrated**: stage and commit cleanly, review the diff, then either merge back locally or
 open a PR — without re-deriving fragile `git` + `gh` + `wt` command sequences on every task.
 
-It's a *workflow* toolkit, not just a git one: `review-changes` drives CodeRabbit/Codex,
+It's a *workflow* toolkit, not just a git one: `review-changes` drives CodeRabbit/Codex/Claude,
 `create-pr` drives GitHub, and `finish-feature` handles worktree cleanup — the parts of the
 dev loop the agent runs, git-centric but not git-limited.
 
@@ -38,7 +38,7 @@ A cohesive bundle that moves work through its lifecycle. `commit` is the shared 
 | Skill | Does | Trigger examples |
 |-------|------|------------------|
 | **`commit`** | Inspect the tree, stage intentionally, split into logical Conventional Commits. | "commit", "split into commits" |
-| **`review-changes`** | Review the local diff/commits with CodeRabbit + Codex, fix what's worth fixing, summarize. | "review my changes", "run codex and coderabbit" |
+| **`review-changes`** | Review the local diff/commits with three independent reviewers (CodeRabbit + Codex + Claude), verify the findings, fix what's worth fixing, summarize. | "review my changes", "run codex and coderabbit" |
 | **`finish-feature`** | Commit → merge the branch back into its base → delete branch / remove worktree. **Local**, no PR. | "finish this feature", "merge back and clean up" |
 | **`create-pr`** | Commit → push → open a GitHub PR → assign reviewers. **Remote review** path. | "create a PR", "open a pull request", "submit for review" |
 
@@ -54,6 +54,15 @@ the four skills link into via `../_shared/references/…`:
 - `worktree.md` — detect the worktree origin (Worktrunk `wt` / Claude Code
   `.claude/worktrees/` / plain `git worktree`) and clean up correctly.
 - `branching.md` — the default branch model to assume when a repo doesn't document its own.
+- `review-severity.md` — the severity bar (`critical`/`major`/`minor`), the `[surface, severity]`
+  tag, the read-only reviewer contract, what not to report, and the partial-review rule.
+- `review-lenses.md` — the eight review lenses (`bugs`, `impl`, `quality`, `architecture`,
+  `tests`, `docs`, `comments`, `adversarial`) and which reviewer carries which.
+- `finding-triage.md` — reconcile (dedupe + corroboration), verify (five verdicts + the
+  materiality test), and the three checks on every fix.
+- `agent-delegation.md` — context discipline: the per-run directory inside the git dir as the
+  transport between stages, subagent return budgets, resolved reference paths, parallel-vs-
+  sequential rules, and which model each stage shape wants.
 
 ## Architecture
 ```
@@ -63,7 +72,8 @@ the four skills link into via `../_shared/references/…`:
  commit · review-changes · finish-feature · create-pr   ← SKILL.md (when & how)
    │   all link into
    ▼
- _shared/references/*.md   (safety · conventions · quality gate · worktree · branching)
+ _shared/references/*.md   (safety · conventions · quality gate · worktree · branching
+                            severity bar · lenses · finding triage · agent delegation)
    │   drive
    ▼
  git   +   gh (GitHub CLI)   +   wt (Worktrunk)
