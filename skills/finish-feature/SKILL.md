@@ -34,6 +34,17 @@ Shared references (read the ones you need): `../_shared/references/worktree.md`,
 
 ## Workflow
 
+**Before step 1 — open the run directory.** Every log this skill writes lives in it
+(`../_shared/references/output-discipline.md`):
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh finish-feature
+```
+
+It prints one absolute path. **Keep that literal and reuse it** — there is no `$RUN_DIR` to fall back on,
+a shell variable does not survive to the next call, and re-running the script would open a second
+directory.
+
 ### 1. Commit remaining work
 
 If the tree is dirty, run the `commit` workflow first (stage intentionally, logical commits, Conventional Commit

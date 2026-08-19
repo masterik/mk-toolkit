@@ -23,7 +23,7 @@ Also honor anything the repo's own docs or CLAUDE.md name as the canonical check
 ## When a step fails — triage the log, don't read it
 
 The log is already on disk (`output-discipline.md`: every gate step is redirected to
-`$RUN_DIR/gate-<step>.log`), so the decision the caller faces — fix it, or get an explicit OK to proceed —
+`<run-dir>/gate-<step>.log`, in the run directory the caller opened before running the gate), so the decision the caller faces — fix it, or get an explicit OK to proceed —
 needs a diagnosis, not a transcript.
 
 **Delegate the diagnosis when the log is long** (roughly >100 lines, which any real failing test suite is).
@@ -44,6 +44,8 @@ compiler error is usually its own diagnosis.
 
 ## Rules
 
+- Open the run directory before the first step, with `run-open.sh` (`output-discipline.md`) — the gate's
+  very first action is a redirect into it, and a missing path sends the log to `/`.
 - Run the gate from the repo root of the current worktree.
 - Report exactly which step failed, its exit code, and the tail of its log — **never the whole log**
   (`output-discipline.md`). Do not silently continue past a failure.

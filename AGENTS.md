@@ -14,9 +14,12 @@ skills (`commit`, `review-changes`, `finish-feature`, `create-pr`) plus the shar
 - `skills/_shared/` — shared references (no `SKILL.md`); the skills link into it via
   `../_shared/references/…`. **Keep those relative paths intact** — they're what makes the
   bundle portable.
+- `scripts/run-open.sh` — opens this run's directory under `<git-dir>/mkit/`; every skill calls it
+  before it logs anything, via `${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh <skill>`.
 
 ## Conventions
-- Skills are Markdown only — no build step, no runtime.
+- Skills are Markdown — no build step, no runtime. The lone executable is `scripts/run-open.sh`;
+  add a script only for a mechanical invariant (see `concept.md`), never for a decision.
 - Nothing project-specific is hardcoded: quality-gate commands, commit scopes, and reviewers
   are discovered from the target repo.
 

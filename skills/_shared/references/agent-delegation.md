@@ -10,20 +10,20 @@ actually being acted on.
 
 ## The run directory
 
-Give every multi-stage run one directory, and make it the transport between stages:
+Give every multi-stage run one directory, and make it the transport between stages. **Open it with `scripts/run-open.sh`
+(`output-discipline.md`, "open the run directory first")**, which owns the rules about where it lives and
+why; this section is only about using it as transport.
 
-```bash
-RUN_DIR="$(git rev-parse --git-dir)/mkit/<skill>-$(date -u +%Y%m%dT%H%M%SZ)"
-mkdir -p "$RUN_DIR"
-```
-
-- Inside the git dir, so it is **never committed and never shows up in `git status`** — no `.gitignore`
-  entry needed, and a worktree gets its own (`git rev-parse --git-dir` resolves per worktree).
-- Write only inside that `mkit/` subdirectory. Never write anywhere else under the git dir.
-- Tell the user the path in the summary: it is the record, which is what makes it safe for the summary
-  to stay short.
-- Prune old runs (keep the last handful) at the end of a run, never at the start of one — a run in
-  progress elsewhere may be reading them.
+- Hand every subagent the **resolved absolute path** — never a `$RUN_DIR` (a subagent does not inherit
+  this session's shell) and never the `${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh` command (it has no plugin
+  root, and it must not open a directory of its own). The next Bash call in *this* session inherits nothing
+  either, which is why the path is carried in context (`output-discipline.md`, "carry the path, not a
+  variable").
+- **One writer per file.** A stage that fans out gets one file per branch of the fan-out
+  (`findings-<source>.md`, `verdicts-<group>.md`), and the caller aggregates after they all return.
+  Concurrent writers to a single path interleave or clobber, and a lost verdict reads exactly like a
+  finding nobody raised.
+- A stage reads the files of the stages before it and nothing else — that is what keeps its brief small.
 
 ## What each stage hands back
 
@@ -57,7 +57,8 @@ adversarial all covered`. Ten lines is generous; a hundred means the brief had n
   them in one message so they run concurrently.
 - **Exactly one writer at a time.** Never two subagents editing the same working tree; either serialize
   the edits or keep them in the main session. Fixing is a main-session job for that reason (and because
-  the user is in the loop for it).
+  the user is in the loop for it). The same rule covers the run directory: **fan-out means one output
+  file per subagent**, never a shared one they append to.
 - **Independence is a feature, not an accident.** Reviewers must not see each other's output, and a
   verifier must not see findings outside its own group. Passing one stage's findings into a stage meant
   to judge them independently is anchoring, and it is what a fan-out is designed to avoid.

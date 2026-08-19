@@ -10,17 +10,25 @@ It's a *workflow* toolkit, not just a git one: `review-changes` drives CodeRabbi
 `create-pr` drives GitHub, and `finish-feature` handles worktree cleanup — the parts of the
 dev loop the agent runs, git-centric but not git-limited.
 
-There is no CLI, no runtime, and nothing to install into the repo's toolchain. The plugin is
-just **knowledge + procedure**: each skill tells Claude *when* it applies and *how* to drive
-the underlying tools, with the safety rules that keep destructive steps from firing by
-accident. The agent is the interface; the skills are the muscle memory.
+There is no CLI and nothing to install into the repo's toolchain. The plugin is essentially
+**knowledge + procedure**: each skill tells Claude *when* it applies and *how* to drive the
+underlying tools, with the safety rules that keep destructive steps from firing by accident.
+The agent is the interface; the skills are the muscle memory.
+
+The one exception is `scripts/run-open.sh`, which opens a run directory for logs and
+intermediate files. It ships with the plugin (no `PATH`, no build, no install) and exists
+because that step is *mechanical* — atomic creation, absolute path, inside the git dir — and
+prose re-executed on every run kept getting one of the three wrong. Judgement stays in
+Markdown; a shell invariant belongs in shell.
 
 **Claude-only for now.** Other agents (Codex, opencode, …) are a later concern — the skills
 are plain Markdown, so support for another agent is a thin packaging step, not a rewrite.
 
 ## Design Principles
 - **Skills, not a binary:** the workflow lives in Markdown the agent reads, not in code it
-  executes. Nothing to build, version, or keep on `PATH`.
+  executes. Nothing to build, version, or keep on `PATH`. A script is warranted only for a
+  *mechanical invariant* the agent would otherwise re-derive every run (see `scripts/`) —
+  never for a decision, and never for a git operation.
 - **Composition over replacement:** orchestrate `git`, GitHub CLI (`gh`), and Worktrunk
   (`wt`); never reimplement what they already do well.
 - **Safe by default:** irreversible actions (force-push, branch delete, history rewrite,
@@ -78,6 +86,8 @@ the four skills link into via `../_shared/references/…`:
  _shared/references/*.md   (safety · conventions · quality gate · worktree · branching
                             severity bar · lenses · finding triage
                             agent delegation · output discipline)
+   +
+ scripts/run-open.sh       (one mechanical step: open this run's directory)
    │   drive
    ▼
  git   +   gh (GitHub CLI)   +   wt (Worktrunk)

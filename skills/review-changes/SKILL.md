@@ -48,11 +48,21 @@ technique; this is the roster.
 | 7 re-check | this session — Bash | — | pass/fail |
 | 8 report | this session, written from the run files | — | the summary itself |
 
-Open the run directory in step 1 and pass its path to every subagent:
+Open the run directory **before the gate in step 2 writes its first log**
+(`../_shared/references/output-discipline.md`):
 
 ```bash
-RUN_DIR="$(git rev-parse --git-dir)/mkit/review-$(date -u +%Y%m%dT%H%M%SZ)" && mkdir -p "$RUN_DIR"
+${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh review
 ```
+
+It prints one absolute path, created atomically so two concurrent reviews in one checkout cannot land in
+the same directory. **Keep that literal**: there is no `$RUN_DIR` to fall back on in a later call, this
+file writes it as `<run-dir>`, and every subagent gets the resolved path — never the variable, and never
+the `${CLAUDE_PLUGIN_ROOT}` command, which means nothing in a subagent's context.
+
+**One writer per file, throughout.** Every fanned-out stage writes one file per subagent —
+`findings-<source>.md` per reviewer, `verdicts-<group>.md` per group — and this session aggregates after
+they return.
 
 **Never read a diff into this session.** Subagents read the diff; this session reads `--shortstat` and `--name-only`.
 Never paste a reference file into a brief either — resolve its absolute path and tell the subagent to read it.
@@ -80,7 +90,7 @@ reports nothing at all when the work is fully staged.
 the commit messages or the ticket. The `impl` lens is judged against it; when there is no goal, say so and expect lower
 confidence rather than inventing one.
 
-Write `$RUN_DIR/scope.md`: the range, the command that produces the diff, the shortstat, the file list, and the goal.
+Write `<run-dir>/scope.md`: the range, the command that produces the diff, the shortstat, the file list, and the goal.
 Every later stage reads that file instead of being told again.
 
 ## 2. Run the quality gate *first*
@@ -91,7 +101,7 @@ Run the repo's fast check (`../_shared/references/quality-gate.md`, fast tier) *
   long failure log, triage it in a subagent per `../_shared/references/quality-gate.md` ("when a step fails").
 - Once it passes, **tell every reviewer it passed**, and that they must not run the tests, the build or the linter. That
   is what earns the right to reject "anything a linter catches" as a finding.
-- Keep the output out of this session: redirect each step to `$RUN_DIR/gate-<step>.log`, then report pass/fail and, on
+- Keep the output out of this session: redirect each step to `<run-dir>/gate-<step>.log`, then report pass/fail and, on
   failure, the failing step and the tail (`../_shared/references/output-discipline.md`).
 
 ## 3. Run three reviewers in parallel
@@ -104,10 +114,10 @@ Spawn all three in **one message** so they run concurrently and no reviewer sees
 | **Codex** | the Codex review path (`codex:rescue` skill / `codex:codex-rescue` agent), prompted for a review pass | `bugs`, `impl`, `adversarial` |
 | **Claude** | a subagent over the same diff — or the built-in `code-review` skill at a high effort level | `architecture`, `quality`, `tests`, `docs`, `comments` |
 
-Each brief carries: `$RUN_DIR/scope.md`, its lens set, the **resolved absolute paths** of `review-severity.md` and
+Each brief carries: `<run-dir>/scope.md`, its lens set, the **resolved absolute paths** of `review-severity.md` and
 `review-lenses.md` with an instruction to read them, and the fact that the gate already passed.
 
-Each reviewer **writes** `$RUN_DIR/findings-<source>.md` — one entry per finding: `[surface, severity]`, file + line,
+Each reviewer **writes** `<run-dir>/findings-<source>.md` — one entry per finding: `[surface, severity]`, file + line,
 confidence (0–100), the lens(es) that raised it, a title naming the mechanism, a body giving trigger + consequence, and a
 concrete fix. Cap it: **at most 15 findings, body under 80 words**; a reviewer at the cap says so and keeps the worst.
 
@@ -127,7 +137,7 @@ partial review as "clean" — `../_shared/references/review-severity.md`, last s
 One subagent, on a cheaper model: this stage is mechanical, and the answer is entirely in its input.
 
 Its brief: read the `findings-*.md` files and `../_shared/references/finding-triage.md` §1 (resolved path), write
-`$RUN_DIR/reconciled.md`, and **read nothing else** — no source files, no `git diff`, no `rg`. Which findings are the
+`<run-dir>/reconciled.md`, and **read nothing else** — no source files, no `git diff`, no `rg`. Which findings are the
 same issue and which singletons are too weak is answerable from the text; verification comes next with the code in front
 of it, and an opinion formed here contaminates the set the verifier is handed.
 
@@ -146,10 +156,15 @@ its own group — a verifier that sees the whole set anchors on it — plus `sco
 
 Each returns one line per finding: `id → confirmed | refined | rejected | immaterial | pre_existing`, with corrected
 fields on a `refined` and one clause of reasoning on a `rejected` or `immaterial`. Verdicts also go to
-`$RUN_DIR/verdicts.md`. Verification applies the materiality test only after a finding is confirmed real, and **does not
-look for new problems**.
+**`<run-dir>/verdicts-<group>.md` — one file per verifier, named for its group**, never a shared
+`verdicts.md`: parallel writers to one path interleave or clobber, and a lost verdict is indistinguishable
+from a finding nobody raised. Once all verifiers have returned, concatenate them into
+`<run-dir>/verdicts.md` in this session (`cat <run-dir>/verdicts-*.md > <run-dir>/verdicts.md`) so step 8
+has one file to read. Verification applies the materiality test only after a finding is confirmed real, and
+**does not look for new problems**.
 
-For a handful of findings in one or two files, verify inline instead — a subagent per group is not worth the round trip.
+For a handful of findings in one or two files, verify inline instead — a subagent per group is not worth the round trip;
+write the verdicts straight to `<run-dir>/verdicts.md`, since there is only one writer.
 
 `rejected` findings leave the report entirely. `immaterial` and `pre_existing` get their own summary sections and are
 kept **out of the counts**.
@@ -183,13 +198,13 @@ introduced a failure, revert or correct it before summarizing. Never fabricate a
 If the user wants another review round after fixing, keep the bar narrow: re-review with `bugs` + `impl` and **report
 nothing below major** — `impl` is the lens that catches a fix that does not address its finding. Do **not** widen the
 round to cover documentation you just wrote; a `docs` pass over fresh prose finds a defect in the sentence the last round
-produced, round after round, while the code stands still. A second round is a new `$RUN_DIR`, and reviewers are told the
+produced, round after round, while the code stands still. A second round is a new run directory, and reviewers are told the
 range and the goal — **never handed the previous round's findings**, which would anchor them on conclusions they should
 re-derive.
 
 ## 8. Summarize (the deliverable)
 
-Write it from the run files, in this order. It is a **decision brief, not a record** — the record is `$RUN_DIR`, so name
+Write it from the run files, in this order. It is a **decision brief, not a record** — the record is the run directory, so name
 that path once and let it hold the detail.
 
 1. **Completeness first** — sources expected vs reported. If any source failed, that goes above every finding.
@@ -201,7 +216,7 @@ that path once and let it hold the detail.
 6. **Needs your decision** — risky findings awaiting approval, with the proposed fix.
 7. **Considered, not changed** — skipped findings and `immaterial` verdicts, one line each.
 8. **Open questions** and **pre-existing** — their own short sections, one line each, out of the counts.
-9. **Verification** — the check that ran after fixing, its result, and the `$RUN_DIR` path.
+9. **Verification** — the check that ran after fixing, its result, and the `<run-dir>` path.
 
 A body appears in full where the reader acts on it and nowhere twice: findings the user must decide on carry their full
 body; everything in the one-line sections stays one line. End on the decision the user has to make — findings without an

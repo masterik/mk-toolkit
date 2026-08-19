@@ -31,6 +31,17 @@ Make commits that are easy to review and safe to ship:
 
 ## Workflow (checklist)
 
+**Before step 1 — open the run directory.** Every log this skill writes lives in it
+(`../_shared/references/output-discipline.md`):
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh commit
+```
+
+It prints one absolute path. **Keep that literal and reuse it** — there is no `$RUN_DIR` to fall back on,
+a shell variable does not survive to the next call, and re-running the script would open a second
+directory.
+
 1. Inspect the working tree before staging
    - `git status`
    - Confirm you are on the branch you intend (`git branch --show-current`) — matters when running inside a worktree.

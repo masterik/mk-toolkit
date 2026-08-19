@@ -39,12 +39,14 @@ Pick the finisher by **destination** — `finish-feature` merges it yourself loc
 - `finding-triage.md` — what happens after the reviewers return: reconcile (dedupe +
   corroboration arithmetic), verify (five verdicts + the materiality test), and the three
   checks on every fix.
-- `agent-delegation.md` — how a skill runs heavy work without paying for it in context: the
-  per-run directory inside the git dir, subagent return budgets, resolved reference paths,
-  one-writer-at-a-time, and model-per-stage.
-- `output-discipline.md` — bounding command output: gate logs to a file and read the tail,
-  `--stat` before any diff, never a full branch diff to write prose — and what must never be
-  capped (a staged diff you are approving, a body the user acts on).
+- `agent-delegation.md` — how a skill runs heavy work without paying for it in context: using the
+  run directory as transport between stages, subagent return budgets, resolved reference paths,
+  one-writer-per-file, and model-per-stage.
+- `output-discipline.md` — the run directory itself (opened with `scripts/run-open.sh` before
+  anything logs, and written as `<run-dir>` — there is no `$RUN_DIR` variable) and bounding
+  command output: gate logs to a file and read the tail, `--stat` before any diff,
+  never a full branch diff to write prose — and what must never be capped (a staged diff you are
+  approving, a body the user acts on).
 
 ## Design invariants
 
@@ -61,7 +63,7 @@ Pick the finisher by **destination** — `finish-feature` merges it yourself loc
   their lists mergeable and corroboration meaningful.
 - **The main session holds decisions, not evidence** — stages that read a lot and decide a
   little run in subagents and hand back a summary; diffs, transcripts and findings bodies live
-  in a per-run directory under the git dir (`agent-delegation.md`), and command output is
-  bounded before it ever arrives (`output-discipline.md`).
+  in a per-run directory under the git dir, which every skill opens before it logs anything, and
+  command output is bounded before it ever arrives (`output-discipline.md`).
 
 For the plugin's overall design and roadmap, see [`concept.md`](../../concept.md).
