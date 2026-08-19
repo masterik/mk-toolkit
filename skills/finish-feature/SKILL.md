@@ -25,17 +25,29 @@ Shared references (read the ones you need): `../_shared/references/worktree.md`,
 
 ## Preconditions
 
-1. Determine the **current branch** and confirm it is a feature/bugfix branch, not the base itself
-   (`git branch --show-current`). If it's `main`/`master`, stop — there is nothing to finish.
-2. Determine the **base branch** to merge into — default `main`; the branch this feature was cut from. If ambiguous,
-   ask. See `../_shared/references/branching.md` for the common branch model and how to detect a repo's own.
-3. Detect the **worktree context** (worktrunk `wt` / Claude Code `.claude/worktrees/` / plain git / none) per
-   `../_shared/references/worktree.md`. This decides the cleanup path.
+All three are answered by **one call** — they are independent read-only probes, and running them separately spends a
+turn each:
+
+```bash
+git branch --show-current && git status --short
+git rev-parse --git-dir --git-common-dir --show-toplevel
+git worktree list
+command -v wt >/dev/null && echo "wt: yes" || echo "wt: no"
+```
+
+1. **Current branch** — confirm it is a feature/bugfix branch, not the base itself. If it's `main`/`master`, stop:
+   there is nothing to finish.
+2. **Base branch** to merge into — default `main`; the branch this feature was cut from. If ambiguous, ask. See
+   `../_shared/references/branching.md` for the common branch model and how to detect a repo's own.
+3. **Worktree context** — worktrunk `wt` / Claude Code `.claude/worktrees/` / plain git / none. This decides the
+   cleanup path. `--git-dir` differing from `--git-common-dir` means a linked worktree; a root path containing
+   `/.claude/worktrees/` means the harness's own; `wt` on `PATH` plus a worktrunk-shaped layout means worktrunk. Read
+   `../_shared/references/worktree.md` for the cleanup each one needs — at step 4, not now.
 
 ## Workflow
 
 **Before step 1 — open the run directory.** Every log this skill writes lives in it
-(`../_shared/references/output-discipline.md`):
+(`../_shared/references/output-discipline.md`). Fold it into the preconditions call above — it depends on none of them:
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh finish-feature

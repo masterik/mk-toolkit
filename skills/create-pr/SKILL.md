@@ -37,10 +37,14 @@ Open a PR that is easy to review and safe to merge:
 ## Workflow
 
 **Before step 1 — open the run directory.** Every log this skill writes lives in it
-(`../_shared/references/output-discipline.md`):
+(`../_shared/references/output-discipline.md`). Once the base branch is settled, gather the run directory and every
+read-only fact this skill needs in **one call** — the same three outputs serve step 2's pre-flight, step 4's context and
+the final report, and none of them change when step 3 pushes:
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh create-pr
+git branch --show-current && git status --short
+git log --oneline <base>..HEAD && git diff <base> --stat
 ```
 
 It prints one absolute path. **Reuse that literal**; this file writes it as `<run-dir>`. There is no
@@ -56,9 +60,9 @@ left behind. Works the same inside a worktree — just confirm `git branch --sho
 
 Before writing any PR description, verify:
 
-1. **Not on the base branch** — if `git branch --show-current` is `main`/`master`/the default branch, stop and warn;
+1. **Not on the base branch** — if the current branch is `main`/`master`/the default branch, stop and warn;
    PRs come from feature/bugfix branches (see `../_shared/references/branching.md` for how to tell them apart).
-2. **Commits exist ahead of base** — `git log --oneline <base>..HEAD`; if empty, there's nothing to PR.
+2. **Commits exist ahead of base** — the `git log --oneline <base>..HEAD` above; if empty, there's nothing to PR.
 3. **Full quality gate** — run the project gate (`../_shared/references/quality-gate.md`): lint → test → build or the
    repo equivalent, in order, stop on failure. Report which step failed. The user may proceed anyway for a draft PR.
    Redirect each step to its own log: one line per passing step, and on failure the step, the exit code and the tail —
@@ -77,12 +81,8 @@ diverged, stop and surface it rather than force-pushing.
 
 ### 4. Gather context for the PR
 
-Two commands here, and no more:
-
-```bash
-git log --oneline <base>..HEAD
-git diff <base> --stat
-```
+**Nothing to run here** — the log and the `--stat` came back with the run directory, and pushing did not change either.
+Re-running them is a turn spent to reprint what is already in context.
 
 **Commit messages are the primary source for the title and description** — the diff is a fallback for the one thing they
 do not explain. **Do not load the branch diff into this session.** On a real branch it is tens of thousands of tokens
@@ -192,8 +192,8 @@ Commits (<base>..HEAD):
 ...
 ```
 
-Get the commit list from `git log --oneline <base>..HEAD` (from step 4 — it is already in context, and it is cheap
-precisely because the diff never was) — don't just say "N commits pushed."
+The commit list is the `git log --oneline <base>..HEAD` gathered at the top — already in context, and cheap precisely
+because the diff never was. Don't just say "N commits pushed."
 
 ## Common failure scenarios
 

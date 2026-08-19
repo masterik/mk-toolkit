@@ -35,21 +35,24 @@ Make commits that are easy to review and safe to ship:
 ## Workflow (checklist)
 
 **Before step 1 — open the run directory.** Every log this skill writes lives in it
-(`../_shared/references/output-discipline.md`):
+(`../_shared/references/output-discipline.md`). Nothing in step 1 depends on it, so issue both in **one call** instead
+of spending a turn on each:
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh commit
+git branch --show-current && git status --short && git diff --stat && git diff --cached --stat
 ```
 
 It prints one absolute path. **Reuse that literal**; this file writes it as `<run-dir>`. There is no
 `$RUN_DIR` — a shell variable does not survive to the next Bash call — and re-running the script opens a
 second directory rather than returning the first.
 
-1. Inspect the working tree before staging
-   - `git status`
-   - Confirm you are on the branch you intend (`git branch --show-current`) — matters when running inside a worktree.
-   - **`git diff --stat` first**, then the full diff per file for the files you actually have to judge — never the whole
-     tree at once (`../_shared/references/output-discipline.md`).
+1. Inspect the working tree before staging — the call above already returned all of it
+   - Confirm you are on the branch you intend — matters when running inside a worktree.
+   - Read both `--stat`s: unstaged **and** staged. A bare `git diff --stat` reports nothing when the work is already
+     fully staged, which reads exactly like a clean tree.
+   - Then the full diff per file for the files you actually have to judge — never the whole tree at once
+     (`../_shared/references/output-discipline.md`).
    - On a large mixed tree, stop after the `--stat` and let step 2 delegate the read instead.
 2. Decide commit boundaries (split if needed)
    - Split by: feature vs refactor, backend vs frontend, formatting vs logic, tests vs prod code, dependency bumps vs
