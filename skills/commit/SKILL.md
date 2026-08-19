@@ -36,13 +36,22 @@ Make commits that are easy to review and safe to ship:
    - Confirm you are on the branch you intend (`git branch --show-current`) — matters when running inside a worktree.
    - **`git diff --stat` first**, then the full diff per file for the files you actually have to judge — never the whole
      tree at once (`../_shared/references/output-discipline.md`).
-   - On a large mixed tree (roughly >10 files or >400 changed lines), delegate the read: hand a subagent the file list
-     and have it return a **commit plan** — groups of paths with one line of rationale each — then do the staging here.
-     Below that threshold the round trip costs more than it saves.
+   - On a large mixed tree, stop after the `--stat` and let step 2 delegate the read instead.
 2. Decide commit boundaries (split if needed)
    - Split by: feature vs refactor, backend vs frontend, formatting vs logic, tests vs prod code, dependency bumps vs
      behavior changes.
    - If changes are mixed in one file, plan to use patch staging.
+   - **On a large mixed tree — roughly >10 files or >400 changed lines — delegate the read**
+     (`../_shared/references/agent-delegation.md`). Hand a subagent the branch, the `--stat`, the file list and the
+     split heuristics above (it does not have this skill loaded, so put them in the brief), and have it read the diff
+     and **return a commit plan and nothing else** — for each proposed commit: the type and scope, a one-line subject,
+     the paths it covers, one line of rationale, and a note on any file that has to be patch-staged because it is
+     mixed. Under ~20 lines total; no diff, no file contents.
+   - Below that threshold, read it here — the `--stat` plus a few targeted per-file diffs costs less than the round
+     trip.
+   - **The plan is a proposal, not a decision.** Sanity-check it against the `--stat` (every changed path is in exactly
+     one group, nothing invented), then do the staging, the message wording and the splits in this session — the
+     rationale is what lets you answer "why is X with Y?" without re-reading the diff.
 3. Stage only what belongs in the next commit
    - Prefer patch staging for mixed changes: `git add -p`
    - To unstage a hunk/file: `git restore --staged -p` or `git restore --staged <path>`
