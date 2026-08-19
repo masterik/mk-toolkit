@@ -41,9 +41,9 @@ Shared references (read the ones you need): `../_shared/references/worktree.md`,
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh finish-feature
 ```
 
-It prints one absolute path. **Keep that literal and reuse it** — there is no `$RUN_DIR` to fall back on,
-a shell variable does not survive to the next call, and re-running the script would open a second
-directory.
+It prints one absolute path. **Reuse that literal**; this file writes it as `<run-dir>`. There is no
+`$RUN_DIR` — a shell variable does not survive to the next Bash call — and re-running the script opens a
+second directory rather than returning the first.
 
 ### 1. Commit remaining work
 

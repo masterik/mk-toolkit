@@ -43,9 +43,9 @@ Open a PR that is easy to review and safe to merge:
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh create-pr
 ```
 
-It prints one absolute path. **Keep that literal and reuse it** — there is no `$RUN_DIR` to fall back on,
-a shell variable does not survive to the next call, and re-running the script would open a second
-directory.
+It prints one absolute path. **Reuse that literal**; this file writes it as `<run-dir>`. There is no
+`$RUN_DIR` — a shell variable does not survive to the next Bash call — and re-running the script opens a
+second directory rather than returning the first.
 
 ### 1. Commit remaining work
 

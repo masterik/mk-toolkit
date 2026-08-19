@@ -14,17 +14,24 @@ Part of the **mkit** workflow bundle. Runs a multi-source review over local work
 applies safe fixes automatically, asks before risky ones, and hands back a findings + fixes summary. Typically run right
 before `commit`, `finish-feature`, or `create-pr`.
 
-Shared references — **read the first four before running anything; they are what the reviewers are held to**:
+**Read nothing up front.** Most of this bundle's references are what the *reviewers* are held to, not what this
+session runs on — they are handed to subagents as resolved paths, and a copy here buys nothing. Each is named at the
+step that needs it:
 
-- `../_shared/references/review-severity.md` — the severity bar, the `[surface, severity]` tag, the reviewer contract,
-  what not to report, and the partial-review rule.
-- `../_shared/references/lenses-correctness.md` / `../_shared/references/lenses-craft.md` — the eight
-  lenses, split along the reviewer that carries each set.
-- `../_shared/references/triage-reconcile.md`, `../_shared/references/triage-verify.md`,
-  `../_shared/references/fix-checks.md` — reconcile, verify, and the three checks on every fix.
-- `../_shared/references/agent-delegation.md` — the run directory, return budgets, and how to write a brief.
-- `../_shared/references/output-discipline.md` — how to keep gate logs and diffs out of this session.
-- `../_shared/references/quality-gate.md`, `../_shared/references/git-safety.md`.
+| reference | who reads it | when |
+| --- | --- | --- |
+| `review-severity.md` | every reviewer | handed over in step 3 |
+| `lenses-correctness.md` / `lenses-craft.md` | Codex / the Claude reviewer | handed over in step 3 |
+| `triage-reconcile.md` | the reconciler subagent | handed over in step 4 |
+| `triage-verify.md` | each verifier subagent | handed over in step 5 |
+| `fix-checks.md` | **this session** | read it at step 6, before the first fix |
+| `quality-gate.md` | **this session** | read it at step 2 to detect the repo's check |
+| `output-discipline.md`, `agent-delegation.md`, `git-safety.md` | — | background rationale; the rules this run needs are restated below |
+
+The one piece of that vocabulary this session uses throughout is the finding tag. Every finding carries
+`[surface, severity]`: surface is `code` · `comments` · `docs` · `tests` · `config`/`build`, severity is
+`critical` (data loss, security hole, crash on a reachable path) · `major` (wrong runtime behavior, broken contract) ·
+`minor` (a real defect, contained impact — prose defects are always minor). Counts are reported by tag, never bare.
 
 The pipeline is **gate → find → reconcile → verify → fix → re-check → report**. Each stage exists to keep the next one
 honest, so do not collapse them: a reviewer that also fixes anchors on its own conclusions, and a fixer that also decides
@@ -34,8 +41,10 @@ what is real never rejects anything.
 
 **Every stage that reads a lot and decides a little runs in a subagent, and hands back a summary — never its work.**
 A three-reviewer review over a real diff is tens of thousands of tokens of transcript; none of it belongs in this
-session, which needs only enough to put a decision to the user. `../_shared/references/agent-delegation.md` is the
-technique; this is the roster.
+session, which needs only enough to put a decision to the user. Every brief therefore states its **return budget**, its
+**output path** and its **prohibitions**, hands over the facts already established (the range, the shortstat, the file
+list, the goal), and resolves every path it names — a subagent has neither this skill nor `${CLAUDE_PLUGIN_ROOT}` in its
+context. (`../_shared/references/agent-delegation.md` argues the case; this is the roster.)
 
 | stage | who runs it | model | enters this session |
 | --- | --- | --- | --- |

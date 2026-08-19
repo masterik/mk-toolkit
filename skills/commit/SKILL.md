@@ -12,8 +12,11 @@ model: sonnet
 Part of the **mkit** workflow bundle (`commit` · `finish-feature` · `create-pr` · `review-changes`). Shared references live in
 `../_shared/references/`. This skill only commits — for merge-and-cleanup use `finish-feature`, for a PR use `create-pr`.
 
-Keep command output bounded throughout — `../_shared/references/output-discipline.md`. It is the one reference to read
-before step 1, because `commit` is the front-end both finishers call, so what it loads they load too.
+Keep command output bounded throughout, which for this skill is three rules, stated again where they apply below:
+**`--stat` before any diff**, **gate output goes to a log — report pass/fail, not the log**, and **never truncate a
+staged diff you are about to approve**. `../_shared/references/output-discipline.md` has the reasoning and the rest of
+the pattern; read it only if a case here is not covered. `commit` is the front-end both finishers call, so what it
+loads they load too.
 
 ## Goal
 
@@ -38,9 +41,9 @@ Make commits that are easy to review and safe to ship:
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh commit
 ```
 
-It prints one absolute path. **Keep that literal and reuse it** — there is no `$RUN_DIR` to fall back on,
-a shell variable does not survive to the next call, and re-running the script would open a second
-directory.
+It prints one absolute path. **Reuse that literal**; this file writes it as `<run-dir>`. There is no
+`$RUN_DIR` — a shell variable does not survive to the next Bash call — and re-running the script opens a
+second directory rather than returning the first.
 
 1. Inspect the working tree before staging
    - `git status`
