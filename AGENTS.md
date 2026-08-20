@@ -7,6 +7,13 @@ skills (`commit`, `review-changes`, `finish-feature`, `create-pr`) plus the shar
 `_shared/references/` bundle. Composition over replacement: the skills orchestrate `git`,
 `gh`, `wt`, and code-review tools — no new git logic.
 
+## Rules
+
+- When reporting information, be _extremely concise_ — prioritize brevity over grammar or style.
+- When writing documentation, be _clear and complete_, but prioritize concision over polished grammar.
+- When creating plans, be thorough and actionable; describe *what* to do, not *how*, and omit code
+  unless essential for clarity.
+
 ## Layout
 - `.claude-plugin/plugin.json` — plugin manifest (skills auto-discovered from `skills/`).
 - `.claude-plugin/marketplace.json` — marketplace entry (`source: "./"`).
