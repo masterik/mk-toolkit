@@ -28,6 +28,9 @@ skills (`commit`, `review`, `finish`, `pr`) plus the shared
   review's findings), `lib/common.sh` (sourced helpers).
 - `PREREQUISITES.md` — required tooling (`git`, `bash`, `node`, `jq`), recommended (`rg`, `gh`, `wt`),
   and the permission allowlist that stops the scripts prompting.
+- `tests/` — the script layer's own test suite, dev-only (never shipped as part of a skill run):
+  `tests/run.sh` runs both — `node --test tests/findings.test.mjs` (built-in runner, no deps) and
+  `bats tests/bats/` (one `.bats` file per shell script, each against a throwaway git repo).
 
 ## Conventions
 - Skills are Markdown — no build step, no runtime. Scripts are bash (POSIX-ish; macOS ships bash 3.2

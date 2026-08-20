@@ -32,6 +32,11 @@ arithmetic over a review's findings.
 Nothing to build. The scripts need `git`, `bash`, `node` and `jq`; `rg`, `gh` and `wt` are
 recommended — see [Prerequisites](PREREQUISITES.md).
 
+## Testing the scripts
+
+`tests/run.sh` runs the script layer's own suite: `node --test` over `findings.mjs`, `bats`
+over the five shell scripts. Dev-only — see [Prerequisites](PREREQUISITES.md#dev-only--running-tests).
+
 ## Docs
 
 - [Concept](concept.md) — direction and design principles

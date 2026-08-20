@@ -36,6 +36,16 @@ brew install ripgrep gh worktrunk/tap/worktrunk   # macOS
 sudo apt install -y ripgrep && gh auth login      # Debian/Ubuntu
 ```
 
+## Dev only — running `tests/`
+
+Contributors testing the scripts themselves need `bats-core`; users of the plugin never do.
+
+```bash
+brew install bats-core                     # macOS
+npm install -g bats                        # or via npm, any OS
+./tests/run.sh                             # node --test findings.mjs, then bats tests/bats/
+```
+
 ## Optional — extra reviewers for `review`
 
 `review` wants three independent sources. Any one can be missing; the skill redistributes

@@ -145,6 +145,7 @@ skills/
 scripts/
   lib/common.sh        # sourced helpers: plugin root, refs path, rg-or-grep, wt binary
   run-open.sh  facts.sh  gate-detect.sh  gate-run.sh  findings.mjs
+tests/                  # dev-only: the script layer's own test suite (tests/run.sh)
 PREREQUISITES.md       # required + recommended tooling, setup, permission allowlist
 ```
 
