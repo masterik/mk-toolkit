@@ -24,10 +24,11 @@ The **shared library** for mkit's four workflow skills. **Not a triggerable skil
 - `git-safety.md` — the non-negotiable git safety protocol: no force-push, no config edits, no AI attribution,
   don't skip hooks, confirm before irreversible steps.
 - `conventional-commits.md` — message format, type table, scope detection.
-- `quality-gate.md` — how to **detect** (not hardcode) the repo's fast check and full lint/test/build gate, and
-  how to triage a failing step: delegate the diagnosis, report cause + suggested fix, never the log.
-- `worktree.md` — detect the worktree origin (worktrunk `wt` / Claude Code `.claude/worktrees/` / plain
-  `git worktree`) and clean up correctly.
+- `quality-gate.md` — detecting the repo's fast check and full lint/test/build gate with
+  `scripts/gate-detect.sh` (never hardcoded), running them through `scripts/gate-run.sh`, and when a failure
+  still needs a delegated diagnosis.
+- `worktree.md` — the `cleanup_path` `facts.sh` reports (`exit-worktree` / `wt` / `git-worktree` / `none`) and
+  the teardown each one takes.
 - `branching.md` — the branch model to assume when a repo documents none.
 - `review-severity.md` — the severity bar (`critical`/`major`/`minor`, prose is minor), the
   `[surface, severity]` tag, the read-only reviewer contract, what not to report, and why a partial review is
@@ -36,15 +37,15 @@ The **shared library** for mkit's four workflow skills. **Not a triggerable skil
   each set: `bugs`/`impl`/`adversarial` to Codex, `architecture`/`quality`/`tests`/`docs`/`comments` to the
   Claude subagent. Split so a reviewer loads only its own lenses.
 - `triage-reconcile.md`, `triage-verify.md`, `fix-checks.md` — what happens after the reviewers return, one
-  file per stage and per consumer: reconcile (dedupe + corroboration arithmetic, in a subagent), verify (five
-  verdicts + the materiality test, one subagent per group), and the three checks on every fix plus what gates
-  (the main session).
+  file per stage and per consumer: reconcile (`findings.mjs reconcile` does the arithmetic; the main session
+  judges what it leaves open), verify (five verdicts + the materiality test, one subagent per group from
+  `findings.mjs group`), and the three checks on every fix plus what gates (the main session).
 - `agent-delegation.md` — running heavy work without paying for it in context: the run directory as transport,
   subagent return budgets, resolved reference paths, one-writer-per-file, model-per-stage.
-- `output-discipline.md` — the run directory itself (opened with `scripts/run-open.sh` before anything logs,
-  written as `<run-dir>` — there is no `$RUN_DIR`) and bounding command output: gate logs to a file and read
-  the tail, `--stat` before any diff, never a full branch diff to write prose — plus what must never be capped
-  (a staged diff you are approving, a body the user acts on).
+- `output-discipline.md` — the one call that starts a run (`scripts/facts.sh`, which opens the run directory
+  and returns every starting fact), the gate runner (`scripts/gate-run.sh`), and bounding command output:
+  `--stat` before any diff, never a full branch diff to write prose — plus what must never be capped (a staged
+  diff you are approving, a body the user acts on).
 
 ## Design invariants
 
@@ -60,5 +61,8 @@ The **shared library** for mkit's four workflow skills. **Not a triggerable skil
   subagents and hand back a summary; diffs, transcripts and finding bodies live in a per-run directory under
   the git dir, opened before anything logs, and command output is bounded before it arrives
   (`output-discipline.md`).
+- **A script for a mechanical invariant, never for a decision** — `scripts/` owns the steps that are the same
+  every run and fail silently when hand-rolled (opening the run directory, logging a gate step, classifying a
+  worktree, confidence arithmetic). Judgement stays in Markdown; see [`concept.md`](../../concept.md).
 
 For the plugin's overall design and roadmap see [`concept.md`](../../concept.md).

@@ -14,10 +14,10 @@ live in `../_shared/references/`. This skill only commits — merge-and-cleanup 
 `pr`.
 
 Keep output bounded throughout. For this skill that is three rules, restated below where they apply:
-**`--stat` before any diff**, **gate output goes to a log — report pass/fail, not the log**, **never truncate
-a staged diff you are about to approve**. `../_shared/references/output-discipline.md` has the reasoning and
-the rest of the pattern; read it only for a case not covered here. `commit` is the front-end both finishers
-call, so what it loads, they load.
+**`--stat` before any diff**, **gate output goes through `gate-run.sh` — report pass/fail, not the log**,
+**never truncate a staged diff you are about to approve**. `../_shared/references/output-discipline.md` has
+the reasoning; read it only for a case not covered here. `commit` is the front-end both finishers call, so
+what it loads, they load.
 
 ## Goal
 
@@ -35,22 +35,22 @@ Commits that are easy to review and safe to ship:
 
 ## Workflow
 
-**Before step 1 — open the run directory** (`../_shared/references/output-discipline.md`). Nothing in step 1
-depends on it, so issue both in **one call** rather than a turn each:
+**Step 0 — one call for everything read-only**, which also opens this run's directory
+(`../_shared/references/output-discipline.md`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh commit
-git branch --show-current && git status --short && git diff --stat && git diff --cached --stat
+${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh commit
 ```
 
-It prints one absolute path. **Reuse that literal**; this file writes it as `<run-dir>`. There is no
+Keep the `run=` and `refs=` literals it prints; this file writes the first as `<run-dir>`. There is no
 `$RUN_DIR` — a shell variable does not survive to the next Bash call — and re-running the script opens a
 second directory instead of returning the first.
 
 1. **Inspect before staging** — the call above returned all of it.
-   - Confirm you are on the intended branch; matters inside a worktree.
-   - Read **both** `--stat`s, unstaged and staged. A bare `git diff --stat` reports nothing when the work is
-     already fully staged, which reads exactly like a clean tree.
+   - Confirm `branch=` is the intended one; matters inside a worktree (`linked=yes`).
+   - Read **both** stats: `unstaged_stat` and `staged_stat`. They are separate because a bare
+     `git diff --stat` reports nothing when the work is already fully staged, which reads exactly like a
+     clean tree.
    - Then the full diff per file, only for files you must judge — never the whole tree at once.
    - Large mixed tree: stop after the `--stat` and let step 2 delegate the read.
 2. **Decide commit boundaries.**
@@ -59,7 +59,8 @@ second directory instead of returning the first.
    - Changes mixed within one file → plan patch staging.
    - **Large mixed tree (>~10 files or >~400 changed lines): delegate the read**
      (`../_shared/references/agent-delegation.md`). The subagent does not have this skill loaded, so its brief
-     carries the branch, the `--stat`, the file list and the split heuristics above. It reads the diff and
+     carries the branch, the stats, the file list and the split heuristics above — all of which step 0
+     returned. It reads the diff and
      **returns a commit plan and nothing else** — per proposed commit: type and scope, one-line subject, the
      paths it covers, one line of rationale, plus any file needing patch staging because it is mixed. Under
      ~20 lines; no diff, no file contents.
@@ -78,12 +79,20 @@ second directory instead of returning the first.
 6. **Write the message.** Conventional Commits required (`../_shared/references/conventional-commits.md`).
    Multi-line: `git commit -v` or `git commit -F <file>`.
 7. **Run the smallest relevant verification** — the repo's fastest meaningful check
-   (`../_shared/references/quality-gate.md`, fast tier). Redirect to a log; report pass/fail and the failing
-   step only, never the log. On a long failure log, triage it per that reference ("when a step fails").
+   (`../_shared/references/quality-gate.md`, fast tier):
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/gate-detect.sh                       # once per run: what to run
+   ${CLAUDE_PLUGIN_ROOT}/scripts/gate-run.sh <run-dir> fast -- <fast command>
+   ```
+
+   Report pass/fail and, on failure, the step and its exit code — never the log. The verdict usually *is* the
+   diagnosis; delegate only when it is not ("when a step fails").
 8. **Repeat** until the working tree is clean.
 
 ## Final report (always)
 
+Prune with `${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh --prune` on the way out, folded into another call.
 After the last commit run `git log --oneline -n <N>` (N = commits made this run) to confirm hashes, then
 report every commit — never skip this, even for one:
 

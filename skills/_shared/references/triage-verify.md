@@ -3,7 +3,10 @@
 Stage 2 of finding triage in `review`: judge the reconciled findings against the code. Reconciling
 happened before you (`triage-reconcile.md`), fixing happens after (`fix-checks.md`) — you do neither.
 
-Open the file at the line named, read enough around it to judge, return exactly **one** verdict:
+You are given a `verify-<group>.jsonl` file of findings. Open each one's file at the line named, read enough
+around it to judge, and return exactly **one** verdict per finding — as a line of JSON in
+`<run-dir>/verdicts-<group>.jsonl`, `{"id":"f03","verdict":"…","reason":"one clause"}`, plus any field a
+`refined` verdict corrects:
 
 | verdict | means |
 | --- | --- |

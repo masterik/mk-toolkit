@@ -15,22 +15,18 @@ applies safe fixes, asks before risky ones, hands back a findings + fixes summar
 `commit`, `finish` or `pr`.
 
 **Read nothing up front.** Most of these references are what the *reviewers* are held to, not what this
-session runs on — they go to subagents as resolved paths, and a copy here buys nothing. Later steps name them
-by bare filename:
+session runs on — they go to subagents as paths under `refs=` (below), and a copy here buys nothing. Later
+steps name them by bare filename:
 
-| reference, under `../_shared/references/` | who reads it | when |
+| reference, under `refs=` | who reads it | when |
 | --- | --- | --- |
 | `review-severity.md` | every reviewer | handed over in step 3 |
 | `lenses-correctness.md` / `lenses-craft.md` | Codex / the Claude reviewer | handed over in step 3 |
-| `triage-reconcile.md` | the reconciler subagent — or **this session**, on a short list | handed over in step 4, or read there |
-| `triage-verify.md` | each verifier subagent — or **this session**, on a handful of findings | handed over in step 5, or read there |
+| `triage-reconcile.md` | **this session** | read at step 4 |
+| `triage-verify.md` | each verifier subagent — or **this session**, on a handful | handed over in step 5, or read there |
 | `fix-checks.md` | **this session** | read at step 6, before the first fix |
-| `quality-gate.md` | **this session** | read at step 2 to detect the repo's check |
+| `quality-gate.md` | **this session** | read at step 2 |
 | `output-discipline.md`, `agent-delegation.md`, `git-safety.md` | — | background rationale; the rules this run needs are restated below |
-
-**Resolve a path before it goes into a brief.** A subagent has neither this skill nor `${CLAUDE_PLUGIN_ROOT}`
-in context, so `../_shared/references/lenses-craft.md` means nothing to it — expand against this file's own
-location and hand over the absolute path.
 
 The one piece of reviewer vocabulary this session uses throughout is the finding tag. Every finding carries
 `[surface, severity]`: surface is `code` · `comments` · `docs` · `tests` · `config`/`build`; severity is
@@ -48,79 +44,58 @@ what is real never rejects anything.
 work.** A three-reviewer review is tens of thousands of tokens of transcript; this session needs only enough to
 put a decision to the user. Every brief states its **return budget**, **output path** and **prohibitions**, and
 hands over established facts — range, shortstat, file list, goal — so the subagent does not re-derive them.
-(`../_shared/references/agent-delegation.md` argues the case; this is the roster.)
+(`agent-delegation.md` argues the case; this is the roster.)
 
 | stage | who runs it | model | enters this session |
 | --- | --- | --- | --- |
-| 1 scope | this session — 2 batched Bash calls, one shared with the run directory | — | range, shortstat, file count, goal |
-| 2 gate | this session — Bash | — | pass/fail and the failing step only |
-| 2a gate triage (on failure) | 1 subagent, reads the log | Sonnet | what failed, cause, suggested fix — ≤15 lines |
+| 1 scope | this session — **one** `facts.sh` call | — | run dir, refs path, branch, stat, file list |
+| 2 gate | this session — `gate-detect.sh` + `gate-run.sh` | — | pass/fail and the failing step only |
+| 2a gate triage | 1 subagent, only if the verdict is not diagnosis enough | Sonnet | what failed, cause, suggested fix — ≤15 lines |
 | 3 find | 3 subagents, parallel | Opus | 3 × ≤10 lines: path written + counts by tag + lenses not covered |
-| 4 reconcile | 1 subagent, text only — inline if ≤10 findings | Sonnet | path written + counts + what it dropped and why |
-| 5 verify | 1 subagent per directory group, parallel | Opus | one line per finding: id + verdict (+ corrected fields) |
+| 4 reconcile | this session — `findings.mjs reconcile` | — | counts, merges, drops, undecided pairs |
+| 5 verify | 1 subagent per group from `findings.mjs group`, parallel | Opus | one line per finding: id + verdict (+ corrected fields) |
 | 6 fix | this session, bodies read from disk on demand | — | the findings being acted on, in full |
 | 6a sweep | this session when the shape greps; 1 subagent per shape when it does not | Sonnet | the occurrence list |
-| 7 re-check | this session — Bash | — | pass/fail |
-| 8 report | this session, written from the run files | — | the summary itself |
+| 7 re-check | this session — `gate-run.sh` | — | pass/fail |
+| 8 report | this session — `findings.mjs report`, then prose | — | the summary itself |
 
-Open the run directory **before step 2's gate writes its first log**
-(`../_shared/references/output-discipline.md`). It does not depend on the scope, so open it **in the same call
-as step 1's branch and status**:
-
-```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh review
-git branch --show-current && git status --short
-```
-
-One absolute path, created atomically so two concurrent reviews in one checkout cannot collide. **Keep that
-literal**: there is no `$RUN_DIR` in a later call, this file writes it as `<run-dir>`, and every subagent gets
-the resolved path — never the variable, never the `${CLAUDE_PLUGIN_ROOT}` command.
+**Never read a diff into this session.** Subagents read the diff; this session reads what `facts.sh` returned.
+Never paste a reference into a brief either — hand over its path under `refs=` and have the subagent read it.
 
 **One writer per file, throughout.** Every fanned-out stage writes one file per subagent —
-`findings-<source>.md` per reviewer, `verdicts-<group>.md` per group — and this session aggregates after they
-return.
-
-**Never read a diff into this session.** Subagents read the diff; this session reads `--shortstat` and
-`--name-only`. Never paste a reference into a brief either — resolve its path and have the subagent read it.
+`findings-<source>.jsonl` per reviewer, `verdicts-<group>.jsonl` per group — and the scripts aggregate after
+they return.
 
 ## 1. Establish the review scope
 
 Decide what to review (ask only if genuinely ambiguous — a feature branch with uncommitted work is the
-standard case):
+standard case): **uncommitted changes** (default when the tree is dirty), or **recent commits**
+(`HEAD~3..HEAD`, `<base>..HEAD`). Both a dirty tree and "review my commits" in play → confirm which, or review
+both and note the split.
 
-- **Uncommitted changes** (default when the tree is dirty): staged + unstaged — `git diff HEAD`, or
-  `git diff` / `git diff --cached` to separate them.
-- **Recent commits**: "last 3 commits" → `git diff HEAD~3..HEAD`; everything since base →
-  `git diff <base>..HEAD`.
-- Both a dirty tree and "review my commits" in play → confirm which, or review both and note the split.
-
-Branch and status came back with the run directory. Once the range is settled, one more call — and no more git
-than this:
+Then one call, which also opens the run directory:
 
 ```bash
-git diff <range> --shortstat && git diff <range> --name-only
+${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh review --range <range>     # omit --range for a dirty tree
 ```
 
-Uncommitted work on the default branch is `git diff` **plus** `git diff --staged`: a bare
-`git diff --shortstat` reports nothing when the work is fully staged.
+Keep the `run=` and `refs=` literals; every later step and every brief needs them, and re-running the script
+opens a second directory (`output-discipline.md`).
 
 **Also capture the goal** — what the change is trying to achieve, one or two lines, from the user, branch name,
 commit messages or ticket. The `impl` lens is judged against it; with no goal, say so and expect lower
 confidence rather than inventing one.
 
-Write `<run-dir>/scope.md`: range, the command producing the diff, shortstat, file list, goal. Later stages
-read that file instead of being told again.
+Write `<run-dir>/scope.md`: the range, the command producing the diff, the stat, the file list, the goal. Later
+stages read that file instead of being told again.
 
 ## 2. Run the quality gate *first*
 
-The repo's fast check (`../_shared/references/quality-gate.md`, fast tier), **before** the review.
+`gate-detect.sh`, then `gate-run.sh` on the fast tier (`quality-gate.md`), **before** the review.
 
 - Failing → fix that first, or stop and report it: reviewing a red tree wastes three reviewers on lint output.
-  On a long failure log, triage it in a subagent ("when a step fails").
 - Passing → **tell every reviewer it passed**, and that they must not run the tests, build or linter. That is
   what earns the right to reject "anything a linter catches" as a finding.
-- Keep output out of this session: redirect each step to `<run-dir>/gate-<step>.log`, report pass/fail and, on
-  failure, the failing step and the tail (`../_shared/references/output-discipline.md`).
 
 ## 3. Run three reviewers in parallel
 
@@ -129,63 +104,93 @@ Spawn all three in **one message**, so they run concurrently and none sees anoth
 | reviewer | how to invoke | lenses |
 | --- | --- | --- |
 | **CodeRabbit** | the CodeRabbit review skill (`coderabbit:code-review`) or the `coderabbit:code-reviewer` agent | not steerable — takes its own broad pass; map its findings onto lenses afterwards |
-| **Codex** | the Codex review path (`codex:rescue` skill / `codex:codex-rescue` agent), prompted for a review pass | `bugs`, `impl`, `adversarial` |
+| **Codex** | the Codex review path (`codex:rescue` skill / `codex:codex-rescue` agent), prompted for a review pass — see the async caveat below | `bugs`, `impl`, `adversarial` |
 | **Claude** | a subagent over the same diff — or the built-in `code-review` skill at a high effort level | `architecture`, `quality`, `tests`, `docs`, `comments` |
 
-Each brief carries: `<run-dir>/scope.md`, the **resolved absolute paths** of `review-severity.md` and of **its
-own lens file** — `lenses-correctness.md` for Codex, `lenses-craft.md` for Claude — with an instruction to read
-them, plus the fact that the gate passed. A reviewer gets the lens file it carries and not the other; hand over
-both only when it is covering for a missing reviewer.
+Each brief carries: `<run-dir>/scope.md`, the paths of `review-severity.md` and of **its own lens file** under
+`refs=` — `lenses-correctness.md` for Codex, `lenses-craft.md` for Claude — with an instruction to read them,
+plus the fact that the gate passed. A reviewer gets the lens file it carries and not the other; hand over both
+only when it is covering for a missing reviewer.
 
-Each reviewer **writes** `<run-dir>/findings-<source>.md`, one entry per finding: `[surface, severity]`,
-file + line, confidence (0–100), the lens(es) that raised it, a title naming the mechanism, a body giving
-trigger + consequence, and a concrete fix. Cap it: **at most 15 findings, body under 80 words**; a reviewer at
-the cap says so and keeps the worst.
+Each reviewer **writes `<run-dir>/findings-<source>.jsonl`, one JSON object per line**:
+
+```json
+{"surface":"code","severity":"major","confidence":85,"file":"src/api/user.ts","line":42,
+ "lens":["bugs"],"title":"names the mechanism","body":"trigger + consequence","fix":"concrete fix"}
+```
+
+`surface`, `severity`, `file`, `title` required; `class` is `finding` (default), `open_question` or
+`pre_existing`. Full shape: `node ${CLAUDE_PLUGIN_ROOT}/scripts/findings.mjs schema`. Cap it: **at most 15 findings, body
+under 80 words**; a reviewer at the cap says so and keeps the worst. JSONL because step 4 is a script — a
+reviewer that writes prose costs a re-spawn, so the brief says "one JSON object per line, nothing else".
 
 Each reviewer **returns at most ten lines**: the path it wrote, counts by `[surface, severity]`, and any lens
 it could not cover. No diff, no file contents, no narration.
 
+**The file is the completion signal, not the reply.** A reviewer is done when
+`findings-<source>.jsonl` exists — so the brief must say: found nothing at or above the bar → **write an empty
+file and say so**. The two states are not the same downstream, and only the reviewer can tell them apart:
+present-and-empty means that source reported zero and keeps the drop rule armed; absent means it never
+reported and disarms it. An agent that finishes its turn with no file has reported nothing, whatever its reply
+says.
+
 **Read-only, all three.** No reviewer edits, stages or commits anything — including the built-in `code-review`
 skill, which must not be given `--fix`. Fixing is step 6.
+
+**Codex wraps an async job.** `codex:codex-rescue` delegates to a background Codex CLI run, so the agent's turn
+can end — and it can report itself idle — while the inner job is still working; it is routinely the slowest of
+the three. Its brief must add: **do not end your turn until the job returns and you have written the file**; if
+it is still running, keep waiting; if it dies, say so with the error rather than reconstructing findings; and
+**never write a placeholder before it returns**, because an empty file claims a zero-finding review that did
+not happen. Treat an idle signal with no file as "still working", not as a failure.
 
 **Availability & fallback.** A missing or erroring tool: redistribute its lenses to an available reviewer and
 **note both facts in the summary**. Claude only: run **two** subagents with different lens splits, so
 corroboration still means something. Never claim a tool ran if it did not, and never report a partial review as
-"clean" (`../_shared/references/review-severity.md`, last section).
+"clean" (`review-severity.md`, last section).
+
+**Bound the wait.** A reviewer that has neither written its file nor reported an error is not evidence of
+anything, and step 4 cannot start without the full set. Ask a silent source once what happened —
+distinguishing *job errored* / *ran but did not write* / *returned prose* / *genuinely zero* — and if the file
+is still missing after roughly ten minutes, declare that source **missing**, redistribute its lenses, and go on
+with a lower `--sources-expected`. Do not poll it repeatedly, and do not hold the run open indefinitely; a slow
+source blocking every later stage costs more than the corroboration it would have added. Say in the summary
+that it was dropped and which lenses went uncovered.
 
 ## 4. Reconcile the lists
 
-One subagent on a cheaper model: mechanical, and the answer is entirely in its input.
+```bash
+node ${CLAUDE_PLUGIN_ROOT}/scripts/findings.mjs reconcile <run-dir> --sources-expected <N>
+```
 
-Brief: read the `findings-*.md` files and `../_shared/references/triage-reconcile.md` (resolved path), write
-`<run-dir>/reconciled.md`, **read nothing else** — no source files, no `git diff`, no `rg`. Same-issue and
-too-weak-singleton are answerable from the text; verification comes next with the code in front of it, and an
-opinion formed here contaminates the set the verifier is handed.
+`N` is the number of reviewers you **launched**, not the number that answered — it is what switches the
+weak-singleton drop rule off when a source is missing. **Never create an empty `findings-<source>.jsonl` to
+make the count line up**: the script reads a present file as that source reporting zero, which re-arms the drop
+rule and silently deletes exactly the single-source findings the missing reviewer would have corroborated. A
+source that never wrote a file is missing; lower `N` and say so. Then read `triage-reconcile.md` and check the two
+things the script deliberately leaves open: `LOW-SIM` merges and `review_pairs`. No subagent: the merge is
+arithmetic, and forming an opinion here contaminates the set the verifier is handed.
 
-In short: split out open questions and pre-existing issues, dedupe on same file within ±2 lines and same
-problem, boost confidence by distinct **sources** (a source is a reviewer, not a lens), take the highest
-claimed severity, drop weak uncorroborated singletons — **never a critical or major, and nothing at all if a
-source was missing**. Stable id on every survivor. Returns: the path, the counts, one line per dropped finding.
-
-**Reconcile inline instead when the lists are short** — ~≤10 findings across sources, where the round trip
-costs more than the merge. Same rules either way; write `reconciled.md` here and move on. Delegate above that,
-and whenever a source returned near its 15-finding cap.
+If a reviewer wrote prose instead of JSONL, `validate` names the lines; convert it here rather than re-spawning.
 
 ## 5. Verify the survivors
 
-Group the reconciled findings **by directory**, spawn **one subagent per group in a single message**. Each gets
-only its own group — a verifier seeing the whole set anchors on it — plus `scope.md` and the resolved path to
+```bash
+node ${CLAUDE_PLUGIN_ROOT}/scripts/findings.mjs group <run-dir>
+```
+
+It groups by directory, folds groups too small to be worth a round trip, writes `verify-<group>.jsonl`, and
+suggests inline vs fan-out. On fan-out, spawn **one subagent per group in a single message**; each gets only
+its own group file — a verifier seeing the whole set anchors on it — plus `scope.md` and the path to
 `triage-verify.md`.
 
-Each returns one line per finding: `id → confirmed | refined | rejected | immaterial | pre_existing`, with
-corrected fields on a `refined` and one clause of reasoning on a `rejected` or `immaterial`. Verdicts also go to
-**`<run-dir>/verdicts-<group>.md` — one file per verifier, named for its group**, never a shared `verdicts.md`:
-parallel writers to one path interleave or clobber, and a lost verdict is indistinguishable from a finding
-nobody raised. Step 8 reads the `verdicts-*.md` set directly — never concatenate them. Verification applies the
-materiality test only after a finding is confirmed real, and **does not look for new problems**.
+Each verifier **writes `<run-dir>/verdicts-<group>.jsonl`** (never a shared file: parallel writers to one path
+interleave, and a lost verdict is indistinguishable from a finding nobody raised) and returns one line per
+finding: `id → confirmed | refined | rejected | immaterial | pre_existing`, with corrected fields on a
+`refined` and one clause of reasoning on a `rejected` or `immaterial`. Verification applies the materiality
+test only after a finding is confirmed real, and **does not look for new problems**.
 
-A handful of findings in one or two files: verify inline instead and write straight to
-`<run-dir>/verdicts-all.md`, since there is only one writer.
+On `suggest=inline`, verify here and write `verdicts-all.jsonl` — there is only one writer.
 
 `rejected` findings leave the report entirely. `immaterial` and `pre_existing` get their own summary sections,
 **out of the counts**.
@@ -193,7 +198,7 @@ A handful of findings in one or two files: verify inline instead and write strai
 ## 6. Triage and fix — auto-fix safe, ask on risky
 
 This session fixes: the user is in the loop, and two subagents editing one tree collide. Read bodies back from
-`reconciled.md` **only for findings being acted on** — the first point where full detail earns its place.
+`reconciled.jsonl` **only for findings being acted on** — the first point where full detail earns its place.
 
 - **Safe → fix automatically**: unambiguous, low-risk, behavior-preserving. Typos, a clearly correct missing
   nil/error check, an obvious off-by-one, dead code, lint/style, a missing `await`, a stale comment,
@@ -203,20 +208,20 @@ This session fixes: the user is in the loop, and two subagents editing one tree 
   and the proposed fix, get a decision before editing.
 - **Not worth fixing → skip**, with a one-line reason. `immaterial` verdicts are already here by definition.
 
-**Every fix gets the three checks in `../_shared/references/fix-checks.md`** — read it here, before the first
-fix. Check one, sweep for the *shape* not the site, is a read-only repo search, and **how you run it depends on
-whether the shape greps**. A literal or near-literal pattern is one `rg` call: run it here, no subagent.
-Delegate only when the construct needs judgement to recognise ("a switch over a three-value enum that only
-tests one end") or the search spans the whole repo — hand the subagent the construct in words, get back the
-occurrence list, file:line only. **The check itself is never optional**, whichever way it runs. Then enumerate
-the input space you touched (every enum value, struct field, error class — and a test telling them apart), and
-re-read the finding to confirm the fix answers the **mechanism** it named, not the example. Group related safe
-fixes into coherent edits, in the style of the surrounding code.
+**Every fix gets the three checks in `fix-checks.md`** — read it here, before the first fix. Check one, sweep
+for the *shape* not the site, is a read-only repo search, and **how you run it depends on whether the shape
+greps**. A literal or near-literal pattern is one `rg` call: run it here, no subagent. Delegate only when the
+construct needs judgement to recognise ("a switch over a three-value enum that only tests one end") or the
+search spans the whole repo — hand the subagent the construct in words, get back the occurrence list,
+file:line only. **The check itself is never optional**, whichever way it runs. Then enumerate the input space
+you touched (every enum value, struct field, error class — and a test telling them apart), and re-read the
+finding to confirm the fix answers the **mechanism** it named, not the example. Group related safe fixes into
+coherent edits, in the style of the surrounding code.
 
 ## 7. Re-check
 
-Re-run step 2's fast check and report pass/fail, plus the failing step and the tail of its log if it broke. A
-fix that introduced a failure gets reverted or corrected before summarizing. Never fabricate a passing result.
+Re-run step 2's fast check with `gate-run.sh` and report pass/fail. A fix that introduced a failure gets
+reverted or corrected before summarizing. Never fabricate a passing result.
 
 Another round after fixing keeps the bar narrow: `bugs` + `impl` only, **nothing below major** — `impl` is the
 lens that catches a fix not addressing its finding. Do **not** widen it to documentation you just wrote: a
@@ -226,8 +231,17 @@ the code stands still. A second round is a new run directory, and reviewers get 
 
 ## 8. Summarize (the deliverable)
 
-Written from the run files, in this order. It is a **decision brief, not a record** — the record is the run
-directory, so name that path once and let it hold the detail.
+```bash
+node ${CLAUDE_PLUGIN_ROOT}/scripts/findings.mjs report <run-dir>
+```
+
+It merges the verdicts onto the findings (applying `refined` corrections), writes `final.jsonl`, and returns
+the counts, the reportable set, the gating count, and — the one that matters — `UNVERIFIED` ids and orphan
+verdicts. **Never write the summary while `UNVERIFIED` is non-empty**: a lost verdict reads exactly like a
+finding nobody raised.
+
+Then the prose, in this order. It is a **decision brief, not a record** — the record is the run directory, so
+name that path once and let it hold the detail.
 
 1. **Completeness first** — sources expected vs reported. A failed source goes above every finding.
 2. **Scope** — range reviewed, shortstat, which reviewers actually ran (and lenses no source carried).
@@ -245,11 +259,10 @@ their full body, the one-line sections stay one line. End on the decision the us
 without an ask is the middle of the job, not the end.
 
 Do not commit unless asked — leave fixes in the working tree for the user to commit (or chain into `commit`).
-Prune old `mkit/review-*` run directories at the end, keeping the last few; fold that into step 7's re-check
-call rather than spending a turn on it.
+Fold `${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh --prune` into step 7's call rather than spending a turn on it.
 
 ## Git safety
 
-Follow `../_shared/references/git-safety.md`. Apply only fixes to the working tree; never rewrite pushed
-history, never force-push, never commit or push as a side effect of the review unless explicitly asked. The run
-directory is the one thing this skill writes outside the working tree, and it goes only in `<git-dir>/mkit/`.
+Follow `git-safety.md`. Apply only fixes to the working tree; never rewrite pushed history, never force-push,
+never commit or push as a side effect of the review unless explicitly asked. The run directory is the one thing
+this skill writes outside the working tree, and it goes only in `<git-dir>/mkit/`.

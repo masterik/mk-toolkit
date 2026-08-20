@@ -1,63 +1,60 @@
 # Worktree awareness
 
-Shared by `finish`, `pr`, `commit`. Git worktrees check out several branches at once in
-sibling directories, and Claude Code agents commonly run inside one. The finishing skills must detect
-**which kind** and clean up accordingly.
+Shared by `finish`, `pr`, `commit`. Git worktrees check out several branches at once in sibling
+directories, and Claude Code agents commonly run inside one. The finishing skills must clean up
+the right way for the one they are in.
 
-## Detect the context
+## Ask the script, not the layout
 
-```bash
-git rev-parse --is-inside-work-tree   # in a repo?
-git branch --show-current             # current branch
-git rev-parse --show-toplevel         # this checkout's root
-git rev-parse --git-common-dir        # shared .git dir — differs from --git-dir inside a linked worktree
-git worktree list                     # all worktrees + branches
+`facts.sh` already answered this (`output-discipline.md`):
+
+```
+linked=yes            git_dir != common_dir — this is not the primary checkout
+worktree_origin=claude-code | linked | primary
+cleanup_path=exit-worktree | wt | git-worktree | none
+wt_lists_this=yes     worktrunk can see this repo
+primary=/Users/you/repo
 ```
 
-- **Linked worktree** (not the primary checkout): `--git-dir` and `--git-common-dir` resolve differently.
-- **Primary worktree**: the `git worktree list` entry whose path is the main repo root, usually on
-  `main`/`master`. It holds the default branch.
+There is deliberately no "is this a worktrunk worktree" answer: `wt list` enumerates *every* git
+worktree in the repo and worktrunk's path template is configurable, so nothing can tell one from a
+hand-made worktree — and nothing needs to. What differs is the teardown.
 
-## Three origins — cleanup differs
+| `cleanup_path` | Meaning | Teardown |
+| --- | --- | --- |
+| `exit-worktree` | the harness's own (`/.claude/worktrees/`) | merge, then the **ExitWorktree** tool — never `git worktree remove` it from inside itself |
+| `wt` | a linked worktree, worktrunk present | `wt merge` — it respects the user's hooks and squash/rebase config |
+| `git-worktree` | a linked worktree, no worktrunk | plain git, below |
+| `none` | the primary checkout | nothing to tear down |
 
-### 1. worktrunk (`wt`)
+`wt_bin=none` is **advisory**: worktrunk's shell integration installs `wt` as a shell function,
+which a script may not inherit even though the agent's own shell has it. Treat a missing `wt`
+as "check before concluding", not as proof.
 
-Signals: `command -v wt` succeeds **and** `.config/wt.toml` (or `~/.config/worktrunk/config.toml`) exists, or
-`git worktree list` paths match worktrunk's layout.
+## worktrunk (`wt`)
 
-Prefer worktrunk's own commands — they respect the user's hooks and squash/rebase config.
+Prefer worktrunk's own commands — they respect the user's hooks and config.
 
-- Merge + clean up in one step: `wt merge [target]` — squash-rebases the current branch, fast-forwards the
-  target (default = default branch), removes the worktree. Flags: `--no-squash`, `--no-ff`, `--no-remove`,
-  `--no-hooks`.
-- Remove only: `wt remove [branch|path]` — removes the worktree, deletes the branch **if merged**
-  (`--no-delete-branch` to keep, `-D` to force-delete unmerged, `-f` to discard a dirty worktree).
+- Merge + clean up in one step: `wt merge [target]` — squash-rebases the current branch,
+  fast-forwards the target (default = default branch), removes the worktree. Flags:
+  `--no-squash`, `--no-ff`, `--no-remove`, `--no-hooks`.
+- Remove only: `wt remove [branch|path]` — removes the worktree, deletes the branch **if
+  merged** (`--no-delete-branch` to keep, `-D` to force-delete unmerged, `-f` to discard a dirty
+  worktree).
 - `-y` skips approval prompts — only when the user authorized non-interactive completion.
 
-### 2. Claude Code agent worktree (`.claude/worktrees/`)
+## Merge back with plain git
 
-Signal: the worktree root path contains `/.claude/worktrees/`. This is the harness's own isolation.
-
-Do **not** `git worktree remove` it by hand from inside itself. Merge into the base (below), then hand back
-with the **ExitWorktree** tool: `action: "remove"` after a successful merge, `action: "keep"` to leave it. If
-the change should ship as a PR instead, keep the worktree and use `pr`.
-
-### 3. Plain `git worktree`
-
-Manual worktrees anywhere else. Clean up with git directly (below).
-
-## Merge back (plain git, not delegating to `wt merge`)
-
-`git checkout <base>` fails inside a worktree when the base is checked out in the primary one. Two safe
-options:
+`git checkout <base>` fails inside a worktree when the base is checked out in the primary one.
+Two safe options, and `facts.sh` already gave you `primary=`:
 
 - **Merge from the primary worktree** (preferred):
   ```bash
-  git -C <primary-worktree-path> merge --ff-only <feature-branch>   # or a real merge if ff isn't possible
+  git -C <primary> merge --ff-only <feature-branch>   # or a real merge if ff isn't possible
   ```
-- **Merge without checkout**, when a fast-forward is valid:
+- **Merge without checkout**, when a fast-forward is valid (`ff_from_base=yes`):
   ```bash
-  git fetch . <feature-branch>:<base>        # ff's <base> to <feature> if <base> is an ancestor
+  git fetch . <feature-branch>:<base>
   ```
   Fails safely when it isn't a fast-forward — fall back to the primary-worktree merge.
 
@@ -73,9 +70,9 @@ git worktree prune                  # tidy stale metadata
 
 ## Rules
 
-- Determine the **base branch** before finishing — the branch the feature was cut from (often `main`).
-  Confirm with the user if ambiguous.
-- Never remove a worktree or delete a branch with **uncommitted changes** or **unmerged commits** without an
-  explicit request.
-- After removal verify: `git worktree list` no longer shows it, `git branch` no longer lists the branch.
+- Determine the **base branch** before finishing — the branch the feature was cut from (often
+  `default_branch`). Confirm with the user if ambiguous.
+- Never remove a worktree or delete a branch with **uncommitted changes** or **unmerged commits**
+  without an explicit request. `facts.sh` reports `clean=` and `commits_ahead_of_base=`.
+- After removal verify: `git worktree list` no longer shows it, `git branch` no longer lists it.
 - Respect `git-safety.md` throughout.

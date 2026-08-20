@@ -25,28 +25,24 @@ References, read the ones a step calls for: `../_shared/references/worktree.md`,
 
 ## Preconditions
 
-**One call** — these are independent read-only probes, and the run directory depends on none of them
-(`../_shared/references/output-discipline.md`):
+**One call**, which also opens this run's directory (`../_shared/references/output-discipline.md`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh finish
-git branch --show-current && git status --short
-git rev-parse --git-dir --git-common-dir --show-toplevel
-git worktree list
-command -v wt >/dev/null && echo "wt: yes" || echo "wt: no"
+${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh finish --base <base>
 ```
 
-The script prints one absolute path. **Reuse that literal**; this file writes it as `<run-dir>`. There is no
-`$RUN_DIR` — a shell variable does not survive to the next Bash call — and re-running it opens a second
-directory instead of returning the first.
+Keep the `run=` literal; this file writes it as `<run-dir>`. There is no `$RUN_DIR` — a shell variable does
+not survive to the next Bash call — and re-running the script opens a second directory instead of returning
+the first. Check three things in what it printed:
 
-1. **Current branch** — a feature/bugfix branch, not the base. On `main`/`master`: stop, nothing to finish.
-2. **Base branch** — default `main`; the branch this feature was cut from. Ask if ambiguous;
-   `../_shared/references/branching.md` covers detecting a repo's own model.
-3. **Worktree context** — worktrunk `wt` / Claude Code `.claude/worktrees/` / plain git / none. Decides the
-   cleanup path. `--git-dir` ≠ `--git-common-dir` → a linked worktree; a root path containing
-   `/.claude/worktrees/` → the harness's own; `wt` on `PATH` plus a worktrunk-shaped layout → worktrunk. Read
-   `../_shared/references/worktree.md` at step 4, not now.
+1. **Current branch** — `branch=` must be a feature/bugfix branch, not `default_branch=`. On `main`/`master`:
+   stop, nothing to finish.
+2. **Base branch** — the branch this feature was cut from, usually `default_branch=`. Ask if ambiguous;
+   `../_shared/references/branching.md` covers detecting a repo's own model. Pass it as `--base` so
+   `commits:`, `base_stat` and `ff_from_base` come back with everything else.
+3. **Cleanup path** — `cleanup_path=` is `exit-worktree` (the harness's own worktree) · `wt` (linked,
+   worktrunk present) · `git-worktree` (linked, no worktrunk) · `none` (primary checkout). It decides step 4.
+   Read `../_shared/references/worktree.md` there, not now.
 
 ## Workflow
 
@@ -61,31 +57,38 @@ Run the **full quality gate** (`../_shared/references/quality-gate.md`): lint �
 equivalent, stop on first failure. A local merge skips review, so this gate is the only safety net. Report any
 failure; do not merge past it without an explicit user OK.
 
-Redirect each step to its own log and keep output out of context — one line per passing step; on failure the
-step, the exit code and the tail (`../_shared/references/output-discipline.md`). A failing suite is thousands
-of lines, none of which change the decision ("fix it or get an explicit OK").
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/gate-detect.sh
+${CLAUDE_PLUGIN_ROOT}/scripts/gate-run.sh <run-dir> --chain 'lint=<cmd>' 'test=<cmd>' 'build=<cmd>'
+```
 
-On a long failure log, delegate the diagnosis (`../_shared/references/quality-gate.md`, "when a step fails")
-and give the user its verdict — what failed, probable cause, whether the change caused it, suggested fix. The
-log stays on disk.
+One line per passing step; on failure the step, the exit code, the grepped failures and the tail
+(`../_shared/references/output-discipline.md`). A failing suite is thousands of lines, none of which change
+the decision ("fix it or get an explicit OK").
+
+Delegate the diagnosis only when that verdict is not enough (`../_shared/references/quality-gate.md`, "when a
+step fails") and give the user what it returns — what failed, probable cause, whether the change caused it,
+suggested fix. The log stays on disk.
 
 ### 3. Show the plan and confirm
 
 Before merging or deleting anything, print a one-screen summary and get a go-ahead (unless the user already
-said "finish and clean up" or gave standing authorization):
+said "finish and clean up" or gave standing authorization). Step 0's `commits:` block predates step 1, so if
+step 1 committed, re-read the log (`git log --oneline <base>..HEAD`) first — approving a plan that omits the
+commits the merge actually carries is worse than asking twice:
 
 ```
 Finish feature:  <feature-branch>
 Merge into:       <base-branch>
-Worktree:         <origin: worktrunk | claude-code | plain-git | none> @ <path>
-Commits to merge: <git log --oneline base..HEAD>
+Worktree:         <cleanup_path> @ <toplevel>
+Commits to merge: <the commits: block, re-read if step 1 committed>
 After merge:      delete branch <feature-branch> + remove worktree (if any)
 ```
 
-### 4. Merge back + clean up — by worktree origin
+### 4. Merge back + clean up — by `cleanup_path`
 
-**worktrunk (`wt`)** — delegate; it squash-rebases, fast-forwards the base and removes the worktree in one
-step, firing the user's hooks:
+**`wt`** — delegate; it squash-rebases, fast-forwards the base and removes the worktree in one step, firing
+the user's hooks:
 
 ```bash
 wt merge <base>        # add -y only if non-interactive completion is authorized
@@ -94,21 +97,21 @@ wt merge <base>        # add -y only if non-interactive completion is authorized
 `wt merge` removes the worktree by default and deletes the branch as part of the flow. Use `--no-remove` /
 `--no-squash` / `--no-ff` only to override the user's config on request.
 
-**Claude Code worktree (`.claude/worktrees/`)** — merge into the base, then hand back via the **ExitWorktree**
-tool (`action: "remove"`). Never `git worktree remove` the harness's own worktree from inside it. If the base
-cannot be fast-forwarded (checked out in the primary worktree), merge from there per
-`../_shared/references/worktree.md`.
+**`exit-worktree`** — merge into the base, then hand back via the **ExitWorktree** tool
+(`action: "remove"`). Never `git worktree remove` the harness's own worktree from inside it. If the base
+cannot be fast-forwarded (`ff_from_base=no`, or it is checked out in the primary worktree), merge from
+`primary=` per `../_shared/references/worktree.md`.
 
-**Plain git worktree**:
+**`git-worktree`**:
 
 ```bash
-git -C <primary-worktree-path> merge --ff-only <feature-branch>   # or a real merge if ff isn't possible
-git worktree remove <feature-worktree-path>
+git -C <primary> merge --ff-only <feature-branch>   # or a real merge if ff isn't possible
+git worktree remove <toplevel>
 git branch -d <feature-branch>
 git worktree prune
 ```
 
-**No worktree (single checkout)**:
+**`none` (single checkout)**:
 
 ```bash
 git switch <base>
@@ -127,6 +130,9 @@ merge onto current base.
 - `git log --oneline -5` — the base contains the feature commits.
 
 ## Deliverable
+
+Prune with `${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh --prune` on the way out, folded into step 5's
+verification call.
 
 - What merged into what, the resulting base HEAD, and that branch + worktree were removed.
 - Anything left in place on purpose (unmerged commits, dirty tree, a delete the user declined) — say so

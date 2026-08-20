@@ -1,26 +1,49 @@
 # Reconcile — merge the reviewers' lists
 
-Stage 1 of finding triage in `review`: several reviewers wrote `findings-*.md` independently; merge
-them into one set with stable ids. Verifying (`triage-verify.md`) and fixing (`fix-checks.md`) are later
-stages — you do neither, and you add no findings of your own.
+Stage 1 of finding triage in `review`: several reviewers wrote `findings-*.jsonl` independently;
+merge them into one set with stable ids. Verifying (`triage-verify.md`) and fixing
+(`fix-checks.md`) are later stages — you do neither, and you add no findings of your own.
 
-**Work from the findings text alone. Do not open files, run `git diff` or `rg`, or look at the code.** Which
-findings are the same issue, which sources raised each, and which singletons are too weak are all answerable
-from the text. Verification comes next with the code in front of it; an opinion formed here contaminates the
-set the verifier is handed.
+## Run it
 
-1. **Split out what is not a defect in the change.** A question a reviewer could not answer from the code →
-   **open questions**; a defect in untouched code → **pre-existing**. Move both out first: neither is deduped,
-   boosted or dropped.
-2. **Deduplicate.** Same issue = same file **within two lines** and the same problem. Merge into one, keep the
-   clearest title and body, list every source and lens on the survivor.
-3. **Boost corroboration.** `confidence = min(99, highest confidence + 10 × (distinct sources − 1))`.
-   **A source is a process, not a lens** — one reviewer raising it under two of its lenses is one source, no boost.
+```bash
+node ${CLAUDE_PLUGIN_ROOT}/scripts/findings.mjs reconcile <run-dir> --sources-expected 3
+```
+
+It writes `<run-dir>/reconciled.jsonl` and prints the counts, every merge, every drop and every
+pair it refused to decide. That is the whole stage — **no subagent, and no reading the code**:
+which findings are the same issue and which singletons are too weak are answerable from the
+text, and an opinion formed here contaminates the set the verifier is handed.
+
+What the script does, so you can check its work rather than repeat it:
+
+1. **Splits out what is not a defect in the change** — `class: open_question` and
+   `class: pre_existing` move aside first, get `x`-ids, and are never deduped, boosted or dropped.
+2. **Merges on the documented key**: same file, within ±2 lines. Text similarity does not gate the
+   merge (the script header says why); every member's title and body survives on the winner
+   (`also`), so a merge that was really two problems is still visible to the verifier.
+3. **Boosts corroboration**: `confidence = min(99, highest + 10 × (distinct sources − 1))`. A
+   source is a *process*, not a lens — one reviewer raising it under two lenses is one source.
 4. **Severity is the highest any input claimed.**
-5. **Drop a finding with a single source, confidence below 80, and nothing corroborating it** — but **never a
-   critical or major.** One reviewer looking in the right place is the normal case for the worst bugs; keep it
-   and let verification decide.
-   **If any source was missing or degraded, drop nothing** — corroboration is rarer with a source gone, so the
-   rule starts eating exactly the findings the missing source would have confirmed.
+5. **Drops a finding with a single source, confidence below 80, and minor severity** — never a
+   critical or major, and **nothing at all when `sources_present < sources_expected`**: with a
+   source gone the rule would eat exactly the findings that source would have corroborated.
+6. **Stable ids** on every survivor, ordered by severity, confidence, then location.
 
-Give every survivor a stable id. Severity, surfaces and the reviewer contract: `review-severity.md`.
+## What is still yours
+
+- `LOW-SIM` on a merge line — the locations matched but the wordings barely overlap. Read both
+  titles; if they are two problems, say so in the summary and treat them as two.
+- `review_pairs` — same file, similar wording, different lines. Usually one defect shape at two
+  sites, which `fix-checks.md` sweeps for. The script never resolves these.
+- Anything a reviewer mislabelled: a "finding" that is plainly a question, a `pre_existing` that
+  the diff actually touched.
+
+Pass `--sources-expected` honestly: it is what switches the drop rule off, and the count of
+reviewers you *launched*, not the count that answered. A `findings-<source>.jsonl` that exists
+but is empty counts as that source reporting **zero**; a file that does not exist is a source
+that did not report. Never write an empty one to make the arithmetic line up — that re-arms the
+drop rule on exactly the findings the missing source would have corroborated.
+
+Severity, surfaces and the reviewer contract: `review-severity.md`. The record shape:
+`node ${CLAUDE_PLUGIN_ROOT}/scripts/findings.mjs schema`.

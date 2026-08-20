@@ -37,19 +37,18 @@ A PR that is easy to review and safe to merge:
 
 ## Workflow
 
-**Before step 1 — open the run directory** (`../_shared/references/output-discipline.md`). Once the base is
-settled, gather it and every read-only fact this skill needs in **one call**: the same outputs serve step 2's
-pre-flight, step 4's context and the final report, and none change when step 3 pushes.
+**Step 0 — one call.** Once the base is settled, it opens the run directory and returns every read-only fact
+this skill needs (`../_shared/references/output-discipline.md`). The same outputs serve step 2's pre-flight,
+step 4's context and the final report, and none change when step 3 pushes:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh pr
-git branch --show-current && git status --short
-git log --oneline <base>..HEAD && git diff <base> --stat
+${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh pr --base <base> --gh
 ```
 
-The script prints one absolute path. **Reuse that literal**; this file writes it as `<run-dir>`. There is no
-`$RUN_DIR` — a shell variable does not survive to the next Bash call — and re-running it opens a second
-directory instead of returning the first.
+That covers the branch, the status, `commits:` for `<base>..HEAD`, the stat, `codeowners=` for step 6, and
+`pr=` — whether this branch already has one, which is the check that otherwise gets skipped. Keep the `run=`
+literal; this file writes it as `<run-dir>`. There is no `$RUN_DIR` (a shell variable does not survive to the
+next Bash call), and re-running the script opens a second directory instead of returning the first.
 
 ### 1. Commit remaining work
 
@@ -58,15 +57,26 @@ Same inside a worktree — just confirm `git branch --show-current` is the featu
 
 ### 2. Pre-flight checks
 
-1. **Not on the base branch.** On `main`/`master`/the default branch: stop and warn. PRs come from
-   feature/bugfix branches (`../_shared/references/branching.md`).
-2. **Commits exist ahead of base** — the `git log --oneline <base>..HEAD` above. Empty → nothing to PR.
-3. **Full quality gate** (`../_shared/references/quality-gate.md`): lint → test → build or the repo
-   equivalent, in order, stop on failure. Report which step failed; the user may proceed anyway for a draft.
-   Redirect each step to its own log: one line per passing step, and on failure the step, the exit code and
-   the tail — never the log (`../_shared/references/output-discipline.md`). On a long failure log, delegate
-   the diagnosis ("when a step fails") — choosing between fixing and opening a draft needs a cause and a
-   suggested fix, not a transcript.
+1. **Not on the base branch.** `branch=` equal to `default_branch=` (or `main`/`master`): stop and warn. PRs
+   come from feature/bugfix branches (`../_shared/references/branching.md`).
+2. **Commits exist ahead of base** — `commits_ahead_of_base=0` means nothing to PR. Step 0's count
+   predates step 1, so re-count after committing (`git rev-list --count <base>..HEAD`) before you
+   trust a zero: a branch whose work was all uncommitted reads 0 in the step 0 snapshot.
+3. **Existing PR** — `pr=` is a URL only when one exists. Otherwise it is a sentinel naming why
+   there is none: `none` (no PR yet — the case that justifies creating one), `gh-missing`,
+   `jq-missing`, `gh-unauthenticated`, `no-remote`. Test for a URL, not for non-emptiness — every
+   sentinel is a non-empty string, so a "non-empty" reading always fires and shows `none` as if it
+   were a PR. Only `none` means proceed; the rest are blocked states to surface, not to push past.
+4. **Full quality gate** (`../_shared/references/quality-gate.md`), in order, stopping at the first failure:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/gate-detect.sh
+   ${CLAUDE_PLUGIN_ROOT}/scripts/gate-run.sh <run-dir> --chain 'lint=<cmd>' 'test=<cmd>' 'build=<cmd>'
+   ```
+
+   One line per passing step; on failure the step, the exit code, the grepped failures and the tail — never
+   the log. The user may proceed anyway for a draft. Delegate the diagnosis only when that verdict is not
+   enough ("when a step fails") — choosing between fixing and opening a draft needs a cause, not a transcript.
 
 ### 3. Push the branch
 
@@ -79,8 +89,8 @@ branch diverged, stop and surface it.
 
 ### 4. Gather context for the PR
 
-**Nothing to run here** — the log and the `--stat` came back with the run directory, and pushing changed
-neither. Re-running them spends a turn to reprint context.
+**Nothing to run here** — `commits:` and `base_stat` came back from step 0, and pushing changed neither.
+Re-running them spends a turn to reprint context.
 
 **Commit messages are the primary source for the title and description**; the diff is a fallback for the one
 thing they do not explain. **Do not load the branch diff into this session** — on a real branch it is tens of
@@ -131,7 +141,8 @@ Honest and brief. **Never** include co-authorship lines or any mention of AI/Cla
 Runs alongside step 5 — spawn both in one message, or do it inline when the lookup is a `CODEOWNERS` read and
 nothing more. Figure out who, without hardcoding handles:
 
-1. `CODEOWNERS` (`.github/`, repo root, or `docs/`) — owners of the changed paths are the natural reviewers.
+1. `CODEOWNERS` — step 0 reported `codeowners=<path>` or `none`; owners of the changed paths are the natural
+   reviewers.
 2. Repo/team conventions the user or docs mention; a configured default reviewer/team (`gh repo view`, org
    settings).
 3. Reviewers the user named.
@@ -191,8 +202,8 @@ Commits (<base>..HEAD):
 ...
 ```
 
-The commit list is the `git log --oneline <base>..HEAD` gathered at the top — already in context, and cheap
-precisely because the diff never was. Never just "N commits pushed."
+The commit list is step 0's `commits:` block — already in context, and cheap precisely because the diff never
+was. Never just "N commits pushed." Prune with `${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh --prune` on the way out.
 
 ## Common failure scenarios
 
@@ -200,7 +211,7 @@ precisely because the diff never was. Never just "N commits pushed."
 | ----------------------------------- | ----------------------------------------------------------------- |
 | No commits ahead of base            | Stop — nothing to PR. Check the user is on the right branch.      |
 | Branch not pushed / push rejected   | Push with `-u`; if diverged, surface it — do not force-push.      |
-| PR already exists for this branch   | `gh pr view`, show the existing URL.                              |
+| PR already exists for this branch   | step 0's `pr=` holds a URL — show it (`none`/`gh-missing` are not). |
 | Lint/test/build fails               | Report which step; user decides fix vs proceed-as-draft.          |
 | On the base branch                  | Stop — tell the user to create a feature branch first.            |
 | No reviewers determinable           | Ask, or skip for a draft.                                         |

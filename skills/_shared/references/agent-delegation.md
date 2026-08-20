@@ -8,14 +8,13 @@ transcripts, file contents, finding bodies — lives on disk, read back only for
 
 ## The run directory as transport
 
-Give every multi-stage run one directory. **Open it with `scripts/run-open.sh`** (`output-discipline.md`
-owns where it lives and why); this section is only about using it between stages.
+Give every multi-stage run one directory. **`scripts/facts.sh <skill>` opens it** and prints it as `run=`
+(`output-discipline.md` owns where it lives and why); this section is only about using it between stages.
 
-- Hand every subagent the **resolved absolute path**. Never `$RUN_DIR` (it inherits no shell) and never the
-  `${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh` command (no plugin root, and it must not open its own
-  directory).
-- **One writer per file.** A fanned-out stage gets one file per branch (`findings-<source>.md`,
-  `verdicts-<group>.md`); the caller aggregates after they return. Concurrent writers to one path interleave
+- Hand every subagent that **`run=` literal**. Never `$RUN_DIR` (it inherits no shell) and never the
+  `${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh` command (no plugin root, and it must not open its own directory).
+- **One writer per file.** A fanned-out stage gets one file per branch (`findings-<source>.jsonl`,
+  `verdicts-<group>.jsonl`); the caller aggregates after they return. Concurrent writers to one path interleave
   or clobber, and a lost verdict reads exactly like a finding nobody raised.
 - A stage reads the files of the stages before it and nothing else. That is what keeps its brief small.
 
@@ -30,15 +29,21 @@ a subagent with no budget returns everything it read.
 | counts, tags, ids, verdicts — a handful of lines | file contents it read to get there |
 | what it could **not** do (a failed tool, ground not covered) | a narration of its steps |
 
-Concretely: `wrote findings-codex.md — 4 findings: 1 [code, major], 3 [code, minor]; lenses bugs, impl,
+Concretely: `wrote findings-codex.jsonl — 4 findings: 1 [code, major], 3 [code, minor]; lenses bugs, impl,
 adversarial all covered`. Ten lines is generous; a hundred means the brief had no budget in it.
 
 ## Writing a brief
 
-- **Resolve every path first.** A subagent does not have the calling skill loaded, so
-  `${CLAUDE_PLUGIN_ROOT}` and `../_shared/references/…` mean nothing to it. Substitute the absolute path and
-  tell it to **read the file itself** — pasting a reference into three briefs costs three copies.
+- **Use the resolved paths you were given.** A subagent does not have the calling skill loaded, so
+  `${CLAUDE_PLUGIN_ROOT}` and `../_shared/references/…` mean nothing to it — `facts.sh` printed the bundle's
+  real location as `refs=`, so a brief says `<refs>/lenses-craft.md` and tells the subagent to **read the file
+  itself**. Pasting a reference into three briefs costs three copies.
 - **State the return budget, the output path, and the prohibitions**, not just the task.
+- **The output file is the completion signal, not the reply.** Where a brief names an output path, say what an
+  empty result looks like — write the file empty and say so — so *nothing to report* cannot be confused with
+  *never reported*. A subagent whose turn ended with no file has reported nothing, whatever its reply claims,
+  and an agent wrapping its own async job (a background CLI run) may go idle while that job is still working:
+  tell it not to end its turn until the file is written. Check the path before believing the summary.
 - **Hand over facts already established** (range, shortstat, file list, goal) as given, not to be measured.
 - **One line to the user before spawning**, naming the subject in their terms — "Reviewing the branch against
   main with three reviewers…". Then spawn and stop talking until results are in.
@@ -61,6 +66,7 @@ adversarial all covered`. Ten lines is generous; a hundred means the brief had n
 | judgement about what is true or worth doing — reviewing, verifying, materiality | the strongest available (Opus) |
 | mechanical text work, answer already in the input — merging, deduping, formatting | a cheaper tier (Sonnet) |
 | a bounded search or file sweep | a cheaper tier (Sonnet), precise brief |
+| arithmetic over a stage's output — dedupe, counts, grouping, merging verdicts | **no subagent**: `findings.mjs` |
 
 ## When a Workflow is appropriate
 
