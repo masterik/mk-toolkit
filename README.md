@@ -18,7 +18,9 @@ Claude-only for now; other agents (Codex, opencode, …) are a later, thin packa
 
 `_shared/` is the shared **references** bundle (git safety, Conventional Commits, quality
 gate, worktree detection, branching) that the four skills link into — not a triggerable
-skill.
+skill. `scripts/` holds five helpers the skills call for the mechanical steps: opening a run
+directory, gathering the starting facts, detecting and running the quality gate, and the
+arithmetic over a review's findings.
 
 ## Install
 
@@ -27,6 +29,10 @@ skill.
 /plugin install mkit@masterik
 ```
 
+Nothing to build. The scripts need `git`, `bash`, `node` and `jq`; `rg`, `gh` and `wt` are
+recommended — see [Prerequisites](PREREQUISITES.md).
+
 ## Docs
 
-- [Concept](concept.md)
+- [Concept](concept.md) — direction and design principles
+- [Prerequisites](PREREQUISITES.md) — required tooling, setup, permission allowlist
