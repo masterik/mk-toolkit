@@ -15,20 +15,28 @@ There is no CLI and nothing to install into the repo's toolchain. The plugin is 
 underlying tools, with the safety rules that keep destructive steps from firing by accident.
 The agent is the interface; the skills are the muscle memory.
 
-The one exception is `scripts/run-open.sh`, which opens a run directory for logs and
-intermediate files. It ships with the plugin (no `PATH`, no build, no install) and exists
-because that step is *mechanical* — atomic creation, absolute path, inside the git dir — and
-prose re-executed on every run kept getting one of the three wrong. Judgement stays in
-Markdown; a shell invariant belongs in shell.
+Alongside the Markdown sits a thin layer of **helper scripts** (`scripts/`, five of them) for
+the steps that are identical every run and fail silently when hand-rolled: opening the run
+directory, gathering the starting facts, detecting and running the quality gate, and the
+arithmetic over a review's findings. They ship with the plugin — no `PATH`, no build, no
+install — and they exist for reliability more than for tokens: prose re-executed every run kept
+getting one invariant of three wrong. **Judgement stays in Markdown; a mechanical invariant
+belongs in a script.** Prerequisites: [`PREREQUISITES.md`](PREREQUISITES.md).
 
 **Claude-only for now.** Other agents (Codex, opencode, …) are a later concern — the skills
 are plain Markdown, so support for another agent is a thin packaging step, not a rewrite.
 
 ## Design Principles
 - **Skills, not a binary:** the workflow lives in Markdown the agent reads, not in code it
-  executes. Nothing to build, version, or keep on `PATH`. A script is warranted only for a
-  *mechanical invariant* the agent would otherwise re-derive every run (see `scripts/`) —
-  never for a decision, and never for a git operation.
+  executes. Nothing to build, version, or keep on `PATH` — which is also why the scripts are
+  shell plus one dependency-free Node file, and never a compiled binary: a plugin install is a
+  clone, and the glue is ~4 ms of a ~10 s agent turn, so a faster language would optimize
+  nothing and cost a release pipeline.
+- **A script for a mechanical invariant, never for a decision:** `scripts/` may open a
+  directory, run a logged command, classify a worktree or do confidence arithmetic. It may not
+  choose commit boundaries, assign severity, judge materiality, or decide that a fix is safe.
+  Where the line is genuinely unclear the script reports candidates and the skill picks —
+  `gate-detect.sh` proposing `fast=` beside `docs_candidates:` is the shape to copy.
 - **Composition over replacement:** orchestrate `git`, GitHub CLI (`gh`), and Worktrunk
   (`wt`); never reimplement what they already do well.
 - **Safe by default:** irreversible actions (force-push, branch delete, history rewrite,
@@ -89,11 +97,21 @@ the four skills link into via `../_shared/references/…`:
                             severity bar · lenses · finding triage
                             agent delegation · output discipline)
    +
- scripts/run-open.sh       (one mechanical step: open this run's directory)
+ scripts/                  the mechanical steps, one call each
+   run-open.sh             open a run directory · --prune old ones
+   facts.sh                run dir + refs path + branch/status/worktree/stats, in one call
+   gate-detect.sh          what this repo's fast + full checks are
+   gate-run.sh             run a gate step: log it, bound it, stop at the first failure
+   findings.mjs            reconcile · group · report over a review's findings (JSONL)
    │   drive
    ▼
- git   +   gh (GitHub CLI)   +   wt (Worktrunk)
+ git   +   gh (GitHub CLI)   +   wt (Worktrunk)   +   rg   +   jq
 ```
+
+The scripts never act: no staging, no merging, no `wt merge`, no edits. They report facts and
+run commands the skill named. `rtk` is deliberately not among them — it reshapes output for an
+agent to read, which is exactly what a parser must not tolerate; it stays on the agent's own
+direct commands.
 
 The skills are the single source of truth for the *workflow*; the underlying tools remain
 the source of truth for the *operations*. The plugin never re-encodes git logic.
@@ -123,7 +141,11 @@ skills/
   pr/SKILL.md
   review/SKILL.md
   finish/SKILL.md
-  _shared/            # shared references (README + references/*.md) — no SKILL.md
+  _shared/             # shared references (README + references/*.md) — no SKILL.md
+scripts/
+  lib/common.sh        # sourced helpers: plugin root, refs path, rg-or-grep, wt binary
+  run-open.sh  facts.sh  gate-detect.sh  gate-run.sh  findings.mjs
+PREREQUISITES.md       # required + recommended tooling, setup, permission allowlist
 ```
 
 Install it with:

@@ -21,12 +21,23 @@ skills (`commit`, `review`, `finish`, `pr`) plus the shared
 - `skills/_shared/` — shared references (no `SKILL.md`); the skills link into it via
   `../_shared/references/…`. **Keep those relative paths intact** — they're what makes the
   bundle portable.
-- `scripts/run-open.sh` — opens this run's directory under `<git-dir>/mkit/`; every skill calls it
-  before it logs anything, via `${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh <skill>`.
+- `scripts/` — the mechanical steps, called as `${CLAUDE_PLUGIN_ROOT}/scripts/<name>`:
+  `facts.sh <skill>` (opens the run directory under `<git-dir>/mkit/` **and** returns every starting
+  fact — every skill's first call), `run-open.sh` (the directory alone, plus `--prune`),
+  `gate-detect.sh` / `gate-run.sh` (the quality gate), `findings.mjs` (reconcile/group/report over a
+  review's findings), `lib/common.sh` (sourced helpers).
+- `PREREQUISITES.md` — required tooling (`git`, `bash`, `node`, `jq`), recommended (`rg`, `gh`, `wt`),
+  and the permission allowlist that stops the scripts prompting.
 
 ## Conventions
-- Skills are Markdown — no build step, no runtime. The lone executable is `scripts/run-open.sh`;
-  add a script only for a mechanical invariant (see `concept.md`), never for a decision.
+- Skills are Markdown — no build step, no runtime. Scripts are bash (POSIX-ish; macOS ships bash 3.2
+  and BSD `sed`/`date`, so no GNU-only flags) plus one dependency-free `.mjs`; never a compiled binary,
+  since installing the plugin is a clone.
+- Add a script only for a mechanical invariant (see `concept.md`), never for a decision. Where the line
+  is unclear, report candidates and let the skill choose.
+- Scripts report and run; they never stage, merge, push or edit. They parse stable machine output
+  (`--porcelain`, `--shortstat`/`--name-only`, `--format=json`) and never call `rtk`, which
+  reshapes output for reading.
 - Nothing project-specific is hardcoded: quality-gate commands, commit scopes, and reviewers
   are discovered from the target repo.
 
