@@ -1,12 +1,11 @@
 # _shared — reference bundle
 
-This folder is the **shared library** for the mkit plugin's four workflow skills. It is
-**not a triggerable skill** — it has no `SKILL.md`. Instead, `commit`, `review-changes`,
-`finish-feature`, and `create-pr` link into `references/` via relative paths
-(`../_shared/references/…`) so the safety rules and conventions live in exactly one place.
+The **shared library** for mkit's four workflow skills. **Not a triggerable skill** — no `SKILL.md`.
+`commit`, `review-changes`, `finish-feature` and `create-pr` link into `references/` via relative paths
+(`../_shared/references/…`), so safety rules and conventions live in exactly one place.
 
-> Keep those `../_shared/references/…` links intact — sibling-relative paths are what make
-> the bundle portable if it's ever lifted into another repo.
+> Keep those `../_shared/references/…` links intact — sibling-relative paths are what make the bundle
+> portable if it is lifted into another repo.
 
 ## The skills that consume it
 
@@ -17,57 +16,49 @@ This folder is the **shared library** for the mkit plugin's four workflow skills
 | `finish-feature` | Commit → merge branch back into base → delete branch / remove worktree.      | `worktree`, `quality-gate` (full gate), `branching`, `output-discipline`, all of the above |
 | `create-pr`      | Commit → push → open GitHub PR → assign reviewers.                           | `worktree`, `quality-gate` (full gate), `branching`, `output-discipline`, `agent-delegation`, all of the above |
 
-`commit` is the shared front-end: `finish-feature` and `create-pr` both start by committing.
-Pick the finisher by **destination** — `finish-feature` merges it yourself locally,
-`create-pr` pushes it for remote review.
+`commit` is the shared front-end — both finishers start by committing. Pick the finisher by **destination**:
+`finish-feature` merges locally yourself, `create-pr` pushes for remote review.
 
 ## References (`references/`)
 
-- `git-safety.md` — the non-negotiable git safety protocol (no force-push, no config edits,
-  no AI attribution, don't skip hooks, confirm before irreversible steps).
-- `conventional-commits.md` — commit message format, type table, scope detection.
-- `quality-gate.md` — how to **detect** (not hardcode) the repo's fast check and full
-  lint/test/build gate, and how to triage a failing step (delegate the diagnosis, report a
-  cause and a suggested fix, never the log).
-- `worktree.md` — detect the worktree origin (worktrunk `wt` / Claude Code
-  `.claude/worktrees/` / plain `git worktree`) and clean up correctly.
-- `branching.md` — the default branch model to assume when a repo doesn't document its own.
+- `git-safety.md` — the non-negotiable git safety protocol: no force-push, no config edits, no AI attribution,
+  don't skip hooks, confirm before irreversible steps.
+- `conventional-commits.md` — message format, type table, scope detection.
+- `quality-gate.md` — how to **detect** (not hardcode) the repo's fast check and full lint/test/build gate, and
+  how to triage a failing step: delegate the diagnosis, report cause + suggested fix, never the log.
+- `worktree.md` — detect the worktree origin (worktrunk `wt` / Claude Code `.claude/worktrees/` / plain
+  `git worktree`) and clean up correctly.
+- `branching.md` — the branch model to assume when a repo documents none.
 - `review-severity.md` — the severity bar (`critical`/`major`/`minor`, prose is minor), the
-  `[surface, severity]` tag, the read-only reviewer contract, what not to report, and why a
-  partial review is never reported as clean.
-- `lenses-correctness.md` / `lenses-craft.md` — the eight review lenses, split along the
-  reviewer that carries each set: `bugs`/`impl`/`adversarial` go to Codex, and
-  `architecture`/`quality`/`tests`/`docs`/`comments` to the Claude subagent. Split so a
-  reviewer loads only the lenses it carries.
-- `triage-reconcile.md`, `triage-verify.md`, `fix-checks.md` — what happens after the reviewers
-  return, one file per stage and per consumer: reconcile (dedupe + corroboration arithmetic, in
-  a subagent), verify (five verdicts + the materiality test, one subagent per group), and the
-  three checks on every fix plus what gates (the main session).
-- `agent-delegation.md` — how a skill runs heavy work without paying for it in context: using the
-  run directory as transport between stages, subagent return budgets, resolved reference paths,
-  one-writer-per-file, and model-per-stage.
-- `output-discipline.md` — the run directory itself (opened with `scripts/run-open.sh` before
-  anything logs, and written as `<run-dir>` — there is no `$RUN_DIR` variable) and bounding
-  command output: gate logs to a file and read the tail, `--stat` before any diff,
-  never a full branch diff to write prose — and what must never be capped (a staged diff you are
-  approving, a body the user acts on).
+  `[surface, severity]` tag, the read-only reviewer contract, what not to report, and why a partial review is
+  never reported as clean.
+- `lenses-correctness.md` / `lenses-craft.md` — the eight review lenses, split by the reviewer that carries
+  each set: `bugs`/`impl`/`adversarial` to Codex, `architecture`/`quality`/`tests`/`docs`/`comments` to the
+  Claude subagent. Split so a reviewer loads only its own lenses.
+- `triage-reconcile.md`, `triage-verify.md`, `fix-checks.md` — what happens after the reviewers return, one
+  file per stage and per consumer: reconcile (dedupe + corroboration arithmetic, in a subagent), verify (five
+  verdicts + the materiality test, one subagent per group), and the three checks on every fix plus what gates
+  (the main session).
+- `agent-delegation.md` — running heavy work without paying for it in context: the run directory as transport,
+  subagent return budgets, resolved reference paths, one-writer-per-file, model-per-stage.
+- `output-discipline.md` — the run directory itself (opened with `scripts/run-open.sh` before anything logs,
+  written as `<run-dir>` — there is no `$RUN_DIR`) and bounding command output: gate logs to a file and read
+  the tail, `--stat` before any diff, never a full branch diff to write prose — plus what must never be capped
+  (a staged diff you are approving, a body the user acts on).
 
 ## Design invariants
 
-- **Nothing project-specific is hardcoded** — quality-gate commands, commit scopes, and
-  reviewers are all *discovered* from the target repo, so the bundle works in any project
-  (Bun/Node, .NET, Rust, Go, Python…).
-- **Composition over replacement** — the skills orchestrate `git`, `gh`, and `wt`; they
-  never re-encode git logic.
-- **Degrades gracefully** — `review-changes` calls the `coderabbit` and `codex` plugins when
-  present, redistributes their lenses to a Claude subagent otherwise, and never reports a
-  partial review as a clean one.
-- **Independent sources, then one bar** — reviewers never see each other's findings, and all
-  of them rate against the single severity bar in `review-severity.md`, which is what makes
-  their lists mergeable and corroboration meaningful.
-- **The main session holds decisions, not evidence** — stages that read a lot and decide a
-  little run in subagents and hand back a summary; diffs, transcripts and findings bodies live
-  in a per-run directory under the git dir, which every skill opens before it logs anything, and
-  command output is bounded before it ever arrives (`output-discipline.md`).
+- **Nothing project-specific is hardcoded** — quality-gate commands, commit scopes and reviewers are
+  *discovered* from the target repo, so the bundle works in any project (Bun/Node, .NET, Rust, Go, Python…).
+- **Composition over replacement** — the skills orchestrate `git`, `gh` and `wt`; they never re-encode git logic.
+- **Degrades gracefully** — `review-changes` calls the `coderabbit` and `codex` plugins when present,
+  redistributes their lenses to a Claude subagent otherwise, and never reports a partial review as clean.
+- **Independent sources, then one bar** — reviewers never see each other's findings, and all rate against the
+  single severity bar in `review-severity.md`. That is what makes their lists mergeable and corroboration
+  meaningful.
+- **The main session holds decisions, not evidence** — stages that read a lot and decide a little run in
+  subagents and hand back a summary; diffs, transcripts and finding bodies live in a per-run directory under
+  the git dir, opened before anything logs, and command output is bounded before it arrives
+  (`output-discipline.md`).
 
-For the plugin's overall design and roadmap, see [`concept.md`](../../concept.md).
+For the plugin's overall design and roadmap see [`concept.md`](../../concept.md).
