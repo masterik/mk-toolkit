@@ -1,6 +1,6 @@
 # Quality gate detection
 
-Shared by `commit` (fast check), `finish-feature` and `create-pr` (full gate). **Do not hardcode commands** —
+Shared by `commit` (fast check), `finish` and `pr` (full gate). **Do not hardcode commands** —
 detect what the repo uses, so the bundle works in any project.
 
 ## Discover the commands
@@ -21,7 +21,7 @@ detected commands, not instead of them.
 
 - **Fast check** (`commit`, per logical commit): the single fastest meaningful check — usually lint,
   typecheck, or the touched package's unit tests. It runs repeatedly; keep it quick.
-- **Full gate** (`finish-feature`, `create-pr`, once before merge/PR): the complete pre-integration sequence
+- **Full gate** (`finish`, `pr`, once before merge/PR): the complete pre-integration sequence
   in order, **stop on first failure**. Typically `lint → test → build`.
 
 ## When a step fails — triage the log, don't read it
@@ -39,7 +39,7 @@ the sources needed to explain the failure, and **returns at most 15 lines**:
 - a concrete suggested fix
 
 No log excerpts beyond the decisive ones, no file contents, no narration. **Read-only** — triage diagnoses,
-never fixes: what to do about a red gate is the caller's decision, and for `finish-feature`/`create-pr` the
+never fixes: what to do about a red gate is the caller's decision, and for `finish`/`pr` the
 user's (fix, or proceed as a draft).
 
 **On a short log, read the tail yourself.** Under ~100 lines the round trip costs more than it saves, and a

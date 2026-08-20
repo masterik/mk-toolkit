@@ -4,7 +4,7 @@ Three reading stances: `bugs`, `impl`, `adversarial`. A lens is **what a reviewe
 decides where to look and how hard to push, never what severity to give (that is `review-severity.md`, the
 same bar for every lens).
 
-This set goes to the **Codex reviewer** in `review-changes` — promptable, strongest on correctness and on
+This set goes to the **Codex reviewer** in `review` — promptable, strongest on correctness and on
 attacking the change. The craft set (`architecture`, `quality`, `tests`, `docs`, `comments`) is in
 `lenses-craft.md`, carried by a different reviewer; you do not carry it. Lenses are redistributed when a
 reviewer is missing, so you may be handed both files — then cover both sets and say so.

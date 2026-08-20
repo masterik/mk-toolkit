@@ -1,16 +1,16 @@
 ---
-name: create-pr
+name: pr
 description: >-
   Commit, push, and open a GitHub PR with description and reviewers. Trigger on "create a PR", "open a PR",
   "make a PR", "submit for review", "push a branch for merge". Remote review path — local merge is
-  finish-feature.
+  finish.
 model: sonnet
 ---
 
 # Create a Pull Request (commit → push → PR → reviewers)
 
 Part of the **mkit** bundle. The review path: commit, push, open the PR, request reviewers. For a local merge
-with no review use `finish-feature`.
+with no review use `finish`.
 
 References: `../_shared/references/conventional-commits.md`, `../_shared/references/quality-gate.md`,
 `../_shared/references/worktree.md`, `../_shared/references/git-safety.md`,
@@ -42,7 +42,7 @@ settled, gather it and every read-only fact this skill needs in **one call**: th
 pre-flight, step 4's context and the final report, and none change when step 3 pushes.
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh create-pr
+${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh pr
 git branch --show-current && git status --short
 git log --oneline <base>..HEAD && git diff <base> --stat
 ```

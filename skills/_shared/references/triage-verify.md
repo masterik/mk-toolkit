@@ -1,6 +1,6 @@
 # Verify — one verdict per finding
 
-Stage 2 of finding triage in `review-changes`: judge the reconciled findings against the code. Reconciling
+Stage 2 of finding triage in `review`: judge the reconciled findings against the code. Reconciling
 happened before you (`triage-reconcile.md`), fixing happens after (`fix-checks.md`) — you do neither.
 
 Open the file at the line named, read enough around it to judge, return exactly **one** verdict:

@@ -4,7 +4,7 @@ Five reading stances: `architecture`, `quality`, `tests`, `docs`, `comments`. A 
 looking for** — it decides where to look and how hard to push, never what severity to give (that is
 `review-severity.md`, the same bar for every lens).
 
-This set goes to the **Claude subagent reviewer** in `review-changes` — promptable, and it needs repo context
+This set goes to the **Claude subagent reviewer** in `review` — promptable, and it needs repo context
 the other reviewers do not gather. The correctness set (`bugs`, `impl`, `adversarial`) is in
 `lenses-correctness.md`, carried by a different reviewer; you do not carry it. Lenses are redistributed when a
 reviewer is missing, so you may be handed both files — then cover both sets and say so.

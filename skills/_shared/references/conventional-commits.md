@@ -1,6 +1,6 @@
 # Conventional Commits reference
 
-Commit-message format for `commit`, `finish-feature`, `create-pr`.
+Commit-message format for `commit`, `finish`, `pr`.
 
 ## Format
 

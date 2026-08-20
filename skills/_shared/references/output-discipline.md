@@ -18,7 +18,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh <skill>
 ```
 
 - Prints one absolute path, nothing else. `<skill>` = the skill's own name (`commit`, `review`,
-  `create-pr`, `finish-feature`).
+  `pr`, `finish`).
 - A script, not a snippet: its invariants (atomic creation, absolute path, inside the git dir) fail
   silently when hand-rolled. Script header documents each; nonzero exit says why (not a git repo, bad name).
 - Empty `${CLAUDE_PLUGIN_ROOT}` fails as `/scripts/run-open.sh: not found`. Intended failure — find the

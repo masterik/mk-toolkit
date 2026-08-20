@@ -3,7 +3,7 @@
 This file provides guidance to agents when working with code in this repository.
 
 **mkit** — a **Claude Code plugin** packaging a cohesive kit of agent coding-workflow
-skills (`commit`, `review-changes`, `finish-feature`, `create-pr`) plus the shared
+skills (`commit`, `review`, `finish`, `pr`) plus the shared
 `_shared/references/` bundle. Composition over replacement: the skills orchestrate `git`,
 `gh`, `wt`, and code-review tools — no new git logic.
 

@@ -6,8 +6,8 @@ gives Claude a safe, repeatable way to take work from **edits → committed → 
 integrated**: stage and commit cleanly, review the diff, then either merge back locally or
 open a PR — without re-deriving fragile `git` + `gh` + `wt` command sequences on every task.
 
-It's a *workflow* toolkit, not just a git one: `review-changes` drives CodeRabbit/Codex/Claude,
-`create-pr` drives GitHub, and `finish-feature` handles worktree cleanup — the parts of the
+It's a *workflow* toolkit, not just a git one: `review` drives CodeRabbit/Codex/Claude,
+`pr` drives GitHub, and `finish` handles worktree cleanup — the parts of the
 dev loop the agent runs, git-centric but not git-limited.
 
 There is no CLI and nothing to install into the repo's toolchain. The plugin is essentially
@@ -40,15 +40,15 @@ are plain Markdown, so support for another agent is a thin packaging step, not a
 
 ## The Skills
 A cohesive bundle that moves work through its lifecycle. `commit` is the shared front-end;
-`finish-feature` and `create-pr` both begin by committing, and you pick the finisher by
+`finish` and `pr` both begin by committing, and you pick the finisher by
 **destination** — merge it yourself locally, or push it for review.
 
 | Skill | Does | Trigger examples |
 |-------|------|------------------|
 | **`commit`** | Inspect the tree, stage intentionally, split into logical Conventional Commits. | "commit", "split into commits" |
-| **`review-changes`** | Review the local diff/commits with three independent reviewers (CodeRabbit + Codex + Claude), verify the findings, fix what's worth fixing, summarize. | "review my changes", "run codex and coderabbit" |
-| **`finish-feature`** | Commit → merge the branch back into its base → delete branch / remove worktree. **Local**, no PR. | "finish this feature", "merge back and clean up" |
-| **`create-pr`** | Commit → push → open a GitHub PR → assign reviewers. **Remote review** path. | "create a PR", "open a pull request", "submit for review" |
+| **`review`** | Review the local diff/commits with three independent reviewers (CodeRabbit + Codex + Claude), verify the findings, fix what's worth fixing, summarize. | "review my changes", "run codex and coderabbit" |
+| **`finish`** | Commit → merge the branch back into its base → delete branch / remove worktree. **Local**, no PR. | "finish this feature", "merge back and clean up" |
+| **`pr`** | Commit → push → open a GitHub PR → assign reviewers. **Remote review** path. | "create a PR", "open a pull request", "submit for review" |
 
 ### Shared references — `skills/_shared/`
 `_shared/` is **not** a triggerable skill (it has no `SKILL.md`); it is the shared library
@@ -82,7 +82,7 @@ the four skills link into via `../_shared/references/…`:
  Claude Code
    │   loads plugin skills (via .claude-plugin/plugin.json)
    ▼
- commit · review-changes · finish-feature · create-pr   ← SKILL.md (when & how)
+ commit · review · finish · pr   ← SKILL.md (when & how)
    │   all link into
    ▼
  _shared/references/*.md   (safety · conventions · quality gate · worktree · branching
@@ -103,8 +103,8 @@ Work is modeled as a **feature** — edits that become commits and then get inte
 
 ```
 edit → commit → review → finish
-                          ├── finish-feature   (local merge, delete branch / worktree)
-                          └── create-pr         (push, open PR, review remotely)
+                          ├── finish  (local merge, delete branch / worktree)
+                          └── pr      (push, open PR, review remotely)
 ```
 
 Worktree awareness is built in: the finishing skills detect whether they're in a Worktrunk
@@ -120,9 +120,9 @@ mkit ships as a standard Claude Code plugin:
   marketplace.json     # marketplace entry — source "./"
 skills/
   commit/SKILL.md
-  create-pr/SKILL.md
-  review-changes/SKILL.md
-  finish-feature/SKILL.md
+  pr/SKILL.md
+  review/SKILL.md
+  finish/SKILL.md
   _shared/            # shared references (README + references/*.md) — no SKILL.md
 ```
 

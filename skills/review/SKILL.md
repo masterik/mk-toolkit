@@ -1,5 +1,5 @@
 ---
-name: review-changes
+name: review
 description: >-
   Multi-source review of local uncommitted changes or recent commits — CodeRabbit, Codex and Claude in
   parallel, findings verified, worthwhile fixes applied. Trigger on "review my changes", "review the diff",
@@ -12,7 +12,7 @@ model: opus
 
 Part of the **mkit** bundle. Runs a multi-source review over local work, merges and verifies the findings,
 applies safe fixes, asks before risky ones, hands back a findings + fixes summary. Typically run right before
-`commit`, `finish-feature` or `create-pr`.
+`commit`, `finish` or `pr`.
 
 **Read nothing up front.** Most of these references are what the *reviewers* are held to, not what this
 session runs on — they go to subagents as resolved paths, and a copy here buys nothing. Later steps name them

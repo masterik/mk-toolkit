@@ -1,16 +1,16 @@
 ---
-name: finish-feature
+name: finish
 description: >-
   Commit, merge a feature branch into base (usually main), delete the branch, remove the worktree. Trigger on
   "finish this feature", "merge back and clean up", "merge into main and clean up", "done with this feature".
-  Local path — reviewed remote merge is create-pr.
+  Local path — reviewed remote merge is pr.
 model: sonnet
 ---
 
 # Finish a feature (local merge + cleanup)
 
 Part of the **mkit** bundle. The "merge it back myself" path: no remote PR, no reviewers — commit, integrate
-into the base branch, tear down the branch/worktree. For the review path use `create-pr`.
+into the base branch, tear down the branch/worktree. For the review path use `pr`.
 
 References, read the ones a step calls for: `../_shared/references/worktree.md`,
 `../_shared/references/quality-gate.md`, `../_shared/references/conventional-commits.md`,
@@ -19,9 +19,9 @@ References, read the ones a step calls for: `../_shared/references/worktree.md`,
 
 ## When NOT to use this
 
-- Work needs review → `create-pr`.
+- Work needs review → `pr`.
 - You only want to commit → `commit`.
-- Base branch is protected, or the team merges only via PR → `create-pr`.
+- Base branch is protected, or the team merges only via PR → `pr`.
 
 ## Preconditions
 
@@ -29,7 +29,7 @@ References, read the ones a step calls for: `../_shared/references/worktree.md`,
 (`../_shared/references/output-discipline.md`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh finish-feature
+${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh finish
 git branch --show-current && git status --short
 git rev-parse --git-dir --git-common-dir --show-toplevel
 git worktree list

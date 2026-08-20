@@ -7,7 +7,7 @@
     {
       "name": "mkit",
       "source": "./",
-      "description": "Coding-workflow skills for Claude Code: commit, review-changes, finish-feature, create-pr, over a shared git-safety + Conventional Commits reference bundle."
+      "description": "Coding-workflow skills for Claude Code: commit, review, finish, pr, over a shared git-safety + Conventional Commits reference bundle."
     }
   ]
 }

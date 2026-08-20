@@ -1,6 +1,6 @@
 # Worktree awareness
 
-Shared by `finish-feature`, `create-pr`, `commit`. Git worktrees check out several branches at once in
+Shared by `finish`, `pr`, `commit`. Git worktrees check out several branches at once in
 sibling directories, and Claude Code agents commonly run inside one. The finishing skills must detect
 **which kind** and clean up accordingly.
 
@@ -40,7 +40,7 @@ Signal: the worktree root path contains `/.claude/worktrees/`. This is the harne
 
 Do **not** `git worktree remove` it by hand from inside itself. Merge into the base (below), then hand back
 with the **ExitWorktree** tool: `action: "remove"` after a successful merge, `action: "keep"` to leave it. If
-the change should ship as a PR instead, keep the worktree and use `create-pr`.
+the change should ship as a PR instead, keep the worktree and use `pr`.
 
 ### 3. Plain `git worktree`
 

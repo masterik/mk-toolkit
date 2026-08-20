@@ -1,6 +1,6 @@
 # Branching strategy
 
-Shared by `commit`, `create-pr`, `finish-feature`. The branch model to assume when a repo documents none.
+Shared by `commit`, `pr`, `finish`. The branch model to assume when a repo documents none.
 
 ## Discover first
 

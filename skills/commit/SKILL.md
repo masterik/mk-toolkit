@@ -2,16 +2,16 @@
 name: commit
 description: >-
   Stage and split local changes into logical Conventional Commits. Trigger on "commit", "make a commit",
-  "split into commits", or what the commit message should be. Commits only — merge with finish-feature, PR
-  with create-pr.
+  "split into commits", or what the commit message should be. Commits only — merge is finish, PR
+  is pr.
 model: sonnet
 ---
 
 # Commit work
 
-Part of the **mkit** bundle (`commit` · `finish-feature` · `create-pr` · `review-changes`); shared references
-live in `../_shared/references/`. This skill only commits — merge-and-cleanup is `finish-feature`, a PR is
-`create-pr`.
+Part of the **mkit** bundle (`commit` · `finish` · `pr` · `review`); shared references
+live in `../_shared/references/`. This skill only commits — merge-and-cleanup is `finish`, a PR is
+`pr`.
 
 Keep output bounded throughout. For this skill that is three rules, restated below where they apply:
 **`--stat` before any diff**, **gate output goes to a log — report pass/fail, not the log**, **never truncate

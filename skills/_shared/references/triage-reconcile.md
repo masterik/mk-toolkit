@@ -1,6 +1,6 @@
 # Reconcile — merge the reviewers' lists
 
-Stage 1 of finding triage in `review-changes`: several reviewers wrote `findings-*.md` independently; merge
+Stage 1 of finding triage in `review`: several reviewers wrote `findings-*.md` independently; merge
 them into one set with stable ids. Verifying (`triage-verify.md`) and fixing (`fix-checks.md`) are later
 stages — you do neither, and you add no findings of your own.
 

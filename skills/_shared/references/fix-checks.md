@@ -1,6 +1,6 @@
 # Fix — three checks before a fix is done, and what gates
 
-Stage 3 of finding triage in `review-changes`, run in the main session: verified findings get acted on.
+Stage 3 of finding triage in `review`, run in the main session: verified findings get acted on.
 Reconciling (`triage-reconcile.md`) and verifying (`triage-verify.md`) happened before you.
 
 Findings arrive as a site; defects live as a shape. Run these in order, on every fix.

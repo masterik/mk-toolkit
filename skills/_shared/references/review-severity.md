@@ -1,6 +1,6 @@
 # Severity bar & reporting rules
 
-Used by `review-changes` and any skill asking a tool or subagent for findings. "The severity bar" means this
+Used by `review` and any skill asking a tool or subagent for findings. "The severity bar" means this
 file. Hand it to every reviewer verbatim — one bar for all sources is what makes their findings mergeable.
 
 ## The bar

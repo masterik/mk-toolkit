@@ -1,6 +1,6 @@
 {
   "name": "mkit",
-  "description": "Coding-workflow skills for Claude Code that move work from edits → committed → reviewed → integrated: commit, review-changes, finish-feature, create-pr — over a shared git-safety + Conventional Commits reference bundle.",
+  "description": "Coding-workflow skills for Claude Code that move work from edits → committed → reviewed → integrated: commit, review, finish, pr — over a shared git-safety + Conventional Commits reference bundle.",
   "version": "0.2.0",
   "author": {
     "name": "Malik Amurlayev",
