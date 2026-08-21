@@ -1,7 +1,8 @@
 # Agent delegation & context discipline
 
-How a skill runs heavy work without paying for it in context. Used by `review` (three reviewers,
-a reconciler, verifiers); applies to any stage that reads a lot and decides a little.
+How a skill runs heavy work without paying for it in context. Used by `review` (two or three
+reviewers depending on mode, a reconciler, verifiers); applies to any stage that reads a lot and
+decides a little.
 
 The rule behind all of it: **the main session holds decisions, not evidence.** Evidence — diffs, tool
 transcripts, file contents, finding bodies — lives on disk, read back only for the finding being acted on.

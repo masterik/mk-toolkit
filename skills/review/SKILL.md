@@ -118,17 +118,20 @@ Spawn every reviewer the mode calls for in **one message**, so they run concurre
 findings.
 
 - **full** (default): all three, as below.
-- **quick**: CodeRabbit + Codex only — no Claude subagent. Codex still carries `lenses-correctness.md`, but its
-  brief explicitly narrows it to the `bugs` and `impl` sections and instructs it to **skip `adversarial`**.
+- **quick**: CodeRabbit + Codex only — no Claude subagent. Both briefs carry `lenses-correctness.md` and
+  explicitly narrow to the `bugs` and `impl` sections, instructing **skip `adversarial`**. CodeRabbit's
+  narrowing is best-effort only — it is not steerable and may still return broader findings; that is expected,
+  not a broken brief.
 
 | reviewer | how to invoke | lenses |
 | --- | --- | --- |
-| **CodeRabbit** | the CodeRabbit review skill (`coderabbit:code-review`) or the `coderabbit:code-reviewer` agent | not steerable — takes its own broad pass; map its findings onto lenses afterwards |
+| **CodeRabbit** | the CodeRabbit review skill (`coderabbit:code-review`) or the `coderabbit:code-reviewer` agent | full: not steerable — takes its own broad pass; map its findings onto lenses afterwards. quick: brief also asks for `bugs`/`impl` only, best-effort — it may still return broader findings |
 | **Codex** | the Codex review path (`codex:rescue` skill / `codex:codex-rescue` agent), prompted for a review pass — see the async caveat below | full: `bugs`, `impl`, `adversarial`. quick: `bugs`, `impl` only — the brief says so explicitly |
 | **Claude** (full only) | a subagent over the same diff — or the built-in `code-review` skill at a high effort level | `architecture`, `quality`, `tests`, `docs`, `comments` |
 
 Each brief carries: `<run-dir>/scope.md`, the paths of `review-severity.md` and of **its own lens file** under
-`refs=` — `lenses-correctness.md` for Codex, `lenses-craft.md` for Claude — with an instruction to read them,
+`refs=` — `lenses-correctness.md` for Codex (and, in quick mode, for CodeRabbit too, so its best-effort
+narrowing has something to narrow against), `lenses-craft.md` for Claude — with an instruction to read them,
 plus the fact that the gate passed. A reviewer gets the lens file it carries and not the other; hand over both
 only when it is covering for a missing reviewer.
 
