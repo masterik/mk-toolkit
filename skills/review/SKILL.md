@@ -2,17 +2,22 @@
 name: review
 description: >-
   Multi-source review of local uncommitted changes or recent commits — CodeRabbit, Codex and Claude in
-  parallel, findings verified, worthwhile fixes applied. Trigger on "review my changes", "review the diff",
-  "review last N commits", "run codex and coderabbit", or before a commit/PR. Local work only — for a GitHub
-  PR use the PR review tools.
+  parallel, findings verified, worthwhile fixes applied. Full mode (default) runs all three reviewers; quick
+  mode runs CodeRabbit + Codex on bugs/impl only. Trigger on "review my changes", "review the diff", "quick
+  review", "review last N commits", "run codex and coderabbit", or before a commit/PR. Local work only — for a
+  GitHub PR use the PR review tools.
+argument-hint: "[quick|full]"
 model: opus
 ---
 
-# Review changes (three reviewers → verify → fix)
+# Review changes (reviewers → verify → fix)
 
 Part of the **mkit** bundle. Runs a multi-source review over local work, merges and verifies the findings,
 applies safe fixes, asks before risky ones, hands back a findings + fixes summary. Typically run right before
 `commit`, `finish` or `pr`.
+
+**Mode** (`$ARGUMENTS`): `quick` or `full` — e.g. `/mkit:review quick`. Decided in step 1 if omitted; full is
+the default.
 
 **Read nothing up front.** Most of these references are what the *reviewers* are held to, not what this
 session runs on — they go to subagents as paths under `refs=` (below), and a copy here buys nothing. Later
@@ -41,9 +46,10 @@ what is real never rejects anything.
 ## How the work is split
 
 **Every stage that reads a lot and decides a little runs in a subagent and hands back a summary, never its
-work.** A three-reviewer review is tens of thousands of tokens of transcript; this session needs only enough to
-put a decision to the user. Every brief states its **return budget**, **output path** and **prohibitions**, and
-hands over established facts — range, shortstat, file list, goal — so the subagent does not re-derive them.
+work.** A full review (all three reviewers) is tens of thousands of tokens of transcript; quick (two reviewers,
+narrower brief) is proportionally less. Either way this session needs only enough to put a decision to the
+user. Every brief states its **return budget**, **output path** and **prohibitions**, and hands over
+established facts — range, shortstat, file list, goal, mode — so the subagent does not re-derive them.
 (`agent-delegation.md` argues the case; this is the roster.)
 
 | stage | who runs it | model | enters this session |
@@ -51,7 +57,7 @@ hands over established facts — range, shortstat, file list, goal — so the su
 | 1 scope | this session — **one** `facts.sh` call | — | run dir, refs path, branch, stat, file list |
 | 2 gate | this session — `gate-detect.sh` + `gate-run.sh` | — | pass/fail and the failing step only |
 | 2a gate triage | 1 subagent, only if the verdict is not diagnosis enough | Sonnet | what failed, cause, suggested fix — ≤15 lines |
-| 3 find | 3 subagents, parallel | Opus | 3 × ≤10 lines: path written + counts by tag + lenses not covered |
+| 3 find | 2 (quick) or 3 (full) subagents, parallel | Opus | one ≤10-line reply per subagent: path written + counts by tag + lenses not covered |
 | 4 reconcile | this session — `findings.mjs reconcile` | — | counts, merges, drops, undecided pairs |
 | 5 verify | 1 subagent per group from `findings.mjs group`, parallel | Opus | one line per finding: id + verdict (+ corrected fields) |
 | 6 fix | this session, bodies read from disk on demand | — | the findings being acted on, in full |
@@ -73,6 +79,14 @@ standard case): **uncommitted changes** (default when the tree is dirty), or **r
 (`HEAD~3..HEAD`, `<base>..HEAD`). Both a dirty tree and "review my commits" in play → confirm which, or review
 both and note the split.
 
+**Decide the mode**: **full** (all three reviewers, all eight lenses — the default) or **quick** (CodeRabbit +
+Codex on `bugs`/`impl` only; no Claude craft subagent; no `adversarial`). `$ARGUMENTS` decides it outright when
+present (`quick` or `full`). Otherwise, an explicit signal — "quick review", "fast pass", "just check for
+bugs" — selects quick; ask only if genuinely ambiguous; **default to full** otherwise, since "before a
+commit/PR" is the typical high-stakes trigger this skill is built for. Quick is a **deliberate** narrower
+scope, not a degraded run — step 3 and step 8 must never describe it the way a missing/failed reviewer is
+described.
+
 Then one call, which also opens the run directory:
 
 ```bash
@@ -86,31 +100,42 @@ opens a second directory (`output-discipline.md`).
 commit messages or ticket. The `impl` lens is judged against it; with no goal, say so and expect lower
 confidence rather than inventing one.
 
-Write `<run-dir>/scope.md`: the range, the command producing the diff, the stat, the file list, the goal. Later
-stages read that file instead of being told again.
+Write `<run-dir>/scope.md`: the range, the command producing the diff, the stat, the file list, the goal, and
+**the mode**. Later stages read that file instead of being told again — step 3's roster and step 4's
+`--sources-expected` both key off the mode recorded here.
 
 ## 2. Run the quality gate *first*
 
 `gate-detect.sh`, then `gate-run.sh` on the fast tier (`quality-gate.md`), **before** the review.
 
-- Failing → fix that first, or stop and report it: reviewing a red tree wastes three reviewers on lint output.
+- Failing → fix that first, or stop and report it: reviewing a red tree wastes every reviewer on lint output.
 - Passing → **tell every reviewer it passed**, and that they must not run the tests, build or linter. That is
   what earns the right to reject "anything a linter catches" as a finding.
 
-## 3. Run three reviewers in parallel
+## 3. Run the reviewers in parallel
 
-Spawn all three in **one message**, so they run concurrently and none sees another's findings.
+Spawn every reviewer the mode calls for in **one message**, so they run concurrently and none sees another's
+findings.
+
+- **full** (default): all three, as below.
+- **quick**: CodeRabbit + Codex only — no Claude subagent. Codex still carries `lenses-correctness.md`, but its
+  brief explicitly narrows it to the `bugs` and `impl` sections and instructs it to **skip `adversarial`**.
 
 | reviewer | how to invoke | lenses |
 | --- | --- | --- |
 | **CodeRabbit** | the CodeRabbit review skill (`coderabbit:code-review`) or the `coderabbit:code-reviewer` agent | not steerable — takes its own broad pass; map its findings onto lenses afterwards |
-| **Codex** | the Codex review path (`codex:rescue` skill / `codex:codex-rescue` agent), prompted for a review pass — see the async caveat below | `bugs`, `impl`, `adversarial` |
-| **Claude** | a subagent over the same diff — or the built-in `code-review` skill at a high effort level | `architecture`, `quality`, `tests`, `docs`, `comments` |
+| **Codex** | the Codex review path (`codex:rescue` skill / `codex:codex-rescue` agent), prompted for a review pass — see the async caveat below | full: `bugs`, `impl`, `adversarial`. quick: `bugs`, `impl` only — the brief says so explicitly |
+| **Claude** (full only) | a subagent over the same diff — or the built-in `code-review` skill at a high effort level | `architecture`, `quality`, `tests`, `docs`, `comments` |
 
 Each brief carries: `<run-dir>/scope.md`, the paths of `review-severity.md` and of **its own lens file** under
 `refs=` — `lenses-correctness.md` for Codex, `lenses-craft.md` for Claude — with an instruction to read them,
 plus the fact that the gate passed. A reviewer gets the lens file it carries and not the other; hand over both
 only when it is covering for a missing reviewer.
+
+**Quick's narrower roster is not the same thing as a missing reviewer.** Quick never spawns the Claude
+subagent and never asks Codex to cover `adversarial` — that is the mode working as designed, and step 8 must
+say so in mode-neutral language. "Availability & fallback" below is for a reviewer that was *launched* and
+then errored, went silent, or came back unusable — a different situation, reported a different way.
 
 Each reviewer **writes `<run-dir>/findings-<source>.jsonl`, one JSON object per line**:
 
@@ -134,12 +159,12 @@ present-and-empty means that source reported zero and keeps the drop rule armed;
 reported and disarms it. An agent that finishes its turn with no file has reported nothing, whatever its reply
 says.
 
-**Read-only, all three.** No reviewer edits, stages or commits anything — including the built-in `code-review`
-skill, which must not be given `--fix`. Fixing is step 6.
+**Read-only, every reviewer run.** No reviewer edits, stages or commits anything — including the built-in
+`code-review` skill, which must not be given `--fix`. Fixing is step 6.
 
 **Codex wraps an async job.** `codex:codex-rescue` delegates to a background Codex CLI run, so the agent's turn
-can end — and it can report itself idle — while the inner job is still working; it is routinely the slowest of
-the three. Its brief must add: **do not end your turn until the job returns and you have written the file**; if
+can end — and it can report itself idle — while the inner job is still working; it is routinely the slowest
+reviewer running. Its brief must add: **do not end your turn until the job returns and you have written the file**; if
 it is still running, keep waiting; if it dies, say so with the error rather than reconstructing findings; and
 **never write a placeholder before it returns**, because an empty file claims a zero-finding review that did
 not happen. Treat an idle signal with no file as "still working", not as a failure.
@@ -164,7 +189,8 @@ node ${CLAUDE_PLUGIN_ROOT}/scripts/findings.mjs reconcile <run-dir> --sources-ex
 ```
 
 `N` is the number of reviewers you **launched**, not the number that answered — it is what switches the
-weak-singleton drop rule off when a source is missing. **Never create an empty `findings-<source>.jsonl` to
+weak-singleton drop rule off when a source is missing. That follows the mode recorded in `scope.md`: **2** for
+quick (CodeRabbit + Codex), **3** for full. **Never create an empty `findings-<source>.jsonl` to
 make the count line up**: the script reads a present file as that source reporting zero, which re-arms the drop
 rule and silently deletes exactly the single-source findings the missing reviewer would have corroborated. A
 source that never wrote a file is missing; lower `N` and say so. Then read `triage-reconcile.md` and check the two
@@ -243,16 +269,19 @@ finding nobody raised.
 Then the prose, in this order. It is a **decision brief, not a record** — the record is the run directory, so
 name that path once and let it hold the detail.
 
-1. **Completeness first** — sources expected vs reported. A failed source goes above every finding.
-2. **Scope** — range reviewed, shortstat, which reviewers actually ran (and lenses no source carried).
-3. **Counts** — one line, by tag: "2 `[code, major]`, 1 `[docs, minor]`". Never a bare "3 findings".
-4. **Findings** — grouped by severity, each headed `[surface, severity] Title — file:line, conf N`, then
+1. **Mode** — which mode ran, and which reviewers/lenses were **not run by design**, e.g. "Mode: quick —
+   CodeRabbit + Codex (bugs, impl); architecture/quality/tests/docs/comments and adversarial not run." Word it
+   so it reads distinctly from item 2 below: a deliberate narrower scope, never a partial or degraded full run.
+2. **Completeness first** — sources expected vs reported. A failed source goes above every finding.
+3. **Scope** — range reviewed, shortstat, which reviewers actually ran (and lenses no source carried).
+4. **Counts** — one line, by tag: "2 `[code, major]`, 1 `[docs, minor]`". Never a bare "3 findings".
+5. **Findings** — grouped by severity, each headed `[surface, severity] Title — file:line, conf N`, then
    trigger, consequence, fix. Mark any finding more than one source raised, and any that was `refined`.
-5. **Fixed automatically** — what changed, why it was safe.
-6. **Needs your decision** — risky findings awaiting approval, with the proposed fix.
-7. **Considered, not changed** — skipped findings and `immaterial` verdicts, one line each.
-8. **Open questions** and **pre-existing** — their own short sections, one line each, out of the counts.
-9. **Verification** — the check that ran after fixing, its result, and the `<run-dir>` path.
+6. **Fixed automatically** — what changed, why it was safe.
+7. **Needs your decision** — risky findings awaiting approval, with the proposed fix.
+8. **Considered, not changed** — skipped findings and `immaterial` verdicts, one line each.
+9. **Open questions** and **pre-existing** — their own short sections, one line each, out of the counts.
+10. **Verification** — the check that ran after fixing, its result, and the `<run-dir>` path.
 
 A body appears in full where the reader acts on it, and nowhere twice: findings the user must decide on carry
 their full body, the one-line sections stay one line. End on the decision the user has to make — findings

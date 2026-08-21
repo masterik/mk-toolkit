@@ -54,7 +54,7 @@ A cohesive bundle that moves work through its lifecycle. `commit` is the shared 
 | Skill | Does | Trigger examples |
 |-------|------|------------------|
 | **`commit`** | Inspect the tree, stage intentionally, split into logical Conventional Commits. | "commit", "split into commits" |
-| **`review`** | Review the local diff/commits with three independent reviewers (CodeRabbit + Codex + Claude), verify the findings, fix what's worth fixing, summarize. | "review my changes", "run codex and coderabbit" |
+| **`review`** | Review the local diff/commits — full (CodeRabbit + Codex + Claude, all lenses) or quick (CodeRabbit + Codex, bugs/impl only) — verify the findings, fix what's worth fixing, summarize. | "review my changes", "quick review", "run codex and coderabbit" |
 | **`finish`** | Commit → merge the branch back into its base → delete branch / remove worktree. **Local**, no PR. | "finish this feature", "merge back and clean up" |
 | **`pr`** | Commit → push → open a GitHub PR → assign reviewers. **Remote review** path. | "create a PR", "open a pull request", "submit for review" |
 
