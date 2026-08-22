@@ -1,0 +1,28 @@
+{
+	"hooks": {
+		"Stop": [
+			{
+				"hooks": [
+					{
+						"type": "command",
+						"command": "${CLAUDE_PLUGIN_ROOT}/scripts/hooks/journal-nudge.sh",
+						"timeout": 5,
+						"statusMessage": "mkit: checking the commit journal"
+					}
+				]
+			}
+		],
+		"SubagentStop": [
+			{
+				"hooks": [
+					{
+						"type": "command",
+						"command": "${CLAUDE_PLUGIN_ROOT}/scripts/hooks/journal-nudge.sh",
+						"timeout": 5,
+						"statusMessage": "mkit: checking the commit journal"
+					}
+				]
+			}
+		]
+	}
+}
