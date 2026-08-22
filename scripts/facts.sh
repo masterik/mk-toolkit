@@ -3,7 +3,7 @@
 # Gather every read-only fact an mkit skill needs to start, in one call, and open the
 # run directory while we are here.
 #
-#   usage: facts.sh <skill> [--base <branch>] [--range <range>] [--gh]
+#   usage: facts.sh <skill> [--base <branch>] [--range <range>] [--gh] [--journal]
 #                           [--no-run] [--status-max N] [--files-max N]
 #
 #   facts.sh commit
@@ -32,11 +32,12 @@ skill=""
 base=""
 range=""
 want_gh=no
+want_journal=no
 want_run=yes
 status_max=60
 files_max=200
 
-[ $# -gt 0 ] || mkit_die 'usage: facts.sh <skill> [--base <branch>] [--range <range>] [--gh] [--no-run]' 2
+[ $# -gt 0 ] || mkit_die 'usage: facts.sh <skill> [--base <branch>] [--range <range>] [--gh] [--journal] [--no-run]' 2
 skill="$1"
 shift
 case "$skill" in
@@ -58,6 +59,10 @@ while [ $# -gt 0 ]; do
 		;;
 	--gh)
 		want_gh=yes
+		shift
+		;;
+	--journal)
+		want_journal=yes
 		shift
 		;;
 	--no-run)
@@ -255,6 +260,53 @@ elif [ -n "$porcelain" ]; then
 	emit_scope unstaged ""
 	emit_scope staged "--cached"
 	emit_untracked
+fi
+
+# --- commit journal ----------------------------------------------------------------
+# Here because this is the state the journal describes: its coverage arithmetic runs
+# against exactly the dirty set the three scopes above just reported.
+#
+# Delegated to journal.sh, the way this script already delegates to run-open.sh, and
+# folded in behind a flag so `commit`'s step 0 stays *one* call — a second Bash round
+# trip for the journal would cost more than the diff read the journal exists to skip.
+#
+# One value per distinct cause, the lesson from the pr=gh-missing/pr=jq-missing split:
+# off, empty and jq-missing all leave a skill with no records to spend, but only `off`
+# means the user never asked for journaling, and only `jq-missing` means records exist
+# and cannot be read. Two values the contract floated are deliberately absent:
+#   - `journal=disabled`. `journal.sh disable` *removes* the marker, so a disabled repo
+#     and a never-enabled one are byte-identical on disk; `off` covers both and a
+#     separate value could never be emitted.
+#   - nothing for "no entries on this branch". Emptiness is tested on the file, not on
+#     the branch-filtered entry count, which keeps it a stat instead of a jq read — so
+#     `empty` still reports correctly with no jq, and the block's own
+#     journal_entries= says whether this branch has any.
+if [ "$want_journal" = yes ]; then
+	journal_sh="$plugin_root/scripts/journal.sh"
+	if [ "$("$journal_sh" enabled)" != enabled ]; then
+		printf 'journal=off\n'
+	else
+		journal_file="$("$journal_sh" path)"
+		if [ ! -s "$journal_file" ] ||
+			[ "$(wc -l <"$journal_file" | tr -d ' ')" -eq 0 ]; then
+			printf 'journal=empty\n'
+		elif ! command -v jq >/dev/null 2>&1; then
+			printf 'journal=jq-missing\n'
+		elif journal_status="$("$journal_sh" status)"; then
+			# One tab per nested line. Every other block here carries payload that
+			# cannot be read as a fact (porcelain lines, file names, log subjects);
+			# this one carries key=value lines of its own, so the indent keeps
+			# "column 0 means a facts.sh fact" true for anything grepping this output.
+			printf 'journal=on\njournal:\n'
+			# awk, not `sed 's/^/\t/'`: BSD sed writes a literal `t` there.
+			printf '%s\n' "$journal_status" | awk '{ printf "\t%s\n", $0 }'
+		else
+			# A journal jq cannot parse (hand-edited, or a crash mid-append) must not
+			# take the whole fact set down with it: the journal is an optimization,
+			# every other key here is not.
+			printf 'journal=unreadable\n'
+		fi
+	fi
 fi
 
 # --- base..HEAD, for the finishers -------------------------------------------------
