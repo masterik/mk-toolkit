@@ -1,7 +1,7 @@
 # _shared — reference bundle
 
-The **shared library** for mkit's four workflow skills. **Not a triggerable skill** — no `SKILL.md`.
-`commit`, `review`, `finish` and `pr` link into `references/` via relative paths
+The **shared library** for mkit's five skills. **Not a triggerable skill** — no `SKILL.md`.
+`commit`, `review`, `finish`, `pr` and `note` link into `references/` via relative paths
 (`../_shared/references/…`), so safety rules and conventions live in exactly one place.
 
 > Keep those `../_shared/references/…` links intact — sibling-relative paths are what make the bundle
@@ -15,9 +15,13 @@ The **shared library** for mkit's four workflow skills. **Not a triggerable skil
 | `review`   | Review local diff/commits — full mode with CodeRabbit + Codex + Claude, quick mode with CodeRabbit + Codex only — verify, auto-fix safe, summarize. | `review-severity`, `lenses-correctness`/`lenses-craft`, `triage-reconcile`/`triage-verify`/`fix-checks`, `agent-delegation`, `output-discipline`, `quality-gate` (fast tier), `git-safety` |
 | `finish`   | Commit → merge branch back into base → delete branch / remove worktree.                        | `worktree`, `quality-gate` (full gate), `branching`, `output-discipline`, all of the above |
 | `pr`       | Commit → push → open GitHub PR → assign reviewers.                                              | `worktree`, `quality-gate` (full gate), `branching`, `output-discipline`, `agent-delegation`, all of the above |
+| `note`     | Record why the unit of work just finished exists, into the commit journal. One call, no diff read. | `journal`, `conventional-commits` |
 
 `commit` is the shared front-end — both finishers start by committing. Pick the finisher by **destination**:
 `finish` merges locally yourself, `pr` pushes for remote review.
+
+`note` is the one skill outside that line: it writes intent *during* implementation, which `commit`
+later spends. Normally the `Stop` / `SubagentStop` hook does that writing — `note` is the manual path.
 
 ## References (`references/`)
 
@@ -40,6 +44,8 @@ The **shared library** for mkit's four workflow skills. **Not a triggerable skil
   file per stage and per consumer: reconcile (`findings.mjs reconcile` does the arithmetic; the main session
   judges what it leaves open), verify (five verdicts + the materiality test, one subagent per group from
   `findings.mjs group`), and the three checks on every fix plus what gates (the main session).
+- `journal.md` — the commit journal: intent is a changelog, not a commit plan; the hook names the gap and
+  the agent supplies the judgement; the `unit` record, the five freshness classes, and who decides what.
 - `agent-delegation.md` — running heavy work without paying for it in context: the run directory as transport,
   subagent return budgets, resolved reference paths, one-writer-per-file, model-per-stage.
 - `output-discipline.md` — the one call that starts a run (`scripts/facts.sh`, which opens the run directory

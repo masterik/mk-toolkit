@@ -1,16 +1,16 @@
 # Prerequisites
 
-mkit is Markdown plus five small scripts. There is nothing to build and nothing to put on
-`PATH` — installing the plugin is a clone. What follows is what the scripts call.
+mkit is Markdown plus six small scripts and one hook. There is nothing to build and nothing to
+put on `PATH` — installing the plugin is a clone. What follows is what the scripts call.
 
 ## Required
 
 | Tool | Used by | Why |
 | --- | --- | --- |
 | `git` ≥ 2.30 | everything | `--absolute-git-dir`, `worktree list --porcelain`, `diff --shortstat` |
-| `bash` ≥ 3.2 | the four `.sh` scripts | macOS's system bash is 3.2; nothing here needs 4.x |
+| `bash` ≥ 3.2 | every `.sh` — six scripts plus the sourced `lib/common.sh` | macOS's system bash is 3.2; nothing here needs 4.x |
 | `node` ≥ 18 | `findings.mjs` | ESM, `node:fs`. No npm install, no dependencies |
-| `jq` ≥ 1.6 | `gate-detect.sh`, `facts.sh` | reads `package.json` and `wt list --format=json` |
+| `jq` ≥ 1.6 | `gate-detect.sh`, `facts.sh`, `journal.sh`, the hook | reads `package.json`, `wt list --format=json`, and the journal's JSONL |
 
 ```bash
 # macOS
@@ -56,6 +56,28 @@ its lenses and says so in the summary. It never reports a partial review as clea
 - Claude alone still works: `review` runs two subagents with different lens splits so
   corroboration keeps meaning something.
 
+## Opt-in — the commit journal
+
+Journaling records *why* each unit of work exists, for `commit` to spend later. It is off in
+every repo until you turn it on there — one command, no other setup:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/scripts/journal.sh" enable    # writes <git-dir>/mkit/journal.enabled
+"${CLAUDE_PLUGIN_ROOT}/scripts/journal.sh" enabled   # → enabled | disabled
+```
+
+Needs nothing beyond the `jq` already required above.
+
+**The hook needs no user action, and ships inert.** Claude Code loads a plugin's
+`hooks/hooks.json` automatically: plugin hooks require **no opt-in beyond installing the
+plugin**, and subagents inherit them. That is exactly why the marker gate is non-negotiable —
+mkit's `Stop` / `SubagentStop` hook is registered from the moment the plugin is installed, so
+without the gate it would start writing in every repo you touch. Outside a git repo, or in a
+repo with no marker, it exits 0 with no output and writes nothing.
+
+It also needs no allowlist entry: Claude Code runs the hook itself, not the agent through
+`Bash`, so it never prompts.
+
 ## Verify
 
 ```bash
@@ -71,6 +93,7 @@ Then check the plugin itself, from any repo:
 "${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh" commit --no-run   # prints a fact block
 "${CLAUDE_PLUGIN_ROOT}/scripts/gate-detect.sh"             # prints fast= and full=
 node "${CLAUDE_PLUGIN_ROOT}/scripts/findings.mjs" schema    # prints the JSONL shape
+"${CLAUDE_PLUGIN_ROOT}/scripts/journal.sh" enabled         # prints enabled or disabled
 ```
 
 Empty `${CLAUDE_PLUGIN_ROOT}` fails as `/scripts/facts.sh: not found`. That is intended:
@@ -88,6 +111,7 @@ Each new script is a new Bash pattern, so the first run of each asks. Allow them
       "Bash(*/mkit/scripts/facts.sh:*)",
       "Bash(*/mkit/scripts/gate-detect.sh:*)",
       "Bash(*/mkit/scripts/gate-run.sh:*)",
+      "Bash(*/mkit/scripts/journal.sh:*)",
       "Bash(*/mkit/scripts/run-open.sh:*)",
       "Bash(node */mkit/scripts/findings.mjs:*)"
     ]

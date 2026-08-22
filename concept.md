@@ -15,13 +15,20 @@ There is no CLI and nothing to install into the repo's toolchain. The plugin is 
 underlying tools, with the safety rules that keep destructive steps from firing by accident.
 The agent is the interface; the skills are the muscle memory.
 
-Alongside the Markdown sits a thin layer of **helper scripts** (`scripts/`, five of them) for
+Alongside the Markdown sits a thin layer of **helper scripts** (`scripts/`, six of them) for
 the steps that are identical every run and fail silently when hand-rolled: opening the run
-directory, gathering the starting facts, detecting and running the quality gate, and the
-arithmetic over a review's findings. They ship with the plugin — no `PATH`, no build, no
-install — and they exist for reliability more than for tokens: prose re-executed every run kept
-getting one invariant of three wrong. **Judgement stays in Markdown; a mechanical invariant
+directory, gathering the starting facts, detecting and running the quality gate, the
+arithmetic over a review's findings, and the commit journal's coverage and freshness arithmetic.
+They ship with the plugin — no `PATH`, no build, no install — and they exist for reliability
+more than for tokens: prose re-executed every run kept getting one invariant of three wrong. **Judgement stays in Markdown; a mechanical invariant
 belongs in a script.** Prerequisites: [`PREREQUISITES.md`](PREREQUISITES.md).
+
+One script is not called by a skill at all. A `Stop` / `SubagentStop` hook
+(`scripts/hooks/journal-nudge.sh`, registered by `hooks/hooks.json` at the plugin root) tells
+the agent which dirty paths no journal entry covers, so *why* a unit of work exists gets
+recorded while the session still knows it — instead of being reverse-engineered from the diff
+at commit time. It ships **inert**: journaling does nothing in a repo until
+`journal.sh enable` is run there.
 
 **Claude-only for now.** Other agents (Codex, opencode, …) are a later concern — the skills
 are plain Markdown, so support for another agent is a thin packaging step, not a rewrite.
@@ -37,6 +44,18 @@ are plain Markdown, so support for another agent is a thin packaging step, not a
   choose commit boundaries, assign severity, judge materiality, or decide that a fix is safe.
   Where the line is genuinely unclear the script reports candidates and the skill picks —
   `gate-detect.sh` proposing `fast=` beside `docs_candidates:` is the shape to copy.
+- **The hook names the gap; the agent supplies the judgement:** a lifecycle hook may compute
+  set difference — which dirty paths have no journal entry — and hand the answer back to the
+  model. It may not author the record. This *extends* the rule above rather than restating it:
+  a script only ever ran because a skill called it, so "report candidates, the skill picks" was
+  enough. A hook fires on its own, with no skill in the loop, so the line has to be drawn again
+  for events — mechanical arithmetic in the hook, every word of judgement from the agent it
+  interrupts.
+- **A past session's judgement is an input, never a decision:** a journal entry records why a
+  unit of work exists; it never says what the commits should be. `commit` still reads the
+  staged hunks and authors the final message. A stale entry that quietly wrote a
+  plausible-but-wrong message into permanent history is a worse failure than the tokens it
+  saved.
 - **Composition over replacement:** orchestrate `git`, GitHub CLI (`gh`), and Worktrunk
   (`wt`); never reimplement what they already do well.
 - **Safe by default:** irreversible actions (force-push, branch delete, history rewrite,
@@ -47,9 +66,11 @@ are plain Markdown, so support for another agent is a thin packaging step, not a
   scopes, and reviewers are all *discovered* from the target repo.
 
 ## The Skills
-A cohesive bundle that moves work through its lifecycle. `commit` is the shared front-end;
+Five skills. Four move work through its lifecycle: `commit` is the shared front-end;
 `finish` and `pr` both begin by committing, and you pick the finisher by
-**destination** — merge it yourself locally, or push it for review.
+**destination** — merge it yourself locally, or push it for review. The fifth, `note`, is the
+only one outside that line — it records intent *during* implementation for `commit` to spend
+later, and normally the hook fires it, not the user.
 
 | Skill | Does | Trigger examples |
 |-------|------|------------------|
@@ -57,14 +78,18 @@ A cohesive bundle that moves work through its lifecycle. `commit` is the shared 
 | **`review`** | Review the local diff/commits — full (CodeRabbit + Codex + Claude, all lenses) or quick (CodeRabbit + Codex, bugs/impl only) — verify the findings, fix what's worth fixing, summarize. | "review my changes", "quick review", "run codex and coderabbit" |
 | **`finish`** | Commit → merge the branch back into its base → delete branch / remove worktree. **Local**, no PR. | "finish this feature", "merge back and clean up" |
 | **`pr`** | Commit → push → open a GitHub PR → assign reviewers. **Remote review** path. | "create a PR", "open a pull request", "submit for review" |
+| **`note`** | Record why the unit of work just finished exists, into the repo's commit journal. Capture only — no diff read, no staging. | "note this", "record what I just did" |
 
 ### Shared references — `skills/_shared/`
 `_shared/` is **not** a triggerable skill (it has no `SKILL.md`); it is the shared library
-the four skills link into via `../_shared/references/…`:
+the five skills link into via `../_shared/references/…`:
 
 - `git-safety.md` — the non-negotiable git safety protocol (no force-push, no config edits,
   no AI attribution, don't skip hooks, …).
 - `conventional-commits.md` — commit message format, type table, scope detection.
+- `journal.md` — the commit journal: its two governing rules, the one record kind, how an entry
+  is classified against the current tree (`fresh`/`drifted`/`committed`/`orphaned`/`unknown-head`), and
+  the known gaps. `note`, `commit` and the hook's own nudge text all point here.
 - `quality-gate.md` — how to **detect** (not hardcode) the repo's fast check + full
   lint/test/build gate, and how to triage a failing step.
 - `worktree.md` — detect the worktree origin (Worktrunk `wt` / Claude Code
@@ -89,12 +114,13 @@ the four skills link into via `../_shared/references/…`:
 ```
  Claude Code
    │   loads plugin skills (via .claude-plugin/plugin.json)
+   │   loads plugin hooks (via hooks/hooks.json — auto-discovered)
    ▼
- commit · review · finish · pr   ← SKILL.md (when & how)
+ commit · review · finish · pr · note   ← SKILL.md (when & how)
    │   all link into
    ▼
  _shared/references/*.md   (safety · conventions · quality gate · worktree · branching
-                            severity bar · lenses · finding triage
+                            severity bar · lenses · finding triage · commit journal
                             agent delegation · output discipline)
    +
  scripts/                  the mechanical steps, one call each
@@ -103,15 +129,21 @@ the four skills link into via `../_shared/references/…`:
    gate-detect.sh          what this repo's fast + full checks are
    gate-run.sh             run a gate step: log it, bound it, stop at the first failure
    findings.mjs            reconcile · group · report over a review's findings (JSONL)
+   journal.sh              record intent · classify entries against the tree · coverage
+   +
+ scripts/hooks/            the one thing no skill calls
+   journal-nudge.sh        Stop/SubagentStop: name the dirty paths no entry covers
    │   drive
    ▼
  git   +   gh (GitHub CLI)   +   wt (Worktrunk)   +   rg   +   jq
 ```
 
 The scripts never act: no staging, no merging, no `wt merge`, no edits. They report facts and
-run commands the skill named. `rtk` is deliberately not among them — it reshapes output for an
-agent to read, which is exactly what a parser must not tolerate; it stays on the agent's own
-direct commands.
+run commands the skill named. The hook is the only piece that runs without a skill asking, and
+it is held to the same line — it names which paths lack an entry and never writes one, always
+exits 0, and stays silent unless the repo opted in. `rtk` is deliberately not among any of
+them — it reshapes output for an agent to read, which is exactly what a parser must not
+tolerate; it stays on the agent's own direct commands.
 
 The skills are the single source of truth for the *workflow*; the underlying tools remain
 the source of truth for the *operations*. The plugin never re-encodes git logic.
@@ -121,8 +153,9 @@ Work is modeled as a **feature** — edits that become commits and then get inte
 
 ```
 edit → commit → review → finish
-                          ├── finish  (local merge, delete branch / worktree)
-                          └── pr      (push, open PR, review remotely)
+  │                       ├── finish  (local merge, delete branch / worktree)
+  │                       └── pr      (push, open PR, review remotely)
+  └── note  (opt-in: record why this unit exists, for commit to spend)
 ```
 
 Worktree awareness is built in: the finishing skills detect whether they're in a Worktrunk
@@ -136,15 +169,20 @@ mkit ships as a standard Claude Code plugin:
 .claude-plugin/
   plugin.json          # plugin manifest (name, skills discovered from skills/)
   marketplace.json     # marketplace entry — source "./"
+hooks/
+  hooks.json           # Stop / SubagentStop registration — plugin root, not .claude-plugin/;
+                       #   auto-discovered, so the manifest carries no `hooks` key
 skills/
   commit/SKILL.md
   pr/SKILL.md
   review/SKILL.md
   finish/SKILL.md
+  note/SKILL.md
   _shared/             # shared references (README + references/*.md) — no SKILL.md
 scripts/
-  lib/common.sh        # sourced helpers: plugin root, refs path, rg-or-grep, wt binary
-  run-open.sh  facts.sh  gate-detect.sh  gate-run.sh  findings.mjs
+  lib/common.sh        # sourced helpers: plugin root, refs path, mkit dir, rg-or-grep, wt binary
+  hooks/journal-nudge.sh   # the Stop/SubagentStop hook — inert until journaling is enabled
+  run-open.sh  facts.sh  gate-detect.sh  gate-run.sh  findings.mjs  journal.sh
 tests/                  # dev-only: the script layer's own test suite (tests/run.sh)
 PREREQUISITES.md       # required + recommended tooling, setup, permission allowlist
 ```
@@ -160,8 +198,13 @@ Plugin skills are namespaced (`mkit:commit`), which avoids clashing with any rep
 skills of the same name.
 
 ## Roadmap
-- **Now — Claude Code plugin.** The four skills + the shared reference bundle, packaged and
+- **Now — Claude Code plugin.** The five skills + the shared reference bundle, packaged and
   installable. This is the whole product.
+- **Now, opt-in — intent capture.** The commit journal: the hook nudges the agent that did the
+  work to record *why* each unit exists, and `commit` spends those records instead of
+  re-deriving intent from the diff. Off in every repo until `journal.sh enable`. `commit` is
+  the only consumer so far — `review` could use the `why` lines as reviewer context and `pr`
+  could draft a description from them; one consumer first, then decide.
 - **Later — other agents.** Codex, opencode, and others are plain-Markdown consumers of the
   same skill content; supporting one is a packaging step, added only if needed, with no
   change to the skills themselves.
