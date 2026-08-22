@@ -128,3 +128,46 @@ teardown() { mkit_teardown_repo; }
 	[ "$(cat "$mkit_dir/journal.jsonl")" = '{"kind":"unit","seq":1}' ]
 	[ -f "$decoy" ]
 }
+
+# Naming the individual files prune must spare (journal.jsonl, gate.jsonl, ...) protects
+# only the files that existed when the test was written; the next thing dropped in the
+# mkit directory would be unguarded. So the assertion is the general one: prune removes
+# `<skill>-*` DIRECTORIES and nothing else, whatever else happens to be in there.
+@test "--prune removes only <skill>-* directories and leaves every other entry alone" {
+	git_dir="$(git rev-parse --absolute-git-dir)"
+	mkit_dir="$git_dir/mkit"
+	mkdir -p "$mkit_dir/scratch" "$mkit_dir/random-dir"
+	printf '{"kind":"unit","seq":1}\n' >"$mkit_dir/journal.jsonl"
+	printf '{"kind":"gate","step":"lint"}\n' >"$mkit_dir/gate.jsonl"
+	: >"$mkit_dir/journal.enabled"
+	printf 'stray\n' >"$mkit_dir/notes.txt"
+	printf 'kept\n' >"$mkit_dir/scratch/inner.txt"
+	printf 'kept\n' >"$mkit_dir/random-dir/inner.txt"
+	# Three stale run dirs, so prune with keep=1 actually removes something and the
+	# survival of everything else is not just prune declining to run.
+	for i in 1 2 3; do
+		d="$mkit_dir/commit-2026010${i}T000000Z-aaaaa$i"
+		mkdir -p "$d"
+		touch -t 202601010000 "$d"
+	done
+	find "$mkit_dir" -maxdepth 1 ! -name mkit -exec touch -t 202601010000 {} +
+
+	run "$SCRIPTS/run-open.sh" --prune 1
+	[ "$status" -eq 0 ]
+	[[ "$output" == "pruned 2 run dir(s), kept 1" ]]
+
+	# Every entry that is not a <skill>-* directory, still there and still intact.
+	[ "$(cat "$mkit_dir/journal.jsonl")" = '{"kind":"unit","seq":1}' ]
+	[ "$(cat "$mkit_dir/gate.jsonl")" = '{"kind":"gate","step":"lint"}' ]
+	[ -f "$mkit_dir/journal.enabled" ]
+	[ "$(cat "$mkit_dir/notes.txt")" = stray ]
+	[ "$(cat "$mkit_dir/scratch/inner.txt")" = kept ]
+	[ "$(cat "$mkit_dir/random-dir/inner.txt")" = kept ]
+
+	# ...and the general form: nothing outside the `commit-*` set was removed.
+	survivors="$(find "$mkit_dir" -maxdepth 1 -mindepth 1 ! -name 'commit-*' | sort)"
+	[ "$(printf '%s\n' "$survivors" | wc -l | tr -d ' ')" -eq 6 ]
+	[ -d "$mkit_dir/commit-20260103T000000Z-aaaaa3" ]
+	[ ! -d "$mkit_dir/commit-20260101T000000Z-aaaaa1" ]
+	[ ! -d "$mkit_dir/commit-20260102T000000Z-aaaaa2" ]
+}
