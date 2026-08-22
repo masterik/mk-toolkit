@@ -29,7 +29,8 @@ Commits that are easy to review and safe to ship:
 
 ## Ask if missing
 
-- One commit or several? (Unsure → default to several small ones when changes are unrelated.)
+- One commit or several? With a usable `journal:` block, **propose** instead of asking — *"3 units
+  recorded; I'd make 2 commits — ok?"*. Without one, ask; unsure → several small ones when unrelated.
 - Conventional Commits are required.
 - Any repo rules: max subject length, required scopes.
 
@@ -39,7 +40,7 @@ Commits that are easy to review and safe to ship:
 (`../_shared/references/output-discipline.md`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh commit
+${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh commit --journal
 ```
 
 Keep the `run=` and `refs=` literals it prints; this file writes the first as `<run-dir>`. There is no
@@ -51,13 +52,22 @@ second directory instead of returning the first.
    - Read **both** stats: `unstaged_stat` and `staged_stat`. They are separate because a bare
      `git diff --stat` reports nothing when the work is already fully staged, which reads exactly like a
      clean tree.
-   - Then the full diff per file, only for files you must judge — never the whole tree at once.
-   - Large mixed tree: stop after the `--stat` and let step 2 delegate the read.
-2. **Decide commit boundaries.**
+2. **Read the `journal:` block** — recorded intent, which decides how much diff you read
+   (`../_shared/references/journal.md`). *The read*, wherever it still applies: the full diff per file, only
+   for files you must judge — never the whole tree at once.
+   - `journal_uncovered=0` **and** every entry `fresh` → the entries *are* step 3's input; **no read at all**.
+   - Any `uncovered:` path, or any `drifted` / `unknown-head` entry → read, **scoped to those paths only**.
+   - `journal=off` / `empty` / `jq-missing` / `unreadable` → nothing recorded; read as today. Large mixed
+     tree: stop after the `--stat` and let step 3 delegate.
+   - `committed` → drop; `orphaned` → drop and name in the final report. `overlap:` (a path two `fresh`
+     entries both claim) → patch staging in step 4: the script named the path, **you decide the hunks**.
+3. **Decide commit boundaries.**
    - Split by: feature vs refactor, backend vs frontend, formatting vs logic, tests vs prod code, dependency
      bumps vs behavior changes.
    - Changes mixed within one file → plan patch staging.
-   - **Large mixed tree (>~10 files or >~400 changed lines): delegate the read**
+   - Journal entries arrive in dependency order; keep it, but merge freely — tests with the feature they
+     cover.
+   - **Large mixed uncovered tree (>~10 files or >~400 changed lines): delegate the read**
      (`../_shared/references/agent-delegation.md`). The subagent does not have this skill loaded, so its brief
      carries the branch, the stats, the file list and the split heuristics above — all of which step 0
      returned. It reads the diff and
@@ -65,20 +75,24 @@ second directory instead of returning the first.
      paths it covers, one line of rationale, plus any file needing patch staging because it is mixed. Under
      ~20 lines; no diff, no file contents.
    - Below that, read it here: the `--stat` plus a few targeted per-file diffs costs less than the round trip.
-   - **The plan is a proposal, not a decision.** Sanity-check it against the `--stat` (every changed path in
-     exactly one group, nothing invented), then do the staging, wording and splits here — the rationale is
-     what lets you answer "why is X with Y?" without re-reading the diff.
-3. **Stage only what belongs in the next commit.** Prefer `git add -p` for mixed changes; unstage with
+   - **A plan is a proposal, not a decision** — a subagent's and the journal's alike. Sanity-check it against
+     the `--stat` (every changed path in exactly one group, nothing invented), then do the staging, wording
+     and splits here — the rationale is what lets you answer "why is X with Y?" without re-reading the diff.
+4. **Stage only what belongs in the next commit.** Prefer `git add -p` for mixed changes; unstage with
    `git restore --staged -p` or `git restore --staged <path>`.
-4. **Review what will actually be committed.** `git diff --cached --stat` to plan, then
+5. **Review what will actually be committed.** `git diff --cached --stat` to plan, then
    `git diff --cached -- <path>` **file by file, skipping none** — the one read that must not be truncated,
    since the checks below only work on the actual hunks (`../_shared/references/output-discipline.md`). Check
-   for: secrets or tokens, accidental debug logging, unrelated formatting churn.
-5. **Describe the staged change in 1–2 sentences** before writing the message: what changed, why. If you
-   cannot describe it cleanly the commit is too big or mixed — back to step 2.
-6. **Write the message.** Conventional Commits required (`../_shared/references/conventional-commits.md`).
-   Multi-line: `git commit -v` or `git commit -F <file>`.
-7. **Run the smallest relevant verification** — the repo's fastest meaningful check
+   for: secrets or tokens, accidental debug logging, unrelated formatting churn. **Not skippable, however
+   fresh the journal looks** — a stale entry that wrote a plausible-but-wrong message into permanent history
+   is a worse failure than the tokens the read costs.
+6. **Describe the staged change in 1–2 sentences** before writing the message: what changed, why. If you
+   cannot describe it cleanly the commit is too big or mixed — back to step 3.
+7. **Write the message.** Conventional Commits required (`../_shared/references/conventional-commits.md`).
+   Multi-line: `git commit -v` or `git commit -F <file>`. The subject is authored **here, against the staged
+   hunks** — an entry's `type`/`scope`/`subject` is only a proposal, and the final subject must match what was
+   actually staged; body `why` lines come from the entries.
+8. **Run the smallest relevant verification** — the repo's fastest meaningful check
    (`../_shared/references/quality-gate.md`, fast tier):
 
    ```bash
@@ -88,11 +102,12 @@ second directory instead of returning the first.
 
    Report pass/fail and, on failure, the step and its exit code — never the log. The verdict usually *is* the
    diagnosis; delegate only when it is not ("when a step fails").
-8. **Repeat** until the working tree is clean.
+9. **Repeat** until the working tree is clean.
 
 ## Final report (always)
 
-Prune with `${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh --prune` on the way out, folded into another call.
+On the way out, folded into another call: `${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh --prune`, plus
+`${CLAUDE_PLUGIN_ROOT}/scripts/journal.sh drop --committed` if entries were spent.
 After the last commit run `git log --oneline -n <N>` (N = commits made this run) to confirm hashes, then
 report every commit — never skip this, even for one:
 
@@ -101,7 +116,8 @@ report every commit — never skip this, even for one:
   <what/why, 1 sentence>
 ```
 
-One block per commit, in order. Say so if staged changes were deliberately left out.
+One block per commit, in order. Say so if staged changes were deliberately left out. With a journal, one more
+line: how many entries were consumed vs left, naming any dropped as `orphaned`.
 
 ## Conventional Commit format
 
