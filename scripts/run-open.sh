@@ -31,13 +31,6 @@ set -euo pipefail
 # shellcheck source=lib/common.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 
-mkit_dir_or_die() {
-	local git_dir
-	git_dir="$(git rev-parse --absolute-git-dir 2>/dev/null)" ||
-		mkit_die 'not inside a git repository' 1
-	printf '%s/mkit\n' "$git_dir"
-}
-
 prune() {
 	local keep="${1:-5}" mkit_dir skill d n kept=0 removed=0 live=0
 	case "$keep" in *[!0-9]* | '') mkit_die "--prune takes a count, got: $keep" 2 ;; esac

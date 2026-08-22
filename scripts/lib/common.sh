@@ -31,6 +31,20 @@ mkit_require_repo() {
 		mkit_die 'not inside a git repository' 1
 }
 
+# Absolute path of this repo's mkit directory. Creating it is the caller's business;
+# this only resolves it, or fails.
+#
+# --absolute-git-dir, never a relative `.git/...`: the path is handed to subagents and
+# reused across shells, where a relative path would resolve somewhere else. Inside the
+# git dir it is never committed, never shows up in `git status`, and a linked worktree
+# gets its own.
+mkit_dir_or_die() {
+	local git_dir
+	git_dir="$(git rev-parse --absolute-git-dir 2>/dev/null)" ||
+		mkit_die 'not inside a git repository' 1
+	printf '%s/mkit\n' "$git_dir"
+}
+
 # A path component that cannot traverse or glob.
 mkit_check_slug() {
 	case "$1" in
