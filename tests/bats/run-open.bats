@@ -101,3 +101,30 @@ teardown() { mkit_teardown_repo; }
 	[ -d "$mkit_dir/commit-20260101T000000Z-a" ]
 	[ ! -d "$mkit_dir/commit-20260102T000000Z-b" ]
 }
+
+@test "--prune never touches journal.jsonl" {
+	git_dir="$(git rev-parse --absolute-git-dir)"
+	mkit_dir="$git_dir/mkit"
+	mkdir -p "$mkit_dir"
+	printf '{"kind":"unit","seq":1}\n' >"$mkit_dir/journal.jsonl"
+	# A decoy *file* whose name matches prune's `-name "<skill>-*"` glob. It is what
+	# makes this test fail if prune's find ever loses `-type d` — the journal itself
+	# would survive that change on its name alone, and the guarantee is too
+	# destructive to rest on one filter.
+	decoy="$mkit_dir/commit-20260101T000000Z-journal.jsonl"
+	printf 'decoy\n' >"$decoy"
+	# Three stale run dirs so prune with keep=1 actually removes something.
+	for i in 1 2 3; do
+		d="$mkit_dir/commit-2026010${i}T000000Z-aaaaa$i"
+		mkdir -p "$d"
+		touch -t 202601010000 "$d"
+	done
+	touch -t 202601010000 "$mkit_dir/journal.jsonl" "$decoy"
+
+	run "$SCRIPTS/run-open.sh" --prune 1
+	[ "$status" -eq 0 ]
+	[[ "$output" == "pruned 2 run dir(s), kept 1" ]]
+	[ -f "$mkit_dir/journal.jsonl" ]
+	[ "$(cat "$mkit_dir/journal.jsonl")" = '{"kind":"unit","seq":1}' ]
+	[ -f "$decoy" ]
+}
