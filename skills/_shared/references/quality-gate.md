@@ -10,7 +10,13 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/gate-detect.sh
 # pm=bun
 # ecosystem=node
 # fast=bun run lint
+# fast_cache=fresh exit=0 age=6m
 # full=bun run lint|bun run test|bun run build
+# full_cache=fresh|failed|none
+# full_cache_exit=0|1|-
+# full_cache_age=6m|6m|-
+# gate_fingerprint=7c998da01a8a9aa8
+# gate_max_age_min=60
 # alt_fast=bun run test:unit,bun run test
 # scripts=build,dev,format,lint,test,test:e2e,test:unit
 # scripts_state=ok
@@ -62,6 +68,105 @@ sentence or two, caused-by-this-change or pre-existing, a concrete suggested fix
 — triage diagnoses, never fixes: what to do about a red gate is the caller's decision, and for
 `finish`/`pr` the user's.
 
+## The gate ledger — what was already proven
+
+`gate-run.sh` records every step it finishes into `<git-dir>/mkit/gate.jsonl`:
+`(step, command, exit code, seconds, fingerprint of the content it ran over)`.
+`gate-detect.sh` compares each command it proposes against the newest record for that
+**exact command string** and annotates it. The `*_cache=` keys above are that annotation.
+
+**What this saves is wall-clock, not tokens.** There are no token savings here by
+construction — `gate-run.sh` already sends full output to a log so it never reaches
+context. What it saves is the second and third execution of a 90-second suite over a tree
+that stopped changing: `review` gates, then `finish` or `pr` gates the same content again.
+
+### The governing rule
+
+> The ledger records **what was proven, over which content**. It never decides whether a
+> gate may be skipped, and a skipped step is always reported as skipped.
+
+**A report may never show `gate=ok` for a step that did not run.** A cached step is named
+`cached` with its age, in the same line that would have carried its verdict:
+
+```
+lint   cached (6m ago, exit=0)
+test   ok 91s
+gate=ok (1 step cached)
+```
+
+A run that prints `gate=ok` having executed nothing is worse than any amount of
+re-running: it reports a safety net that was never deployed. Hence the script never
+skips, and you must label.
+
+### Classification
+
+| Class | Means | Do |
+|---|---|---|
+| `fresh` | same content, `exit=0`, within the age bound | skip if you choose — and **label it `cached`** |
+| `failed` | same content, `exit≠0` — **whatever its age** | **say so before running.** Surface the known-red tree, then run the step anyway: a stale environment can turn a real failure green, and the win here is the early warning, not the skip |
+| `drifted` | the content changed | run |
+| `stale` | same content, `exit=0`, older than the age bound | run — the environment may have moved |
+| `unknown-head` | the recorded commit no longer resolves | run; never treat as `fresh` |
+| `none` | no record for this exact command | run |
+
+A step *name* is not identity — the command is. `bun run test` and
+`bun run test --coverage` are different checks. A command you overrode (from `alt_fast`,
+or `docs_candidates`) therefore classifies `none` and simply runs, which is the correct
+default for anything unrecognized.
+
+### What the fingerprint cannot see
+
+It covers **tracked repo content only**: the committed tree overlaid with the worktree,
+invariant under staging and committing. Invisible to it — a dependency install, a tool or
+runtime version change, environment variables, generated artifacts under `.gitignore`,
+and **file mode** (`chmod +x` does not change a blob sha; a known, documented gap).
+
+So `fresh` means "the tracked content is identical", not "the environment is identical".
+That gap is what the **age bound** is for: past 60 minutes a matching fingerprint
+classifies `stale` and the step runs. Age is *reported* on every class so you can always
+see how old a proof is; it is only *decisive* for `stale`.
+
+One consequence worth recognizing in the wild: a gate step that *writes* into the tree — a
+build emitting untracked output, a formatter rewriting files, a snapshot test updating
+fixtures — changes the content its own record is keyed on, so the next lookup reads
+`drifted` and everything runs. Correct, and safe; it just means the ledger never helps on
+those repos. Ignore the output (`.gitignore`) and it becomes invisible to the fingerprint
+again.
+
+Note also that `--prune` deletes run directories, so a record can outlive the
+`gate-<step>.log` it names. The ledger stores the verdict; if you need the log, re-run.
+
+### Per-skill posture
+
+Deliberately unequal — the four skills do not carry the same risk.
+
+| Skill | Step | Posture |
+|---|---|---|
+| `commit` | fast tier, per logical commit | **may consume.** Committing does not move the fingerprint, so a run that splits one dirty tree into four commits sees `fresh` on every one after the first check — which is sound, because the content really is unchanged. It only `drifts` if you edit between commits |
+| `review` | pre-review fast check | **may consume.** A red tree wastes every reviewer, so `failed` is as valuable here as `fresh` |
+| `review` | post-fix re-check | naturally `drifted` — the fixes just changed the tree. No special case |
+| `pr` | full tier | **may consume per step.** A draft PR is recoverable and CI runs remotely anyway |
+| `finish` | full tier | **strictest.** Its gate is the only safety net before a local merge. Consume only on an exact command match, a matching fingerprint, and an age within bound — and **always** print `cached (Nm ago)`. Never cache a whole chain silently |
+
+### When there is nothing to classify
+
+One key, one cause — the same discipline as `scripts_state`:
+
+- `gate_cache=off` — `--no-cache` was passed. This is the answer to "I don't trust it".
+- `gate_cache=empty` — nothing to compare against: no ledger yet, or one with no records.
+- `gate_cache=no-hash` — no `shasum`/`sha256sum` on the machine, so no fingerprint is possible.
+- `gate_cache=no-fingerprint` — a hash tool *is* present but the fingerprint could not be
+  computed anyway. A distinct cause on purpose: "install `shasum`" is the wrong advice for
+  someone who already has it.
+- `gate_cache=no-jq` — no `jq`.
+
+Each degrades to today's behavior exactly: detect, then run everything.
+
+The two escape hatches: `gate-detect.sh --no-cache` ignores the ledger for one call
+(`gate_cache=off`), and `gate-run.sh --no-ledger` stops writing to it. Neither is needed in
+normal use; reach for `--no-cache` when a `fresh` verdict looks wrong and you want the
+question off the table.
+
 ## Rules
 
 - Open the run directory before the first step — `facts.sh` did it; `gate-run.sh` refuses a
@@ -71,4 +176,4 @@ sentence or two, caused-by-this-change or pre-existing, a concrete suggested fix
 - For a **draft** PR or an explicit override, the user may proceed past a failing gate: surface
   it, then respect the decision.
 - Never fabricate a passing result. If a check was skipped — no such script, too slow, user
-  opted out — say so, and say which.
+  opted out, or **served from the ledger** — say so, and say which.

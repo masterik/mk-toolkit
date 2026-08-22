@@ -10,7 +10,7 @@ put on `PATH` — installing the plugin is a clone. What follows is what the scr
 | `git` ≥ 2.30 | everything | `--absolute-git-dir`, `worktree list --porcelain`, `diff --shortstat` |
 | `bash` ≥ 3.2 | every `.sh` — six scripts plus the sourced `lib/common.sh` | macOS's system bash is 3.2; nothing here needs 4.x |
 | `node` ≥ 18 | `findings.mjs` | ESM, `node:fs`. No npm install, no dependencies |
-| `jq` ≥ 1.6 | `gate-detect.sh`, `facts.sh`, `journal.sh`, the hook | reads `package.json`, `wt list --format=json`, and the journal's JSONL |
+| `jq` ≥ 1.6 | `gate-detect.sh`, `gate-run.sh`, `facts.sh`, `journal.sh`, the hook | reads `package.json`, `wt list --format=json`, and the journal's and gate ledger's JSONL |
 
 ```bash
 # macOS
@@ -28,6 +28,7 @@ machine** — install one even if Claude Code runs fine without it.
 | Tool | Used by | Degrades to |
 | --- | --- | --- |
 | `rg` (ripgrep) | `gate-run.sh` failure digest, `gate-detect.sh` doc scan, the `fix-checks` sweep | `grep -E` (same output, slower) |
+| `shasum` or `sha256sum` | the gate ledger's content fingerprint | `gate_cache=no-hash` — the gate runs every step, exactly as before. Never a hard requirement: a latency optimization may not add a prerequisite |
 | `gh` | `pr`, and `facts.sh --gh` | `pr` cannot open a PR at all; `facts.sh` prints `pr=gh-missing` |
 | `wt` ([worktrunk](https://worktrunk.dev)) | `finish` cleanup, `facts.sh` worktree classification | plain `git worktree remove` |
 

@@ -59,6 +59,20 @@ per-worktree, so they die with the worktree. `journal.sh disable` turns it back 
 `status` / `uncovered` / `drop` / `compact` inspect and prune. Details:
 [`skills/_shared/references/journal.md`](skills/_shared/references/journal.md).
 
+## Not re-proving the same tree (the gate ledger)
+
+`review` runs the quality gate, then `finish` or `pr` runs it again over content that never
+changed. Every step the gate finishes is recorded against a fingerprint of the content it read
+— staging- and commit-invariant, so committing the reviewed tree does not invalidate the proof.
+The next skill sees `fast_cache=fresh exit=0 age=6m` and can skip a 90-second suite.
+
+**Wall-clock only — there are no token savings here.** Gate output already goes to a log rather
+than into context. Nothing is automatic and nothing is silent: the scripts never skip a step,
+the skill decides, and a step served from the ledger is reported as `cached (6m ago)`, never as
+a pass. `gate.jsonl` lives beside the journal, on by default, with `--no-cache` to ignore it and
+`--no-ledger` to stop writing it. Details:
+[`skills/_shared/references/quality-gate.md`](skills/_shared/references/quality-gate.md).
+
 ## Testing the scripts
 
 `tests/run.sh` runs the script layer's own suite: `node --test` over `findings.mjs`, `bats`

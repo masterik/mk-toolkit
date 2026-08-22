@@ -102,6 +102,14 @@ second directory instead of returning the first.
 
    Report pass/fail and, on failure, the step and its exit code — never the log. The verdict usually *is* the
    diagnosis; delegate only when it is not ("when a step fails").
+
+   `gate-detect.sh` also says what the gate ledger already proved. `fast_cache=fresh` means this exact
+   command already passed over exactly this content — the first run after a `review` genuinely is a hit, and
+   you may skip it. Then write `cached (Nm ago)` where the verdict would have gone: **a report that shows a
+   pass for a step that did not run is the one thing this must never produce.** The fingerprint does not move
+   when you commit, so splitting one dirty tree into four commits reads `fresh` on each one after the first
+   check — sound, because the content really is unchanged. It only `drifts` once you edit between commits.
+   `failed` means the tree was red on this content: say so, then run the check anyway.
 9. **Repeat** until the working tree is clean.
 
 ## Final report (always)

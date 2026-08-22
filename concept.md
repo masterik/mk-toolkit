@@ -44,18 +44,23 @@ are plain Markdown, so support for another agent is a thin packaging step, not a
   choose commit boundaries, assign severity, judge materiality, or decide that a fix is safe.
   Where the line is genuinely unclear the script reports candidates and the skill picks —
   `gate-detect.sh` proposing `fast=` beside `docs_candidates:` is the shape to copy.
-- **The hook names the gap; the agent supplies the judgement:** a lifecycle hook may compute
-  set difference — which dirty paths have no journal entry — and hand the answer back to the
-  model. It may not author the record. This *extends* the rule above rather than restating it:
-  a script only ever ran because a skill called it, so "report candidates, the skill picks" was
-  enough. A hook fires on its own, with no skill in the loop, so the line has to be drawn again
-  for events — mechanical arithmetic in the hook, every word of judgement from the agent it
-  interrupts.
-- **A past session's judgement is an input, never a decision:** a journal entry records why a
-  unit of work exists; it never says what the commits should be. `commit` still reads the
-  staged hunks and authors the final message. A stale entry that quietly wrote a
-  plausible-but-wrong message into permanent history is a worse failure than the tokens it
-  saved.
+- **A recorded fact is an input, never a permission:** mkit accumulates state between runs —
+  journal entries, gate results, hook arithmetic — and every one of them is evidence handed to
+  the agent, never a decision taken on its behalf. This *extends* the rule above rather than
+  restating it: a script only ever ran because a skill called it, so "report candidates, the
+  skill picks" was enough. State outlives the skill that wrote it, and a hook fires with no
+  skill in the loop at all, so the line has to be drawn again. Three instances of the one rule:
+  - *the hook names the gap; the agent supplies the judgement* — a lifecycle hook may compute
+    which dirty paths have no journal entry and hand the answer back to the model. It may not
+    author the record.
+  - *a past session's judgement is an input, never a decision* — a journal entry records why a
+    unit of work exists; it never says what the commits should be. `commit` still reads the
+    staged hunks and authors the message. A stale entry that quietly wrote a plausible-but-wrong
+    message into permanent history is a worse failure than the tokens it saved.
+  - *a past run's proof is an input, never a permission* — the gate ledger records that a
+    command exited 0 over exactly this content. Whether that is still good enough to skip on is
+    a safety-against-latency trade-off, so the skill decides it and must report the step as
+    `cached`. A run printing `gate=ok` having executed nothing is the failure this guards.
 - **Composition over replacement:** orchestrate `git`, GitHub CLI (`gh`), and Worktrunk
   (`wt`); never reimplement what they already do well.
 - **Safe by default:** irreversible actions (force-push, branch delete, history rewrite,
@@ -91,7 +96,9 @@ the five skills link into via `../_shared/references/…`:
   is classified against the current tree (`fresh`/`drifted`/`committed`/`orphaned`/`unknown-head`), and
   the known gaps. `note`, `commit` and the hook's own nudge text all point here.
 - `quality-gate.md` — how to **detect** (not hardcode) the repo's fast check + full
-  lint/test/build gate, and how to triage a failing step.
+  lint/test/build gate, how to triage a failing step, and the gate ledger: what a past run
+  proved over which content (`fresh`/`failed`/`drifted`/`stale`/`unknown-head`/`none`), the
+  per-skill posture, and the rule that a cached step is always labelled `cached`.
 - `worktree.md` — detect the worktree origin (Worktrunk `wt` / Claude Code
   `.claude/worktrees/` / plain `git worktree`) and clean up correctly.
 - `branching.md` — the default branch model to assume when a repo doesn't document its own.
@@ -126,7 +133,7 @@ the five skills link into via `../_shared/references/…`:
  scripts/                  the mechanical steps, one call each
    run-open.sh             open a run directory · --prune old ones
    facts.sh                run dir + refs path + branch/status/worktree/stats, in one call
-   gate-detect.sh          what this repo's fast + full checks are
+   gate-detect.sh          what this repo's fast + full checks are · what the ledger proved
    gate-run.sh             run a gate step: log it, bound it, stop at the first failure
    findings.mjs            reconcile · group · report over a review's findings (JSONL)
    journal.sh              record intent · classify entries against the tree · coverage
@@ -139,7 +146,12 @@ the five skills link into via `../_shared/references/…`:
 ```
 
 The scripts never act: no staging, no merging, no `wt merge`, no edits. They report facts and
-run commands the skill named. The hook is the only piece that runs without a skill asking, and
+run commands the skill named. Two of them also *remember*: `journal.sh` records why a unit of
+work exists, and `gate-run.sh` records that a command exited 0 over a fingerprint of the content
+it read — `<git-dir>/mkit/journal.jsonl` and `gate.jsonl`, beside the run directories, never
+committed, and a linked worktree gets its own of each. Neither adds a script: the ledger is a
+side effect of a gate that was running anyway, read back by the detector that already prints the
+commands. The hook is the only piece that runs without a skill asking, and
 it is held to the same line — it names which paths lack an entry and never writes one, always
 exits 0, and stays silent unless the repo opted in. `rtk` is deliberately not among any of
 them — it reshapes output for an agent to read, which is exactly what a parser must not

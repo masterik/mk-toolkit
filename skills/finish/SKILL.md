@@ -66,6 +66,14 @@ One line per passing step; on failure the step, the exit code, the grepped failu
 (`../_shared/references/output-discipline.md`). A failing suite is thousands of lines, none of which change
 the decision ("fix it or get an explicit OK").
 
+`gate-detect.sh` also reports what the gate ledger already proved (`full_cache=`, pipe-parallel with
+`full=`). **This is the strictest consumer in the bundle**, because a local merge skips review and this gate
+is the only safety net: consume a step only on an exact command match, a matching fingerprint and an age
+inside the bound — per step, never a whole chain at once — and print `cached (Nm ago, exit=0)` on that
+step's own line, with the verdict naming how many were cached. `gate=ok` for a step that did not run is not
+an acceptable report here. `failed` means the tree was red on this exact content: say so before starting,
+then run the step anyway — the environment may have moved since.
+
 Delegate the diagnosis only when that verdict is not enough (`../_shared/references/quality-gate.md`, "when a
 step fails") and give the user what it returns — what failed, probable cause, whether the change caused it,
 suggested fix. The log stays on disk.
@@ -134,6 +142,7 @@ merge onto current base.
 Prune with `${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh --prune` on the way out, folded into step 5's
 verification call.
 
+- The gate verdict, naming any step served from the ledger as `cached` and how old that proof was.
 - What merged into what, the resulting base HEAD, and that branch + worktree were removed.
 - Anything left in place on purpose (unmerged commits, dirty tree, a delete the user declined) — say so
   explicitly.

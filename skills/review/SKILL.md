@@ -111,6 +111,10 @@ Write `<run-dir>/scope.md`: the range, the command producing the diff, the stat,
 - Failing → fix that first, or stop and report it: reviewing a red tree wastes every reviewer on lint output.
 - Passing → **tell every reviewer it passed**, and that they must not run the tests, build or linter. That is
   what earns the right to reject "anything a linter catches" as a finding.
+- `fast_cache=` (also from `gate-detect.sh`) says what the gate ledger already proved. `fresh` means this
+  exact command passed over exactly this content — skip it if you like, and then it is `cached (Nm ago)` in
+  the report, **never** a pass. `failed` is worth as much as `fresh` here: a red tree wastes every reviewer,
+  so surface it before spending them, then run the check to confirm it.
 
 ## 3. Run the reviewers in parallel
 
@@ -250,7 +254,8 @@ coherent edits, in the style of the surrounding code.
 ## 7. Re-check
 
 Re-run step 2's fast check with `gate-run.sh` and report pass/fail. A fix that introduced a failure gets
-reverted or corrected before summarizing. Never fabricate a passing result.
+reverted or corrected before summarizing. Never fabricate a passing result. Step 6 just edited the tree, so
+the ledger reads `drifted` here — correct, and no special case: run it.
 
 Another round after fixing keeps the bar narrow: `bugs` + `impl` only, **nothing below major** — `impl` is the
 lens that catches a fix not addressing its finding. Do **not** widen it to documentation you just wrote: a
@@ -284,7 +289,8 @@ name that path once and let it hold the detail.
 7. **Needs your decision** — risky findings awaiting approval, with the proposed fix.
 8. **Considered, not changed** — skipped findings and `immaterial` verdicts, one line each.
 9. **Open questions** and **pre-existing** — their own short sections, one line each, out of the counts.
-10. **Verification** — the check that ran after fixing, its result, and the `<run-dir>` path.
+10. **Verification** — the check that ran after fixing, its result, and the `<run-dir>` path. A step served
+    from the gate ledger is named `cached (Nm ago)`, never reported as a pass.
 
 A body appears in full where the reader acts on it, and nowhere twice: findings the user must decide on carry
 their full body, the one-line sections stay one line. End on the decision the user has to make — findings

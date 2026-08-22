@@ -28,17 +28,25 @@ skills (`commit`, `review`, `finish`, `pr`, `note`) plus the shared
 - `scripts/` — the mechanical steps, called as `${CLAUDE_PLUGIN_ROOT}/scripts/<name>`:
   `facts.sh <skill>` (opens the run directory under `<git-dir>/mkit/` **and** returns every starting
   fact — every skill's first call), `run-open.sh` (the directory alone, plus `--prune`),
-  `gate-detect.sh` / `gate-run.sh` (the quality gate), `findings.mjs` (reconcile/group/report over a
+  `gate-detect.sh` / `gate-run.sh` (the quality gate — `gate-run.sh` also **writes** the gate ledger, one
+  record per finished step; `gate-detect.sh` **reads** it back and annotates the commands it proposes with
+  `fast_cache=` / `full_cache=` / `gate_fingerprint=`, or one `gate_cache=off|empty|no-hash|no-jq` cause.
+  Neither ever skips a step: the skill owns that trade-off and must label a skipped step `cached`.
+  `--no-ledger` / `--no-cache` are the escape hatches), `findings.mjs` (reconcile/group/report over a
   review's findings), `journal.sh` (the commit journal: `add` a record of *why* a unit exists, then
   `status` / `uncovered` classify those records against the current tree — plus `drop`, `compact`,
-  `enable`/`disable`/`enabled`/`path`), `lib/common.sh` (sourced helpers).
+  `enable`/`disable`/`enabled`/`path`), `lib/common.sh` (sourced helpers, including
+  `mkit_tree_fingerprint` — the staging- and commit-invariant hash of the content a gate command reads,
+  which is what makes a `review` → `finish` cache hit possible at all).
 - `scripts/hooks/journal-nudge.sh` — the `Stop` / `SubagentStop` hook: names the dirty paths no
   journal entry covers and hands them back to the model. Gated (git repo, journaling enabled,
   `stop_hook_active` false, one nudge per `prompt_id` + `agent_id`, uncovered > 0) and **always
   exits 0**. It never authors a record.
 - `<git-dir>/mkit/` — the scripts' scratch root: per-run directories (`run-open.sh`), plus
-  `journal.jsonl` (append-only records) and the `journal.enabled` opt-in marker. Never committed,
-  never in `git status`; a linked worktree gets its own, so entries die with the worktree.
+  `journal.jsonl` (append-only records), the `journal.enabled` opt-in marker, and `gate.jsonl` (the gate
+  ledger, append-only, rotated back to the newest 200 records once it passes 400). Never committed, never in `git status`; a linked
+  worktree gets its own, so entries die with the worktree. `--prune` only ever removes `<skill>-*`
+  **directories**, which is what keeps both `.jsonl` files out of its range.
 - `PREREQUISITES.md` — required tooling (`git`, `bash`, `node`, `jq`), recommended (`rg`, `gh`, `wt`),
   and the permission allowlist that stops the scripts prompting.
 - `tests/` — the script layer's own test suite, dev-only (never shipped as part of a skill run):
