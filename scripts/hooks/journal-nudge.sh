@@ -166,26 +166,18 @@ SubagentStop) source_tag=subagent-stop ;;
 esac
 
 # The contract is inlined, not linked, on purpose: it keeps compliance to one Bash call
-# with no skill load. The reference is for the rare case only.
+# with no skill load. The reference is for the rare case only. Kept to one short
+# paragraph after the path list, not a multi-line spec: every phrase a test pins
+# (grep the .bats file before trimming further) still has to appear verbatim.
 context="$(printf '%s\n' \
-	"mkit journal: $n_uncovered changed path(s) in this repo have no recorded intent." \
+	"mkit journal: $n_uncovered uncovered path(s)." \
 	"" \
 	"uncovered:" \
 	"$(printf '%s\n' "$uncovered" | sed 's/^/  /')" \
 	"" \
-	"Before you finish, record one unit per reason - one Bash call per unit, nothing else:" \
+	"  $journal_sh add --paths <a,b> --type <feat|fix|docs|refactor|test|chore|perf> --scope <s> --subject \"...\" --why \"...\" --source $source_tag" \
 	"" \
-	"  $journal_sh add --paths <comma,separated> --type <feat|fix|docs|refactor|test|chore|perf> --scope <scope> --subject \"<imperative, lower case, no period>\" --why \"<one line: why this unit exists>\" --source $source_tag" \
-	"" \
-	"Contract:" \
-	"  - record only the paths you changed and know the reason for; leave the rest" \
-	"  - one unit = one reason; group by intent, not by directory" \
-	"  - why is one line, and says why the change exists - not what changed" \
-	"  - subject proposes a commit subject; the commit skill may still override it" \
-	"This list is every uncovered dirty path, not a record of your turn - it cannot tell" \
-	"your edits from work that was already in the tree. Never invent a reason to cover a" \
-	"path; an unexplained path stays uncovered, and that is the correct outcome." \
-	"Rare cases (deletions, overlapping paths, drift): $plugin_root/skills/_shared/references/journal.md")"
+	"One unit = one reason. Record only the paths you changed and know the reason for. Never invent a reason to cover a path. Details: $plugin_root/skills/_shared/references/journal.md")"
 
 # Built by jq, never by string interpolation: the uncovered paths go inside a JSON
 # string, and a path with a quote or a backslash in it must land as data.
