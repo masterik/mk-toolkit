@@ -30,3 +30,42 @@ mkit_setup_repo() {
 mkit_teardown_repo() {
 	[ -n "${MKIT_TMP:-}" ] && [ -d "$MKIT_TMP" ] && rm -rf -- "$MKIT_TMP"
 }
+
+# Opt-in, for the suites that exercise user-scoped *setup* — install.sh and the
+# SessionStart hook. Those two write an executable into a bin directory, so unlike every
+# other suite they can reach outside MKIT_HOME.
+#
+# MKIT_BIN alone would be enough if the plumbing were correct, which is exactly why HOME
+# is sandboxed too: a bug in that plumbing must not be able to drop a file into the
+# developer's real ~/.local/bin. Belt and braces, deliberately redundant.
+#
+# Call it *after* mkit_setup_repo — that sets user.email/user.name on the throwaway repo,
+# so nothing here needs a ~/.gitconfig. Opt-in rather than default so the existing suites
+# keep running against the same environment they were written for.
+mkit_sandbox_home() {
+	export HOME="$MKIT_TMP/home"
+	export MKIT_BIN="$MKIT_TMP/bin"
+	mkdir -p "$HOME" "$MKIT_BIN"
+}
+
+# A PATH containing symlinks to only the externals the setup scripts legitimately call,
+# minus the tools named as arguments. The honest way to simulate a missing jq: excluding
+# whole PATH directories takes out more than intended, since macOS keeps jq beside
+# dirname and sed. Doubles as an executable inventory of the scripts' external surface.
+#
+#   mkit_fake_path jq node    -> prints a PATH with everything but jq and node
+mkit_fake_path() {
+	local excluded=" $* " dir tool path
+	dir="$MKIT_TMP/fakebin"
+	rm -rf -- "$dir"
+	mkdir -p "$dir"
+	# `bash` and `sh` are here because `env PATH=<fake> bash -c ...` resolves the
+	# interpreter itself on the new PATH — omit them and every such run exits 127 with an
+	# empty output, which reads exactly like the hook staying silent.
+	for tool in bash sh mkdir mv mktemp chmod grep awk rm cut head dirname sed cat git jq node shasum; do
+		case "$excluded" in *" $tool "*) continue ;; esac
+		path="$(command -v "$tool" 2>/dev/null)" || continue
+		ln -sf "$path" "$dir/$tool"
+	done
+	printf '%s\n' "$dir"
+}
