@@ -125,21 +125,20 @@ mkit_gate_ledger_path() {
 	printf '%s/mkit/gate.jsonl\n' "$git_dir"
 }
 
-# sha256 of stdin. shasum is BSD/macOS, sha256sum is GNU; a system with neither is not
-# an error — the ledger simply reports no-hash and the gate behaves exactly as before.
-# Never add a hard prerequisite for a latency optimization.
+# sha256 of stdin, via macOS's `shasum`. Its absence is not an error — the ledger simply
+# reports no-hash and the gate behaves exactly as before. Never add a hard prerequisite
+# for a latency optimization.
+#
+# Still guarded rather than called bare: `shasum` is a Perl script, so a stripped or
+# containerized environment can lack it even on macOS. The GNU `sha256sum` fallback is
+# gone with the rest of the non-macOS accommodations.
 mkit_sha256() {
-	if command -v shasum >/dev/null 2>&1; then
-		shasum -a 256
-	elif command -v sha256sum >/dev/null 2>&1; then
-		sha256sum
-	else
-		return 1
-	fi
+	command -v shasum >/dev/null 2>&1 || return 1
+	shasum -a 256
 }
 
 mkit_have_hash() {
-	command -v shasum >/dev/null 2>&1 || command -v sha256sum >/dev/null 2>&1
+	command -v shasum >/dev/null 2>&1
 }
 
 # Short hash identifying *the content a quality-gate command would read*, printed on

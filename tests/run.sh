@@ -18,8 +18,7 @@ echo
 echo "== bats (shell scripts) =="
 if ! command -v bats >/dev/null 2>&1; then
 	echo "bats-core not found — install it to run the shell-script suite:" >&2
-	echo "  brew install bats-core   # macOS" >&2
-	echo "  sudo apt install -y bats # Debian/Ubuntu" >&2
+	echo "  brew install bats-core" >&2
 	exit 2
 fi
 bats tests/bats/ || overall=1

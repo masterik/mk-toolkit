@@ -154,7 +154,7 @@ One key, one cause — the same discipline as `scripts_state`:
 
 - `gate_cache=off` — `--no-cache` was passed. This is the answer to "I don't trust it".
 - `gate_cache=empty` — nothing to compare against: no ledger yet, or one with no records.
-- `gate_cache=no-hash` — no `shasum`/`sha256sum` on the machine, so no fingerprint is possible.
+- `gate_cache=no-hash` — no `shasum` on the machine, so no fingerprint is possible.
 - `gate_cache=no-fingerprint` — a hash tool *is* present but the fingerprint could not be
   computed anyway. A distinct cause on purpose: "install `shasum`" is the wrong advice for
   someone who already has it.
