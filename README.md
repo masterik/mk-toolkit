@@ -33,17 +33,22 @@ the arithmetic over a review's findings, and the commit journal.
 Nothing to build. The scripts need `git`, `bash`, `node` and `jq`; `rg`, `gh` and `wt` are
 recommended — see [Prerequisites](PREREQUISITES.md).
 
-## Journaling intent (opt-in)
+## Journaling intent (on by default)
 
 `commit` normally has to reverse-engineer *why* each hunk exists out of the diff. Journaling
-records that while the session still knows it. **Off in every repo by default** — installing
-mkit registers the hook but nothing is written until you ask:
+records that while the session still knows it. **It sets itself up**: on your first session
+after installing mkit, a `SessionStart` hook writes the one user-scoped marker that turns
+journaling on for every repo — present and future — and tells you once that it did. There is
+no install step.
+
+Opting out, at either scope:
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT}/scripts/journal.sh" enable   # per repo, one command
+"${CLAUDE_PLUGIN_ROOT}/scripts/journal.sh" disable   # this repo only — beats the default
+"${CLAUDE_PLUGIN_ROOT}/install.sh" --uninstall       # everywhere, and it sticks
 ```
 
-From then on, with nothing else to configure:
+With it on, and nothing else to configure:
 
 - a `Stop` / `SubagentStop` hook works out which dirty paths no entry covers and asks the agent
   that did the work to record one — its paths, a type/scope/subject proposal, one line of `why`.
@@ -55,8 +60,10 @@ From then on, with nothing else to configure:
 - `note` ("note this") records one by hand.
 
 Entries live in `<git-dir>/mkit/journal.jsonl` — never committed, never in `git status`, and
-per-worktree, so they die with the worktree. `journal.sh disable` turns it back off;
-`status` / `uncovered` / `drop` / `compact` inspect and prune. Details:
+per-worktree, so they die with the worktree. `status` / `uncovered` / `drop` / `compact` inspect
+and prune. A repo's own `disable` always beats the global default, and `install.sh --uninstall`
+leaves a tombstone the hook honours — so an opt-out at either scope sticks rather than being
+re-asserted next session. Details:
 [`skills/_shared/references/journal.md`](skills/_shared/references/journal.md).
 
 ## Not re-proving the same tree (the gate ledger)

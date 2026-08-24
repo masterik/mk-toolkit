@@ -4,8 +4,28 @@ How an implementation session records **why** each unit of work exists, so `comm
 reverse-engineering intent from the diff. Written by the `Stop` / `SubagentStop` hook (the normal path)
 or by the `note` skill (when the user asks); read by `commit`.
 
-**Inert until opted in.** Journaling does nothing in a repo until `scripts/journal.sh enable` creates the
-marker — the plugin ships the hook registered but silent, so installing mkit never starts writing.
+**On by default, per user.** The `SessionStart` hook (`scripts/hooks/session-bootstrap.sh`) writes the
+user-scoped default on the first session after install, so journaling applies everywhere without a setup
+step. Enablement still resolves repo-first, so a repo can always overrule it:
+
+| | file | means |
+| --- | --- | --- |
+| repo, off | `<git-dir>/mkit/journal.disabled` | never journal here, whatever the default says (`journal.sh disable`) |
+| repo, on | `<git-dir>/mkit/journal.enabled` | journal here (`journal.sh enable`) |
+| user | `~/.claude/mkit/journal.default` | journal in every repo that has said neither (the `SessionStart` hook, or `install.sh`) |
+| neither | — | off — reachable only by `install.sh --uninstall` |
+
+Checked in that order. The repo always outranks the user default, and a tombstone outranks a marker —
+precedence never resolves *toward* writing. `journal.sh enabled` prints the one-word verdict the hook
+compares against; `enabled --why` adds where it came from (`repo` / `user` / `none`).
+
+`disable` writes a tombstone **only** when a user default is in play; otherwise it just removes the marker,
+leaving a pristine repo byte-identical to one that never opted in.
+
+Turning it off for the *user* needs `install.sh --uninstall`, which writes its own tombstone
+(`~/.claude/mkit/bootstrap.disabled`) one scope out, for exactly the reason this file's repo tombstone
+exists: without a record of the intent, the hook would re-establish the default next session and the
+opt-out would silently expire.
 
 ## The two governing rules
 

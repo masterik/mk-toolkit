@@ -1,23 +1,25 @@
 # Prerequisites
 
-mkit is Markdown plus six small scripts and one hook. There is nothing to build and nothing to
-put on `PATH` — installing the plugin is a clone. What follows is what the scripts call.
+mkit is Markdown plus six small scripts and two hooks. There is nothing to build and nothing to
+put on `PATH` — installing the plugin is a clone, and the one piece of user-scoped setup happens
+by itself on the next session (see *the commit journal*, below). What follows is what the
+scripts call.
+
+**macOS is the supported platform.** Nothing here detects an OS or branches on one; the scripts
+are simply written to what macOS provides, which is the narrower target: no GNU-only flags, no
+`flock`, no bash 4.
 
 ## Required
 
 | Tool | Used by | Why |
 | --- | --- | --- |
 | `git` ≥ 2.30 | everything | `--absolute-git-dir`, `worktree list --porcelain`, `diff --shortstat` |
-| `bash` ≥ 3.2 | every `.sh` — six scripts plus the sourced `lib/common.sh` | macOS's system bash is 3.2; nothing here needs 4.x |
+| `bash` ≥ 3.2 | every `.sh` — six scripts plus the sourced `lib/common.sh` | macOS ships `/bin/bash` 3.2 (frozen there over GPLv3) and `/bin/zsh` 5.9. The scripts run under bash via `#!/usr/bin/env bash`, so **your interactive shell being zsh is irrelevant** — nothing here needs 4.x, and no Homebrew bash is required |
 | `node` ≥ 18 | `findings.mjs` | ESM, `node:fs`. No npm install, no dependencies |
 | `jq` ≥ 1.6 | `gate-detect.sh`, `gate-run.sh`, `facts.sh`, `journal.sh`, the hook | reads `package.json`, `wt list --format=json`, and the journal's and gate ledger's JSONL |
 
 ```bash
-# macOS
 brew install git jq node
-# Debian / Ubuntu
-sudo apt install -y git jq
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt install -y nodejs
 ```
 
 Claude Code now ships as a native binary, so **it no longer guarantees a `node` on the
@@ -28,13 +30,13 @@ machine** — install one even if Claude Code runs fine without it.
 | Tool | Used by | Degrades to |
 | --- | --- | --- |
 | `rg` (ripgrep) | `gate-run.sh` failure digest, `gate-detect.sh` doc scan, the `fix-checks` sweep | `grep -E` (same output, slower) |
-| `shasum` or `sha256sum` | the gate ledger's content fingerprint | `gate_cache=no-hash` — the gate runs every step, exactly as before. Never a hard requirement: a latency optimization may not add a prerequisite |
+| `shasum` | the gate ledger's content fingerprint | `gate_cache=no-hash` — the gate runs every step, exactly as before. Never a hard requirement: a latency optimization may not add a prerequisite. macOS ships it, but it is a Perl script, so a stripped environment can lack it |
 | `gh` | `pr`, and `facts.sh --gh` | `pr` cannot open a PR at all; `facts.sh` prints `pr=gh-missing` |
 | `wt` ([worktrunk](https://worktrunk.dev)) | `finish` cleanup, `facts.sh` worktree classification | plain `git worktree remove` |
 
 ```bash
-brew install ripgrep gh worktrunk/tap/worktrunk   # macOS
-sudo apt install -y ripgrep && gh auth login      # Debian/Ubuntu
+brew install ripgrep gh worktrunk/tap/worktrunk
+gh auth login
 ```
 
 ## Dev only — running `tests/`
@@ -42,8 +44,7 @@ sudo apt install -y ripgrep && gh auth login      # Debian/Ubuntu
 Contributors testing the scripts themselves need `bats-core`; users of the plugin never do.
 
 ```bash
-brew install bats-core                     # macOS
-npm install -g bats                        # or via npm, any OS
+brew install bats-core
 ./tests/run.sh                             # node --test findings.mjs, then bats tests/bats/
 ```
 
@@ -57,27 +58,42 @@ its lenses and says so in the summary. It never reports a partial review as clea
 - Claude alone still works: `review` runs two subagents with different lens splits so
   corroboration keeps meaning something.
 
-## Opt-in — the commit journal
+## The commit journal — on by default, no setup
 
-Journaling records *why* each unit of work exists, for `commit` to spend later. It is off in
-every repo until you turn it on there — one command, no other setup:
+Journaling records *why* each unit of work exists, for `commit` to spend later instead of
+re-deriving intent from the diff. **It configures itself.** On your next session after
+installing the plugin, the `SessionStart` hook (`scripts/hooks/session-bootstrap.sh`) writes
+`~/.claude/mkit/journal.default` — the user-scoped marker that makes journaling apply to every
+repo, including ones you clone tomorrow — and tells you once that it did. Nothing to run.
+
+It needs nothing beyond the `jq` already required above, and the hook itself needs not even
+that: it reports a missing `jq` rather than depending on one.
+
+Opting out, at either scope:
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT}/scripts/journal.sh" enable    # writes <git-dir>/mkit/journal.enabled
-"${CLAUDE_PLUGIN_ROOT}/scripts/journal.sh" enabled   # → enabled | disabled
+"${CLAUDE_PLUGIN_ROOT}/scripts/journal.sh" disable    # this repo only — beats the default
+"${CLAUDE_PLUGIN_ROOT}/install.sh" --uninstall        # everywhere, and it sticks
+"${CLAUDE_PLUGIN_ROOT}/scripts/journal.sh" enabled --why   # → enabled user | disabled repo | …
 ```
 
-Needs nothing beyond the `jq` already required above.
+`--uninstall` writes `~/.claude/mkit/bootstrap.disabled`, and the hook honours it forever.
+That tombstone is not bookkeeping for its own sake: a deleted file carries no provenance, so
+"never set up" and "deliberately removed" are byte-identical on disk, and without a record of
+the *intent* an uninstall would last exactly until the next session. Re-running `install.sh`
+clears it. `install.sh --status` reports which state you are in.
 
-**The hook needs no user action, and ships inert.** Claude Code loads a plugin's
-`hooks/hooks.json` automatically: plugin hooks require **no opt-in beyond installing the
-plugin**, and subagents inherit them. That is exactly why the marker gate is non-negotiable —
-mkit's `Stop` / `SubagentStop` hook is registered from the moment the plugin is installed, so
-without the gate it would start writing in every repo you touch. Outside a git repo, or in a
-repo with no marker, it exits 0 with no output and writes nothing.
+**Both hooks need no user action.** Claude Code loads a plugin's `hooks/hooks.json`
+automatically: plugin hooks require **no opt-in beyond installing the plugin**, and subagents
+inherit them. That is why each one is gated on something:
 
-It also needs no allowlist entry: Claude Code runs the hook itself, not the agent through
-`Bash`, so it never prompts.
+- `SessionStart` → `session-bootstrap.sh` acts once and then produces zero bytes on every
+  later session, and stays silent forever once the tombstone exists.
+- `Stop` / `SubagentStop` → `journal-nudge.sh` exits 0 with no output outside a git repo, or in
+  a repo whose own `journal.sh disable` tombstone outranks the default.
+
+Neither needs an allowlist entry: Claude Code runs a hook itself, not the agent through `Bash`,
+so neither ever prompts.
 
 ## Verify
 
@@ -95,6 +111,8 @@ Then check the plugin itself, from any repo:
 "${CLAUDE_PLUGIN_ROOT}/scripts/gate-detect.sh"             # prints fast= and full=
 node "${CLAUDE_PLUGIN_ROOT}/scripts/findings.mjs" schema    # prints the JSONL shape
 "${CLAUDE_PLUGIN_ROOT}/scripts/journal.sh" enabled         # prints enabled or disabled
+"${CLAUDE_PLUGIN_ROOT}/install.sh" --status                # what setup is in place
+"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/session-bootstrap.sh" </dev/null   # silent once set up
 ```
 
 Empty `${CLAUDE_PLUGIN_ROOT}` fails as `/scripts/facts.sh: not found`. That is intended:

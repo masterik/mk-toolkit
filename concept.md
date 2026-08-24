@@ -23,12 +23,18 @@ They ship with the plugin — no `PATH`, no build, no install — and they exist
 more than for tokens: prose re-executed every run kept getting one invariant of three wrong. **Judgement stays in Markdown; a mechanical invariant
 belongs in a script.** Prerequisites: [`PREREQUISITES.md`](PREREQUISITES.md).
 
-One script is not called by a skill at all. A `Stop` / `SubagentStop` hook
-(`scripts/hooks/journal-nudge.sh`, registered by `hooks/hooks.json` at the plugin root) tells
-the agent which dirty paths no journal entry covers, so *why* a unit of work exists gets
-recorded while the session still knows it — instead of being reverse-engineered from the diff
-at commit time. It ships **inert**: journaling does nothing in a repo until
-`journal.sh enable` is run there.
+Two scripts are not called by a skill at all — the hooks, registered by `hooks/hooks.json` at
+the plugin root. A `Stop` / `SubagentStop` hook (`scripts/hooks/journal-nudge.sh`) tells the
+agent which dirty paths no journal entry covers, so *why* a unit of work exists gets recorded
+while the session still knows it — instead of being reverse-engineered from the diff at commit
+time. A `SessionStart` hook (`scripts/hooks/session-bootstrap.sh`) writes the one user-scoped
+marker that turns journaling on everywhere, so the feature needs no install step; it says so
+once, and then produces nothing on every later session.
+
+Journaling is therefore **on by default**, and reversible at two scopes: `journal.sh disable`
+in a repo, `install.sh --uninstall` for the user. Both leave a tombstone, for the same reason —
+absent files carry no provenance, so an opt-out that is only an absence gets re-asserted by the
+next thing that re-establishes the default.
 
 **Claude-only for now.** Other agents (Codex, opencode, …) are a later concern — the skills
 are plain Markdown, so support for another agent is a thin packaging step, not a rewrite.
@@ -61,14 +67,28 @@ are plain Markdown, so support for another agent is a thin packaging step, not a
     command exited 0 over exactly this content. Whether that is still good enough to skip on is
     a safety-against-latency trade-off, so the skill decides it and must report the step as
     `cached`. A run printing `gate=ok` having executed nothing is the failure this guards.
+  - *configuration is the one exception, and it is bounded* — the `SessionStart` hook does not
+    report a fact; it **writes configuration**, unasked, that changes what mkit does in every
+    repo. Nothing else in the codebase does that, so it is named here as a deliberate exception
+    rather than left to look like the rule. Three bounds make it one: it writes a single empty
+    marker and one wrapper and nothing else, ever; it announces itself once, in the user's own
+    view, naming both files and both opt-outs, because a hook cannot ask and after-the-fact
+    disclosure is then the whole of consent; and a tombstone at either scope stops it dead.
+    The test is whether a user who never reads the docs still ends up informed and in control —
+    not whether the default is convenient.
 - **Composition over replacement:** orchestrate `git`, GitHub CLI (`gh`), and Worktrunk
   (`wt`); never reimplement what they already do well.
 - **Safe by default:** irreversible actions (force-push, branch delete, history rewrite,
   hook-skipping) are gated by an explicit safety protocol the skills share.
 - **DRY via shared references:** the skills link into one `_shared/references/` bundle
   instead of each restating the same safety and convention rules.
-- **Portable:** nothing project-specific is hardcoded — quality-gate commands, commit
-  scopes, and reviewers are all *discovered* from the target repo.
+- **Portable across repos, targeted at one OS:** nothing project-specific is hardcoded —
+  quality-gate commands, commit scopes, and reviewers are all *discovered* from the target repo.
+  Platform portability is the opposite call: **macOS is the supported OS**, and no script
+  detects or branches on one. What that buys is a single narrow target rather than a matrix —
+  bash 3.2, BSD userland, no `flock` — so the discipline shows up as constructs avoided
+  (`mktemp`+`mv` instead of `sed -i`, a stored `epoch` instead of parsing dates, `mkdir` as the
+  lock primitive) rather than as conditionals to keep in sync.
 
 ## The Skills
 Five skills. Four move work through its lifecycle: `commit` is the shared front-end;
@@ -138,7 +158,8 @@ the five skills link into via `../_shared/references/…`:
    findings.mjs            reconcile · group · report over a review's findings (JSONL)
    journal.sh              record intent · classify entries against the tree · coverage
    +
- scripts/hooks/            the one thing no skill calls
+ scripts/hooks/            the two things no skill calls
+   session-bootstrap.sh    SessionStart: write the user-scoped setup, once, then stay silent
    journal-nudge.sh        Stop/SubagentStop: name the dirty paths no entry covers
    │   drive
    ▼
@@ -182,8 +203,9 @@ mkit ships as a standard Claude Code plugin:
   plugin.json          # plugin manifest (name, skills discovered from skills/)
   marketplace.json     # marketplace entry — source "./"
 hooks/
-  hooks.json           # Stop / SubagentStop registration — plugin root, not .claude-plugin/;
-                       #   auto-discovered, so the manifest carries no `hooks` key
+  hooks.json           # SessionStart / Stop / SubagentStop registration — plugin root, not
+                       #   .claude-plugin/; auto-discovered, so the manifest carries no
+                       #   `hooks` key
 skills/
   commit/SKILL.md
   pr/SKILL.md
@@ -192,9 +214,13 @@ skills/
   note/SKILL.md
   _shared/             # shared references (README + references/*.md) — no SKILL.md
 scripts/
-  lib/common.sh        # sourced helpers: plugin root, refs path, mkit dir, rg-or-grep, wt binary
-  hooks/journal-nudge.sh   # the Stop/SubagentStop hook — inert until journaling is enabled
+  lib/common.sh        # sourced helpers: plugin root, refs path, mkit dir, rg-or-grep, wt
+                       #   binary, the prereq table, the wrapper generator, jq-free JSON escape
+  hooks/session-bootstrap.sh  # the SessionStart hook — writes the user-scoped setup itself
+  hooks/journal-nudge.sh      # the Stop/SubagentStop hook — silent in a repo that opted out
   run-open.sh  facts.sh  gate-detect.sh  gate-run.sh  findings.mjs  journal.sh
+install.sh             # --status / --uninstall / --bin. Not needed for setup: the hook does
+                       #   that. --uninstall is the only way to opt out globally.
 tests/                  # dev-only: the script layer's own test suite (tests/run.sh)
 PREREQUISITES.md       # required + recommended tooling, setup, permission allowlist
 ```
@@ -212,11 +238,16 @@ skills of the same name.
 ## Roadmap
 - **Now — Claude Code plugin.** The five skills + the shared reference bundle, packaged and
   installable. This is the whole product.
-- **Now, opt-in — intent capture.** The commit journal: the hook nudges the agent that did the
-  work to record *why* each unit exists, and `commit` spends those records instead of
-  re-deriving intent from the diff. Off in every repo until `journal.sh enable`. `commit` is
+- **Now, on by default — intent capture.** The commit journal: the `Stop` hook nudges the agent
+  that did the work to record *why* each unit exists, and `commit` spends those records instead
+  of re-deriving intent from the diff. The `SessionStart` hook turns it on with no install step;
+  `journal.sh disable` (per repo) and `install.sh --uninstall` (global) both stick. `commit` is
   the only consumer so far — `review` could use the `why` lines as reviewer context and `pr`
   could draft a description from them; one consumer first, then decide.
+- **Later — a stable opt-out surface.** The bootstrap notice names paths inside the installed
+  plugin, which are version-scoped for a marketplace install and go stale on upgrade. A
+  `journal.sh default off` subcommand, reachable as `mkit-journal default off` from anywhere,
+  would replace both with something that keeps working.
 - **Later — other agents.** Codex, opencode, and others are plain-Markdown consumers of the
   same skill content; supporting one is a packaging step, added only if needed, with no
   change to the skills themselves.
