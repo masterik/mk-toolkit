@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 #
-# Stop / SubagentStop hook: name the changed paths this turn left without recorded
-# intent, and hand that gap back to the model.
+# Stop / SubagentStop hook: name the count of changed paths this turn left without
+# recorded intent, and hand that gap back to the model — pointing at `journal.sh
+# uncovered` for the list rather than inlining it, so the transcript sees a one-line
+# nudge instead of a rendered path dump.
 #
 # Reads the event JSON on stdin. Emits nothing at all unless every gate below passes;
 # when they do, emits one line of JSON:
@@ -151,8 +153,6 @@ unc_out="$("$journal_sh" uncovered 2>/dev/null)" || exit 0
 n_uncovered="$(printf '%s\n' "$unc_out" | sed -n 's/^journal_uncovered=\([0-9]\{1,\}\)$/\1/p' | sed -n 1p)"
 [ -n "$n_uncovered" ] || exit 0
 [ "$n_uncovered" -gt 0 ] || exit 0
-uncovered="$(printf '%s\n' "$unc_out" | sed -n '/^uncovered:$/,$p' | sed '1d' | awk 'NF')"
-[ -n "$uncovered" ] || exit 0
 
 # --- the nudge ---------------------------------------------------------------------
 # journal.sh is named by its resolved absolute path: the model must not be handed an
@@ -167,20 +167,27 @@ esac
 
 # The contract is inlined, not linked, on purpose: it keeps compliance to one Bash call
 # with no skill load. The reference is for the rare case only. Kept to one short
-# paragraph after the path list, not a multi-line spec: every phrase a test pins
-# (grep the .bats file before trimming further) still has to appear verbatim.
+# paragraph plus a command, not a multi-line spec: every phrase a test pins (grep the
+# .bats file before trimming further) still has to appear verbatim.
+#
+# Deliberately no path list here. An earlier version named every uncovered path inline
+# — harmless at 2 paths, unreadable at the 7-across-three-locales spread a real session
+# produced, and that text is additionalContext the transcript always renders in full
+# (suppressOutput only hides the raw JSON blob, not this). `journal.sh uncovered` already
+# prints the same list on demand, so the nudge points at the command instead of
+# duplicating its output — the model's `uncovered` call renders as one collapsed tool
+# result rather than a wall of text. This also means the JSON payload built below carries
+# no untrusted path content at all: every value is either fixed or numeric.
 context="$(printf '%s\n' \
-	"mkit journal: $n_uncovered uncovered path(s)." \
-	"" \
-	"uncovered:" \
-	"$(printf '%s\n' "$uncovered" | sed 's/^/  /')" \
+	"mkit journal: $n_uncovered uncovered path(s). Run \`$journal_sh uncovered\` to list them." \
 	"" \
 	"  $journal_sh add --paths <a,b> --type <feat|fix|docs|refactor|test|chore|perf> --scope <s> --subject \"...\" --why \"...\" --source $source_tag" \
 	"" \
 	"One unit = one reason. Record only the paths you changed and know the reason for. Never invent a reason to cover a path. Details: $plugin_root/skills/_shared/references/journal.md")"
 
-# Built by jq, never by string interpolation: the uncovered paths go inside a JSON
-# string, and a path with a quote or a backslash in it must land as data.
+# Built by jq, never by string interpolation, on the same general principle even though
+# nothing here is untrusted any more: a path with a quote or a backslash in it never
+# reaches this payload at all now that the list itself lives in `journal.sh uncovered`.
 #
 # additionalContext MUST be nested under hookSpecificOutput alongside hookEventName.
 # The flat top-level form is silently ignored - no warning in stdout, in stream-json or

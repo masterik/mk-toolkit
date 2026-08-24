@@ -40,10 +40,11 @@ skills (`commit`, `review`, `finish`, `pr`, `note`) plus the shared
   `enable`/`disable`/`enabled [--why]`/`path`, resolved repo-marker > repo-tombstone > user default), `lib/common.sh` (sourced helpers, including
   `mkit_tree_fingerprint` — the staging- and commit-invariant hash of the content a gate command reads,
   which is what makes a `review` → `finish` cache hit possible at all).
-- `scripts/hooks/journal-nudge.sh` — the `Stop` / `SubagentStop` hook: names the dirty paths no
-  journal entry covers and hands them back to the model. Gated (git repo, journaling enabled,
-  `stop_hook_active` false, one nudge per `prompt_id` + `agent_id`, uncovered > 0) and **always
-  exits 0**. It never authors a record.
+- `scripts/hooks/journal-nudge.sh` — the `Stop` / `SubagentStop` hook: names the *count* of dirty
+  paths no journal entry covers and points the model at `journal.sh uncovered` for the list,
+  rather than inlining it — that list is additionalContext, which the transcript always renders in
+  full. Gated (git repo, journaling enabled, `stop_hook_active` false, one nudge per `prompt_id` +
+  `agent_id`, uncovered > 0) and **always exits 0**. It never authors a record.
 - `scripts/hooks/session-bootstrap.sh` — the `SessionStart` hook: makes install.sh's setup happen
   by itself. Writes `journal.default` + the `mkit-journal` wrapper, idempotently, then emits
   **zero bytes** on every later session. Gated (absolute user dir, no `bootstrap.disabled`

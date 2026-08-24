@@ -43,13 +43,6 @@ enable_and_dirty() {
 
 state_file() { printf '%s\n' "$MKIT_TMP/.git/mkit/journal-nudge.state"; }
 
-# The uncovered paths exactly as the hook rendered them, unindented: the `uncovered:`
-# block of additionalContext, which ends at the blank line before the instructions.
-nudged_paths() {
-	printf '%s' "$1" | jq -r .hookSpecificOutput.additionalContext |
-		awk '/^uncovered:$/ { f = 1; next } f && NF == 0 { exit } f { sub(/^  /, ""); print }'
-}
-
 # --- silent no-ops: every gate, plus the malformed input -----------------------------
 
 @test "empty stdin is a silent exit 0" {
@@ -256,7 +249,7 @@ nudged_paths() {
 
 # --- the payload ---------------------------------------------------------------------
 
-@test "the nudge names every uncovered path and the journal.sh add invocation" {
+@test "the nudge names the uncovered count and the journal.sh add invocation, never the paths themselves" {
 	"$SCRIPTS/journal.sh" enable >/dev/null
 	printf 'edit\n' >>seed.txt
 	printf 'new\n' >added.txt
@@ -264,18 +257,24 @@ nudged_paths() {
 	[ "$status" -eq 0 ]
 	local ctx
 	ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')"
-	[[ "$ctx" == *"seed.txt"* ]]
-	[[ "$ctx" == *"added.txt"* ]]
-	[[ "$ctx" == *"$SCRIPTS/journal.sh add "* ]]
-	[[ "$ctx" == *"--subject"* ]]
-	[[ "$ctx" == *"--why"* ]]
-	[[ "$ctx" == *"--source stop"* ]]
+	# Simple commands, not `[[ ... ]]`: on bash 3.2 errexit does not fire for a failing
+	# `[[ ... ]]`, so such an assertion aborts a bats test only as its last command —
+	# and every check here has to be able to fail.
+	printf '%s' "$ctx" | grep -qF -- '2 uncovered path(s)'
+	printf '%s' "$ctx" | grep -qF -- "$SCRIPTS/journal.sh uncovered"
+	printf '%s' "$ctx" | grep -qF -- "$SCRIPTS/journal.sh add "
+	printf '%s' "$ctx" | grep -qF -- '--subject'
+	printf '%s' "$ctx" | grep -qF -- '--why'
+	printf '%s' "$ctx" | grep -qF -- '--source stop'
 	# the resolved absolute path, never an unexpanded plugin-root placeholder
-	[[ "$ctx" != *'${CLAUDE_PLUGIN_ROOT}'* ]]
-	[[ "$ctx" != *'CLAUDE_PLUGIN_ROOT'* ]]
+	[ -z "$(printf '%s' "$ctx" | grep -F -- '${CLAUDE_PLUGIN_ROOT}' || true)" ]
+	[ -z "$(printf '%s' "$ctx" | grep -F -- 'CLAUDE_PLUGIN_ROOT' || true)" ]
+	# collapsed: the individual paths are not named — the agent fetches them itself
+	[ -z "$(printf '%s' "$ctx" | grep -F -- 'seed.txt' || true)" ]
+	[ -z "$(printf '%s' "$ctx" | grep -F -- 'added.txt' || true)" ]
 	# the contract is inlined, and the reference is a pointer for the rare case
-	[[ "$ctx" == *"one unit = one reason"* ]]
-	[[ "$ctx" == *"_shared/references/journal.md"* ]]
+	printf '%s' "$ctx" | grep -qF -- 'One unit = one reason'
+	printf '%s' "$ctx" | grep -qF -- '_shared/references/journal.md'
 }
 
 @test "a SubagentStop nudge asks for --source subagent-stop" {
@@ -286,35 +285,23 @@ nudged_paths() {
 	[[ "$ctx" == *"--source subagent-stop"* ]]
 }
 
-@test "the nudge renders the paths git would quote in the form add accepts back" {
-	# This test used to assert git's *escaped* form (`we\"ird`, with a backslash the real
-	# filename does not have), so it passed only while the journal read git's C-quoted
-	# output and would have failed on the correct encoding. What matters is the round
-	# trip: a name the agent cannot pass to `add` is a nudge it can never satisfy.
+@test "the nudge points at journal.sh uncovered instead of naming an unusual path, and covering it silences the next one" {
+	# Quoting an unusual filename correctly is journal.sh's job (tests/bats/journal.bats
+	# covers café.txt / spaces / quotes there); this test only needs to confirm the hook
+	# no longer re-renders the path itself, and that the pointer it gives instead
+	# (`journal.sh uncovered`) leads to a real fix for the gap.
 	"$SCRIPTS/journal.sh" enable >/dev/null
 	printf 'x\n' >'café.txt'
-	printf 'x\n' >'has space.txt'
-	printf 'x\n' >'we"ird.txt'
 	run_hook "$(mkev Stop p1 '' false)"
 	[ "$status" -eq 0 ]
-	paths="$(nudged_paths "$output")"
-	[ "$(printf '%s\n' "$paths" | wc -l | tr -d ' ')" -eq 3 ]
-	# Simple commands, not `[[ ... ]]`: on bash 3.2 errexit does not fire for a failing
-	# `[[ ... ]]`, so such an assertion aborts a bats test only as its last command —
-	# and every check here has to be able to fail.
-	printf '%s\n' "$paths" | grep -qxF -- 'café.txt'
-	printf '%s\n' "$paths" | grep -qxF -- 'has space.txt'
-	printf '%s\n' "$paths" | grep -qxF -- 'we"ird.txt'
-	# neither git's octal escape nor its backslash-quoted form
-	[ -z "$(printf '%s\n' "$paths" | grep -F -e '\303' -e '\"' || true)" ]
+	ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')"
+	printf '%s' "$ctx" | grep -qF -- "$SCRIPTS/journal.sh uncovered"
+	[ -z "$(printf '%s' "$ctx" | grep -F -- 'café.txt' || true)" ]
 
-	while IFS= read -r p; do
-		[ -n "$p" ] || continue
-		run "$SCRIPTS/journal.sh" add --paths "$p" --type feat --scope core \
-			--subject s --why w
-		[ "$status" -eq 0 ]
-	done <<<"$paths"
-	# every path the hook named is now recorded, so the next prompt is silent
+	run "$SCRIPTS/journal.sh" add --paths 'café.txt' --type feat --scope core \
+		--subject s --why w
+	[ "$status" -eq 0 ]
+	# covering the path the hook pointed at is now recorded, so the next prompt is silent
 	run_hook "$(mkev Stop p2 '' false)"
 	[ -z "$output" ]
 }
@@ -334,14 +321,15 @@ nudged_paths() {
 @test "a lockfile that does not match the glob still nudges" {
 	# The exclusion is a glob, not an intent: package-lock.json is a lockfile and is
 	# nudged. Pins the pair so the comment beside the pathspec cannot drift back to
-	# "lockfile churn never nudges".
+	# "lockfile churn never nudges". The hook no longer names the path itself, so the
+	# count is what proves it was counted as uncovered.
 	"$SCRIPTS/journal.sh" enable >/dev/null
 	printf '{}\n' >package-lock.json
 	run_hook "$(mkev Stop p1 '' false)"
 	[ "$status" -eq 0 ]
 	[ -n "$output" ]
 	ctx="$(printf '%s' "$output" | jq -r .hookSpecificOutput.additionalContext)"
-	[[ "$ctx" == *"package-lock.json"* ]]
+	printf '%s' "$ctx" | grep -qF -- '1 uncovered path(s)'
 }
 
 # --- control characters are rejected, never normalised away ------------------------
