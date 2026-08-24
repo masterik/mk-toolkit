@@ -25,6 +25,18 @@ mkit_refs_dir() {
 	printf '%s/skills/_shared/references\n' "$(mkit_plugin_root)"
 }
 
+# The user-scoped config directory — the one piece of mkit state that lives outside a
+# repo, and the only thing `install.sh` writes. Under `~/.claude` rather than XDG
+# because mkit is a Claude Code plugin and this sits beside the runtime's own state.
+#
+# MKIT_HOME is not a convenience: the bats suite exports it at a temp path so a user
+# who has run install.sh does not have their real user-scoped default leak into every
+# test that asserts a pristine repo is disabled. Any future user-scoped file goes here
+# for the same reason.
+mkit_user_dir() {
+	printf '%s\n' "${MKIT_HOME:-$HOME/.claude/mkit}"
+}
+
 # Fail unless we are inside a work tree. Every mkit script needs this.
 mkit_require_repo() {
 	git rev-parse --is-inside-work-tree >/dev/null 2>&1 ||

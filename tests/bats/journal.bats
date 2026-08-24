@@ -45,6 +45,86 @@ add_entry() {
 	[ "$output" = disabled ]
 }
 
+# --- the user-scoped default (install.sh) -------------------------------------------
+# MKIT_HOME is redirected into the throwaway repo by helpers.bash, so these exercise the
+# real resolution order without going near the developer's own ~/.claude/mkit.
+
+user_default() { printf '%s\n' "$MKIT_HOME/journal.default"; }
+
+set_user_default() {
+	mkdir -p "$MKIT_HOME"
+	: >"$(user_default)"
+}
+
+@test "a user-scoped default enables a repo that has said nothing" {
+	set_user_default
+	run "$SCRIPTS/journal.sh" enabled
+	[ "$status" -eq 0 ]
+	[ "$output" = enabled ]
+	run "$SCRIPTS/journal.sh" enabled --why
+	[ "$output" = "enabled user" ]
+}
+
+@test "add works under the user-scoped default with no repo marker" {
+	set_user_default
+	printf 'x\n' >>seed.txt
+	run "$SCRIPTS/journal.sh" add --paths seed.txt --type fix --scope core \
+		--subject "s" --why "w"
+	[ "$status" -eq 0 ]
+	[ ! -f "$MKIT_TMP/.git/mkit/journal.enabled" ]
+	[ -s "$(journal_file)" ]
+}
+
+@test "disable beats the user-scoped default, via a tombstone" {
+	set_user_default
+	run "$SCRIPTS/journal.sh" disable
+	[ "$status" -eq 0 ]
+	[ -f "$MKIT_TMP/.git/mkit/journal.disabled" ]
+	run "$SCRIPTS/journal.sh" enabled
+	[ "$output" = disabled ]
+	run "$SCRIPTS/journal.sh" enabled --why
+	[ "$output" = "disabled repo" ]
+	# And the refusal still bites, which is the point of the tombstone.
+	printf 'x\n' >>seed.txt
+	run "$SCRIPTS/journal.sh" add --paths seed.txt --type fix --scope core \
+		--subject "s" --why "w"
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"not enabled"* ]]
+}
+
+@test "enable clears a tombstone" {
+	set_user_default
+	"$SCRIPTS/journal.sh" disable >/dev/null
+	run "$SCRIPTS/journal.sh" enable
+	[ "$status" -eq 0 ]
+	[ ! -f "$MKIT_TMP/.git/mkit/journal.disabled" ]
+	run "$SCRIPTS/journal.sh" enabled
+	[ "$output" = enabled ]
+}
+
+@test "disable writes no tombstone when no user default applies" {
+	# A pristine repo must stay byte-identical to a never-enabled one.
+	"$SCRIPTS/journal.sh" enable >/dev/null
+	run "$SCRIPTS/journal.sh" disable
+	[ "$status" -eq 0 ]
+	[ ! -f "$MKIT_TMP/.git/mkit/journal.disabled" ]
+	[ ! -f "$MKIT_TMP/.git/mkit/journal.enabled" ]
+}
+
+@test "a tombstone outvotes a marker if both exist" {
+	"$SCRIPTS/journal.sh" enable >/dev/null
+	: >"$MKIT_TMP/.git/mkit/journal.disabled"
+	run "$SCRIPTS/journal.sh" enabled
+	[ "$output" = disabled ]
+}
+
+@test "enabled --why reports none on a pristine repo, and rejects junk" {
+	run "$SCRIPTS/journal.sh" enabled --why
+	[ "$output" = "disabled none" ]
+	run "$SCRIPTS/journal.sh" enabled --nope
+	[ "$status" -eq 2 ]
+}
+
 @test "path prints the journal location under <git-dir>/mkit" {
 	run "$SCRIPTS/journal.sh" path
 	[ "$status" -eq 0 ]

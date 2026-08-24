@@ -274,9 +274,12 @@ fi
 # off, empty and jq-missing all leave a skill with no records to spend, but only `off`
 # means the user never asked for journaling, and only `jq-missing` means records exist
 # and cannot be read. Two values the contract floated are deliberately absent:
-#   - `journal=disabled`. `journal.sh disable` *removes* the marker, so a disabled repo
-#     and a never-enabled one are byte-identical on disk; `off` covers both and a
-#     separate value could never be emitted.
+#   - `journal=disabled`. A repo can now be explicitly off (a `journal.disabled`
+#     tombstone, written only where a user-scoped default would otherwise apply) as
+#     well as never opted in, so the two are no longer byte-identical on disk — but
+#     both leave a skill with nothing to spend and nothing different to do, which is
+#     what this value is for. The distinction is a debugging question, and
+#     `journal.sh enabled --why` answers it without widening this grammar.
 #   - nothing for "no entries on this branch". Emptiness is tested on the file, not on
 #     the branch-filtered entry count, which keeps it a stat instead of a jq read — so
 #     `empty` still reports correctly with no jq, and the block's own

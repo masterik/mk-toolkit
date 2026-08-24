@@ -9,7 +9,7 @@
 #          journal.sh uncovered              dirty paths no entry claims (the hook's path)
 #          journal.sh drop --committed | --orphaned | <seq>
 #          journal.sh compact                drop committed/orphaned, renumber from 1
-#          journal.sh enable | disable | enabled | path
+#          journal.sh enable | disable | enabled [--why] | path
 #
 # Why this is a script and not prose in a SKILL.md: every question it answers is
 # mechanical. Hashing a path (`git hash-object`), the set arithmetic between the
@@ -23,6 +23,11 @@
 # `overlap:` names a path two entries both claim — which hunks go where stays the
 # `commit` skill's decision, the same way `gate-detect.sh` proposes `fast=` beside
 # `docs_candidates:` without running anything.
+#
+# Enablement is three-way and repo-first: <git-dir>/mkit/journal.enabled (on here),
+# <git-dir>/mkit/journal.disabled (off here, outvoting the default below), then the
+# user-scoped ~/.claude/mkit/journal.default that `install.sh` writes. Nothing set at
+# either level means off, which is the state the plugin still ships in.
 #
 # Storage: <absolute-git-dir>/mkit/journal.jsonl, append-only JSONL, one `unit` record
 # per line, beside the run directories `run-open.sh` owns — never committed, never in
@@ -66,19 +71,63 @@ shift
 mkit_dir="$(mkit_dir_or_die)"
 journal="$mkit_dir/journal.jsonl"
 marker="$mkit_dir/journal.enabled"
+tombstone="$mkit_dir/journal.disabled"
+user_default="$(mkit_user_dir)/journal.default"
 
-# --- the cheap half: the opt-in marker and the file location -----------------------
-# `enabled` is the hook's first call on every agent turn and the usual answer is "no",
-# so it costs one `git rev-parse` and one stat. No porcelain, no jq.
+# --- the cheap half: the opt-in markers and the file location ----------------------
+# `enabled` is the hook's first call on every agent turn, so it stays a `git rev-parse`
+# plus at most three stats. No porcelain, no jq.
+#
+# Three-way, in this order — the repo always outranks the profile:
+#
+#   journal.enabled    this repo, explicitly on
+#   journal.disabled   this repo, explicitly off — the tombstone exists *only* to
+#                      outvote a user-scoped default. Without it, `disable` in a repo
+#                      covered by ~/.claude/mkit/journal.default would be a no-op that
+#                      reported success, which is the worst possible answer.
+#   journal.default    the user-scoped default (install.sh), applying to every repo
+#                      that has said nothing either way
+#   otherwise          off — the shipped state, unchanged: install the plugin and
+#                      nothing writes anywhere until someone opts in at one of the
+#                      two levels.
+#
+# The tombstone beats the marker if both somehow exist, so a hand-made file cannot leave
+# a repo journaling against an explicit `disable`. Precedence never resolves *toward*
+# writing.
+journal_state() {
+	if [ -f "$tombstone" ]; then
+		printf 'disabled repo\n'
+	elif [ -f "$marker" ]; then
+		printf 'enabled repo\n'
+	elif [ -f "$user_default" ]; then
+		printf 'enabled user\n'
+	else
+		printf 'disabled none\n'
+	fi
+}
+
 case "$cmd" in
 enabled)
-	[ $# -eq 0 ] || mkit_die 'enabled takes no arguments' 2
-	if [ -f "$marker" ]; then printf 'enabled\n'; else printf 'disabled\n'; fi
+	# The bare word is the contract — journal-nudge.sh gate 2 and facts.sh both compare
+	# against it exactly, so `--why` adds a second field rather than a second line.
+	why=no
+	while [ $# -gt 0 ]; do
+		case "$1" in
+		--why) why=yes ;;
+		*) mkit_die "enabled: unexpected argument: $1" 2 ;;
+		esac
+		shift
+	done
+	state="$(journal_state)"
+	if [ "$why" = yes ]; then printf '%s\n' "$state"; else printf '%s\n' "${state%% *}"; fi
 	exit 0
 	;;
 enable)
 	[ $# -eq 0 ] || mkit_die 'enable takes no arguments' 2
 	mkdir -p "$mkit_dir"
+	# Clear the tombstone first: `enable` must be able to undo `disable` even where a
+	# user-scoped default is in play, and a repo left holding both files reads as off.
+	rm -f "$tombstone"
 	: >"$marker"
 	printf 'journal enabled: %s\n' "$journal"
 	exit 0
@@ -86,7 +135,17 @@ enable)
 disable)
 	[ $# -eq 0 ] || mkit_die 'disable takes no arguments' 2
 	rm -f "$marker"
-	printf 'journal disabled\n'
+	# Only write a tombstone when one is actually load-bearing. With no user-scoped
+	# default, removing the marker already means off, and a pristine repo should stay
+	# byte-identical to a never-enabled one — that is what keeps `disable` reversible
+	# to *nothing* rather than to a permanent opt-out nobody asked for.
+	if [ -f "$user_default" ]; then
+		mkdir -p "$mkit_dir"
+		: >"$tombstone"
+		printf 'journal disabled for this repo (overriding %s)\n' "$user_default"
+	else
+		printf 'journal disabled\n'
+	fi
 	exit 0
 	;;
 path)
@@ -106,8 +165,10 @@ esac
 #
 # Only `add`. `status`/`uncovered`/`drop`/`compact` stay readable on a disabled repo, so
 # a journal written before `disable` can still be inspected and cleaned up.
-if [ "$cmd" = add ] && [ ! -f "$marker" ]; then
-	mkit_die "journaling is not enabled for this repo — run: journal.sh enable" 1
+if [ "$cmd" = add ]; then
+	add_state="$(journal_state)"
+	[ "${add_state%% *}" = enabled ] ||
+		mkit_die "journaling is not enabled for this repo — run: journal.sh enable" 1
 fi
 
 command -v jq >/dev/null 2>&1 || mkit_die 'jq is required to read or write the journal' 1
