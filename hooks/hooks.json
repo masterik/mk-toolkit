@@ -1,5 +1,17 @@
 {
 	"hooks": {
+		"SessionStart": [
+			{
+				"hooks": [
+					{
+						"type": "command",
+						"command": "${CLAUDE_PLUGIN_ROOT}/scripts/hooks/session-bootstrap.sh",
+						"timeout": 5,
+						"statusMessage": "mkit: checking setup"
+					}
+				]
+			}
+		],
 		"Stop": [
 			{
 				"hooks": [
