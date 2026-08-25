@@ -101,7 +101,7 @@ git_dir="$(git rev-parse --absolute-git-dir)"
 # a skill deciding commit boundaries from the list silently lost files.
 cd "$toplevel" || mkit_die "cannot enter repo root: $toplevel" 1
 common_dir="$(cd "$(git rev-parse --git-common-dir)" && pwd)"
-primary="$(git worktree list --porcelain | awk '/^worktree /{print substr($0,10); exit}')"
+primary="$(mkit_primary_worktree)"
 printf 'toplevel=%s\ngit_dir=%s\ncommon_dir=%s\nprimary=%s\n' \
 	"$toplevel" "$git_dir" "$common_dir" "$primary"
 
