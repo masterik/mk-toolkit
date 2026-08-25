@@ -130,7 +130,7 @@ findings.
 | reviewer | how to invoke | lenses |
 | --- | --- | --- |
 | **CodeRabbit** | the CodeRabbit review skill (`coderabbit:code-review`) or the `coderabbit:code-reviewer` agent | full: not steerable — takes its own broad pass; map its findings onto lenses afterwards. quick: brief also asks for `bugs`/`impl` only, best-effort — it may still return broader findings |
-| **Codex** | the Codex review path (`codex:rescue` skill / `codex:codex-rescue` agent), prompted for a review pass — see the async caveat below | full: `bugs`, `impl`, `adversarial`. quick: `bugs`, `impl` only — the brief says so explicitly |
+| **Codex** | the Codex review path (`codex:rescue` skill / `codex:codex-rescue` agent), prompted for a review pass — always with `--wait` appended, see the async caveat below | full: `bugs`, `impl`, `adversarial`. quick: `bugs`, `impl` only — the brief says so explicitly |
 | **Claude** (full only) | a subagent over the same diff — or the built-in `code-review` skill at a high effort level | `architecture`, `quality`, `tests`, `docs`, `comments` |
 
 Each brief carries: `<run-dir>/scope.md`, the paths of `review-severity.md` and of **its own lens file** under
@@ -169,12 +169,16 @@ says.
 **Read-only, every reviewer run.** No reviewer edits, stages or commits anything — including the built-in
 `code-review` skill, which must not be given `--fix`. Fixing is step 6.
 
-**Codex wraps an async job.** `codex:codex-rescue` delegates to a background Codex CLI run, so the agent's turn
-can end — and it can report itself idle — while the inner job is still working; it is routinely the slowest
-reviewer running. Its brief must add: **do not end your turn until the job returns and you have written the file**; if
-it is still running, keep waiting; if it dies, say so with the error rather than reconstructing findings; and
-**never write a placeholder before it returns**, because an empty file claims a zero-finding review that did
-not happen. Treat an idle signal with no file as "still working", not as a failure.
+**Codex wraps an async job — force it to run in the foreground.** `codex:codex-rescue`'s own contract
+(`codex-cli-runtime`) forbids it from polling, monitoring, or waiting on a job it backgrounded — its brief
+telling it to "keep waiting" cannot override that, because the agent's own rules take precedence over
+instructions passed into its prompt. Left to its own routing heuristic, it treats a full review as
+"complicated" and backgrounds the job, forwards it, and ends its turn immediately — reporting itself idle
+while Codex is still working. **Always append `--wait` to the task text forwarded to `codex:codex-rescue`**:
+per `codex-cli-runtime`, `--wait`/`--background` are recognized as execution-control tokens, and `--wait`
+forces the underlying call to block until Codex actually finishes, so the agent's turn cannot end early. Its
+brief must still add: if it dies, say so with the error rather than reconstructing findings; and **never write
+a placeholder before it returns**, because an empty file claims a zero-finding review that did not happen.
 
 **Availability & fallback.** A missing or erroring tool: redistribute its lenses to an available reviewer and
 **note both facts in the summary**. Claude only: run **two** subagents with different lens splits, so
