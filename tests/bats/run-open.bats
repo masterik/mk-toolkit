@@ -102,6 +102,25 @@ teardown() { mkit_teardown_repo; }
 	[ ! -d "$mkit_dir/commit-20260102T000000Z-b" ]
 }
 
+@test "--prune also sweeps cleanup-* run dirs, not just the four original skills" {
+	# A skill added after this list was first written is the exact way a run
+	# directory quietly stops being pruned — guard the list itself, not just the
+	# mechanism that walks it.
+	git_dir="$(git rev-parse --absolute-git-dir)"
+	mkit_dir="$git_dir/mkit"
+	for i in 1 2 3; do
+		d="$mkit_dir/cleanup-2026010${i}T000000Z-aaaaa$i"
+		mkdir -p "$d"
+		touch -t 202601010000 "$d"
+	done
+
+	run "$SCRIPTS/run-open.sh" --prune 1
+	[ "$status" -eq 0 ]
+	[[ "$output" == "pruned 2 run dir(s), kept 1" ]]
+	remaining=$(find "$mkit_dir" -maxdepth 1 -type d -name 'cleanup-*' | wc -l | tr -d ' ')
+	[ "$remaining" -eq 1 ]
+}
+
 @test "--prune never touches journal.jsonl" {
 	git_dir="$(git rev-parse --absolute-git-dir)"
 	mkit_dir="$git_dir/mkit"

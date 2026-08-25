@@ -44,7 +44,7 @@ prune() {
 	fi
 
 	# One pass per skill, so a busy `review` never evicts the only `pr` run.
-	for skill in commit review finish pr; do
+	for skill in commit review finish pr cleanup; do
 		n=0
 		# Newest first: the name's UTC timestamp sorts lexicographically.
 		while IFS= read -r d; do
