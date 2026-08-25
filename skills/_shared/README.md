@@ -1,7 +1,7 @@
 # _shared — reference bundle
 
-The **shared library** for mkit's five skills. **Not a triggerable skill** — no `SKILL.md`.
-`commit`, `review`, `finish`, `pr` and `note` link into `references/` via relative paths
+The **shared library** for mkit's six skills. **Not a triggerable skill** — no `SKILL.md`.
+`commit`, `review`, `finish`, `pr`, `note` and `cleanup` link into `references/` via relative paths
 (`../_shared/references/…`), so safety rules and conventions live in exactly one place.
 
 > Keep those `../_shared/references/…` links intact — sibling-relative paths are what make the bundle
@@ -16,12 +16,15 @@ The **shared library** for mkit's five skills. **Not a triggerable skill** — n
 | `finish`   | Commit → merge branch back into base → delete branch / remove worktree.                        | `worktree`, `quality-gate` (full gate), `branching`, `output-discipline`, all of the above |
 | `pr`       | Commit → push → open GitHub PR → assign reviewers.                                              | `worktree`, `quality-gate` (full gate), `branching`, `output-discipline`, `agent-delegation`, all of the above |
 | `note`     | Record why the unit of work just finished exists, into the commit journal. One call, no diff read. | `journal`, `conventional-commits` |
+| `cleanup`  | Classify every local branch/worktree, delete/keep by that classification, keep only the default and a local `develop`-like branch, switch and pull. Local only. | `worktree`, `branching`, `git-safety`, `output-discipline` |
 
 `commit` is the shared front-end — both finishers start by committing. Pick the finisher by **destination**:
 `finish` merges locally yourself, `pr` pushes for remote review.
 
-`note` is the one skill outside that line: it writes intent *during* implementation, which `commit`
-later spends. Normally the `Stop` / `SubagentStop` hook does that writing — `note` is the manual path.
+`note` and `cleanup` are the two skills outside that line: `note` writes intent *during*
+implementation, which `commit` later spends (normally the `Stop` / `SubagentStop` hook does that
+writing — `note` is the manual path); `cleanup` is repo-wide gardening rather than feature work —
+it sweeps every local branch and worktree, not just the one the other five just touched.
 
 ## References (`references/`)
 

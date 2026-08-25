@@ -15,10 +15,11 @@ There is no CLI and nothing to install into the repo's toolchain. The plugin is 
 underlying tools, with the safety rules that keep destructive steps from firing by accident.
 The agent is the interface; the skills are the muscle memory.
 
-Alongside the Markdown sits a thin layer of **helper scripts** (`scripts/`, six of them) for
+Alongside the Markdown sits a thin layer of **helper scripts** (`scripts/`, seven of them) for
 the steps that are identical every run and fail silently when hand-rolled: opening the run
 directory, gathering the starting facts, detecting and running the quality gate, the
-arithmetic over a review's findings, and the commit journal's coverage and freshness arithmetic.
+arithmetic over a review's findings, the commit journal's coverage and freshness arithmetic,
+and classifying every local branch/worktree a `cleanup` run has to decide about.
 They ship with the plugin — no `PATH`, no build, no install — and they exist for reliability
 more than for tokens: prose re-executed every run kept getting one invariant of three wrong. **Judgement stays in Markdown; a mechanical invariant
 belongs in a script.** Prerequisites: [`PREREQUISITES.md`](PREREQUISITES.md).
@@ -91,11 +92,12 @@ are plain Markdown, so support for another agent is a thin packaging step, not a
   lock primitive) rather than as conditionals to keep in sync.
 
 ## The Skills
-Five skills. Four move work through its lifecycle: `commit` is the shared front-end;
+Six skills. Four move work through its lifecycle: `commit` is the shared front-end;
 `finish` and `pr` both begin by committing, and you pick the finisher by
-**destination** — merge it yourself locally, or push it for review. The fifth, `note`, is the
-only one outside that line — it records intent *during* implementation for `commit` to spend
-later, and normally the hook fires it, not the user.
+**destination** — merge it yourself locally, or push it for review. The other two sit
+outside that line: `note` records intent *during* implementation for `commit` to spend
+later, and normally the hook fires it, not the user; `cleanup` is repo-wide gardening —
+it doesn't touch code, it sweeps every local branch and worktree the other five leave behind.
 
 | Skill | Does | Trigger examples |
 |-------|------|------------------|
@@ -104,10 +106,11 @@ later, and normally the hook fires it, not the user.
 | **`finish`** | Commit → merge the branch back into its base → delete branch / remove worktree. **Local**, no PR. | "finish this feature", "merge back and clean up" |
 | **`pr`** | Commit → push → open a GitHub PR → assign reviewers. **Remote review** path. | "create a PR", "open a pull request", "submit for review" |
 | **`note`** | Record why the unit of work just finished exists, into the repo's commit journal. Capture only — no diff read, no staging. | "note this", "record what I just did" |
+| **`cleanup`** | Classify every local branch (merged, PR'd, unpushed, gone), delete/keep by that classification, remove the worktrees that go with them, keep only the default branch and a local `develop`-like one, then switch and pull. **Local only** — never touches a remote branch. | "clean up branches", "prune stale branches", "tidy up worktrees" |
 
 ### Shared references — `skills/_shared/`
 `_shared/` is **not** a triggerable skill (it has no `SKILL.md`); it is the shared library
-the five skills link into via `../_shared/references/…`:
+the six skills link into via `../_shared/references/…`:
 
 - `git-safety.md` — the non-negotiable git safety protocol (no force-push, no config edits,
   no AI attribution, don't skip hooks, …).
@@ -143,7 +146,7 @@ the five skills link into via `../_shared/references/…`:
    │   loads plugin skills (via .claude-plugin/plugin.json)
    │   loads plugin hooks (via hooks/hooks.json — auto-discovered)
    ▼
- commit · review · finish · pr · note   ← SKILL.md (when & how)
+ commit · review · finish · pr · note · cleanup   ← SKILL.md (when & how)
    │   all link into
    ▼
  _shared/references/*.md   (safety · conventions · quality gate · worktree · branching
@@ -157,6 +160,7 @@ the five skills link into via `../_shared/references/…`:
    gate-run.sh             run a gate step: log it, bound it, stop at the first failure
    findings.mjs            reconcile · group · report over a review's findings (JSONL)
    journal.sh              record intent · classify entries against the tree · coverage
+   branch-scan.sh          classify every local branch/worktree for `cleanup` · one gh call
    +
  scripts/hooks/            the two things no skill calls
    session-bootstrap.sh    SessionStart: write the user-scoped setup, once, then stay silent
@@ -189,11 +193,14 @@ edit → commit → review → finish
   │                       ├── finish  (local merge, delete branch / worktree)
   │                       └── pr      (push, open PR, review remotely)
   └── note  (opt-in: record why this unit exists, for commit to spend)
+
+cleanup  (repo-wide, not per-feature: sweep every local branch/worktree finish and pr left behind)
 ```
 
 Worktree awareness is built in: the finishing skills detect whether they're in a Worktrunk
 worktree, a Claude Code agent worktree, or a plain checkout, and use the matching cleanup
-path.
+path for the *one* branch they just merged. `cleanup` uses the same lookup table, applied to
+every worktree in the repo rather than just the current one.
 
 ## Distribution
 mkit ships as a standard Claude Code plugin:
@@ -212,13 +219,14 @@ skills/
   review/SKILL.md
   finish/SKILL.md
   note/SKILL.md
+  cleanup/SKILL.md
   _shared/             # shared references (README + references/*.md) — no SKILL.md
 scripts/
   lib/common.sh        # sourced helpers: plugin root, refs path, mkit dir, rg-or-grep, wt
                        #   binary, the prereq table, the wrapper generator, jq-free JSON escape
   hooks/session-bootstrap.sh  # the SessionStart hook — writes the user-scoped setup itself
   hooks/journal-nudge.sh      # the Stop/SubagentStop hook — silent in a repo that opted out
-  run-open.sh  facts.sh  gate-detect.sh  gate-run.sh  findings.mjs  journal.sh
+  run-open.sh  facts.sh  gate-detect.sh  gate-run.sh  findings.mjs  journal.sh  branch-scan.sh
 install.sh             # --status / --uninstall / --bin. Not needed for setup: the hook does
                        #   that. --uninstall is the only way to opt out globally.
 tests/                  # dev-only: the script layer's own test suite (tests/run.sh)
@@ -236,7 +244,7 @@ Plugin skills are namespaced (`mkit:commit`), which avoids clashing with any rep
 skills of the same name.
 
 ## Roadmap
-- **Now — Claude Code plugin.** The five skills + the shared reference bundle, packaged and
+- **Now — Claude Code plugin.** The six skills + the shared reference bundle, packaged and
   installable. This is the whole product.
 - **Now, on by default — intent capture.** The commit journal: the `Stop` hook nudges the agent
   that did the work to record *why* each unit exists, and `commit` spends those records instead

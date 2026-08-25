@@ -1,8 +1,16 @@
 # Worktree awareness
 
-Shared by `finish`, `pr`, `commit`. Git worktrees check out several branches at once in sibling
-directories, and Claude Code agents commonly run inside one. The finishing skills must clean up
-the right way for the one they are in.
+Shared by `finish`, `pr`, `commit`, `cleanup`. Git worktrees check out several branches at once in
+sibling directories, and Claude Code agents commonly run inside one. The finishing skills must
+clean up the right way for the one they are in.
+
+`cleanup` is the one consumer that looks at every worktree in the repo rather than just the one it
+is running in — `scripts/branch-scan.sh` reports `origin=primary|claude-code|linked` per worktree,
+the same three-way split as `facts.sh`'s `cleanup_path`, but as a table instead of a single answer.
+The teardown below still applies row by row: never remove an `origin=claude-code` worktree with
+plain `git worktree remove` if this session happens to be the one running inside it — hand it back
+with **ExitWorktree** instead — and treat any other `claude-code` row (some other session's
+worktree) as a reason to ask before touching it, not a reason to skip it silently.
 
 ## Ask the script, not the layout
 

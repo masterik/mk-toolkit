@@ -31,7 +31,7 @@ machine** — install one even if Claude Code runs fine without it.
 | --- | --- | --- |
 | `rg` (ripgrep) | `gate-run.sh` failure digest, `gate-detect.sh` doc scan, the `fix-checks` sweep | `grep -E` (same output, slower) |
 | `shasum` | the gate ledger's content fingerprint | `gate_cache=no-hash` — the gate runs every step, exactly as before. Never a hard requirement: a latency optimization may not add a prerequisite. macOS ships it, but it is a Perl script, so a stripped environment can lack it |
-| `gh` | `pr`, and `facts.sh --gh` | `pr` cannot open a PR at all; `facts.sh` prints `pr=gh-missing` |
+| `gh` | `pr`, `facts.sh --gh`, and `branch-scan.sh` (`cleanup`) | `pr` cannot open a PR at all; `facts.sh` prints `pr=gh-missing`; `branch-scan.sh` falls back to git-only classification and reports `gh=gh-missing` |
 | `wt` ([worktrunk](https://worktrunk.dev)) | `finish` cleanup, `facts.sh` worktree classification | plain `git worktree remove` |
 
 ```bash
@@ -132,6 +132,7 @@ Each new script is a new Bash pattern, so the first run of each asks. Allow them
       "Bash(*/mkit/scripts/gate-run.sh:*)",
       "Bash(*/mkit/scripts/journal.sh:*)",
       "Bash(*/mkit/scripts/run-open.sh:*)",
+      "Bash(*/mkit/scripts/branch-scan.sh:*)",
       "Bash(node */mkit/scripts/findings.mjs:*)"
     ]
   }

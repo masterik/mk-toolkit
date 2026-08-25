@@ -16,12 +16,14 @@ Claude-only for now; other agents (Codex, opencode, …) are a later, thin packa
 | `finish` | Commit → merge the branch back into its base → delete branch / remove worktree (local, no PR). |
 | `pr` | Commit → push → open a GitHub PR → assign reviewers (remote review path). |
 | `note` | Record why the unit of work just finished exists, into the repo's commit journal, so `commit` doesn't infer intent from the diff. |
+| `cleanup` | Sweep every local branch and worktree: delete what's merged, keep only the default branch and a local `develop`-like one, switch to one and pull it current. Local-only — never touches a remote branch. |
 
 `_shared/` is the shared **references** bundle (git safety, Conventional Commits, quality
-gate, worktree detection, branching, the commit journal) that the five skills link into — not a
-triggerable skill. `scripts/` holds six helpers the skills call for the mechanical steps:
+gate, worktree detection, branching, the commit journal) that the six skills link into — not a
+triggerable skill. `scripts/` holds seven helpers the skills call for the mechanical steps:
 opening a run directory, gathering the starting facts, detecting and running the quality gate,
-the arithmetic over a review's findings, and the commit journal.
+the arithmetic over a review's findings, the commit journal, and classifying every local
+branch/worktree for `cleanup`.
 
 ## Install
 
@@ -83,7 +85,7 @@ a pass. `gate.jsonl` lives beside the journal, on by default, with `--no-cache` 
 ## Testing the scripts
 
 `tests/run.sh` runs the script layer's own suite: `node --test` over `findings.mjs`, `bats`
-over the seven shell scripts. Dev-only — see [Prerequisites](PREREQUISITES.md#dev-only--running-tests).
+over the eight shell scripts. Dev-only — see [Prerequisites](PREREQUISITES.md#dev-only--running-tests).
 
 ## Docs
 

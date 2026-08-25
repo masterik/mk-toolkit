@@ -3,7 +3,7 @@
 This file provides guidance to agents when working with code in this repository.
 
 **mkit** — a **Claude Code plugin** packaging a cohesive kit of agent coding-workflow
-skills (`commit`, `review`, `finish`, `pr`, `note`) plus the shared
+skills (`commit`, `review`, `finish`, `pr`, `note`, `cleanup`) plus the shared
 `_shared/references/` bundle. Composition over replacement: the skills orchestrate `git`,
 `gh`, `wt`, and code-review tools — no new git logic.
 
@@ -22,8 +22,9 @@ skills (`commit`, `review`, `finish`, `pr`, `note`) plus the shared
   `scripts/hooks/journal-nudge.sh`. Auto-discovered, so the manifest carries **no `hooks` key** —
   don't add one. No `matcher` on any of them: a mistyped matcher is a hook that silently never
   runs, and both hooks are cheap and re-entrant enough that filtering buys nothing.
-- `skills/<name>/SKILL.md` — the five triggerable skills. `note` is the only one that isn't part of
-  the edit → commit → review → integrate line: it records intent mid-implementation.
+- `skills/<name>/SKILL.md` — the six triggerable skills. Two sit outside the edit → commit → review →
+  integrate line: `note` records intent mid-implementation, and `cleanup` is repo-wide branch/worktree
+  gardening rather than feature work.
 - `skills/_shared/` — shared references (no `SKILL.md`); the skills link into it via
   `../_shared/references/…`. **Keep those relative paths intact** — they're what makes the
   bundle portable.
@@ -37,7 +38,10 @@ skills (`commit`, `review`, `finish`, `pr`, `note`) plus the shared
   `--no-ledger` / `--no-cache` are the escape hatches), `findings.mjs` (reconcile/group/report over a
   review's findings), `journal.sh` (the commit journal: `add` a record of *why* a unit exists, then
   `status` / `uncovered` classify those records against the current tree — plus `drop`, `compact`,
-  `enable`/`disable`/`enabled [--why]`/`path`, resolved repo-marker > repo-tombstone > user default), `lib/common.sh` (sourced helpers, including
+  `enable`/`disable`/`enabled [--why]`/`path`, resolved repo-marker > repo-tombstone > user default),
+  `branch-scan.sh` (`cleanup`'s classifier: every local branch's merge/upstream/PR state and every
+  worktree's origin/cleanliness — one batched `gh` call, cached, never a per-branch round trip),
+  `lib/common.sh` (sourced helpers, including
   `mkit_tree_fingerprint` — the staging- and commit-invariant hash of the content a gate command reads,
   which is what makes a `review` → `finish` cache hit possible at all).
 - `scripts/hooks/journal-nudge.sh` — the `Stop` / `SubagentStop` hook: names the *count* of dirty
