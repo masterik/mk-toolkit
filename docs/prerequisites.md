@@ -1,20 +1,27 @@
 # Prerequisites
 
-mkit is Markdown plus six small scripts and two hooks. There is nothing to build and nothing to
-put on `PATH` — installing the plugin is a clone, and the one piece of user-scoped setup happens
-by itself on the next session (see *the commit journal*, below). What follows is what the
-scripts call.
+mkit's plugin payload is Markdown plus seven helpers — six shell scripts and one dependency-free
+Node file — and two hooks. Nothing in it needs building: installing the plugin is a clone, and
+the one piece of user-scoped setup happens by itself on the next session (see *the commit
+journal*, below). What follows is what those scripts call.
 
-**macOS is the supported platform.** Nothing here detects an OS or branches on one; the scripts
-are simply written to what macOS provides, which is the narrower target: no GNU-only flags, no
-`flock`, no bash 4.
+The `mkit` **binary** is a separate, optional install (`brew install masterik/tap/mkit`), and
+nothing below requires it. It is [taking over the script layer](backlog.md) one milestone at a
+time, and each script it replaces deletes a row from this page: `node` goes with `findings.mjs`
+(M4), `jq` and `shasum` with the gate and journal ports (M5–M6).
+
+**macOS is the supported platform for the scripts.** Nothing in them detects an OS or branches on
+one; they are simply written to what macOS provides, which is the narrower target: no GNU-only
+flags, no `flock`, no bash 4. The binary is the deliberate exception — GoReleaser cross-compiles
+it for darwin and linux × amd64/arm64 — so a *ported* script gains Linux while the un-ported ones
+stay macOS-only.
 
 ## Required
 
 | Tool | Used by | Why |
 | --- | --- | --- |
 | `git` ≥ 2.30 | everything | `--absolute-git-dir`, `worktree list --porcelain`, `diff --shortstat` |
-| `bash` ≥ 3.2 | every `.sh` — six scripts plus the sourced `lib/common.sh` | macOS ships `/bin/bash` 3.2 (frozen there over GPLv3) and `/bin/zsh` 5.9. The scripts run under bash via `#!/usr/bin/env bash`, so **your interactive shell being zsh is irrelevant** — nothing here needs 4.x, and no Homebrew bash is required |
+| `bash` ≥ 3.2 | every `.sh` — six helpers, two hooks, `install.sh`, plus the sourced `lib/common.sh` | macOS ships `/bin/bash` 3.2 (frozen there over GPLv3) and `/bin/zsh` 5.9. The scripts run under bash via `#!/usr/bin/env bash`, so **your interactive shell being zsh is irrelevant** — nothing here needs 4.x, and no Homebrew bash is required |
 | `node` ≥ 18 | `findings.mjs` | ESM, `node:fs`. No npm install, no dependencies |
 | `jq` ≥ 1.6 | `gate-detect.sh`, `gate-run.sh`, `facts.sh`, `journal.sh`, the hook | reads `package.json`, `wt list --format=json`, and the journal's and gate ledger's JSONL |
 
@@ -39,13 +46,15 @@ brew install ripgrep gh worktrunk/tap/worktrunk
 gh auth login
 ```
 
-## Dev only — running `tests/`
+## Dev only — running the tests
 
-Contributors testing the scripts themselves need `bats-core`; users of the plugin never do.
+Contributors need more than users do; none of this is required to *use* the plugin.
 
 ```bash
-brew install bats-core
-./tests/run.sh                             # node --test findings.mjs, then bats tests/bats/
+brew install bats-core go golangci-lint    # bats for the shell suites, Go for the binary
+./tests/run.sh                             # node --test findings.mjs, then bats tests/bats/ (10 suites)
+go build ./... && go vet ./... && go test ./...   # the binary — what CI runs
+golangci-lint run                          # CI pins v2.12
 ```
 
 ## Optional — extra reviewers for `review`
@@ -98,7 +107,7 @@ so neither ever prompts.
 ## Verify
 
 ```bash
-for t in git bash node jq rg gh wt coderabbit codex; do
+for t in git bash node jq rg gh wt coderabbit codex mkit; do
 	printf '%-12s %s\n' "$t" "$(command -v "$t" || echo '— not found')"
 done
 git --version; node --version; jq --version

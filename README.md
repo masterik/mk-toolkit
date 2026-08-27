@@ -1,11 +1,13 @@
 # mkit
 
-A **Claude Code plugin** — a cohesive kit of agent coding-workflow skills that take work from
-**edits → committed → reviewed → integrated**. Composition over replacement: the skills
-orchestrate `git`, GitHub CLI (`gh`), Worktrunk (`wt`), and code-review tools
-(CodeRabbit/Codex); they don't reimplement them.
+A **Go binary (`mkit`) plus a Claude Code plugin** — a cohesive kit of agent coding-workflow
+skills that take work from **edits → committed → reviewed → integrated**. Composition over
+replacement: the skills orchestrate `git`, GitHub CLI (`gh`), Worktrunk (`wt`), and code-review
+tools (CodeRabbit/Codex); they don't reimplement them.
 
-Claude-only for now; other agents (Codex, opencode, …) are a later, thin packaging step.
+The skills are the product; the binary is the mechanical layer beneath them, currently
+[replacing the shell scripts](docs/backlog.md) one milestone at a time. Claude-only for now;
+other agents (Codex, opencode, …) are a later, thin packaging step.
 
 ## Skills
 
@@ -27,13 +29,24 @@ branch/worktree for `cleanup`.
 
 ## Install
 
+The plugin — the six skills and the scripts they call:
+
 ```
 /plugin marketplace add masterik/mk-toolkit
 /plugin install mkit@masterik
 ```
 
-Nothing to build. The scripts need `git`, `bash`, `node` and `jq`; `rg`, `gh` and `wt` are
-recommended — see [Prerequisites](docs/prerequisites.md).
+The `mkit` binary, via Homebrew:
+
+```bash
+brew install masterik/tap/mkit
+```
+
+Nothing to build either way. The binary answers `mkit version` today and is
+[absorbing the script layer](docs/backlog.md) one milestone at a time; M3 will let it register
+the plugin itself, making `brew install` the only step. Until then the scripts need `git`,
+`bash`, `node` and `jq`; `rg`, `gh` and `wt` are recommended — see
+[Prerequisites](docs/prerequisites.md).
 
 ## Journaling intent (on by default)
 
@@ -82,12 +95,15 @@ a pass. `gate.jsonl` lives beside the journal, on by default, with `--no-cache` 
 `--no-ledger` to stop writing it. Details:
 [`skills/_shared/references/quality-gate.md`](plugin/skills/_shared/references/quality-gate.md).
 
-## Testing the scripts
+## Testing
 
-`tests/run.sh` runs the script layer's own suite: `node --test` over `findings.mjs`, `bats`
-over the eight shell scripts. Dev-only — see [Prerequisites](docs/prerequisites.md#dev-only--running-tests).
+`go build ./... && go vet ./... && go test ./...` covers the binary — that is what CI runs.
+`tests/run.sh` covers the script layer: `node --test` over `findings.mjs`, then `bats` over the
+ten shell-script suites. Dev-only — see
+[Prerequisites](docs/prerequisites.md#dev-only--running-tests).
 
 ## Docs
 
 - [Concept](docs/concept.md) — direction and design principles
+- [Backlog](docs/backlog.md) — the Go-binary migration: ordered milestones and their invariants
 - [Prerequisites](docs/prerequisites.md) — required tooling, setup, permission allowlist

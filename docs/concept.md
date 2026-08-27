@@ -1,7 +1,8 @@
 # mkit — Concept
 
 ## Summary
-mkit is a **Claude Code plugin** — a cohesive **kit of agent coding-workflow skills**. It
+mkit is a **Go binary (`mkit`) plus a Claude Code plugin** — a cohesive **kit of agent
+coding-workflow skills**. It
 gives Claude a safe, repeatable way to take work from **edits → committed → reviewed →
 integrated**: stage and commit cleanly, review the diff, then either merge back locally or
 open a PR — without re-deriving fragile `git` + `gh` + `wt` command sequences on every task.
@@ -10,10 +11,12 @@ It's a *workflow* toolkit, not just a git one: `review` drives CodeRabbit/Codex/
 `pr` drives GitHub, and `finish` handles worktree cleanup — the parts of the
 dev loop the agent runs, git-centric but not git-limited.
 
-There is no CLI and nothing to install into the repo's toolchain. The plugin is essentially
+Nothing installs into the repo's own toolchain. The plugin is essentially
 **knowledge + procedure**: each skill tells Claude *when* it applies and *how* to drive the
 underlying tools, with the safety rules that keep destructive steps from firing by accident.
-The agent is the interface; the skills are the muscle memory.
+The agent is the interface; the skills are the muscle memory. The `mkit` binary is not a second
+interface onto that — it is the mechanical layer the skills call, and it is progressively
+replacing the shell scripts below. Milestones: [`backlog.md`](backlog.md).
 
 Alongside the Markdown sits a thin layer of **helper scripts** (`scripts/`, seven of them) for
 the steps that are identical every run and fail silently when hand-rolled: opening the run
@@ -41,11 +44,18 @@ next thing that re-establishes the default.
 are plain Markdown, so support for another agent is a thin packaging step, not a rewrite.
 
 ## Design Principles
-- **Skills, not a binary:** the workflow lives in Markdown the agent reads, not in code it
-  executes. Nothing to build, version, or keep on `PATH` — which is also why the scripts are
-  shell plus one dependency-free Node file, and never a compiled binary: a plugin install is a
-  clone, and the glue is ~4 ms of a ~10 s agent turn, so a faster language would optimize
-  nothing and cost a release pipeline.
+- **Judgement in Markdown, mechanics in the binary:** the workflow lives in Markdown the agent
+  reads, not in code it executes. That has not changed and is not going to — the skills are the
+  product. What changed is the layer beneath them. This document previously argued against a
+  compiled binary on the grounds that the glue is ~4 ms of a ~10 s agent turn, so a faster
+  language would optimize nothing and cost a release pipeline. **That reasoning still holds, and
+  the port is not about speed.** It buys three things shell cannot: prerequisites disappear
+  (`node`, `jq` and `shasum` leave [`prerequisites.md`](prerequisites.md) as their consumers
+  land), whole families of degradation branch go with them (`jq-missing`, `no-hash`,
+  `gate_cache=no-jq` — a binary is never half-capable), and a real TUI becomes possible for the
+  steps where a human wants to tick a list before anything runs. Homebrew then ships binary and
+  plugin together, so one `brew upgrade` updates both. Ordered milestones and the invariants the
+  port must hold: [`backlog.md`](backlog.md).
 - **A script for a mechanical invariant, never for a decision:** `scripts/` may open a
   directory, run a logged command, classify a worktree or do confidence arithmetic. It may not
   choose commit boundaries, assign severity, judge materiality, or decide that a fix is safe.
@@ -83,13 +93,16 @@ are plain Markdown, so support for another agent is a thin packaging step, not a
   hook-skipping) are gated by an explicit safety protocol the skills share.
 - **DRY via shared references:** the skills link into one `_shared/references/` bundle
   instead of each restating the same safety and convention rules.
-- **Portable across repos, targeted at one OS:** nothing project-specific is hardcoded —
-  quality-gate commands, commit scopes, and reviewers are all *discovered* from the target repo.
-  Platform portability is the opposite call: **macOS is the supported OS**, and no script
-  detects or branches on one. What that buys is a single narrow target rather than a matrix —
-  bash 3.2, BSD userland, no `flock` — so the discipline shows up as constructs avoided
-  (`mktemp`+`mv` instead of `sed -i`, a stored `epoch` instead of parsing dates, `mkdir` as the
-  lock primitive) rather than as conditionals to keep in sync.
+- **Portable across repos; one OS for the shell, two for the binary:** nothing project-specific
+  is hardcoded — quality-gate commands, commit scopes, and reviewers are all *discovered* from
+  the target repo. Platform portability is the opposite call for the shell layer: **macOS is the
+  supported OS**, and no script detects or branches on one. What that buys is a single narrow
+  target rather than a matrix — bash 3.2, BSD userland, no `flock` — so the discipline shows up
+  as constructs avoided (`mktemp`+`mv` instead of `sed -i`, a stored `epoch` instead of parsing
+  dates, `mkdir` as the lock primitive) rather than as conditionals to keep in sync. The binary
+  inverts that cheaply rather than reversing the principle: GoReleaser cross-compiles
+  darwin+linux × amd64/arm64 from one source, so a *ported* script gains Linux for free while
+  the un-ported ones stay macOS-only. Windows stays out until someone needs it.
 
 ## The Skills
 Six skills. Four move work through its lifecycle: `commit` is the shared front-end;
@@ -165,6 +178,10 @@ the six skills link into via `../_shared/references/…`:
  scripts/hooks/            the two things no skill calls
    session-bootstrap.sh    SessionStart: write the user-scoped setup, once, then stay silent
    journal-nudge.sh        Stop/SubagentStop: name the dirty paths no entry covers
+   +
+ mkit (Go)                 the same mechanical steps, being ported off shell one at a time
+   --json everywhere       the skill-facing contract · no TUI off a TTY · flags reach everything
+   M2 storage prune · M3 install/status/uninstall · M4 findings · M5 the jq consumers · M6 journal
    │   drive
    ▼
  git   +   gh (GitHub CLI)   +   wt (Worktrunk)   +   rg   +   jq
@@ -203,10 +220,17 @@ path for the *one* branch they just merged. `cleanup` uses the same lookup table
 every worktree in the repo rather than just the current one.
 
 ## Distribution
-mkit ships as a standard Claude Code plugin:
+mkit ships as a Homebrew-installed binary plus a standard Claude Code plugin payload:
 
 ```
-plugin/                 # what Homebrew copies to install the plugin (M3)
+cmd/mkit/               # entrypoint only — build the root command, exit non-zero on error
+internal/
+  cli/                  # the cobra tree; root.go owns --json / --no-tui / --yes
+  core/                 # data-returning logic — never prints, never assumes a terminal
+  tui/                  # Bubble Tea rendering over core
+  buildinfo/            # version/commit/date, injected by -X ldflags at release
+.goreleaser.yaml        # darwin+linux × amd64/arm64, plus the homebrew_casks tap entry
+plugin/                 # the payload M3 will register; not in the cask yet (backlog.md)
   .claude-plugin/
     plugin.json          # plugin manifest (name, skills discovered from skills/)
     marketplace.json     # marketplace entry — source "./"
@@ -234,22 +258,35 @@ docs/
   concept.md             # this file
   backlog.md             # ordered work list
   prerequisites.md       # required + recommended tooling, setup, permission allowlist
-tests/                   # dev-only: the script layer's own test suite (tests/run.sh)
+tests/                   # dev-only: the script layer's own suite (tests/run.sh); Go tests
+                         #   live beside their package
 ```
 
-Install it with:
+Install the plugin with:
 
 ```
 /plugin marketplace add masterik/mk-toolkit
 /plugin install mkit@masterik
 ```
 
+and the binary with `brew install masterik/tap/mkit`. Releases are tag-driven: pushing `vX.Y.Z`
+has GoReleaser build every platform archive and commit the Homebrew **cask** to
+`masterik/homebrew-tap` (`homebrew_casks` — `brews` is deprecated in GoReleaser v2). Once M3
+lands, `mkit install` registers the Homebrew-installed payload as a `directory` marketplace and
+the two steps collapse into one.
+
 Plugin skills are namespaced (`mkit:commit`), which avoids clashing with any repo-local
 skills of the same name.
 
 ## Roadmap
 - **Now — Claude Code plugin.** The six skills + the shared reference bundle, packaged and
-  installable. This is the whole product.
+  installable. This is the product; everything below serves it.
+- **Now — the Go port.** `mkit`, a single binary with a subcommand tree, taking over the
+  mechanical layer script by script so that prerequisites and degradation branches go away and a
+  TUI becomes possible. M1 (scaffold, release chain, Homebrew cask) shipped in `v0.12.0`; M2
+  (`mkit storage prune`) is next. Each script's `.bats` file is the spec for its port, and the
+  script is deleted in the same commit that replaces it — two implementations of one invariant is
+  the failure the script layer exists to prevent. Ordered list: [`backlog.md`](backlog.md).
 - **Now, on by default — intent capture.** The commit journal: the `Stop` hook nudges the agent
   that did the work to record *why* each unit exists, and `commit` spends those records instead
   of re-deriving intent from the diff. The `SessionStart` hook turns it on with no install step;
