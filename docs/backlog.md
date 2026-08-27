@@ -34,13 +34,16 @@ not a trade-off.
 
 ## Milestones
 
-### M1 — Repo reorg + scaffold + release chain
-Repo rename, tree reorganized (payload under `plugin/`, docs under `docs/`), Go module,
-cobra root, GoReleaser config, Homebrew tap repo. No behavior.
+### M1 — Repo reorg + scaffold + release chain — done
+Repo renamed to `mk-toolkit`, tree reorganized (payload under `plugin/`, docs under `docs/`),
+Go module (`github.com/masterik/mk-toolkit`), cobra root with the front-end contract, GoReleaser
+config, `masterik/homebrew-tap`. No behavior beyond `mkit version`.
 Step-by-step plan (local, gitignored): `.claude/plans/2026-08-26-mkit-m1-go-scaffold.md`.
-**Done when:** the shell suite still passes after the move, and a tagged commit produces a
-GitHub Release with darwin/linux archives and an auto-committed tap formula, such that
-`brew install` puts a working `mkit version` on PATH.
+Tagged `v0.12.0` → GitHub Release with darwin/linux × amd64/arm64 archives, checksums, and an
+auto-committed Homebrew cask formula (`brews` is deprecated in GoReleaser v2; used
+`homebrew_casks` instead). `brew install masterik/tap/mkit` verified end to end. The repo had to
+be flipped from private to public — an unauthenticated `brew install` can't reach private-repo
+release assets.
 
 ### M2 — `mkit storage prune`
 Port `tools/storage-prune.sh`. Greenfield, no bats suite to preserve. CLI first, TUI view
