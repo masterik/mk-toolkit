@@ -58,23 +58,54 @@ Homebrew-installed plugin payload as a `directory` marketplace in `~/.claude/set
 Installer targets are an interface from the start — `claude` now, `codex` later. M1 already
 consolidated the payload under `plugin/`, so this milestone points at one path rather than
 enumerating root directories.
-- Register `/opt/homebrew/opt/mkit/share/mkit/plugin` — the **`opt`** symlink, stable across
-  upgrades. Never a `Cellar` path: it is version-pinned and rots on the next `brew upgrade`.
+**Blocked on two packaging gaps M1 left open — resolve these before writing any Go.** Both were
+found by inspecting the shipped `v0.12.0` cask, not by reading the config:
+
+1. **The payload is not in the archive.** `.goreleaser.yaml` declares `archives: [formats:
+   [tar.gz]]` with no `files:`, so the tarball carries only the binary plus goreleaser's default
+   `LICENSE` + `README.md`. The installed cask contains exactly those three entries — no
+   `plugin/` at all. Nothing can be registered until the payload is added to the archive.
+2. **A cask has no stable path to register.** `homebrew_casks` was chosen in M1 because `brews`
+   is deprecated, but a cask is not a keg: it installs to
+   `/opt/homebrew/Caskroom/mkit/<version>/` and **never creates `/opt/homebrew/opt/<name>`**.
+   Verified — `/opt/homebrew/opt/mkit` does not exist, and `/opt/homebrew/bin/mkit` is a symlink
+   straight into `Caskroom/mkit/0.12.0/mkit`. So the `opt` path this milestone was written
+   against does not exist, and the only path that does is version-pinned — precisely the failure
+   the bullet below is guarding against. Casks also have no artifact stanza for "install this
+   directory into `share/`"; `binary` is the one that applies.
+
+   Pick one, deliberately:
+   - **Switch the tap entry to a formula.** Kegs get `opt/`, and `share/mkit/plugin` installs
+     naturally, so the registration below works as originally written. Costs re-doing M1's
+     release chain and understanding why `brews` was deprecated before depending on it.
+   - **Keep the cask; register a path `mkit install` owns.** Copy the payload out of the
+     versioned Caskroom directory into a stable location the binary controls (e.g.
+     `$MKIT_HOME/plugin`) and register *that*. No tap rework, but `mkit install` becomes
+     load-bearing for upgrades — it must re-copy after every `brew upgrade`, which the
+     `SessionStart` hook is the natural thing to detect.
+
+   Until this is settled, "Homebrew ships binary *and* plugin payload" in the Decision section
+   above, and the same claim in `README.md`, `concept.md` and `AGENTS.md`, are statements of
+   intent rather than fact.
+
+- Register the payload by a path that survives `brew upgrade`. Never a versioned path
+  (`Cellar/…`, `Caskroom/<version>/…`): it rots on the next upgrade.
 - `autoUpdate: false` — a directory source's autoUpdate implies a git pull and the Homebrew
   payload is not a checkout. `brew upgrade mkit` is the update mechanism.
 - Merge into existing settings, never overwrite. `--dry-run` prints the diff.
-**Done when:** `brew install mkit && mkit install` yields a working plugin with no clone, and
-`mkit status` reports what today's `install.sh --status` does.
+**Done when:** `brew install mkit && mkit install` yields a working plugin with no clone, the
+registered path still resolves after a `brew upgrade`, and `mkit status` reports what today's
+`install.sh --status` does.
 
 ### M4 — `mkit findings`
 Port `scripts/findings.mjs` (507 lines). Pure data transformation, so parity is testable.
-**Done when:** `node` is gone from `PREREQUISITES.md`.
+**Done when:** `node` is gone from [`prerequisites.md`](prerequisites.md).
 
 ### M5 — the `jq` consumers
 Port `branch-scan.sh`, `gate-run.sh`, and `facts.sh`'s journal block. Deletes a whole family
 of degradation branches — `pr=jq-missing`, `journal=jq-missing`, `gate_cache=no-jq`,
 `no-hash` — because a binary is never half-capable.
-**Done when:** `jq` and `shasum` are gone from `PREREQUISITES.md`.
+**Done when:** `jq` and `shasum` are gone from [`prerequisites.md`](prerequisites.md).
 
 ### M6 — `mkit journal`
 Port `journal.sh` (874 lines, the largest). Last, once the porting pattern is proven.
