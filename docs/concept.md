@@ -93,16 +93,17 @@ are plain Markdown, so support for another agent is a thin packaging step, not a
   hook-skipping) are gated by an explicit safety protocol the skills share.
 - **DRY via shared references:** the skills link into one `_shared/references/` bundle
   instead of each restating the same safety and convention rules.
-- **Portable across repos; one OS for the shell, two for the binary:** nothing project-specific
+- **Portable across repos, deliberately not across platforms:** nothing project-specific
   is hardcoded — quality-gate commands, commit scopes, and reviewers are all *discovered* from
   the target repo. Platform portability is the opposite call for the shell layer: **macOS is the
   supported OS**, and no script detects or branches on one. What that buys is a single narrow
   target rather than a matrix — bash 3.2, BSD userland, no `flock` — so the discipline shows up
   as constructs avoided (`mktemp`+`mv` instead of `sed -i`, a stored `epoch` instead of parsing
   dates, `mkdir` as the lock primitive) rather than as conditionals to keep in sync. The binary
-  inverts that cheaply rather than reversing the principle: GoReleaser cross-compiles
-  darwin+linux × amd64/arm64 from one source, so a *ported* script gains Linux for free while
-  the un-ported ones stay macOS-only. Windows stays out until someone needs it.
+  does **not** widen that: `.goreleaser.yaml` builds `darwin` only. Go would cross-compile for
+  free, and the temptation is to take it — but an untested OS in the release matrix is a support
+  claim nobody verifies, and the Homebrew **cask** the tap publishes cannot install on Linux
+  anyway. amd64 + arm64 is the whole matrix. Other platforms stay out until someone needs one.
 
 ## The Skills
 Six skills. Four move work through its lifecycle: `commit` is the shared front-end;
@@ -229,7 +230,7 @@ internal/
   core/                 # data-returning logic — never prints, never assumes a terminal
   tui/                  # Bubble Tea rendering over core
   buildinfo/            # version/commit/date, injected by -X ldflags at release
-.goreleaser.yaml        # darwin+linux × amd64/arm64, plus the homebrew_casks tap entry
+.goreleaser.yaml        # darwin × amd64/arm64, plus the homebrew_casks tap entry
 plugin/                 # the payload M3 will register; not in the cask yet (backlog.md)
   .claude-plugin/
     plugin.json          # plugin manifest (name, skills discovered from skills/)

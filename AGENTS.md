@@ -30,7 +30,7 @@ go run ./cmd/mkit version --json                 # exercise the front-end contra
 tests/run.sh                                     # shell layer: node --test + bats (brew install bats-core)
 ```
 
-Release is tag-driven: push `vX.Y.Z` → GoReleaser builds darwin/linux × amd64/arm64 and commits
+Release is tag-driven: push `vX.Y.Z` → GoReleaser builds darwin × amd64/arm64 and commits
 the Homebrew **cask** to `masterik/homebrew-tap`. `homebrew_casks`, not `brews` (deprecated in
 GoReleaser v2).
 
@@ -158,12 +158,14 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
 
 ## Conventions
 
-- **Shell is macOS-only; the binary is not.** No script detects or branches on an OS — they are
-  written to what macOS provides (bash 3.2, BSD `sed`/`date`, no GNU-only flags, no `flock`), and
-  a GNU fallback "for portability" is untested surface for an unsupported platform. The Go binary
-  cross-compiles for darwin+linux × amd64/arm64, so prefer `path/filepath` and stdlib over
-  shelling out; Windows/Scoop is a later concern (`backlog.md`). Every script carries
-  `#!/usr/bin/env bash` — the user's interactive zsh is irrelevant.
+- **macOS-only — shell and binary alike.** Nothing detects or branches on an OS. The scripts are
+  written to what macOS provides (bash 3.2, BSD `sed`/`date`, no GNU-only flags, no `flock`); a GNU
+  fallback "for portability" is untested surface for an unsupported platform. `.goreleaser.yaml`
+  builds `darwin` only — amd64 + arm64 is the whole matrix, and a Homebrew **cask** cannot install
+  on Linux regardless. Go's cross-compilation stays available if that changes; it is not a
+  requirement today (`backlog.md`, Later). Still prefer `path/filepath` and stdlib over shelling
+  out — for testability, not portability. Every script carries `#!/usr/bin/env bash` — the user's
+  interactive zsh is irrelevant.
 - Payload runtime stays bash plus one dependency-free `.mjs`. **New mechanical work goes in Go**,
   and the payload shrinks as milestones land.
 - Add a script or a command only for a mechanical invariant, never for a decision. Where the line

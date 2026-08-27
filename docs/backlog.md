@@ -4,11 +4,17 @@ Migration from a shell-script plugin to a **Go binary + plugin**, distributed vi
 Direction and rationale: [`concept.md`](concept.md). This file is the ordered work list.
 
 ## Decision
-- **Language: Go.** Chosen for cross-compilation (`GOOS`/`GOARCH`, no C toolchain), a stdlib
-  that covers the entire workload (`os/exec`, `encoding/json`, `crypto/sha256`,
-  `filepath.WalkDir`), the Charm TUI stack, and GoReleaser's Homebrew/Scoop tap generation.
-  Rejected: Rust (cross-compile friction, slower edit→test loop, for no gain on
-  subprocess-orchestration work), Zig (pre-1.0, breaking releases, no TUI ecosystem).
+- **Language: Go.** Chosen for a single static binary with no C toolchain, a stdlib that covers
+  the entire workload (`os/exec`, `encoding/json`, `crypto/sha256`, `filepath.WalkDir`), the Charm
+  TUI stack, and GoReleaser's Homebrew tap generation. Rejected: Rust (slower edit→test loop, for
+  no gain on subprocess-orchestration work), Zig (pre-1.0, breaking releases, no TUI ecosystem).
+  Cross-compilation is a property Go gives away, **not** a requirement here — see the platform
+  decision below.
+- **Platform: macOS only.** `.goreleaser.yaml` builds `darwin` × amd64/arm64 and nothing else.
+  This matches the script layer rather than diverging from it, and the tap publishes a *cask*,
+  which Homebrew refuses to install on Linux — so a linux archive would have had no `brew` path
+  to reach a user through. Adding a `goos` back is one line whenever someone needs it; carrying
+  an untested OS in the matrix is a support claim nobody verifies.
 - **One binary, subcommand tree.** `mkit storage prune`, `mkit journal add`, `mkit gate run`.
 - **Dual front-end.** Rich TUI when interactive; flags + `--json` when driven by a skill.
 - **Homebrew ships binary *and* plugin payload.** `brew upgrade mkit` updates both.
@@ -39,8 +45,8 @@ Repo renamed to `mk-toolkit`, tree reorganized (payload under `plugin/`, docs un
 Go module (`github.com/masterik/mk-toolkit`), cobra root with the front-end contract, GoReleaser
 config, `masterik/homebrew-tap`. No behavior beyond `mkit version`.
 Step-by-step plan (local, gitignored): `.claude/plans/2026-08-26-mkit-m1-go-scaffold.md`.
-Tagged `v0.12.0` → GitHub Release with darwin/linux × amd64/arm64 archives, checksums, and an
-auto-committed Homebrew cask formula (`brews` is deprecated in GoReleaser v2; used
+Tagged `v0.12.0` → GitHub Release with an archive per `goos`/`goarch` in the config, checksums,
+and an auto-committed Homebrew cask formula (`brews` is deprecated in GoReleaser v2; used
 `homebrew_casks` instead). `brew install masterik/tap/mkit` verified end to end. The repo had to
 be flipped from private to public — an unauthenticated `brew install` can't reach private-repo
 release assets.
@@ -115,7 +121,9 @@ TUI: browse and edit records.
 - `mkit cleanup` TUI — multi-select over `branch-scan.sh`'s classification.
 - `mkit review` TUI — live parallel reviewer progress.
 - Codex installer target (`~/.codex/`).
-- Windows: Scoop manifest (GoReleaser emits it), plus the path/exec assumptions to audit.
+- Other platforms. Deliberately out (see Decision). Reversing it means adding the `goos` entry,
+  auditing the path/exec assumptions, and picking a distribution channel a cask can't serve —
+  Linuxbrew needs a *formula*, Windows a Scoop manifest (GoReleaser emits one).
 
 ## Staying in bash, permanently
 - `scripts/hooks/session-bootstrap.sh` — reduced but not deleted. It cannot depend on a

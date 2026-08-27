@@ -10,11 +10,11 @@ nothing below requires it. It is [taking over the script layer](backlog.md) one 
 time, and each script it replaces deletes a row from this page: `node` goes with `findings.mjs`
 (M4), `jq` and `shasum` with the gate and journal ports (M5–M6).
 
-**macOS is the supported platform for the scripts.** Nothing in them detects an OS or branches on
-one; they are simply written to what macOS provides, which is the narrower target: no GNU-only
-flags, no `flock`, no bash 4. The binary is the deliberate exception — GoReleaser cross-compiles
-it for darwin and linux × amd64/arm64 — so a *ported* script gains Linux while the un-ported ones
-stay macOS-only.
+**macOS is the supported platform — for the scripts and for the binary.** Nothing detects an OS or
+branches on one; the scripts are simply written to what macOS provides, which is the narrower
+target: no GNU-only flags, no `flock`, no bash 4. The binary keeps the same scope: the release
+builds `darwin` × amd64/arm64 (Intel + Apple Silicon), and the Homebrew cask that installs it is
+macOS-only in any case.
 
 ## Required
 
