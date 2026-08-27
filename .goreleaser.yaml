@@ -1,0 +1,37 @@
+version: 2
+
+project_name: mkit
+
+builds:
+  - id: mkit
+    main: ./cmd/mkit
+    binary: mkit
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/masterik/mk-toolkit/internal/buildinfo.Version={{.Version}}
+      - -X github.com/masterik/mk-toolkit/internal/buildinfo.Commit={{.Commit}}
+      - -X github.com/masterik/mk-toolkit/internal/buildinfo.Date={{.Date}}
+
+archives:
+  - formats: [tar.gz]
+
+homebrew_casks:
+  - name: mkit
+    repository:
+      owner: masterik
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    binaries:
+      - mkit
+    homepage: "https://github.com/masterik/mk-toolkit"
+    description: "Coding-workflow skills for Claude Code — Go CLI plus a shared Claude Code plugin."
+    license: "MIT"
+    commit_msg_template: "brew cask update for {{ .ProjectName }} version {{ .Tag }}"

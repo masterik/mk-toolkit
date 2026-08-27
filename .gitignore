@@ -1,6 +1,10 @@
 # OS files
 .DS_Store
 
+# Go build artifacts
+/dist/
+/mkit
+
 # Claude Code local config — ignore local state, keep a shared settings.json if one is added
 .claude/*
 !.claude/settings.json

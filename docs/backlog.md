@@ -101,5 +101,7 @@ TUI: browse and edit records.
 - **Version skew.** A skill from plugin v0.13 calling a binary from v0.12 — does the binary
   assert a minimum plugin version, or stay backward compatible? Only matters once someone
   installs outside Homebrew.
-- **Non-Homebrew install.** Keep `curl | sh` and `go install` as supported paths, or make
-  Homebrew the only one? Affects whether the SessionStart hook still needs self-healing.
+
+Resolved: Homebrew is the only distribution channel (no `curl | sh`, no `go install`) — see the
+M1 plan's decisions. The `SessionStart` hook still self-heals: it runs pre-install, before a
+Homebrew-provided binary is on PATH.
