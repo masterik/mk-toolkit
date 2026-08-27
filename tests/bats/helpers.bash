@@ -4,7 +4,7 @@
 # from its own setup()/teardown() — bats does not let a sourced file's
 # setup() override the test file's.
 
-SCRIPTS="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../scripts" && pwd)"
+SCRIPTS="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../plugin/scripts" && pwd)"
 
 mkit_setup_repo() {
 	MKIT_TMP="$(mktemp -d "${TMPDIR:-/tmp}/mkit-test.XXXXXX")"

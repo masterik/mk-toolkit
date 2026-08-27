@@ -22,7 +22,7 @@ arithmetic over a review's findings, the commit journal's coverage and freshness
 and classifying every local branch/worktree a `cleanup` run has to decide about.
 They ship with the plugin — no `PATH`, no build, no install — and they exist for reliability
 more than for tokens: prose re-executed every run kept getting one invariant of three wrong. **Judgement stays in Markdown; a mechanical invariant
-belongs in a script.** Prerequisites: [`PREREQUISITES.md`](PREREQUISITES.md).
+belongs in a script.** Prerequisites: [`prerequisites.md`](prerequisites.md).
 
 Two scripts are not called by a skill at all — the hooks, registered by `hooks/hooks.json` at
 the plugin root. A `Stop` / `SubagentStop` hook (`scripts/hooks/journal-nudge.sh`) tells the
@@ -206,37 +206,41 @@ every worktree in the repo rather than just the current one.
 mkit ships as a standard Claude Code plugin:
 
 ```
-.claude-plugin/
-  plugin.json          # plugin manifest (name, skills discovered from skills/)
-  marketplace.json     # marketplace entry — source "./"
-hooks/
-  hooks.json           # SessionStart / Stop / SubagentStop registration — plugin root, not
-                       #   .claude-plugin/; auto-discovered, so the manifest carries no
-                       #   `hooks` key
-skills/
-  commit/SKILL.md
-  pr/SKILL.md
-  review/SKILL.md
-  finish/SKILL.md
-  note/SKILL.md
-  cleanup/SKILL.md
-  _shared/             # shared references (README + references/*.md) — no SKILL.md
-scripts/
-  lib/common.sh        # sourced helpers: plugin root, refs path, mkit dir, rg-or-grep, wt
-                       #   binary, the prereq table, the wrapper generator, jq-free JSON escape
-  hooks/session-bootstrap.sh  # the SessionStart hook — writes the user-scoped setup itself
-  hooks/journal-nudge.sh      # the Stop/SubagentStop hook — silent in a repo that opted out
-  run-open.sh  facts.sh  gate-detect.sh  gate-run.sh  findings.mjs  journal.sh  branch-scan.sh
-install.sh             # --status / --uninstall / --bin. Not needed for setup: the hook does
-                       #   that. --uninstall is the only way to opt out globally.
-tests/                  # dev-only: the script layer's own test suite (tests/run.sh)
-PREREQUISITES.md       # required + recommended tooling, setup, permission allowlist
+plugin/                 # what Homebrew copies to install the plugin (M3)
+  .claude-plugin/
+    plugin.json          # plugin manifest (name, skills discovered from skills/)
+    marketplace.json     # marketplace entry — source "./"
+  hooks/
+    hooks.json           # SessionStart / Stop / SubagentStop registration — plugin root, not
+                         #   .claude-plugin/; auto-discovered, so the manifest carries no
+                         #   `hooks` key
+  skills/
+    commit/SKILL.md
+    pr/SKILL.md
+    review/SKILL.md
+    finish/SKILL.md
+    note/SKILL.md
+    cleanup/SKILL.md
+    _shared/             # shared references (README + references/*.md) — no SKILL.md
+  scripts/
+    lib/common.sh        # sourced helpers: plugin root, refs path, mkit dir, rg-or-grep, wt
+                         #   binary, the prereq table, the wrapper generator, jq-free JSON escape
+    hooks/session-bootstrap.sh  # the SessionStart hook — writes the user-scoped setup itself
+    hooks/journal-nudge.sh      # the Stop/SubagentStop hook — silent in a repo that opted out
+    run-open.sh  facts.sh  gate-detect.sh  gate-run.sh  findings.mjs  journal.sh  branch-scan.sh
+  install.sh             # --status / --uninstall / --bin. Not needed for setup: the hook does
+                         #   that. --uninstall is the only way to opt out globally.
+docs/
+  concept.md             # this file
+  backlog.md             # ordered work list
+  prerequisites.md       # required + recommended tooling, setup, permission allowlist
+tests/                   # dev-only: the script layer's own test suite (tests/run.sh)
 ```
 
 Install it with:
 
 ```
-/plugin marketplace add masterik/workflow_tool
+/plugin marketplace add masterik/mk-toolkit
 /plugin install mkit@masterik
 ```
 

@@ -15,20 +15,23 @@ skills (`commit`, `review`, `finish`, `pr`, `note`, `cleanup`) plus the shared
   unless essential for clarity.
 
 ## Layout
-- `.claude-plugin/plugin.json` — plugin manifest (skills auto-discovered from `skills/`).
-- `.claude-plugin/marketplace.json` — marketplace entry (`source: "./"`).
-- `hooks/hooks.json` — hook registration, at the **plugin root** (not under `.claude-plugin/`):
-  `SessionStart` → `scripts/hooks/session-bootstrap.sh`, and `Stop` + `SubagentStop` →
-  `scripts/hooks/journal-nudge.sh`. Auto-discovered, so the manifest carries **no `hooks` key** —
-  don't add one. No `matcher` on any of them: a mistyped matcher is a hook that silently never
-  runs, and both hooks are cheap and re-entrant enough that filtering buys nothing.
-- `skills/<name>/SKILL.md` — the six triggerable skills. Two sit outside the edit → commit → review →
-  integrate line: `note` records intent mid-implementation, and `cleanup` is repo-wide branch/worktree
-  gardening rather than feature work.
-- `skills/_shared/` — shared references (no `SKILL.md`); the skills link into it via
+- `plugin/` — the plugin payload: everything Homebrew copies to install it (M3). Its content is
+  unchanged by the reorg; only its position moved down one level.
+- `plugin/.claude-plugin/plugin.json` — plugin manifest (skills auto-discovered from `skills/`).
+- `plugin/.claude-plugin/marketplace.json` — marketplace entry (`source: "./"`).
+- `plugin/hooks/hooks.json` — hook registration, at the **plugin root** (`plugin/`, not
+  `.claude-plugin/`): `SessionStart` → `scripts/hooks/session-bootstrap.sh`, and `Stop` +
+  `SubagentStop` → `scripts/hooks/journal-nudge.sh`. Auto-discovered, so the manifest carries
+  **no `hooks` key** — don't add one. No `matcher` on any of them: a mistyped matcher is a hook
+  that silently never runs, and both hooks are cheap and re-entrant enough that filtering buys
+  nothing.
+- `plugin/skills/<name>/SKILL.md` — the six triggerable skills. Two sit outside the edit → commit →
+  review → integrate line: `note` records intent mid-implementation, and `cleanup` is repo-wide
+  branch/worktree gardening rather than feature work.
+- `plugin/skills/_shared/` — shared references (no `SKILL.md`); the skills link into it via
   `../_shared/references/…`. **Keep those relative paths intact** — they're what makes the
   bundle portable.
-- `scripts/` — the mechanical steps, called as `${CLAUDE_PLUGIN_ROOT}/scripts/<name>`:
+- `plugin/scripts/` — the mechanical steps, called as `${CLAUDE_PLUGIN_ROOT}/scripts/<name>`:
   `facts.sh <skill>` (opens the run directory under `<git-dir>/mkit/` **and** returns every starting
   fact — every skill's first call), `run-open.sh` (the directory alone, plus `--prune`),
   `gate-detect.sh` / `gate-run.sh` (the quality gate — `gate-run.sh` also **writes** the gate ledger, one
@@ -44,12 +47,12 @@ skills (`commit`, `review`, `finish`, `pr`, `note`, `cleanup`) plus the shared
   `lib/common.sh` (sourced helpers, including
   `mkit_tree_fingerprint` — the staging- and commit-invariant hash of the content a gate command reads,
   which is what makes a `review` → `finish` cache hit possible at all).
-- `scripts/hooks/journal-nudge.sh` — the `Stop` / `SubagentStop` hook: names the *count* of dirty
+- `plugin/scripts/hooks/journal-nudge.sh` — the `Stop` / `SubagentStop` hook: names the *count* of dirty
   paths no journal entry covers and points the model at `journal.sh uncovered` for the list,
   rather than inlining it — that list is additionalContext, which the transcript always renders in
   full. Gated (git repo, journaling enabled, `stop_hook_active` false, one nudge per `prompt_id` +
   `agent_id`, uncovered > 0) and **always exits 0**. It never authors a record.
-- `scripts/hooks/session-bootstrap.sh` — the `SessionStart` hook: makes install.sh's setup happen
+- `plugin/scripts/hooks/session-bootstrap.sh` — the `SessionStart` hook: makes install.sh's setup happen
   by itself. Writes `journal.default` + the `mkit-journal` wrapper, idempotently, then emits
   **zero bytes** on every later session. Gated (absolute user dir, no `bootstrap.disabled`
   tombstone, a pending write or an unsaid message) and **always exits 0**, never to stderr.
@@ -64,7 +67,7 @@ skills (`commit`, `review`, `finish`, `pr`, `note`, `cleanup`) plus the shared
   ledger, append-only, rotated back to the newest 200 records once it passes 400). Never committed, never in `git status`; a linked
   worktree gets its own, so entries die with the worktree. `--prune` only ever removes `<skill>-*`
   **directories**, which is what keeps both `.jsonl` files out of its range.
-- `install.sh` — plugin-root, user-scoped setup. **Not needed for setup any more**: the
+- `plugin/install.sh` — plugin-root, user-scoped setup. **Not needed for setup any more**: the
   `SessionStart` hook writes the same two files itself. It survives for the three jobs a hook
   cannot do — `--status` (the diagnostic surface, which exists precisely so the hook never has to
   be one), `--uninstall` (the only global opt-out, and the thing that writes the tombstone), and
@@ -84,11 +87,13 @@ skills (`commit`, `review`, `finish`, `pr`, `note`, `cleanup`) plus the shared
   back, so a later removal warns again. No prune block: the key space is fixed, unlike
   journal-nudge's). `MKIT_BIN` overrides the wrapper's directory, for the same test-isolation
   reason as `MKIT_HOME`.
-- `PREREQUISITES.md` — required tooling (`git`, `bash`, `node`, `jq`), recommended (`rg`, `gh`, `wt`),
-  and the permission allowlist that stops the scripts prompting.
-- `tests/` — the script layer's own test suite, dev-only (never shipped as part of a skill run):
-  `tests/run.sh` runs both — `node --test tests/findings.test.mjs` (built-in runner, no deps) and
-  `bats tests/bats/` (one `.bats` file per shell script, each against a throwaway git repo).
+- `docs/` — `concept.md` (direction/roadmap), `backlog.md` (ordered work list), `prerequisites.md`
+  (required tooling, setup, permission allowlist). Doc-only; nothing here ships in the formula.
+- `tests/` — the script layer's own test suite, dev-only (never shipped as part of a skill run),
+  deliberately kept at repo root rather than under `plugin/` so `plugin/` stays exactly what
+  Homebrew copies: `tests/run.sh` runs both — `node --test tests/findings.test.mjs` (built-in
+  runner, no deps) and `bats tests/bats/` (one `.bats` file per shell script, each against a
+  throwaway git repo).
   `helpers.bash` sandboxes `MKIT_HOME` for every suite; the two setup suites also call
   `mkit_sandbox_home` (which redirects `HOME` and `MKIT_BIN`) because they write an executable,
   and `mkit_fake_path <tool>…` builds a PATH missing only the named tools — it must include
@@ -111,4 +116,5 @@ skills (`commit`, `review`, `finish`, `pr`, `note`, `cleanup`) plus the shared
 - Nothing project-specific is hardcoded: quality-gate commands, commit scopes, and reviewers
   are discovered from the target repo.
 
-- Direction & roadmap: [`concept.md`](concept.md)
+- Direction & roadmap: [`concept.md`](docs/concept.md)
+- Ordered work list (Go binary + Homebrew migration): [`backlog.md`](docs/backlog.md)

@@ -28,12 +28,12 @@ branch/worktree for `cleanup`.
 ## Install
 
 ```
-/plugin marketplace add masterik/workflow_tool
+/plugin marketplace add masterik/mk-toolkit
 /plugin install mkit@masterik
 ```
 
 Nothing to build. The scripts need `git`, `bash`, `node` and `jq`; `rg`, `gh` and `wt` are
-recommended — see [Prerequisites](PREREQUISITES.md).
+recommended — see [Prerequisites](docs/prerequisites.md).
 
 ## Journaling intent (on by default)
 
@@ -66,7 +66,7 @@ per-worktree, so they die with the worktree. `status` / `uncovered` / `drop` / `
 and prune. A repo's own `disable` always beats the global default, and `install.sh --uninstall`
 leaves a tombstone the hook honours — so an opt-out at either scope sticks rather than being
 re-asserted next session. Details:
-[`skills/_shared/references/journal.md`](skills/_shared/references/journal.md).
+[`skills/_shared/references/journal.md`](plugin/skills/_shared/references/journal.md).
 
 ## Not re-proving the same tree (the gate ledger)
 
@@ -80,14 +80,14 @@ than into context. Nothing is automatic and nothing is silent: the scripts never
 the skill decides, and a step served from the ledger is reported as `cached (6m ago)`, never as
 a pass. `gate.jsonl` lives beside the journal, on by default, with `--no-cache` to ignore it and
 `--no-ledger` to stop writing it. Details:
-[`skills/_shared/references/quality-gate.md`](skills/_shared/references/quality-gate.md).
+[`skills/_shared/references/quality-gate.md`](plugin/skills/_shared/references/quality-gate.md).
 
 ## Testing the scripts
 
 `tests/run.sh` runs the script layer's own suite: `node --test` over `findings.mjs`, `bats`
-over the eight shell scripts. Dev-only — see [Prerequisites](PREREQUISITES.md#dev-only--running-tests).
+over the eight shell scripts. Dev-only — see [Prerequisites](docs/prerequisites.md#dev-only--running-tests).
 
 ## Docs
 
-- [Concept](concept.md) — direction and design principles
-- [Prerequisites](PREREQUISITES.md) — required tooling, setup, permission allowlist
+- [Concept](docs/concept.md) — direction and design principles
+- [Prerequisites](docs/prerequisites.md) — required tooling, setup, permission allowlist
