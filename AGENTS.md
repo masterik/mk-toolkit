@@ -9,8 +9,9 @@ bundle; the binary is absorbing the plugin's shell script layer one script at a 
 Composition over replacement: the skills orchestrate `git`, `gh`, `wt`, and code-review tools —
 no new git logic.
 
-**Current phase: the Go port.** M1 (scaffold + release chain) done at `v0.12.0`; **M2
-(`mkit storage prune`) is next.** Milestones and the full invariant list:
+**Current phase: the Go port.** M1 (scaffold + release chain) done at `v0.12.0`; M2
+(`mkit storage prune`) done; **M3 (`mkit install`/`status`/`uninstall`) is next.** Milestones and
+the full invariant list:
 [`backlog.md`](docs/backlog.md). Direction and rationale: [`concept.md`](docs/concept.md) — the
 place for *why*, so this file can stay operative.
 
@@ -65,11 +66,16 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
   `--no-tui`, `--yes` resolved once in `PersistentPreRun` into an `Options` on the command
   context. Read it via `cli.FromContext(cmd)` — never re-check a flag or call `term.IsTerminal`
   inside a command.
-- `internal/core/` — data-returning logic. Never prints, never assumes a terminal. Empty until M2.
-- `internal/tui/` — Bubble Tea rendering over `core`. Empty until M2.
+- `internal/core/` — data-returning logic. Never prints, never assumes a terminal.
+  `internal/core/storage/` (M2): `provider.go` (the provider/category table), `scan.go`
+  (read-only), `apply.go` (deletes only what `Scan` named, home-containment guarded), `size.go`
+  (`HumanBytes`).
+- `internal/tui/` — Bubble Tea rendering over `core`, one subpackage per command.
+  `internal/tui/storageprune/` (M2): the size-sorted tick-list `storage prune --apply` opens on a
+  TTY. `Update` holds no prune logic — it only toggles selection.
 - `internal/buildinfo/` — version/commit/date, injected by `-X` ldflags at release.
-- `tools/` — shell that is not part of the plugin payload; staging for a port
-  (`storage-prune.sh` → M2). Dev-only.
+- `tools/` — shell that is not part of the plugin payload; staging for a port. Empty since M2
+  ported and deleted `storage-prune.sh`.
 
 ### The plugin payload
 - `plugin/` — the plugin payload: what Homebrew is *meant* to ship so M3 can register it as a

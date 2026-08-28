@@ -182,7 +182,7 @@ the six skills link into via `../_shared/references/…`:
    +
  mkit (Go)                 the same mechanical steps, being ported off shell one at a time
    --json everywhere       the skill-facing contract · no TUI off a TTY · flags reach everything
-   M2 storage prune · M3 install/status/uninstall · M4 findings · M5 the jq consumers · M6 journal
+   M2 storage prune (done) · M3 install/status/uninstall · M4 findings · M5 the jq consumers · M6 journal
    │   drive
    ▼
  git   +   gh (GitHub CLI)   +   wt (Worktrunk)   +   rg   +   jq
@@ -228,7 +228,9 @@ cmd/mkit/               # entrypoint only — build the root command, exit non-z
 internal/
   cli/                  # the cobra tree; root.go owns --json / --no-tui / --yes
   core/                 # data-returning logic — never prints, never assumes a terminal
-  tui/                  # Bubble Tea rendering over core
+    storage/            # M2: provider/category table, Scan, guarded Apply, HumanBytes
+  tui/                  # Bubble Tea rendering over core, one subpackage per command
+    storageprune/       # M2: size-sorted tick-list for `storage prune --apply`
   buildinfo/            # version/commit/date, injected by -X ldflags at release
 .goreleaser.yaml        # darwin × amd64/arm64, plus the homebrew_casks tap entry
 plugin/                 # the payload M3 will register; not in the cask yet (backlog.md)
@@ -285,7 +287,8 @@ skills of the same name.
 - **Now — the Go port.** `mkit`, a single binary with a subcommand tree, taking over the
   mechanical layer script by script so that prerequisites and degradation branches go away and a
   TUI becomes possible. M1 (scaffold, release chain, Homebrew cask) shipped in `v0.12.0`; M2
-  (`mkit storage prune`) is next. Each script's `.bats` file is the spec for its port, and the
+  (`mkit storage prune`, `internal/core/storage/` + `internal/tui/storageprune/`) is done; M3
+  (`mkit install`/`status`/`uninstall`) is next. Each script's `.bats` file is the spec for its port, and the
   script is deleted in the same commit that replaces it — two implementations of one invariant is
   the failure the script layer exists to prevent. Ordered list: [`backlog.md`](backlog.md).
 - **Now, on by default — intent capture.** The commit journal: the `Stop` hook nudges the agent

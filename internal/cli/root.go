@@ -47,6 +47,7 @@ func NewRoot() *cobra.Command {
 	root.PersistentFlags().BoolVar(&yes, "yes", false, "assume yes to any confirmation")
 
 	root.AddCommand(newVersionCmd())
+	root.AddCommand(newStorageCmd())
 
 	return root
 }

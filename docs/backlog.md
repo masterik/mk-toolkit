@@ -51,12 +51,19 @@ and an auto-committed Homebrew cask formula (`brews` is deprecated in GoReleaser
 be flipped from private to public — an unauthenticated `brew install` can't reach private-repo
 release assets.
 
-### M2 — `mkit storage prune`
-Port `tools/storage-prune.sh`. Greenfield, no bats suite to preserve. CLI first, TUI view
-second over the same core. Fixes the per-file `stat` fork in `sum_size` — `WalkDir` gets
-size from the dirent already read.
-**Done when:** dry-run output matches the shell version's categories and totals; `--apply`
-deletes the same set; a TUI mode offers a size-sorted tick-list before applying.
+### M2 — `mkit storage prune` — done
+Ported `tools/storage-prune.sh` to `internal/core/storage/` + `internal/cli/storage*.go` +
+`internal/tui/storageprune/`. Eliminates the per-file `stat` and per-category `find` *subprocess
+forks* the shell version paid for `sum_size`/`prune_files`/`prune_stale_dirs` — not a syscall
+saving: on macOS `readdir` carries no size, so `DirEntry.Info()` still issues an `lstat` per file,
+same as the script's `stat -f%z`. The win is process elimination.
+Differential check against the script (`.claude/plans/2026-08-27-mkit-m2-storage-prune.md`, step
+4) showed a clean diff except at the retention-boundary days, exactly as the plan's single-cutoff
+deviation (mtime strictly before `now - N*24h`, vs. the script's `-mtime +N`/`-mtime -N` split)
+predicts.
+**Done when:** dry-run output matches the shell version's categories and totals outside the
+boundary case; `--apply` deletes the same set; a TUI mode offers a size-sorted tick-list before
+applying. All met.
 
 ### M3 — `mkit install` / `status` / `uninstall`
 Absorbs `install.sh` and most of `scripts/hooks/session-bootstrap.sh`. Registers the
