@@ -1,6 +1,6 @@
 // node --test tests/findings.test.mjs
 //
-// scripts/findings.mjs is invoked as a subprocess (it is a CLI, not a module with
+// plugin/scripts/findings.mjs is invoked as a subprocess (it is a CLI, not a module with
 // exports) so these tests exercise the same interface the skills call: argv in,
 // stdout/exit-code/reconciled.jsonl out.
 
@@ -11,7 +11,7 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const SCRIPT = new URL("../scripts/findings.mjs", import.meta.url).pathname;
+const SCRIPT = new URL("../plugin/scripts/findings.mjs", import.meta.url).pathname;
 
 function run(args, { expectFail = false } = {}) {
   try {

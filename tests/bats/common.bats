@@ -43,7 +43,7 @@ src() { printf '. "%s/lib/common.sh"; ' "$SCRIPTS"; }
 @test "mkit_plugin_root resolves to the checkout root" {
 	run bash -c "$(src)mkit_plugin_root"
 	[ "$status" -eq 0 ]
-	[ -f "$output/PREREQUISITES.md" ]
+	[ -f "$output/.claude-plugin/plugin.json" ]
 }
 
 @test "mkit_refs_dir points at skills/_shared/references" {
