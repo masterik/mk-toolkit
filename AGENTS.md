@@ -24,11 +24,14 @@ place for *why*, so this file can stay operative.
 
 ## Commands
 
+`just` (`brew install just`) wraps these; `just --list` shows all recipes.
+
 ```bash
-go build ./... && go vet ./... && go test ./...   # what CI runs
-golangci-lint run                                # CI pins v2.12 (brew install golangci-lint)
-go run ./cmd/mkit version --json                 # exercise the front-end contract
-tests/run.sh                                     # shell layer: node --test + bats (brew install bats-core)
+just ci                          # build, vet, test, lint, shtest — what CI runs, in one shot
+just build / vet / test          # go build|vet|test ./...
+just lint                        # golangci-lint run (CI pins v2.12, brew install golangci-lint)
+just run version --json          # exercise the front-end contract
+just shtest                      # shell layer: node --test + bats (brew install bats-core)
 ```
 
 Release is tag-driven: push `vX.Y.Z` → GoReleaser builds darwin × amd64/arm64 and commits
