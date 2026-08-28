@@ -37,7 +37,7 @@ func newStoragePruneCmd() *cobra.Command {
 					return err
 				}
 				if !ok {
-					fmt.Fprintln(cmd.OutOrStdout(), "aborted — nothing deleted")
+					_, _ = fmt.Fprintln(cmd.OutOrStdout(), "aborted — nothing deleted")
 					return nil
 				}
 				return applyAndRender(cmd, opts, report, sel)
@@ -60,18 +60,18 @@ func renderDryRun(cmd *cobra.Command, opts Options, report *storage.Report) erro
 	}
 
 	out := cmd.OutOrStdout()
-	fmt.Fprintf(out, "mode: DRY-RUN   retention: %dd\n\n", report.Days)
+	_, _ = fmt.Fprintf(out, "mode: DRY-RUN   retention: %dd\n\n", report.Days)
 	for _, p := range report.Providers {
 		renderProvider(out, p, report.Days)
 	}
 
 	total := report.TotalBytes()
-	fmt.Fprintf(out, "total reclaimable: %s\n", storage.HumanBytes(total))
+	_, _ = fmt.Fprintf(out, "total reclaimable: %s\n", storage.HumanBytes(total))
 	if total > 0 {
-		fmt.Fprintln(out, "(dry run — re-run with --apply to delete)")
+		_, _ = fmt.Fprintln(out, "(dry run — re-run with --apply to delete)")
 	}
 	if n := reportErrorCount(report); n > 0 {
-		fmt.Fprintf(out, "%d paths unreadable\n", n)
+		_, _ = fmt.Fprintf(out, "%d paths unreadable\n", n)
 	}
 	return nil
 }
@@ -87,17 +87,17 @@ func applyAndRender(cmd *cobra.Command, opts Options, report *storage.Report, se
 	}
 
 	out := cmd.OutOrStdout()
-	fmt.Fprintf(out, "mode: APPLY   retention: %dd\n\n", report.Days)
+	_, _ = fmt.Fprintf(out, "mode: APPLY   retention: %dd\n\n", report.Days)
 	for _, p := range report.Providers {
 		renderProvider(out, p, report.Days)
 	}
 
-	fmt.Fprintf(out, "total reclaimed: %s\n", storage.HumanBytes(result.Bytes))
+	_, _ = fmt.Fprintf(out, "total reclaimed: %s\n", storage.HumanBytes(result.Bytes))
 	if len(result.Skipped) > 0 {
-		fmt.Fprintf(out, "%d paths skipped\n", len(result.Skipped))
+		_, _ = fmt.Fprintf(out, "%d paths skipped\n", len(result.Skipped))
 	}
 	if n := reportErrorCount(report) + len(result.Errors); n > 0 {
-		fmt.Fprintf(out, "%d paths unreadable\n", n)
+		_, _ = fmt.Fprintf(out, "%d paths unreadable\n", n)
 	}
 	return nil
 }
@@ -107,27 +107,27 @@ func renderProvider(out io.Writer, p storage.ProviderReport, days int) {
 	if prov, ok := storage.ByName(p.Name); ok {
 		name = prov.DisplayName
 	}
-	fmt.Fprintf(out, "%s (%s):\n", name, p.Home)
+	_, _ = fmt.Fprintf(out, "%s (%s):\n", name, p.Home)
 	for _, c := range p.Categories {
 		renderCategory(out, c, days)
 	}
-	fmt.Fprintln(out)
+	_, _ = fmt.Fprintln(out)
 }
 
 func renderCategory(out io.Writer, c storage.CategoryReport, days int) {
 	switch c.Kind {
 	case storage.KindFiles:
 		if len(c.Entries) == 0 {
-			fmt.Fprintf(out, "  %-38s nothing older than %dd\n", c.Label, days)
+			_, _ = fmt.Fprintf(out, "  %-38s nothing older than %dd\n", c.Label, days)
 			return
 		}
-		fmt.Fprintf(out, "  %-38s %4d files, %s\n", c.Label, len(c.Entries), storage.HumanBytes(c.Bytes))
+		_, _ = fmt.Fprintf(out, "  %-38s %4d files, %s\n", c.Label, len(c.Entries), storage.HumanBytes(c.Bytes))
 	case storage.KindStaleDirs:
 		if len(c.Entries) == 0 {
-			fmt.Fprintf(out, "  %-38s nothing stale\n", c.Label)
+			_, _ = fmt.Fprintf(out, "  %-38s nothing stale\n", c.Label)
 			return
 		}
-		fmt.Fprintf(out, "  %-38s %4d dirs,  %s\n", c.Label, len(c.Entries), storage.HumanBytes(c.Bytes))
+		_, _ = fmt.Fprintf(out, "  %-38s %4d dirs,  %s\n", c.Label, len(c.Entries), storage.HumanBytes(c.Bytes))
 	}
 }
 

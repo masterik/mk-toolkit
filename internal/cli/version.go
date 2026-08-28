@@ -22,8 +22,8 @@ func newVersionCmd() *cobra.Command {
 					"date":    buildinfo.Date,
 				})
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "mkit %s (%s, %s)\n", buildinfo.Version, buildinfo.Commit, buildinfo.Date)
-			return nil
+			_, err := fmt.Fprintf(cmd.OutOrStdout(), "mkit %s (%s, %s)\n", buildinfo.Version, buildinfo.Commit, buildinfo.Date)
+			return err
 		},
 	}
 }

@@ -120,7 +120,7 @@ func (m model) View() string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(fmt.Sprintf("selected: %s\n", storage.HumanBytes(total)))
+	fmt.Fprintf(&b, "selected: %s\n", storage.HumanBytes(total))
 	return b.String()
 }
 
