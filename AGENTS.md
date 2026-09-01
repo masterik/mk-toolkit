@@ -86,8 +86,11 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
   the `v0.12.0` cask contains only the binary, `LICENSE` and `README.md`. M3 is blocked on that
   and on the fact that a cask has no stable path to register (no `opt/` symlink; Caskroom is
   version-pinned). Don't repeat "Homebrew ships the payload" as fact — see M3 in `backlog.md`.
-- `plugin/.claude-plugin/plugin.json` — manifest (skills auto-discovered from `skills/`);
-  `marketplace.json` — marketplace entry (`source: "./"`).
+- `plugin/.claude-plugin/plugin.json` — manifest (skills auto-discovered from `skills/`).
+  The marketplace entry, `marketplace.json` (`source: "./plugin"`), lives at the **repo root**
+  `.claude-plugin/` — not nested under `plugin/` — because `/plugin marketplace add owner/repo`
+  always looks for `.claude-plugin/marketplace.json` at the repository root; there is no
+  subdirectory syntax for the GitHub-shorthand or git-URL forms.
 - `plugin/hooks/hooks.json` — hook registration, at the **plugin root** (not `.claude-plugin/`):
   `SessionStart` → `scripts/hooks/session-bootstrap.sh`, `Stop` + `SubagentStop` →
   `scripts/hooks/journal-nudge.sh`. Auto-discovered, so the manifest carries **no `hooks` key** —

@@ -233,10 +233,13 @@ internal/
     storageprune/       # M2: size-sorted tick-list for `storage prune --apply`
   buildinfo/            # version/commit/date, injected by -X ldflags at release
 .goreleaser.yaml        # darwin × amd64/arm64, plus the homebrew_casks tap entry
+.claude-plugin/
+  marketplace.json      # marketplace entry — source "./plugin". Must sit at the repo root:
+                         #   `/plugin marketplace add owner/repo` only ever looks for
+                         #   .claude-plugin/marketplace.json there, no subdirectory support
 plugin/                 # the payload M3 will register; not in the cask yet (backlog.md)
   .claude-plugin/
     plugin.json          # plugin manifest (name, skills discovered from skills/)
-    marketplace.json     # marketplace entry — source "./"
   hooks/
     hooks.json           # SessionStart / Stop / SubagentStop registration — plugin root, not
                          #   .claude-plugin/; auto-discovered, so the manifest carries no

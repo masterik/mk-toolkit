@@ -6,7 +6,7 @@
   "plugins": [
     {
       "name": "mkit",
-      "source": "./",
+      "source": "./plugin",
       "description": "Coding-workflow skills for Claude Code: commit, review, finish, pr, over a shared git-safety + Conventional Commits reference bundle."
     }
   ]
