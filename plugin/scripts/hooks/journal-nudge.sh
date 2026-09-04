@@ -165,25 +165,32 @@ SubagentStop) source_tag=subagent-stop ;;
 *) source_tag=stop ;;
 esac
 
-# The contract is inlined, not linked, on purpose: it keeps compliance to one Bash call
-# with no skill load. The reference is for the rare case only. Kept to one short
-# paragraph plus a command, not a multi-line spec: every phrase a test pins (grep the
-# .bats file before trimming further) still has to appear verbatim.
+# ONE LINE, and no blank lines in it. The runtime renders additionalContext verbatim in
+# the transcript, prefixed "Stop hook feedback:" — `suppressOutput` hides the raw stdout
+# blob and nothing else (verified against 2.1.260: there is no display setting for it).
+# So every line this nudge spends is a line of the user's own answer pushed off screen,
+# in every turn of every journaling repo. That budget is why the `add` invocation is now
+# named without its flags and journal.md carries them instead: the flags cost four lines
+# of everyone's transcript to save one file read in the rare turn that records anything.
 #
-# Deliberately no path list here. An earlier version named every uncovered path inline
-# — harmless at 2 paths, unreadable at the 7-across-three-locales spread a real session
-# produced, and that text is additionalContext the transcript always renders in full
-# (suppressOutput only hides the raw JSON blob, not this). `journal.sh uncovered` already
-# prints the same list on demand, so the nudge points at the command instead of
-# duplicating its output — the model's `uncovered` call renders as one collapsed tool
-# result rather than a wall of text. This also means the JSON payload built below carries
+# The last clause is the other half of the cost. Without it the model answers the notice
+# in prose after the user's answer — a paragraph explaining what it did not journal and
+# why — which was longer than the nudge itself. A hook that speaks to the model at Stop
+# pays for both what it says and what it provokes.
+#
+# What must survive any further trimming: the count, `uncovered` (the pointer that
+# replaces a path list), the source tag, and both invariant clauses — one unit = one
+# reason, and never invent one. Those two are what stop the model journaling an edit it
+# did not make. Every phrase a test pins still has to appear verbatim; grep the .bats
+# file before rewording.
+#
+# Deliberately no path list here — the same budget, applied first. An earlier version
+# named every uncovered path inline: harmless at 2 paths, unreadable at the
+# 7-across-three-locales spread a real session produced. `journal.sh uncovered` already
+# prints the list on demand, and the model's call to it renders as one collapsed tool
+# result rather than a wall of text. It also means the JSON payload built below carries
 # no untrusted path content at all: every value is either fixed or numeric.
-context="$(printf '%s\n' \
-	"mkit journal: $n_uncovered uncovered path(s). Run \`$journal_sh uncovered\` to list them." \
-	"" \
-	"  $journal_sh add --paths <a,b> --type <feat|fix|docs|refactor|test|chore|perf> --scope <s> --subject \"...\" --why \"...\" --source $source_tag" \
-	"" \
-	"One unit = one reason. Record only the paths you changed and know the reason for. Never invent a reason to cover a path. Details: $plugin_root/skills/_shared/references/journal.md")"
+context="mkit journal: $n_uncovered uncovered path(s). \`$journal_sh uncovered\` lists them; \`$journal_sh add ... --source $source_tag\` records one (flags: $plugin_root/skills/_shared/references/journal.md). One unit = one reason: record only the paths you changed and know the reason for. Never invent a reason to cover a path. If none of them are yours, record nothing and stay silent — do not narrate this notice to the user."
 
 # Built by jq, never by string interpolation, on the same general principle even though
 # nothing here is untrusted any more: a path with a quote or a backslash in it never

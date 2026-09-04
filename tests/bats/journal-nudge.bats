@@ -250,6 +250,7 @@ state_file() { printf '%s\n' "$MKIT_TMP/.git/mkit/journal-nudge.state"; }
 # --- the payload ---------------------------------------------------------------------
 
 @test "the nudge names the uncovered count and the journal.sh add invocation, never the paths themselves" {
+	# The one-line budget itself is pinned by the test below; this one covers content.
 	"$SCRIPTS/journal.sh" enable >/dev/null
 	printf 'edit\n' >>seed.txt
 	printf 'new\n' >added.txt
@@ -263,9 +264,10 @@ state_file() { printf '%s\n' "$MKIT_TMP/.git/mkit/journal-nudge.state"; }
 	printf '%s' "$ctx" | grep -qF -- '2 uncovered path(s)'
 	printf '%s' "$ctx" | grep -qF -- "$SCRIPTS/journal.sh uncovered"
 	printf '%s' "$ctx" | grep -qF -- "$SCRIPTS/journal.sh add "
-	printf '%s' "$ctx" | grep -qF -- '--subject'
-	printf '%s' "$ctx" | grep -qF -- '--why'
 	printf '%s' "$ctx" | grep -qF -- '--source stop'
+	# the add flags are journal.md's job now, not the transcript's
+	[ -z "$(printf '%s' "$ctx" | grep -F -- '--subject' || true)" ]
+	[ -z "$(printf '%s' "$ctx" | grep -F -- '--why' || true)" ]
 	# the resolved absolute path, never an unexpanded plugin-root placeholder
 	[ -z "$(printf '%s' "$ctx" | grep -F -- '${CLAUDE_PLUGIN_ROOT}' || true)" ]
 	[ -z "$(printf '%s' "$ctx" | grep -F -- 'CLAUDE_PLUGIN_ROOT' || true)" ]
@@ -275,6 +277,28 @@ state_file() { printf '%s\n' "$MKIT_TMP/.git/mkit/journal-nudge.state"; }
 	# the contract is inlined, and the reference is a pointer for the rare case
 	printf '%s' "$ctx" | grep -qF -- 'One unit = one reason'
 	printf '%s' "$ctx" | grep -qF -- '_shared/references/journal.md'
+}
+
+# --- the transcript budget -----------------------------------------------------------
+#
+# additionalContext is rendered verbatim in the user's transcript, prefixed "Stop hook
+# feedback:", and `suppressOutput` does not hide it — there is no display setting that
+# does. So every line the nudge spends is a line of the user's own answer pushed off
+# screen, on every turn of every journaling repo. The nudge is therefore one line, and
+# this test is the only thing keeping it one: nothing else fails when a helpful second
+# sentence becomes a helpful second paragraph.
+
+@test "the nudge is a single line" {
+	enable_and_dirty
+	run_hook "$(mkev Stop p1 '' false)"
+	[ "$status" -eq 0 ]
+	local ctx
+	ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')"
+	# grep -c '' counts lines; the context is printed without a trailing newline, so a
+	# one-line nudge is 1 and any embedded newline — blank line or not — is 2 or more.
+	[ "$(printf '%s' "$ctx" | grep -c '')" -eq 1 ]
+	# and stdout stays the single JSON line it has always been
+	[ "$(printf '%s\n' "$output" | grep -c .)" -eq 1 ]
 }
 
 @test "a SubagentStop nudge asks for --source subagent-stop" {
@@ -396,6 +420,8 @@ state_file() { printf '%s\n' "$MKIT_TMP/.git/mkit/journal-nudge.state"; }
 	[[ "$ctx" != *"from this turn"* ]]
 	[[ "$ctx" == *"record only the paths you changed"* ]]
 	[[ "$ctx" == *"Never invent a reason"* ]]
+	# and it tells the agent what to do when none of them are its own: nothing, silently
+	[[ "$ctx" == *"record nothing and stay silent"* ]]
 }
 
 @test "a prune that cannot run still delivers the nudge and leaves no temp file" {

@@ -45,7 +45,14 @@ than the tokens it saved.
 
 ## The record
 
-**One kind: `unit`**, always agent-authored, appended by `journal.sh add`.
+**One kind: `unit`**, always agent-authored, appended by `journal.sh add`. The `Stop` nudge names that
+invocation without its flags — it is one transcript line, every turn, in every journaling repo — so the
+flags live here instead:
+
+```
+journal.sh add --paths <a,b|repeatable> --type <feat|fix|docs|refactor|test|chore|perf> \
+               --scope <s> --subject "..." --why "..." [--source note|stop|subagent-stop]
+```
 
 | Field | |
 | --- | --- |

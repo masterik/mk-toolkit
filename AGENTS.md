@@ -122,7 +122,10 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
     cache hit possible at all.
 - `plugin/scripts/hooks/journal-nudge.sh` — `Stop` / `SubagentStop`: names the *count* of dirty
   paths no journal entry covers and points at `journal.sh uncovered` for the list rather than
-  inlining it (that list is additionalContext, which the transcript always renders in full).
+  inlining it. **The nudge is one line**, tells the agent to stay silent when none of the paths
+  are its own, and leaves the `add` flags to `journal.md` — additionalContext is rendered verbatim
+  in the transcript under "Stop hook feedback:" (`suppressOutput` does not hide it), so every line
+  it spends, and every line of prose it provokes in reply, pushes the user's answer off screen.
   Gated (git repo, journaling enabled, `stop_hook_active` false, one nudge per `prompt_id` +
   `agent_id`, uncovered > 0), **always exits 0**, and never authors a record.
 - `plugin/scripts/hooks/session-bootstrap.sh` — `SessionStart`: writes `journal.default` + the
