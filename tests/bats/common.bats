@@ -263,7 +263,7 @@ fp() { bash -c "$(src)mkit_tree_fingerprint"; }
 	[ "$output" = "?" ]
 }
 
-@test "mkit_gate_ledger_path points at gate.jsonl beside the journal" {
+@test "mkit_gate_ledger_path points at gate.jsonl in the repo mkit dir" {
 	run bash -c "$(src)mkit_gate_ledger_path"
 	[ "$status" -eq 0 ]
 	[ "$output" = "$MKIT_TMP/.git/mkit/gate.jsonl" ]
@@ -274,6 +274,52 @@ fp() { bash -c "$(src)mkit_tree_fingerprint"; }
 	run bash -c "$(src)mkit_gate_ledger_path"
 	[ "$status" -eq 1 ]
 	[ -z "$output" ]
+}
+
+# --- mkit_json_escape ------------------------------------------------------------------
+#
+# Direct unit tests, because nothing else covers this any more. It used to be exercised
+# end-to-end by the SessionStart hook's "weird user dir" test, back when the payload
+# interpolated $MKIT_HOME; the payload now carries only fixed sentences, so that test can
+# no longer reach the escape. The function is still the hook's only route to valid JSON
+# without jq, so it needs coverage of its own rather than coverage by side effect.
+
+@test "mkit_json_escape escapes a double quote" {
+	run bash -c "$(src)printf '%s' 'a\"b' | mkit_json_escape"
+	[ "$status" -eq 0 ]
+	[ "$output" = 'a\"b' ]
+}
+
+@test "mkit_json_escape escapes a backslash" {
+	run bash -c "$(src)printf '%s' 'a\\b' | mkit_json_escape"
+	[ "$status" -eq 0 ]
+	[ "$output" = 'a\\b' ]
+}
+
+@test "mkit_json_escape turns a newline into an escape, not a raw break" {
+	run bash -c "$(src)printf 'a\nb' | mkit_json_escape"
+	[ "$status" -eq 0 ]
+	# One line out: a raw newline inside a JSON string is a parse error, and the hook
+	# emits its whole payload on a single line.
+	[ "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" = 1 ]
+	[ "$output" = 'a\nb' ]
+}
+
+@test "mkit_json_escape escapes a tab" {
+	run bash -c "$(src)printf 'a\tb' | mkit_json_escape"
+	[ "$output" = 'a\tb' ]
+}
+
+@test "mkit_json_escape output is usable as a JSON string body" {
+	# The property that actually matters, and the one the hook depends on: whatever goes
+	# in, wrapping the result in quotes yields a document jq parses and reads back byte
+	# for byte.
+	run bash -c "$(src)printf '%s' 'quote \" back \\ end' | mkit_json_escape"
+	[ "$status" -eq 0 ]
+	esc="$output"
+	run bash -c "printf '{\"m\":\"%s\"}' '$esc' | jq -r .m"
+	[ "$status" -eq 0 ]
+	[ "$output" = 'quote " back \ end' ]
 }
 
 @test "mkit_have_hash finds a sha256 tool" {

@@ -121,16 +121,16 @@ teardown() { mkit_teardown_repo; }
 	[ "$remaining" -eq 1 ]
 }
 
-@test "--prune never touches journal.jsonl" {
+@test "--prune never touches gate.jsonl" {
 	git_dir="$(git rev-parse --absolute-git-dir)"
 	mkit_dir="$git_dir/mkit"
 	mkdir -p "$mkit_dir"
-	printf '{"kind":"unit","seq":1}\n' >"$mkit_dir/journal.jsonl"
+	printf '{"kind":"gate","step":"lint"}\n' >"$mkit_dir/gate.jsonl"
 	# A decoy *file* whose name matches prune's `-name "<skill>-*"` glob. It is what
-	# makes this test fail if prune's find ever loses `-type d` — the journal itself
+	# makes this test fail if prune's find ever loses `-type d` — the ledger itself
 	# would survive that change on its name alone, and the guarantee is too
 	# destructive to rest on one filter.
-	decoy="$mkit_dir/commit-20260101T000000Z-journal.jsonl"
+	decoy="$mkit_dir/commit-20260101T000000Z-gate.jsonl"
 	printf 'decoy\n' >"$decoy"
 	# Three stale run dirs so prune with keep=1 actually removes something.
 	for i in 1 2 3; do
@@ -138,17 +138,17 @@ teardown() { mkit_teardown_repo; }
 		mkdir -p "$d"
 		touch -t 202601010000 "$d"
 	done
-	touch -t 202601010000 "$mkit_dir/journal.jsonl" "$decoy"
+	touch -t 202601010000 "$mkit_dir/gate.jsonl" "$decoy"
 
 	run "$SCRIPTS/run-open.sh" --prune 1
 	[ "$status" -eq 0 ]
 	[[ "$output" == "pruned 2 run dir(s), kept 1" ]]
-	[ -f "$mkit_dir/journal.jsonl" ]
-	[ "$(cat "$mkit_dir/journal.jsonl")" = '{"kind":"unit","seq":1}' ]
+	[ -f "$mkit_dir/gate.jsonl" ]
+	[ "$(cat "$mkit_dir/gate.jsonl")" = '{"kind":"gate","step":"lint"}' ]
 	[ -f "$decoy" ]
 }
 
-# Naming the individual files prune must spare (journal.jsonl, gate.jsonl, ...) protects
+# Naming the individual files prune must spare (gate.jsonl, ...) protects
 # only the files that existed when the test was written; the next thing dropped in the
 # mkit directory would be unguarded. So the assertion is the general one: prune removes
 # `<skill>-*` DIRECTORIES and nothing else, whatever else happens to be in there.
@@ -156,9 +156,8 @@ teardown() { mkit_teardown_repo; }
 	git_dir="$(git rev-parse --absolute-git-dir)"
 	mkit_dir="$git_dir/mkit"
 	mkdir -p "$mkit_dir/scratch" "$mkit_dir/random-dir"
-	printf '{"kind":"unit","seq":1}\n' >"$mkit_dir/journal.jsonl"
 	printf '{"kind":"gate","step":"lint"}\n' >"$mkit_dir/gate.jsonl"
-	: >"$mkit_dir/journal.enabled"
+	: >"$mkit_dir/some.marker"
 	printf 'stray\n' >"$mkit_dir/notes.txt"
 	printf 'kept\n' >"$mkit_dir/scratch/inner.txt"
 	printf 'kept\n' >"$mkit_dir/random-dir/inner.txt"
@@ -176,16 +175,15 @@ teardown() { mkit_teardown_repo; }
 	[[ "$output" == "pruned 2 run dir(s), kept 1" ]]
 
 	# Every entry that is not a <skill>-* directory, still there and still intact.
-	[ "$(cat "$mkit_dir/journal.jsonl")" = '{"kind":"unit","seq":1}' ]
 	[ "$(cat "$mkit_dir/gate.jsonl")" = '{"kind":"gate","step":"lint"}' ]
-	[ -f "$mkit_dir/journal.enabled" ]
+	[ -f "$mkit_dir/some.marker" ]
 	[ "$(cat "$mkit_dir/notes.txt")" = stray ]
 	[ "$(cat "$mkit_dir/scratch/inner.txt")" = kept ]
 	[ "$(cat "$mkit_dir/random-dir/inner.txt")" = kept ]
 
 	# ...and the general form: nothing outside the `commit-*` set was removed.
 	survivors="$(find "$mkit_dir" -maxdepth 1 -mindepth 1 ! -name 'commit-*' | sort)"
-	[ "$(printf '%s\n' "$survivors" | wc -l | tr -d ' ')" -eq 6 ]
+	[ "$(printf '%s\n' "$survivors" | wc -l | tr -d ' ')" -eq 5 ]
 	[ -d "$mkit_dir/commit-20260103T000000Z-aaaaa3" ]
 	[ ! -d "$mkit_dir/commit-20260101T000000Z-aaaaa1" ]
 	[ ! -d "$mkit_dir/commit-20260102T000000Z-aaaaa2" ]

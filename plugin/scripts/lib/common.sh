@@ -26,13 +26,15 @@ mkit_refs_dir() {
 }
 
 # The user-scoped config directory — the one piece of mkit state that lives outside a
-# repo, and the only thing `install.sh` writes. Under `~/.claude` rather than XDG
-# because mkit is a Claude Code plugin and this sits beside the runtime's own state.
+# repo. Under `~/.claude` rather than XDG because mkit is a Claude Code plugin and this
+# sits beside the runtime's own state. It holds exactly two things: `bootstrap.state`
+# (which one-time messages the SessionStart hook has already said) and
+# `bootstrap.disabled` (the tombstone that silences it).
 #
-# MKIT_HOME is not a convenience: the bats suite exports it at a temp path so a user
-# who has run install.sh does not have their real user-scoped default leak into every
-# test that asserts a pristine repo is disabled. Any future user-scoped file goes here
-# for the same reason.
+# MKIT_HOME is not a convenience: the bats suite exports it at a temp path so a developer
+# whose own bootstrap.state already records a warning cannot make the hook's say-it-once
+# assertions pass or fail by accident — the tests would be measuring the developer, not
+# the code. Any future user-scoped file goes here for the same reason.
 mkit_user_dir() {
 	printf '%s\n' "${MKIT_HOME:-$HOME/.claude/mkit}"
 }
@@ -123,8 +125,8 @@ mkit_wt_items() {
 # --- the gate ledger ------------------------------------------------------------------
 #
 # Absolute path of the gate ledger: one JSONL record per quality-gate step, keyed by a
-# fingerprint of the content that step ran over. Beside journal.jsonl in the same mkit
-# directory, so a linked worktree gets its own — a worktree's gate results are its own.
+# fingerprint of the content that step ran over. Lives in the repo's mkit directory, so a
+# linked worktree gets its own — a worktree's gate results are its own.
 # Never dies: the writer runs inside a gate whose verdict must not depend on whether
 # the ledger is reachable. Returns 1 and prints nothing when there is no git dir.
 mkit_gate_ledger_path() {
@@ -217,8 +219,7 @@ mkit_tree_fingerprint() {
 				# Checked before -f, which follows the link. git stores a symlink as a
 				# blob of its *target path*, but `hash-object` follows it and would hash
 				# the target's content — so a repo with any tracked symlink would read
-				# `drifted` forever. One fork each instead, the same exception
-				# `journal.sh` makes for the same reason; symlinks in a dirty set are rare.
+				# `drifted` forever. One fork each instead; symlinks in a dirty set are rare.
 				printf '%s\t%s\n' \
 					"$(printf '%s' "$(readlink "$p")" | git hash-object --stdin 2>/dev/null)" \
 					"$p" >>"$tmp_s"
@@ -287,13 +288,12 @@ mkit_age_human() {
 	fi
 }
 
-# --- user-scoped setup: prerequisites, the bin wrapper, one-time state -----------------
+# --- user-scoped setup: prerequisites, one-time state -----------------------------------
 #
 # Everything below is shared by `install.sh` (run by hand) and
 # `scripts/hooks/session-bootstrap.sh` (the SessionStart hook). Two callers is the whole
-# point: the wrapper's "is this file mine?" test is only as good as there being exactly
-# one producer of the wrapper, and the degradation sentences are only one source of truth
-# if neither caller writes its own.
+# point: the degradation sentences are only one source of truth if neither caller writes
+# its own.
 
 mkit_have() {
 	command -v "$1" >/dev/null 2>&1
@@ -301,14 +301,14 @@ mkit_have() {
 
 # The prerequisite table, one row per tool: <tool>\t<state>\t<consequence>.
 #
-#   state  MISSING  a hard requirement — the journal cannot read or write without it
+#   state  MISSING  a hard requirement — a skill cannot get its starting facts without it
 #          missing  a soft one — some feature degrades, nothing breaks
 #          ok       present
 #
 # A table rather than a print function, because the two callers need different subsets:
 # install.sh prints every row (a human watching wants to see the `ok`s) and derives its
-# refuse-to-install status from whether any row is MISSING, while the hook prints only
-# the non-ok rows, once each, and never blocks on them. Same sentences either way.
+# exit status from whether any row is MISSING, while the hook prints only the non-ok
+# rows, once each, and never blocks on them. Same sentences either way.
 #
 #   mkit_prereq_rows [--missing-only]
 #
@@ -321,11 +321,19 @@ mkit_prereq_rows() {
 	# `bash` is deliberately absent from this table. A bash script cannot report that
 	# bash is missing, so the row could only ever read `ok` — and a check that can only
 	# produce one answer is not a check.
+	#
+	# One sentence per tool rather than one for the pair: "a hard requirement" is the
+	# same verdict either way, but what breaks is not, and a report that cannot say
+	# which feature just died sends the reader to the wrong place.
 	for tool in git jq; do
 		if mkit_have "$tool"; then
 			state=ok text=''
 		else
-			state=MISSING text='the journal cannot read or write without it'
+			state=MISSING
+			case "$tool" in
+			git) text='every skill reads the repo through it' ;;
+			jq) text='facts.sh, branch-scan.sh and the gate ledger all parse JSON with it' ;;
+			esac
 			missing_hard=1
 		fi
 		[ "$missing_only" = yes ] && [ "$state" = ok ] && continue
@@ -349,90 +357,11 @@ mkit_prereq_rows() {
 	return "$missing_hard"
 }
 
-# Where the `mkit-journal` wrapper goes: the first *existing* of ~/.local/bin, ~/bin.
-# Empty output and status 1 when neither exists — and neither is ever created, because a
-# directory mkit invented would not be on PATH anyway and would outlive an uninstall.
-#
-# MKIT_BIN is not a convenience, for the same reason MKIT_HOME is not: the bats suite
-# points it at a temp dir so a bug here cannot write an executable into the developer's
-# real ~/.local/bin.
-mkit_bin_dir() {
-	local candidate
-	if [ -n "${MKIT_BIN:-}" ]; then
-		printf '%s\n' "$MKIT_BIN"
-		return 0
-	fi
-	for candidate in "${HOME:-}/.local/bin" "${HOME:-}/bin"; do
-		case "$candidate" in
-		/*/.local/bin | /*/bin) ;;
-		*) continue ;; # HOME unset — do not resolve to a relative path
-		esac
-		[ -d "$candidate" ] && printf '%s\n' "$candidate" && return 0
-	done
-	return 1
-}
-
-# The one marker that identifies a wrapper mkit generated. A fixed, implausible-to-type
-# string, and deliberately not naming a producer: both install.sh and the SessionStart
-# hook write this same body, and a comment saying "generated by install.sh" would be a
-# lie in the hook's case and would rot the ownership test.
-MKIT_WRAPPER_MARK='mkit-generated wrapper'
-
-mkit_wrapper_body() {
-	printf '#!/usr/bin/env bash\n'
-	printf '# %s — do not edit; re-generated on session start.\n' "$MKIT_WRAPPER_MARK"
-	printf 'exec "%s/scripts/journal.sh" "$@"\n' "$1"
-}
-
-# Is the file at $1 one of ours? Checked in the first few lines only, so a wrapper that
-# somehow grew a body cannot smuggle the mark in from further down.
-mkit_wrapper_is_ours() {
-	[ -f "$1" ] || return 1
-	head -n 5 -- "$1" 2>/dev/null | grep -qF -- "$MKIT_WRAPPER_MARK" 2>/dev/null
-}
-
-# Ours *and* pointing at plugin root $2. A wrapper bakes its plugin root in at write
-# time, so a marketplace upgrade (…/mkit/0.7.0 → …/0.8.0) or a moved checkout leaves one
-# that is ours but stale — which the hook then rewrites, since it is the only component
-# that runs from the new root on every session.
-mkit_wrapper_is_current() {
-	mkit_wrapper_is_ours "$1" || return 1
-	grep -qxF -- "exec \"$2/scripts/journal.sh\" \"\$@\"" "$1" 2>/dev/null
-}
-
-# Write the wrapper at $1 for plugin root $2, atomically.
-#
-# mktemp in the same directory + chmod + `mv -f`, never `cat >`. Three independent
-# reasons, any one of which is sufficient: `cat >` truncates in place, so a
-# `mkit-journal` executing in that window reads a half-file and dies on a partial
-# `exec`; the hook runs under a 5s timeout whose SIGTERM can land mid-write; and
-# `rename(2)` leaves an already-open inode alone. A killed writer leaves a temp file,
-# never a broken executable on the user's PATH.
-#
-# No lock. macOS ships no flock(1), so the portable mutex is a lock *directory* with
-# stale-lock timeout handling — a subsystem, to protect a write that is already atomic.
-# Two racing writers here produce byte-identical content anyway.
-mkit_write_wrapper() {
-	local path="$1" root="$2" dir tmp
-	dir="$(dirname -- "$path")"
-	tmp="$(mktemp "$dir/.mkit-journal.XXXXXX" 2>/dev/null)" || return 1
-	# 755 explicitly, not `chmod +x`: mktemp creates 0600, and `+x` on that yields 0711 —
-	# executable but unreadable, which is a strange thing to leave on someone's PATH.
-	if ! mkit_wrapper_body "$root" >"$tmp" 2>/dev/null ||
-		! chmod 755 "$tmp" 2>/dev/null ||
-		! mv -f -- "$tmp" "$path" 2>/dev/null; then
-		rm -f -- "$tmp" 2>/dev/null
-		return 1
-	fi
-	return 0
-}
-
 # --- one-time state: "have I already said this?" ---------------------------------------
 #
-# A line-per-key file, the same shape as the hook budget in journal-nudge.sh: `grep -qxF`
-# membership, an atomic `>>` append to add, a mktemp+mv rewrite to drop. Unlike that
-# file this one needs no prune — its key space is fixed by construction (a handful of
-# `notice/` and `prereq/` keys), not an unbounded stream of prompt ids.
+# A line-per-key file: `grep -qxF` membership, an atomic `>>` append to add, a mktemp+mv
+# rewrite to drop. It needs no prune — its key space is fixed by construction (a handful
+# of `prereq/` keys), not an unbounded stream.
 
 mkit_state_has() {
 	[ -f "$1" ] || return 1
@@ -499,9 +428,12 @@ mkit_state_missing_keys() {
 # exactly the case that must produce it. awk is POSIX and present wherever bash is, so
 # this leaves the hook with no external prerequisite at all.
 #
-# Correctness matters more than it looks: the strings interpolate $HOME, $MKIT_HOME and
-# the bin dir, and a home directory containing a quote or a backslash is a real case the
-# sibling hook already has a test for.
+# Defensive rather than load-bearing today: the hook's payload is assembled from the fixed
+# prerequisite sentences and interpolates no path at all — not $HOME, not $MKIT_HOME — so
+# nothing user-controlled currently reaches it. That is a property of the present message
+# set, not a guarantee, and it is the kind of property a later message quietly revokes. The
+# escape stays so the first string that does carry a path cannot turn one stray quote into
+# a document that parses as nothing.
 # stderr is silenced because the only caller is a hook forbidden from writing any. If awk
 # itself were missing the result is an empty string in a still-valid JSON document — a
 # message that says nothing, rather than a document that parses as nothing.

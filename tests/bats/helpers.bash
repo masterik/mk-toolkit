@@ -12,10 +12,10 @@ mkit_setup_repo() {
 	# reports --absolute-git-dir resolved, so a raw mktemp path never matches it.
 	MKIT_TMP="$(cd "$MKIT_TMP" && pwd -P)"
 	# Point the user-scoped config at the throwaway repo before anything runs. Without
-	# this the suite reads the developer's real ~/.claude/mkit, so a machine where
-	# install.sh has written journal.default would see every "a pristine repo is
-	# disabled" assertion fail — the tests would be measuring the developer, not the
-	# code. Exported, because the scripts run as children.
+	# this the suite reads the developer's real ~/.claude/mkit, so a machine whose
+	# bootstrap.state already records a warning would see the hook's one-time-message
+	# assertions fail — the tests would be measuring the developer, not the code.
+	# Exported, because the scripts run as children.
 	export MKIT_HOME="$MKIT_TMP/.mkit-home"
 	cd "$MKIT_TMP" || return 1
 	git init -q -b main .
@@ -29,23 +29,6 @@ mkit_setup_repo() {
 
 mkit_teardown_repo() {
 	[ -n "${MKIT_TMP:-}" ] && [ -d "$MKIT_TMP" ] && rm -rf -- "$MKIT_TMP"
-}
-
-# Opt-in, for the suites that exercise user-scoped *setup* — install.sh and the
-# SessionStart hook. Those two write an executable into a bin directory, so unlike every
-# other suite they can reach outside MKIT_HOME.
-#
-# MKIT_BIN alone would be enough if the plumbing were correct, which is exactly why HOME
-# is sandboxed too: a bug in that plumbing must not be able to drop a file into the
-# developer's real ~/.local/bin. Belt and braces, deliberately redundant.
-#
-# Call it *after* mkit_setup_repo — that sets user.email/user.name on the throwaway repo,
-# so nothing here needs a ~/.gitconfig. Opt-in rather than default so the existing suites
-# keep running against the same environment they were written for.
-mkit_sandbox_home() {
-	export HOME="$MKIT_TMP/home"
-	export MKIT_BIN="$MKIT_TMP/bin"
-	mkdir -p "$HOME" "$MKIT_BIN"
 }
 
 # A PATH containing symlinks to only the externals the setup scripts legitimately call,

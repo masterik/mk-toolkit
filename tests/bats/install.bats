@@ -1,9 +1,9 @@
 #!/usr/bin/env bats
 #
-# install.sh — the by-hand half of user-scoped setup. There was no coverage for this file
-# at all before; the SessionStart hook now shares its wrapper generator and its
-# prerequisite table with it, so drift between the two is a real failure mode and the
-# last test here is the one that catches it.
+# install.sh — the by-hand diagnostic, and the only way to silence the SessionStart hook.
+# It installs nothing; these tests exist mostly to hold that line, plus the anti-drift
+# check at the end: the hook shares its prerequisite table with this script, so the two
+# reporting different sentences for the same gap is a real failure mode.
 #
 # `[[ ... ]]` is avoided throughout: on bash 3.2 errexit does not fire for a failing
 # `[[ ... ]]`, so such an assertion only aborts a test as its last command.
@@ -12,13 +12,10 @@ load helpers.bash
 
 setup() {
 	mkit_setup_repo
-	mkit_sandbox_home
 	INSTALL="$(cd "$SCRIPTS/.." && pwd)/install.sh"
 	USER_DIR="$MKIT_HOME"
-	MARKER="$USER_DIR/journal.default"
 	TOMBSTONE="$USER_DIR/bootstrap.disabled"
 	STATE="$USER_DIR/bootstrap.state"
-	WRAPPER="$MKIT_BIN/mkit-journal"
 	HOOK="$SCRIPTS/hooks/session-bootstrap.sh"
 }
 
@@ -28,143 +25,121 @@ teardown() {
 
 has_text() { printf '%s\n' "$1" | grep -qF -- "$2"; }
 
-@test "--status on a pristine user dir reports the default off and writes nothing" {
-	run bash "$INSTALL" --status
+@test "no arguments reports status rather than installing something" {
+	run bash "$INSTALL"
 	[ "$status" -eq 0 ]
-	has_text "$output" 'user default: off'
-	[ ! -f "$MARKER" ]
-	[ ! -e "$WRAPPER" ]
+	has_text "$output" 'prerequisites:'
+	has_text "$output" 'session hook:'
+	has_text "$output" 'gate ledger:'
 }
 
-@test "--status still lists every prerequisite row, including the ok ones" {
+@test "a status run writes nothing at all into the user dir" {
+	run bash "$INSTALL" --status
+	[ "$status" -eq 0 ]
+	# The whole point of "installs nothing": a diagnostic that leaves state behind is
+	# an installer wearing a different name.
+	[ ! -f "$TOMBSTONE" ]
+	[ ! -f "$STATE" ]
+}
+
+@test "--status lists every prerequisite row, including the ok ones" {
 	run bash "$INSTALL" --status
 	has_text "$output" 'prerequisites:'
-	has_text "$output" 'git'
-	has_text "$output" 'jq'
+	# Assert against the prerequisites BLOCK alone. report_ledger also prints
+	# "gate.jsonl" and "usable (jq + sha256 present)", so grepping the whole output for
+	# git/jq/sha256 passes even when the table itself printed nothing — the assertion
+	# would survive report_prereqs being deleted outright.
+	table="$(printf '%s\n' "$output" | sed -n '/^prerequisites:/,/^$/p')"
+	has_text "$table" 'git'
+	has_text "$table" 'jq'
+	has_text "$table" 'node'
+	has_text "$table" 'sha256'
+	# ...and at least one row actually reads `ok`, which is the claim in the name. Without
+	# this the test passes on a table that is all MISSING rows.
+	printf '%s\n' "$table" | grep -qE '^  [a-z0-9]+ +ok'
+}
+
+@test "--status reports the hook as active before it has been silenced" {
+	run bash "$INSTALL" --status
+	has_text "$output" 'active'
+}
+
+@test "the exit status of a status run is the prerequisite verdict" {
+	run bash "$INSTALL" --status
+	[ "$status" -eq 0 ]
+	# A caller scripting "is this machine ready" branches on exactly this.
+	run env PATH="$(mkit_fake_path jq)" bash "$INSTALL" --status
+	[ "$status" -eq 1 ]
+}
+
+@test "a missing soft prerequisite does not fail the run" {
+	run env PATH="$(mkit_fake_path node)" bash "$INSTALL" --status
+	[ "$status" -eq 0 ]
 	has_text "$output" 'node'
-	has_text "$output" 'sha256'
 }
 
-@test "a plain run writes the marker and the wrapper" {
-	run bash "$INSTALL"
-	[ "$status" -eq 0 ]
-	[ -f "$MARKER" ]
-	[ -x "$WRAPPER" ]
-	run "$WRAPPER" enabled --why
-	[ "$output" = 'enabled user' ]
-}
-
-@test "--no-bin writes the marker but no wrapper" {
-	run bash "$INSTALL" --no-bin
-	[ "$status" -eq 0 ]
-	[ -f "$MARKER" ]
-	[ ! -e "$WRAPPER" ]
-}
-
-@test "--bin honours an explicit directory" {
-	mkdir -p "$MKIT_TMP/otherbin"
-	run bash "$INSTALL" --bin "$MKIT_TMP/otherbin"
-	[ "$status" -eq 0 ]
-	[ -x "$MKIT_TMP/otherbin/mkit-journal" ]
-	[ ! -e "$WRAPPER" ]
-}
-
-@test "a plain run pre-spends the hook's notice, so the hook stays silent after it" {
-	run bash "$INSTALL"
-	run grep -qxF 'notice/v1' "$STATE"
-	[ "$status" -eq 0 ]
-	# The point of pre-spending: install.sh just said all of this out loud, at length.
-	run bash -c "'$HOOK' </dev/null"
-	[ "$status" -eq 0 ]
-	[ -z "$output" ]
-}
-
-@test "--uninstall removes both files and writes the tombstone" {
-	bash "$INSTALL" >/dev/null
+@test "--uninstall writes the tombstone" {
 	run bash "$INSTALL" --uninstall
 	[ "$status" -eq 0 ]
-	[ ! -f "$MARKER" ]
-	[ ! -e "$WRAPPER" ]
 	[ -f "$TOMBSTONE" ]
-	has_text "$output" 'pinned off'
+	has_text "$output" 'silenced'
 }
 
 @test "the tombstone is non-empty and says how to undo itself" {
-	bash "$INSTALL" >/dev/null
 	bash "$INSTALL" --uninstall >/dev/null
 	run cat "$TOMBSTONE"
 	has_text "$output" 'install.sh'
 }
 
-@test "--uninstall makes the removal outlive the next session" {
-	bash "$INSTALL" >/dev/null
+@test "--uninstall drops the record of what has already been said" {
+	# Let the hook say its piece and stamp the key, then uninstall.
+	env PATH="$(mkit_fake_path node)" bash -c "'$HOOK' </dev/null" >/dev/null
+	[ -f "$STATE" ]
 	bash "$INSTALL" --uninstall >/dev/null
-	run bash -c "'$HOOK' </dev/null"
+	[ ! -f "$STATE" ]
+}
+
+@test "--uninstall makes the silence outlive the next session" {
+	bash "$INSTALL" --uninstall >/dev/null
+	# Even with a genuine gap to report, the tombstone wins.
+	run env PATH="$(mkit_fake_path node)" bash -c "'$HOOK' </dev/null"
 	[ "$status" -eq 0 ]
 	[ -z "$output" ]
-	[ ! -f "$MARKER" ]
 }
 
-@test "--uninstall leaves a wrapper it did not generate alone" {
-	printf '#!/bin/sh\necho someone elses tool\n' >"$WRAPPER"
-	chmod 755 "$WRAPPER"
-	run bash "$INSTALL" --uninstall
-	[ "$status" -eq 0 ]
-	[ -e "$WRAPPER" ]
-	has_text "$output" 'left alone'
-}
-
-@test "--uninstall does not follow a symlink at the wrapper path" {
-	ln -s /bin/echo "$WRAPPER"
-	run bash "$INSTALL" --uninstall
-	[ "$status" -eq 0 ]
-	[ -L "$WRAPPER" ]
-}
-
-@test "a re-run clears the tombstone and restores the default" {
-	bash "$INSTALL" >/dev/null
+@test "--uninstall --purge removes the tombstone and frees the hook again" {
 	bash "$INSTALL" --uninstall >/dev/null
 	[ -f "$TOMBSTONE" ]
-	run bash "$INSTALL"
-	[ "$status" -eq 0 ]
-	[ ! -f "$TOMBSTONE" ]
-	[ -f "$MARKER" ]
-	has_text "$output" 'un-pinned'
-}
-
-@test "--uninstall --purge removes the tombstone and says the hook will re-run" {
-	bash "$INSTALL" >/dev/null
 	run bash "$INSTALL" --uninstall --purge
 	[ "$status" -eq 0 ]
 	[ ! -f "$TOMBSTONE" ]
-	[ ! -f "$MARKER" ]
-	has_text "$output" 'set this up again'
-	# And it means it: the hook is free to act again.
-	run bash -c "'$HOOK' </dev/null"
-	[ -f "$MARKER" ]
+	has_text "$output" 'warn again'
+	# And it means it: the hook is free to speak.
+	run env PATH="$(mkit_fake_path node)" bash -c "'$HOOK' </dev/null"
+	[ -n "$output" ]
 }
 
-@test "--status reports a pinned-off default distinctly from a never-set-up one" {
-	bash "$INSTALL" >/dev/null
+@test "--status reports a silenced hook distinctly from an active one" {
 	bash "$INSTALL" --uninstall >/dev/null
 	run bash "$INSTALL" --status
-	has_text "$output" 'pinned off'
+	has_text "$output" 'silenced'
 }
 
 @test "--status reports the tombstone path so it can be found" {
-	bash "$INSTALL" >/dev/null
 	bash "$INSTALL" --uninstall >/dev/null
 	run bash "$INSTALL" --status
 	has_text "$output" 'bootstrap.disabled'
 }
 
-@test "a hard prerequisite gap refuses the install unless forced" {
-	run env PATH="$(mkit_fake_path jq)" bash "$INSTALL"
-	[ "$status" -eq 1 ]
-	[ ! -f "$MARKER" ]
-	run env PATH="$(mkit_fake_path jq)" bash "$INSTALL" --force
-	[ "$status" -eq 0 ]
-	[ -f "$MARKER" ]
+@test "the gate ledger is reported as always on, never as something to enable" {
+	run bash "$INSTALL" --status
+	has_text "$output" 'always on'
+	has_text "$output" 'nothing to install'
+}
+
+@test "the gate ledger reports degraded when its hash tool is gone" {
+	run env PATH="$(mkit_fake_path shasum)" bash "$INSTALL" --status
+	has_text "$output" 'degraded'
 }
 
 @test "an unknown flag exits 2" {
@@ -172,15 +147,26 @@ has_text() { printf '%s\n' "$1" | grep -qF -- "$2"; }
 	[ "$status" -eq 2 ]
 }
 
-@test "install.sh and session-bootstrap.sh produce byte-identical wrappers" {
-	# The anti-drift test. Two producers of one file is exactly how the hook's
-	# "is this wrapper mine?" check rots: let the bodies diverge and the hook either
-	# clobbers install.sh's wrapper or refuses to touch its own. Everything about the
-	# shared generator in lib/common.sh is load-bearing only while this passes.
-	bash "$INSTALL" >/dev/null
-	cp "$WRAPPER" "$MKIT_TMP/from-install"
-	rm -f "$WRAPPER"
-	bash -c "'$HOOK' </dev/null" >/dev/null
-	run diff "$MKIT_TMP/from-install" "$WRAPPER"
+@test "--help prints the whole header, including the exit contract" {
+	run bash "$INSTALL" --help
 	[ "$status" -eq 0 ]
+	has_text "$output" 'usage: install.sh'
+	# The last line of the header is the only statement of the exit contract, and a
+	# hard-coded sed range used to drop exactly it. Pin the end of the block, not just
+	# the start.
+	has_text "$output" 'Exit: 0 ok'
+	has_text "$output" 'not make the machine unready'
+	[ ! -f "$TOMBSTONE" ]
+}
+
+@test "install.sh and session-bootstrap.sh report a gap in the same words" {
+	# The anti-drift test, and the reason the prerequisite table lives in lib/common.sh
+	# rather than in either caller. Two producers of one sentence is how a diagnostic
+	# and the hook that points at it start disagreeing about what is wrong.
+	fake="$(mkit_fake_path node)"
+	run env PATH="$fake" bash "$INSTALL" --status
+	sentence='only findings.mjs (the review skill) needs it'
+	has_text "$output" "$sentence"
+	run env PATH="$fake" bash -c "'$HOOK' </dev/null"
+	has_text "$output" "$sentence"
 }
