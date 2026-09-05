@@ -15,7 +15,7 @@ Direction and rationale: [`concept.md`](concept.md). This file is the ordered wo
   which Homebrew refuses to install on Linux — so a linux archive would have had no `brew` path
   to reach a user through. Adding a `goos` back is one line whenever someone needs it; carrying
   an untested OS in the matrix is a support claim nobody verifies.
-- **One binary, subcommand tree.** `mkit storage prune`, `mkit journal add`, `mkit gate run`.
+- **One binary, subcommand tree.** `mkit storage prune`, `mkit gate run`, `mkit status`.
 - **Dual front-end.** Rich TUI when interactive; flags + `--json` when driven by a skill.
 - **Homebrew ships binary *and* plugin payload.** `brew upgrade mkit` updates both.
 
@@ -66,8 +66,10 @@ boundary case; `--apply` deletes the same set; a TUI mode offers a size-sorted t
 applying. All met.
 
 ### M3 — `mkit install` / `status` / `uninstall`
-Absorbs `install.sh` and most of `scripts/hooks/session-bootstrap.sh`. Registers the
-Homebrew-installed plugin payload as a `directory` marketplace in `~/.claude/settings.json`.
+Absorbs `install.sh`. The `SessionStart` hook is **not** in scope — it stays in bash
+permanently (see "Staying in bash, permanently" below), because it cannot depend on a binary
+whose absence it may have to report. Registers the Homebrew-installed plugin payload as a
+`directory` marketplace in `~/.claude/settings.json`.
 Installer targets are an interface from the start — `claude` now, `codex` later. M1 already
 consolidated the payload under `plugin/`, so this milestone points at one path rather than
 enumerating root directories.
@@ -108,21 +110,19 @@ found by inspecting the shipped `v0.12.0` cask, not by reading the config:
 - Merge into existing settings, never overwrite. `--dry-run` prints the diff.
 **Done when:** `brew install mkit && mkit install` yields a working plugin with no clone, the
 registered path still resolves after a `brew upgrade`, and `mkit status` reports what today's
-`install.sh --status` does.
+`install.sh --status` does — the prerequisite table, the `SessionStart` hook's state, and the
+gate ledger's.
 
 ### M4 — `mkit findings`
 Port `scripts/findings.mjs` (507 lines). Pure data transformation, so parity is testable.
 **Done when:** `node` is gone from [`prerequisites.md`](prerequisites.md).
 
 ### M5 — the `jq` consumers
-Port `branch-scan.sh`, `gate-run.sh`, and `facts.sh`'s journal block. Deletes a whole family
-of degradation branches — `pr=jq-missing`, `journal=jq-missing`, `gate_cache=no-jq`,
-`no-hash` — because a binary is never half-capable.
+Port `branch-scan.sh`, `gate-run.sh`, `facts.sh` and `gate-detect.sh`. Deletes a whole family
+of degradation branches — `pr=jq-missing`, `gate_cache=no-jq`, `no-hash` — because a binary is
+never half-capable. The last milestone in the port: the shell payload after it is
+`run-open.sh` and the `SessionStart` hook.
 **Done when:** `jq` and `shasum` are gone from [`prerequisites.md`](prerequisites.md).
-
-### M6 — `mkit journal`
-Port `journal.sh` (874 lines, the largest). Last, once the porting pattern is proven.
-TUI: browse and edit records.
 
 ### Later
 - `mkit cleanup` TUI — multi-select over `branch-scan.sh`'s classification.
@@ -133,9 +133,9 @@ TUI: browse and edit records.
   Linuxbrew needs a *formula*, Windows a Scoop manifest (GoReleaser emits one).
 
 ## Staying in bash, permanently
-- `scripts/hooks/session-bootstrap.sh` — reduced but not deleted. It cannot depend on a
-  binary whose presence it may have to report as missing. Under Homebrew most of its job is
-  gone: the binary is already on PATH.
+- `scripts/hooks/session-bootstrap.sh` — it cannot depend on a binary whose presence it may
+  have to report as missing, and its whole job is reporting a missing tool. Already reduced to
+  that one job; there is nothing left to port out of it.
 - Any hook that must run before setup completes.
 
 ## Porting rules

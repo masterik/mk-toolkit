@@ -4,7 +4,7 @@ This file provides guidance to agents when working with code in this repository.
 
 **mkit** — a **Go binary (`mkit`) plus a Claude Code plugin**, shipped together by Homebrew
 (`brew install masterik/tap/mkit`). The plugin packages the agent coding-workflow skills
-(`commit`, `review`, `finish`, `pr`, `note`, `cleanup`) plus the shared `_shared/references/`
+(`commit`, `review`, `finish`, `pr`, `cleanup`) plus the shared `_shared/references/`
 bundle; the binary is absorbing the plugin's shell script layer one script at a time.
 Composition over replacement: the skills orchestrate `git`, `gh`, `wt`, and code-review tools —
 no new git logic.
@@ -77,8 +77,12 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
   `internal/tui/storageprune/` (M2): the size-sorted tick-list `storage prune --apply` opens on a
   TTY. `Update` holds no prune logic — it only toggles selection.
 - `internal/buildinfo/` — version/commit/date, injected by `-X` ldflags at release.
-- `tools/` — shell that is not part of the plugin payload; staging for a port. Empty since M2
-  ported and deleted `storage-prune.sh`.
+- `tools/` — shell that is not part of the plugin payload; staging for a port, and the home
+  for one-shot maintenance scripts. `purge-journal-state.sh` removes the state mkit <= 0.12.1
+  left behind when journaling was deleted (the user-scoped marker, the `mkit-journal` wrapper,
+  the stale `notice/v1` key, this repo's `journal.*` files). Dry-run by default, `--apply` to
+  act; it never removes a wrapper without mkit's generation marker, never follows a symlink,
+  and never deletes a directory. Delete it once the machines that need it have run it.
 
 ### The plugin payload
 - `plugin/` — the plugin payload: what Homebrew is *meant* to ship so M3 can register it as a
@@ -92,12 +96,13 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
   always looks for `.claude-plugin/marketplace.json` at the repository root; there is no
   subdirectory syntax for the GitHub-shorthand or git-URL forms.
 - `plugin/hooks/hooks.json` — hook registration, at the **plugin root** (not `.claude-plugin/`):
-  `SessionStart` → `scripts/hooks/session-bootstrap.sh`, `Stop` + `SubagentStop` →
-  `scripts/hooks/journal-nudge.sh`. Auto-discovered, so the manifest carries **no `hooks` key** —
-  don't add one. No `matcher` on any of them: a mistyped matcher is a hook that silently never runs.
-- `plugin/skills/<name>/SKILL.md` — the six triggerable skills. `note` (records intent
-  mid-implementation) and `cleanup` (repo-wide branch/worktree gardening) sit outside the
-  edit → commit → review → integrate line.
+  `SessionStart` → `scripts/hooks/session-bootstrap.sh`, and nothing else. Auto-discovered, so the
+  manifest carries **no `hooks` key** — don't add one. No `matcher`: a mistyped matcher is a hook
+  that silently never runs. **No `Stop` / `SubagentStop` hook, deliberately** — see
+  `concept.md`'s "considered and dropped": that event's `additionalContext` is rendered verbatim
+  in the transcript every turn and cannot be suppressed.
+- `plugin/skills/<name>/SKILL.md` — the five triggerable skills. `cleanup` (repo-wide
+  branch/worktree gardening) sits outside the edit → commit → review → integrate line.
 - `plugin/skills/_shared/` — shared references (no `SKILL.md`); skills link in via
   `../_shared/references/…`. **Keep those relative paths intact** — they're what makes the bundle
   portable.
@@ -111,52 +116,33 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
     trade-off and must label a skipped step `cached`. Escape hatches: `--no-ledger` / `--no-cache`.
   - `findings.mjs` — reconcile/group/report over a review's findings. M4 port target; `node`
     leaves `prerequisites.md` with it.
-  - `journal.sh` — the commit journal: `add` a record of *why* a unit exists; `status` /
-    `uncovered` classify records against the current tree; plus `drop`, `compact`,
-    `enable`/`disable`/`enabled [--why]`/`path`. Resolution: repo-marker > repo-tombstone > user
-    default.
   - `branch-scan.sh` — `cleanup`'s classifier: every local branch's merge/upstream/PR state and
     every worktree's origin/cleanliness. One batched `gh` call, cached, never a per-branch round trip.
   - `lib/common.sh` — sourced helpers, including `mkit_tree_fingerprint`, the staging- and
     commit-invariant hash of the content a gate command reads — what makes a `review` → `finish`
     cache hit possible at all.
-- `plugin/scripts/hooks/journal-nudge.sh` — `Stop` / `SubagentStop`: names the *count* of dirty
-  paths no journal entry covers and points at `journal.sh uncovered` for the list rather than
-  inlining it. **The nudge is one line**, tells the agent to stay silent when none of the paths
-  are its own, and leaves the `add` flags to `journal.md` — additionalContext is rendered verbatim
-  in the transcript under "Stop hook feedback:" (`suppressOutput` does not hide it), so every line
-  it spends, and every line of prose it provokes in reply, pushes the user's answer off screen.
-  Gated (git repo, journaling enabled, `stop_hook_active` false, one nudge per `prompt_id` +
-  `agent_id`, uncovered > 0), **always exits 0**, and never authors a record.
-- `plugin/scripts/hooks/session-bootstrap.sh` — `SessionStart`: writes `journal.default` + the
-  `mkit-journal` wrapper idempotently, then emits **zero bytes** on every later session. Gated
-  (absolute user dir, no `bootstrap.disabled` tombstone, a pending write or an unsaid message),
-  **always exits 0**, never to stderr. Never parses its stdin — that would need `jq`, the very
-  tool it must be able to report as missing (hence `mkit_json_escape`). Never touches a repo or
-  calls git; withholds the *notice* rather than refusing to write when a prerequisite is missing;
-  never touches a `mkit-journal` it did not generate, and silently rewrites a stale one. **Stays
-  in bash permanently** — it cannot depend on a binary whose absence it may have to report.
-- `plugin/install.sh` — user-scoped setup, no longer needed for setup (the `SessionStart` hook
-  writes the same two files). Survives for the three jobs a hook cannot do: `--status` (the
-  diagnostic surface, which exists precisely so the hook never has to be one), `--uninstall` (the
-  only global opt-out, and what writes the tombstone), and `--bin <dir>`. Plus `--no-bin`,
-  `--force`, `--uninstall --purge`. Sources `lib/common.sh` — the wrapper generator must have
-  exactly **one** producer or the hook's "is this wrapper mine?" test rots;
-  `tests/bats/install.bats` guards that with a byte-identical-wrapper test. Never edits a shell
-  rc, never touches a repo. **M3 absorbs it.**
-- `<git-dir>/mkit/` — the scripts' scratch root: per-run directories, `journal.jsonl`
-  (append-only records), the `journal.enabled` / `journal.disabled` markers, and `gate.jsonl` (the
-  gate ledger, append-only, rotated back to the newest 200 records once it passes 400). Never
-  committed, never in `git status`; a linked worktree gets its own, so entries die with the
-  worktree. `--prune` only removes `<skill>-*` **directories**, which keeps both `.jsonl` files
-  out of its range.
+- `plugin/scripts/hooks/session-bootstrap.sh` — `SessionStart`: names, **once per tool**, any
+  prerequisite this machine lacks, then emits **zero bytes** on every later session. Installs
+  nothing and writes nothing but `bootstrap.state`. Gated (absolute user dir, no
+  `bootstrap.disabled` tombstone, an unsaid message), **always exits 0**, never to stderr. Never
+  parses its stdin — that would need `jq`, the very tool it must be able to report as missing
+  (hence `mkit_json_escape`). Never touches a repo or calls git. **Stays in bash permanently** —
+  it cannot depend on a binary whose absence it may have to report.
+- `plugin/install.sh` — **installs nothing; there is no setup step.** Two jobs a hook cannot do:
+  `--status` (the diagnostic surface — prerequisites, hook state, gate ledger — which exists
+  precisely so the hook never has to be one) and `--uninstall [--purge]` (writes the tombstone
+  that silences the hook for good). No arguments does what `--status` does, and its exit status
+  is the prerequisite verdict. Sources `lib/common.sh` so the degradation sentences have exactly
+  one producer. Never edits a shell rc, never touches a repo. **M3 absorbs it.**
+- `<git-dir>/mkit/` — the scripts' scratch root: per-run directories plus `gate.jsonl` (the gate
+  ledger, append-only, rotated back to the newest 200 records once it passes 400). Never
+  committed, never in `git status`; a linked worktree gets its own. `--prune` only removes
+  `<skill>-*` **directories**, which keeps `gate.jsonl` out of its range.
 - `~/.claude/mkit/` — the only state outside a repo, overridable with `MKIT_HOME` (the bats suite
-  sets it, so a developer who ran install.sh doesn't fail the "pristine repo is disabled"
-  assertions); `MKIT_BIN` overrides the wrapper's directory for the same reason. Holds
-  `journal.default` (the global on-switch), `bootstrap.disabled` (the tombstone that makes an
-  uninstall outlive the session) and `bootstrap.state` (one key per line: which one-time messages
-  have been said — self-heals, a `prereq/` key drops once the tool is back so a later removal
-  warns again).
+  sets it so a developer's real state cannot affect a run). Holds `bootstrap.disabled` (the
+  tombstone that makes the hook's silencing outlive the session) and `bootstrap.state` (one key
+  per line: which one-time messages have been said — self-heals, a `prereq/` key drops once the
+  tool is back so a later removal warns again).
 
 ### Docs and tests
 - `docs/` — `concept.md` (direction/roadmap), `backlog.md` (ordered work list + invariants),
@@ -165,9 +151,9 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
 - `tests/` — dev-only, deliberately kept at repo root rather than under `plugin/` so `plugin/`
   stays exactly the payload and nothing else. `tests/run.sh` runs both `node --test
   tests/findings.test.mjs` and `bats tests/bats/` (one `.bats` per shell script, each against a
-  throwaway git repo). `helpers.bash` sandboxes `MKIT_HOME` for every suite; the two setup suites
-  also call `mkit_sandbox_home` (redirecting `HOME` and `MKIT_BIN`) because they write an
-  executable. `mkit_fake_path <tool>…` builds a PATH missing only the named tools — **it must
+  throwaway git repo). `helpers.bash` sandboxes `MKIT_HOME` for every suite, which is the whole
+  containment story now that nothing writes outside it — no suite touches `HOME`.
+  `mkit_fake_path <tool>…` builds a PATH missing only the named tools — **it must
   include `bash`**, or `env PATH=… bash -c` exits 127 with empty output, which reads exactly like
   a hook correctly staying silent. Go tests live beside their package.
 

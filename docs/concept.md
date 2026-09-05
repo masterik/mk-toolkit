@@ -18,27 +18,22 @@ The agent is the interface; the skills are the muscle memory. The `mkit` binary 
 interface onto that — it is the mechanical layer the skills call, and it is progressively
 replacing the shell scripts below. Milestones: [`backlog.md`](backlog.md).
 
-Alongside the Markdown sits a thin layer of **helper scripts** (`scripts/`, seven of them) for
+Alongside the Markdown sits a thin layer of **helper scripts** (`scripts/`, six of them) for
 the steps that are identical every run and fail silently when hand-rolled: opening the run
 directory, gathering the starting facts, detecting and running the quality gate, the
-arithmetic over a review's findings, the commit journal's coverage and freshness arithmetic,
-and classifying every local branch/worktree a `cleanup` run has to decide about.
+arithmetic over a review's findings, and classifying every local branch/worktree a `cleanup`
+run has to decide about.
 They ship with the plugin — no `PATH`, no build, no install — and they exist for reliability
 more than for tokens: prose re-executed every run kept getting one invariant of three wrong. **Judgement stays in Markdown; a mechanical invariant
 belongs in a script.** Prerequisites: [`prerequisites.md`](prerequisites.md).
 
-Two scripts are not called by a skill at all — the hooks, registered by `hooks/hooks.json` at
-the plugin root. A `Stop` / `SubagentStop` hook (`scripts/hooks/journal-nudge.sh`) tells the
-agent which dirty paths no journal entry covers, so *why* a unit of work exists gets recorded
-while the session still knows it — instead of being reverse-engineered from the diff at commit
-time. A `SessionStart` hook (`scripts/hooks/session-bootstrap.sh`) writes the one user-scoped
-marker that turns journaling on everywhere, so the feature needs no install step; it says so
-once, and then produces nothing on every later session.
-
-Journaling is therefore **on by default**, and reversible at two scopes: `journal.sh disable`
-in a repo, `install.sh --uninstall` for the user. Both leave a tombstone, for the same reason —
-absent files carry no provenance, so an opt-out that is only an absence gets re-asserted by the
-next thing that re-establishes the default.
+One script is not called by a skill at all — the `SessionStart` hook
+(`scripts/hooks/session-bootstrap.sh`), registered by `hooks/hooks.json` at the plugin root. It
+names, once per tool, any prerequisite the scripts need and this machine lacks: a gap that
+otherwise surfaces as a thinner fact block or a `gate_cache=no-jq` annotation, far from its
+cause. It installs nothing, and produces zero bytes on every session after it has said its
+piece. `install.sh --uninstall` silences it for good, leaving a tombstone — absent files carry
+no provenance, so a dismissal that is only an absence gets re-asserted next session.
 
 **Claude-only for now.** Other agents (Codex, opencode, …) are a later concern — the skills
 are plain Markdown, so support for another agent is a thin packaging step, not a rewrite.
@@ -62,31 +57,17 @@ are plain Markdown, so support for another agent is a thin packaging step, not a
   Where the line is genuinely unclear the script reports candidates and the skill picks —
   `gate-detect.sh` proposing `fast=` beside `docs_candidates:` is the shape to copy.
 - **A recorded fact is an input, never a permission:** mkit accumulates state between runs —
-  journal entries, gate results, hook arithmetic — and every one of them is evidence handed to
-  the agent, never a decision taken on its behalf. This *extends* the rule above rather than
-  restating it: a script only ever ran because a skill called it, so "report candidates, the
-  skill picks" was enough. State outlives the skill that wrote it, and a hook fires with no
-  skill in the loop at all, so the line has to be drawn again. Three instances of the one rule:
+  gate results, hook arithmetic — and every one of them is evidence handed to the agent, never a
+  decision taken on its behalf. This *extends* the rule above rather than restating it: a script
+  only ever ran because a skill called it, so "report candidates, the skill picks" was enough.
+  State outlives the skill that wrote it, and a hook fires with no skill in the loop at all, so
+  the line has to be drawn again. Two instances of the one rule:
   - *the hook names the gap; the agent supplies the judgement* — a lifecycle hook may compute
-    which dirty paths have no journal entry and hand the answer back to the model. It may not
-    author the record.
-  - *a past session's judgement is an input, never a decision* — a journal entry records why a
-    unit of work exists; it never says what the commits should be. `commit` still reads the
-    staged hunks and authors the message. A stale entry that quietly wrote a plausible-but-wrong
-    message into permanent history is a worse failure than the tokens it saved.
+    that a prerequisite is missing and hand the answer back to the model. It may not act on it.
   - *a past run's proof is an input, never a permission* — the gate ledger records that a
     command exited 0 over exactly this content. Whether that is still good enough to skip on is
     a safety-against-latency trade-off, so the skill decides it and must report the step as
     `cached`. A run printing `gate=ok` having executed nothing is the failure this guards.
-  - *configuration is the one exception, and it is bounded* — the `SessionStart` hook does not
-    report a fact; it **writes configuration**, unasked, that changes what mkit does in every
-    repo. Nothing else in the codebase does that, so it is named here as a deliberate exception
-    rather than left to look like the rule. Three bounds make it one: it writes a single empty
-    marker and one wrapper and nothing else, ever; it announces itself once, in the user's own
-    view, naming both files and both opt-outs, because a hook cannot ask and after-the-fact
-    disclosure is then the whole of consent; and a tombstone at either scope stops it dead.
-    The test is whether a user who never reads the docs still ends up informed and in control —
-    not whether the default is convenient.
 - **Composition over replacement:** orchestrate `git`, GitHub CLI (`gh`), and Worktrunk
   (`wt`); never reimplement what they already do well.
 - **Safe by default:** irreversible actions (force-push, branch delete, history rewrite,
@@ -106,12 +87,11 @@ are plain Markdown, so support for another agent is a thin packaging step, not a
   anyway. amd64 + arm64 is the whole matrix. Other platforms stay out until someone needs one.
 
 ## The Skills
-Six skills. Four move work through its lifecycle: `commit` is the shared front-end;
+Five skills. Four move work through its lifecycle: `commit` is the shared front-end;
 `finish` and `pr` both begin by committing, and you pick the finisher by
-**destination** — merge it yourself locally, or push it for review. The other two sit
-outside that line: `note` records intent *during* implementation for `commit` to spend
-later, and normally the hook fires it, not the user; `cleanup` is repo-wide gardening —
-it doesn't touch code, it sweeps every local branch and worktree the other five leave behind.
+**destination** — merge it yourself locally, or push it for review. `cleanup` sits outside
+that line: repo-wide gardening — it doesn't touch code, it sweeps every local branch and
+worktree the other four leave behind.
 
 | Skill | Does | Trigger examples |
 |-------|------|------------------|
@@ -119,19 +99,15 @@ it doesn't touch code, it sweeps every local branch and worktree the other five 
 | **`review`** | Review the local diff/commits — full (CodeRabbit + Codex + Claude, all lenses) or quick (CodeRabbit + Codex, bugs/impl only) — verify the findings, fix what's worth fixing, summarize. | "review my changes", "quick review", "run codex and coderabbit" |
 | **`finish`** | Commit → merge the branch back into its base → delete branch / remove worktree. **Local**, no PR. | "finish this feature", "merge back and clean up" |
 | **`pr`** | Commit → push → open a GitHub PR → assign reviewers. **Remote review** path. | "create a PR", "open a pull request", "submit for review" |
-| **`note`** | Record why the unit of work just finished exists, into the repo's commit journal. Capture only — no diff read, no staging. | "note this", "record what I just did" |
 | **`cleanup`** | Classify every local branch (merged, PR'd, unpushed, gone), delete/keep by that classification, remove the worktrees that go with them, keep only the default branch and a local `develop`-like one, then switch and pull. **Local only** — never touches a remote branch. | "clean up branches", "prune stale branches", "tidy up worktrees" |
 
 ### Shared references — `skills/_shared/`
 `_shared/` is **not** a triggerable skill (it has no `SKILL.md`); it is the shared library
-the six skills link into via `../_shared/references/…`:
+the five skills link into via `../_shared/references/…`:
 
 - `git-safety.md` — the non-negotiable git safety protocol (no force-push, no config edits,
   no AI attribution, don't skip hooks, …).
 - `conventional-commits.md` — commit message format, type table, scope detection.
-- `journal.md` — the commit journal: its two governing rules, the one record kind, how an entry
-  is classified against the current tree (`fresh`/`drifted`/`committed`/`orphaned`/`unknown-head`), and
-  the known gaps. `note`, `commit` and the hook's own nudge text all point here.
 - `quality-gate.md` — how to **detect** (not hardcode) the repo's fast check + full
   lint/test/build gate, how to triage a failing step, and the gate ledger: what a past run
   proved over which content (`fresh`/`failed`/`drifted`/`stale`/`unknown-head`/`none`), the
@@ -160,11 +136,11 @@ the six skills link into via `../_shared/references/…`:
    │   loads plugin skills (via .claude-plugin/plugin.json)
    │   loads plugin hooks (via hooks/hooks.json — auto-discovered)
    ▼
- commit · review · finish · pr · note · cleanup   ← SKILL.md (when & how)
+ commit · review · finish · pr · cleanup   ← SKILL.md (when & how)
    │   all link into
    ▼
  _shared/references/*.md   (safety · conventions · quality gate · worktree · branching
-                            severity bar · lenses · finding triage · commit journal
+                            severity bar · lenses · finding triage
                             agent delegation · output discipline)
    +
  scripts/                  the mechanical steps, one call each
@@ -173,30 +149,27 @@ the six skills link into via `../_shared/references/…`:
    gate-detect.sh          what this repo's fast + full checks are · what the ledger proved
    gate-run.sh             run a gate step: log it, bound it, stop at the first failure
    findings.mjs            reconcile · group · report over a review's findings (JSONL)
-   journal.sh              record intent · classify entries against the tree · coverage
    branch-scan.sh          classify every local branch/worktree for `cleanup` · one gh call
    +
- scripts/hooks/            the two things no skill calls
-   session-bootstrap.sh    SessionStart: write the user-scoped setup, once, then stay silent
-   journal-nudge.sh        Stop/SubagentStop: name the dirty paths no entry covers
+ scripts/hooks/            the one thing no skill calls
+   session-bootstrap.sh    SessionStart: name a missing prerequisite once, then stay silent
    +
  mkit (Go)                 the same mechanical steps, being ported off shell one at a time
    --json everywhere       the skill-facing contract · no TUI off a TTY · flags reach everything
-   M2 storage prune (done) · M3 install/status/uninstall · M4 findings · M5 the jq consumers · M6 journal
+   M2 storage prune (done) · M3 install/status/uninstall · M4 findings · M5 the jq consumers
    │   drive
    ▼
  git   +   gh (GitHub CLI)   +   wt (Worktrunk)   +   rg   +   jq
 ```
 
 The scripts never act: no staging, no merging, no `wt merge`, no edits. They report facts and
-run commands the skill named. Two of them also *remember*: `journal.sh` records why a unit of
-work exists, and `gate-run.sh` records that a command exited 0 over a fingerprint of the content
-it read — `<git-dir>/mkit/journal.jsonl` and `gate.jsonl`, beside the run directories, never
-committed, and a linked worktree gets its own of each. Neither adds a script: the ledger is a
-side effect of a gate that was running anyway, read back by the detector that already prints the
-commands. The hook is the only piece that runs without a skill asking, and
-it is held to the same line — it names which paths lack an entry and never writes one, always
-exits 0, and stays silent unless the repo opted in. `rtk` is deliberately not among any of
+run commands the skill named. One of them also *remembers*: `gate-run.sh` records that a command
+exited 0 over a fingerprint of the content it read — `<git-dir>/mkit/gate.jsonl`, beside the run
+directories, never committed, and a linked worktree gets its own. It adds no script: the ledger
+is a side effect of a gate that was running anyway, read back by the detector that already prints
+the commands. The hook is the only piece that runs without a skill asking, and it is held to the
+same line — it names a missing tool and never installs one, always exits 0, and says each thing
+at most once. `rtk` is deliberately not among any of
 them — it reshapes output for an agent to read, which is exactly what a parser must not
 tolerate; it stays on the agent's own direct commands.
 
@@ -208,9 +181,8 @@ Work is modeled as a **feature** — edits that become commits and then get inte
 
 ```
 edit → commit → review → finish
-  │                       ├── finish  (local merge, delete branch / worktree)
-  │                       └── pr      (push, open PR, review remotely)
-  └── note  (opt-in: record why this unit exists, for commit to spend)
+                          ├── finish  (local merge, delete branch / worktree)
+                          └── pr      (push, open PR, review remotely)
 
 cleanup  (repo-wide, not per-feature: sweep every local branch/worktree finish and pr left behind)
 ```
@@ -241,7 +213,7 @@ plugin/                 # the payload M3 will register; not in the cask yet (bac
   .claude-plugin/
     plugin.json          # plugin manifest (name, skills discovered from skills/)
   hooks/
-    hooks.json           # SessionStart / Stop / SubagentStop registration — plugin root, not
+    hooks.json           # SessionStart registration, and nothing else — plugin root, not
                          #   .claude-plugin/; auto-discovered, so the manifest carries no
                          #   `hooks` key
   skills/
@@ -249,17 +221,15 @@ plugin/                 # the payload M3 will register; not in the cask yet (bac
     pr/SKILL.md
     review/SKILL.md
     finish/SKILL.md
-    note/SKILL.md
     cleanup/SKILL.md
     _shared/             # shared references (README + references/*.md) — no SKILL.md
   scripts/
     lib/common.sh        # sourced helpers: plugin root, refs path, mkit dir, rg-or-grep, wt
-                         #   binary, the prereq table, the wrapper generator, jq-free JSON escape
-    hooks/session-bootstrap.sh  # the SessionStart hook — writes the user-scoped setup itself
-    hooks/journal-nudge.sh      # the Stop/SubagentStop hook — silent in a repo that opted out
-    run-open.sh  facts.sh  gate-detect.sh  gate-run.sh  findings.mjs  journal.sh  branch-scan.sh
-  install.sh             # --status / --uninstall / --bin. Not needed for setup: the hook does
-                         #   that. --uninstall is the only way to opt out globally.
+                         #   binary, the prereq table, one-time state, jq-free JSON escape
+    hooks/session-bootstrap.sh  # the SessionStart hook — names a missing prerequisite, once
+    run-open.sh  facts.sh  gate-detect.sh  gate-run.sh  findings.mjs  branch-scan.sh
+  install.sh             # --status / --uninstall. Installs nothing: there is no setup step.
+                         #   --uninstall is the only way to silence the hook for good.
 docs/
   concept.md             # this file
   backlog.md             # ordered work list
@@ -285,7 +255,7 @@ Plugin skills are namespaced (`mkit:commit`), which avoids clashing with any rep
 skills of the same name.
 
 ## Roadmap
-- **Now — Claude Code plugin.** The six skills + the shared reference bundle, packaged and
+- **Now — Claude Code plugin.** The five skills + the shared reference bundle, packaged and
   installable. This is the product; everything below serves it.
 - **Now — the Go port.** `mkit`, a single binary with a subcommand tree, taking over the
   mechanical layer script by script so that prerequisites and degradation branches go away and a
@@ -294,16 +264,14 @@ skills of the same name.
   (`mkit install`/`status`/`uninstall`) is next. Each script's `.bats` file is the spec for its port, and the
   script is deleted in the same commit that replaces it — two implementations of one invariant is
   the failure the script layer exists to prevent. Ordered list: [`backlog.md`](backlog.md).
-- **Now, on by default — intent capture.** The commit journal: the `Stop` hook nudges the agent
-  that did the work to record *why* each unit exists, and `commit` spends those records instead
-  of re-deriving intent from the diff. The `SessionStart` hook turns it on with no install step;
-  `journal.sh disable` (per repo) and `install.sh --uninstall` (global) both stick. `commit` is
-  the only consumer so far — `review` could use the `why` lines as reviewer context and `pr`
-  could draft a description from them; one consumer first, then decide.
-- **Later — a stable opt-out surface.** The bootstrap notice names paths inside the installed
-  plugin, which are version-scoped for a marketplace install and go stale on upgrade. A
-  `journal.sh default off` subcommand, reachable as `mkit-journal default off` from anywhere,
-  would replace both with something that keeps working.
+- **Considered and dropped — recorded intent.** A commit journal once had a `Stop` /
+  `SubagentStop` hook nudge the agent to record *why* each unit of work existed, for `commit` to
+  spend instead of re-deriving intent from the diff. It was removed: a `Stop` hook's
+  `additionalContext` is rendered verbatim in the transcript on **every turn**, with no way to
+  suppress it, so the standing cost was paid by every session in every repo while the benefit
+  arrived only at commit time. `commit` re-derives intent from the diff, which it had to be able
+  to do anyway — `commit`'s per-file staged read was never skippable, however fresh a record
+  looked. Anything replacing it has to record intent without spending transcript on every turn.
 - **Later — other agents.** Codex, opencode, and others are plain-Markdown consumers of the
   same skill content; supporting one is a packaging step, added only if needed, with no
   change to the skills themselves.

@@ -1,14 +1,13 @@
 # Prerequisites
 
-mkit's plugin payload is Markdown plus seven helpers — six shell scripts and one dependency-free
-Node file — and two hooks. Nothing in it needs building: installing the plugin is a clone, and
-the one piece of user-scoped setup happens by itself on the next session (see *the commit
-journal*, below). What follows is what those scripts call.
+mkit's plugin payload is Markdown plus six helpers — five shell scripts and one dependency-free
+Node file — and one hook. Nothing in it needs building and there is no setup step: installing the
+plugin is a clone. What follows is what those scripts call.
 
 The `mkit` **binary** is a separate, optional install (`brew install masterik/tap/mkit`), and
 nothing below requires it. It is [taking over the script layer](backlog.md) one milestone at a
 time, and each script it replaces deletes a row from this page: `node` goes with `findings.mjs`
-(M4), `jq` and `shasum` with the gate and journal ports (M5–M6).
+(M4), `jq` and `shasum` with the gate port (M5).
 
 **macOS is the supported platform — for the scripts and for the binary.** Nothing detects an OS or
 branches on one; the scripts are simply written to what macOS provides, which is the narrower
@@ -21,9 +20,9 @@ macOS-only in any case.
 | Tool | Used by | Why |
 | --- | --- | --- |
 | `git` ≥ 2.30 | everything | `--absolute-git-dir`, `worktree list --porcelain`, `diff --shortstat` |
-| `bash` ≥ 3.2 | every `.sh` — six helpers, two hooks, `install.sh`, plus the sourced `lib/common.sh` | macOS ships `/bin/bash` 3.2 (frozen there over GPLv3) and `/bin/zsh` 5.9. The scripts run under bash via `#!/usr/bin/env bash`, so **your interactive shell being zsh is irrelevant** — nothing here needs 4.x, and no Homebrew bash is required |
+| `bash` ≥ 3.2 | every `.sh` — five helpers, one hook, `install.sh`, plus the sourced `lib/common.sh` | macOS ships `/bin/bash` 3.2 (frozen there over GPLv3) and `/bin/zsh` 5.9. The scripts run under bash via `#!/usr/bin/env bash`, so **your interactive shell being zsh is irrelevant** — nothing here needs 4.x, and no Homebrew bash is required |
 | `node` ≥ 18 | `findings.mjs` | ESM, `node:fs`. No npm install, no dependencies |
-| `jq` ≥ 1.6 | `gate-detect.sh`, `gate-run.sh`, `facts.sh`, `journal.sh`, the hook | reads `package.json`, `wt list --format=json`, and the journal's and gate ledger's JSONL |
+| `jq` ≥ 1.6 | `gate-detect.sh`, `gate-run.sh`, `facts.sh`, `branch-scan.sh` | reads `package.json`, `wt list --format=json`, `gh`'s JSON, and the gate ledger's JSONL |
 
 ```bash
 brew install git jq node
@@ -52,7 +51,7 @@ Contributors need more than users do; none of this is required to *use* the plug
 
 ```bash
 brew install bats-core go golangci-lint    # bats for the shell suites, Go for the binary
-./tests/run.sh                             # node --test findings.mjs, then bats tests/bats/ (10 suites)
+./tests/run.sh                             # node --test findings.mjs, then bats tests/bats/
 go build ./... && go vet ./... && go test ./...   # the binary — what CI runs
 golangci-lint run                          # CI pins v2.12
 ```
@@ -67,42 +66,35 @@ its lenses and says so in the summary. It never reports a partial review as clea
 - Claude alone still works: `review` runs two subagents with different lens splits so
   corroboration keeps meaning something.
 
-## The commit journal — on by default, no setup
+## The `SessionStart` hook — no setup, no action
 
-Journaling records *why* each unit of work exists, for `commit` to spend later instead of
-re-deriving intent from the diff. **It configures itself.** On your next session after
-installing the plugin, the `SessionStart` hook (`scripts/hooks/session-bootstrap.sh`) writes
-`~/.claude/mkit/journal.default` — the user-scoped marker that makes journaling apply to every
-repo, including ones you clone tomorrow — and tells you once that it did. Nothing to run.
+The plugin ships one hook. `scripts/hooks/session-bootstrap.sh` reports, **once per tool**, any
+prerequisite above that is missing — a gap that otherwise surfaces later as a thinner `facts.sh`
+block or a `gate_cache=no-jq` annotation, and costs far more to debug than to be told about. It
+installs nothing and writes nothing outside `~/.claude/mkit/`.
 
-It needs nothing beyond the `jq` already required above, and the hook itself needs not even
-that: it reports a missing `jq` rather than depending on one.
+It needs no user action. Claude Code loads a plugin's `hooks/hooks.json` automatically: plugin
+hooks require **no opt-in beyond installing the plugin**, and subagents inherit them. It is gated
+accordingly — every session after it has said its piece produces zero bytes, and a tool that
+comes back loses its record, so a later removal warns again.
 
-Opting out, at either scope:
+The hook itself depends on nothing external, not even `jq`: a reporter that needs the tool it
+reports on is unavailable in exactly the case that matters.
+
+Silencing it for good:
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT}/scripts/journal.sh" disable    # this repo only — beats the default
-"${CLAUDE_PLUGIN_ROOT}/install.sh" --uninstall        # everywhere, and it sticks
-"${CLAUDE_PLUGIN_ROOT}/scripts/journal.sh" enabled --why   # → enabled user | disabled repo | …
+"${CLAUDE_PLUGIN_ROOT}/install.sh" --uninstall   # writes the tombstone; it sticks
+"${CLAUDE_PLUGIN_ROOT}/install.sh" --status      # prerequisites, hook state, gate ledger
 ```
 
-`--uninstall` writes `~/.claude/mkit/bootstrap.disabled`, and the hook honours it forever.
-That tombstone is not bookkeeping for its own sake: a deleted file carries no provenance, so
-"never set up" and "deliberately removed" are byte-identical on disk, and without a record of
-the *intent* an uninstall would last exactly until the next session. Re-running `install.sh`
-clears it. `install.sh --status` reports which state you are in.
+`--uninstall` writes `~/.claude/mkit/bootstrap.disabled`, and the hook honours it forever. That
+tombstone is not bookkeeping for its own sake: a deleted file carries no provenance, so "never
+warned" and "warned and dismissed" are byte-identical on disk, and without a record of the
+*intent* the dismissal would last exactly until the next session. Delete that file to undo.
 
-**Both hooks need no user action.** Claude Code loads a plugin's `hooks/hooks.json`
-automatically: plugin hooks require **no opt-in beyond installing the plugin**, and subagents
-inherit them. That is why each one is gated on something:
-
-- `SessionStart` → `session-bootstrap.sh` acts once and then produces zero bytes on every
-  later session, and stays silent forever once the tombstone exists.
-- `Stop` / `SubagentStop` → `journal-nudge.sh` exits 0 with no output outside a git repo, or in
-  a repo whose own `journal.sh disable` tombstone outranks the default.
-
-Neither needs an allowlist entry: Claude Code runs a hook itself, not the agent through `Bash`,
-so neither ever prompts.
+The hook needs no allowlist entry: Claude Code runs a hook itself, not the agent through `Bash`,
+so it never prompts.
 
 ## Verify
 
@@ -119,9 +111,8 @@ Then check the plugin itself, from any repo:
 "${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh" commit --no-run   # prints a fact block
 "${CLAUDE_PLUGIN_ROOT}/scripts/gate-detect.sh"             # prints fast= and full=
 node "${CLAUDE_PLUGIN_ROOT}/scripts/findings.mjs" schema    # prints the JSONL shape
-"${CLAUDE_PLUGIN_ROOT}/scripts/journal.sh" enabled         # prints enabled or disabled
-"${CLAUDE_PLUGIN_ROOT}/install.sh" --status                # what setup is in place
-"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/session-bootstrap.sh" </dev/null   # silent once set up
+"${CLAUDE_PLUGIN_ROOT}/install.sh" --status                # prerequisites, hook, gate ledger
+"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/session-bootstrap.sh" </dev/null   # silent once it has spoken
 ```
 
 Empty `${CLAUDE_PLUGIN_ROOT}` fails as `/scripts/facts.sh: not found`. That is intended:
@@ -139,7 +130,6 @@ Each new script is a new Bash pattern, so the first run of each asks. Allow them
       "Bash(*/mkit/scripts/facts.sh:*)",
       "Bash(*/mkit/scripts/gate-detect.sh:*)",
       "Bash(*/mkit/scripts/gate-run.sh:*)",
-      "Bash(*/mkit/scripts/journal.sh:*)",
       "Bash(*/mkit/scripts/run-open.sh:*)",
       "Bash(*/mkit/scripts/branch-scan.sh:*)",
       "Bash(node */mkit/scripts/findings.mjs:*)"
