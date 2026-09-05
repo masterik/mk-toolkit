@@ -2,6 +2,8 @@
 
 Migration from a shell-script plugin to a **Go binary + plugin**, distributed via Homebrew.
 Direction and rationale: [`concept.md`](concept.md). This file is the ordered work list.
+Researched but unscheduled ideas — deliberately off this list —
+live in [`ideas/`](ideas/README.md).
 
 ## Decision
 - **Language: Go.** Chosen for a single static binary with no C toolchain, a stdlib that covers

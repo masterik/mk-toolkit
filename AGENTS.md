@@ -146,8 +146,9 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
 
 ### Docs and tests
 - `docs/` — `concept.md` (direction/roadmap), `backlog.md` (ordered work list + invariants),
-  `prerequisites.md` (required tooling, setup, permission allowlist). Doc-only; nothing here ships
-  in the cask.
+  `prerequisites.md` (required tooling, setup, permission allowlist), `ideas/` (researched but
+  unscheduled, one file per idea — evidence parked so a later decision doesn't re-derive it;
+  nothing in it is on the milestone line). Doc-only; nothing here ships in the cask.
 - `tests/` — dev-only, deliberately kept at repo root rather than under `plugin/` so `plugin/`
   stays exactly the payload and nothing else. `tests/run.sh` runs both `node --test
   tests/findings.test.mjs` and `bats tests/bats/` (one `.bats` per shell script, each against a

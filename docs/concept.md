@@ -271,7 +271,10 @@ skills of the same name.
   suppress it, so the standing cost was paid by every session in every repo while the benefit
   arrived only at commit time. `commit` re-derives intent from the diff, which it had to be able
   to do anyway — `commit`'s per-file staged read was never skippable, however fresh a record
-  looked. Anything replacing it has to record intent without spending transcript on every turn.
+  looked. Anything replacing it has to record intent without spending transcript on every turn —
+  one candidate, researched and unscheduled, is in
+  [`ideas/journal-transcript-digest.md`](ideas/journal-transcript-digest.md): mine the transcript
+  Claude Code already writes instead of nudging an agent to write a second one.
 - **Later — other agents.** Codex, opencode, and others are plain-Markdown consumers of the
   same skill content; supporting one is a packaging step, added only if needed, with no
   change to the skills themselves.
