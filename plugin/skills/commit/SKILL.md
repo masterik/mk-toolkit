@@ -13,11 +13,11 @@ Part of the **mkit** bundle (`commit` · `finish` · `pr` · `review`); shared r
 live in `../_shared/references/`. This skill only commits — merge-and-cleanup is `finish`, a PR is
 `pr`.
 
-Keep output bounded throughout. For this skill that is three rules, restated below where they apply:
-**`--stat` before any diff**, **gate output goes through `gate-run.sh` — report pass/fail, not the log**,
-**never truncate a staged diff you are about to approve**. `../_shared/references/output-discipline.md` has
-the reasoning; read it only for a case not covered here. `commit` is the front-end both finishers call, so
-what it loads, they load.
+Keep output bounded throughout. For this skill that is two rules, restated below where they apply:
+**`--stat` before any diff**, **never truncate a staged diff you are about to approve**.
+`../_shared/references/output-discipline.md` has the reasoning; read it only for a case not covered here.
+`commit` is the front-end both finishers call, so what it loads, they load. `commit` does not run the
+quality gate — that starts at `pr` and `finish` (`../_shared/references/quality-gate.md`).
 
 ## Goal
 
@@ -78,25 +78,7 @@ second directory instead of returning the first.
    cannot describe it cleanly the commit is too big or mixed — back to step 2.
 6. **Write the message.** Conventional Commits required (`../_shared/references/conventional-commits.md`).
    Multi-line: `git commit -v` or `git commit -F <file>`.
-7. **Run the smallest relevant verification** — the repo's fastest meaningful check
-   (`../_shared/references/quality-gate.md`, fast tier):
-
-   ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/gate-detect.sh                       # once per run: what to run
-   ${CLAUDE_PLUGIN_ROOT}/scripts/gate-run.sh <run-dir> fast -- <fast command>
-   ```
-
-   Report pass/fail and, on failure, the step and its exit code — never the log. The verdict usually *is* the
-   diagnosis; delegate only when it is not ("when a step fails").
-
-   `gate-detect.sh` also says what the gate ledger already proved. `fast_cache=fresh` means this exact
-   command already passed over exactly this content — the first run after a `review` genuinely is a hit, and
-   you may skip it. Then write `cached (Nm ago)` where the verdict would have gone: **a report that shows a
-   pass for a step that did not run is the one thing this must never produce.** The fingerprint does not move
-   when you commit, so splitting one dirty tree into four commits reads `fresh` on each one after the first
-   check — sound, because the content really is unchanged. It only `drifts` once you edit between commits.
-   `failed` means the tree was red on this content: say so, then run the check anyway.
-8. **Repeat** until the working tree is clean.
+7. **Repeat** until the working tree is clean.
 
 ## Final report (always)
 

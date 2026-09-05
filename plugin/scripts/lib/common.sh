@@ -156,7 +156,7 @@ mkit_have_hash() {
 # stdout. Empty output and exit 1 mean "no fingerprint" — callers degrade, never fail.
 #
 # The load-bearing property is that it is **invariant under staging and committing**.
-# The flagship flow is `review` (gate over a dirty tree) → `finish` (commit, then gate).
+# The flagship flow is `pr` (gate before opening) → `finish` (gate again before merge).
 # A key built from HEAD plus the dirty set would classify as drifted the instant the
 # commit lands, even though not one byte the gate reads changed — and the whole feature
 # would save exactly nothing. So the key is the canonical `path → blob` mapping the

@@ -28,7 +28,8 @@ plus a test pinning that same case, so the test cannot catch what was left out.
 example illustrating it. "The switch cannot express a change that skips `minor`" is not answered by adding one
 more case to the switch.
 
-Then run the repo's check (`quality-gate.md`). **A fix that breaks the build is not committed.**
+Verification is `pr`/`finish`'s job, not this one's — `review` does not re-run the repo's check after a
+fix (`quality-gate.md`). Leave the fix in the working tree; the gate runs before the next merge/PR.
 
 ## What gates, if a skill needs a gate
 

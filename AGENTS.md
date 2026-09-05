@@ -119,7 +119,7 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
   - `branch-scan.sh` — `cleanup`'s classifier: every local branch's merge/upstream/PR state and
     every worktree's origin/cleanliness. One batched `gh` call, cached, never a per-branch round trip.
   - `lib/common.sh` — sourced helpers, including `mkit_tree_fingerprint`, the staging- and
-    commit-invariant hash of the content a gate command reads — what makes a `review` → `finish`
+    commit-invariant hash of the content a gate command reads — what makes a `pr` → `finish`
     cache hit possible at all.
 - `plugin/scripts/hooks/session-bootstrap.sh` — `SessionStart`: names, **once per tool**, any
   prerequisite this machine lacks, then emits **zero bytes** on every later session. Installs

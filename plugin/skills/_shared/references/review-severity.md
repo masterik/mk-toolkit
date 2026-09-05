@@ -47,7 +47,7 @@ Every reviewer gets these, whichever tool it is:
 
 - **Read-only.** Read files, run read-only commands (`git diff`, `git log`, `rg`). Do not modify, delete,
   move, stage or commit anything, and do not write through a shell redirect. Reviewers report; the caller fixes.
-- **Do not run the tests, build or linter** — they ran before the review and passed.
+- **Do not run the tests, build or linter** — that's the quality gate's job (`pr`/`finish`), not the reviewer's.
 - **Point at a specific file and line.** A finding with no location cannot be verified.
 - **State the failure concretely**: the input or state, and what goes wrong because of it.
 - **Report the confidence you actually have**, not the confidence that keeps the finding alive.
@@ -60,7 +60,7 @@ Every reviewer gets these, whichever tool it is:
 ## What not to report
 
 - a defect on a line this change did not touch — **unless the change makes it reachable**
-- anything a linter, compiler or type checker catches; all ran before the review and passed
+- anything a linter, compiler or type checker catches — mechanical, and out of scope for a reviewer
 - a lint or vet rule the code silences deliberately, directive visible
 - a missing test, missing doc or general-quality observation the project's own rules do not ask for
 - a nitpick a senior engineer reading this diff would not raise

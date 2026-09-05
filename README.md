@@ -48,10 +48,10 @@ the plugin itself, making `brew install` the only step. Until then the scripts n
 
 ## Not re-proving the same tree (the gate ledger)
 
-`review` runs the quality gate, then `finish` or `pr` runs it again over content that never
-changed. Every step the gate finishes is recorded against a fingerprint of the content it read
-— staging- and commit-invariant, so committing the reviewed tree does not invalidate the proof.
-The next skill sees `fast_cache=fresh exit=0 age=6m` and can skip a 90-second suite.
+`pr` gates before opening a PR; `finish` gates again before a local merge. Every step the gate
+finishes is recorded against a fingerprint of the content it read — staging- and commit-invariant,
+so committing the gated tree does not invalidate the proof. A later run over the same content sees
+`full_cache=fresh exit=0 age=6m` and can skip a re-run of that step.
 
 **Wall-clock only — there are no token savings here.** Gate output already goes to a log rather
 than into context. Nothing is automatic and nothing is silent: the scripts never skip a step,

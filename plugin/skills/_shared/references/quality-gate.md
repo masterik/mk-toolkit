@@ -1,7 +1,7 @@
 # Quality gate
 
-Shared by `commit` (fast tier), `finish` and `pr` (full tier). **Nothing is hardcoded** —
-the commands are detected from the target repo.
+Shared by `finish` and `pr`, both full tier. `commit` and `review` don't gate — they work
+directly on the diff. **Nothing is hardcoded** — the commands are detected from the target repo.
 
 ## Detect, then choose
 
@@ -41,12 +41,12 @@ rather than absent, and never report a skipped gate as a pass. `n-a` is the hone
 case: a repo with no declared check (this plugin is one) has no gate to run, and saying so beats
 substituting a command the repo never named.
 
-## Two tiers
+## One tier, two consumers
 
-- **Fast** (`commit`, per logical commit): the single fastest meaningful check. It runs
-  repeatedly; keep it quick.
-- **Full** (`finish`, `pr`, once before merge/PR): the complete pre-integration sequence, in
-  order, stopping at the first failure.
+`gate-detect.sh` still proposes both `fast=` and `full=`, but only the full tier is used now —
+**by `finish` and `pr`, once each, before merge/PR**: the complete pre-integration sequence, in
+order, stopping at the first failure. `commit` and `review` used to consume the fast tier; they
+no longer gate at all.
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/gate-run.sh <run-dir> --chain 'lint=bun run lint' 'test=bun run test' 'build=bun run build'
@@ -77,8 +77,8 @@ sentence or two, caused-by-this-change or pre-existing, a concrete suggested fix
 
 **What this saves is wall-clock, not tokens.** There are no token savings here by
 construction — `gate-run.sh` already sends full output to a log so it never reaches
-context. What it saves is the second and third execution of a 90-second suite over a tree
-that stopped changing: `review` gates, then `finish` or `pr` gates the same content again.
+context. What it saves is a re-execution of a 90-second suite over a tree that stopped
+changing — e.g. `pr` gates a step, then `finish` gates the same content again later.
 
 ### The governing rule
 
@@ -138,13 +138,10 @@ Note also that `--prune` deletes run directories, so a record can outlive the
 
 ### Per-skill posture
 
-Deliberately unequal — the four skills do not carry the same risk.
+Deliberately unequal — `pr` and `finish` do not carry the same risk.
 
 | Skill | Step | Posture |
 |---|---|---|
-| `commit` | fast tier, per logical commit | **may consume.** Committing does not move the fingerprint, so a run that splits one dirty tree into four commits sees `fresh` on every one after the first check — which is sound, because the content really is unchanged. It only `drifts` if you edit between commits |
-| `review` | pre-review fast check | **may consume.** A red tree wastes every reviewer, so `failed` is as valuable here as `fresh` |
-| `review` | post-fix re-check | naturally `drifted` — the fixes just changed the tree. No special case |
 | `pr` | full tier | **may consume per step.** A draft PR is recoverable and CI runs remotely anyway |
 | `finish` | full tier | **strictest.** Its gate is the only safety net before a local merge. Consume only on an exact command match, a matching fingerprint, and an age within bound — and **always** print `cached (Nm ago)`. Never cache a whole chain silently |
 
