@@ -124,9 +124,16 @@ Port `branch-scan.sh`, `gate-run.sh`, `facts.sh` and `gate-detect.sh`. Deletes a
 of degradation branches — `pr=jq-missing`, `gate_cache=no-jq`, `no-hash` — because a binary is
 never half-capable. The last milestone in the port: the shell payload after it is
 `run-open.sh` and the `SessionStart` hook.
+Drop the fast tier in the same port. Since the tier was removed from `commit` and `review`, no
+skill consumes `fast=` or `fast_cache=`, yet `gate-detect.sh` still derives both for every
+ecosystem and the ledger still classifies them. Dead output is not a compatibility surface: the
+Go command proposes the full tier only.
 **Done when:** `jq` and `shasum` are gone from [`prerequisites.md`](prerequisites.md).
 
 ### Later
+- Delete `tools/purge-journal-state.sh`. It exists only to clear what mkit ≤ 0.12.1 left behind
+  when journaling was removed, so it is finished the moment every machine that ran that version
+  has run it once. Tracked here because nothing else will surface it.
 - `mkit cleanup` TUI — multi-select over `branch-scan.sh`'s classification.
 - `mkit review` TUI — live parallel reviewer progress.
 - Codex installer target (`~/.codex/`).
@@ -149,9 +156,12 @@ never half-capable. The last milestone in the port: the shell payload after it i
   of one invariant is the failure mode the script layer exists to prevent.
 
 ## Open questions
-- **Version skew.** A skill from plugin v0.13 calling a binary from v0.12 — does the binary
-  assert a minimum plugin version, or stay backward compatible? Only matters once someone
-  installs outside Homebrew.
+- **Version skew — the live state, no longer a hypothetical.** `plugin.json` is at `0.13.0`
+  while the newest tag is `v0.12.0`, so the only binary Homebrew can install is a minor behind
+  the payload — and because the cask carries no payload (M3), the plugin side is whatever
+  checkout the machine has. Does the binary assert a minimum plugin version, or stay backward
+  compatible? Settle it in M3: registering a Homebrew-provided payload is the point where the
+  two versions begin moving together and a skew stops being visible.
 
 Resolved: Homebrew is the only distribution channel (no `curl | sh`, no `go install`) — see the
 M1 plan's decisions. The `SessionStart` hook still self-heals: it runs pre-install, before a
