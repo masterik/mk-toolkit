@@ -178,3 +178,17 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
   reshapes output for reading.
 - Nothing project-specific is hardcoded: quality-gate commands, commit scopes, and reviewers are
   discovered from the target repo.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for `masterik/mk-toolkit`, operated via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` and `docs/adr/` at the repo root, created lazily. See `docs/agents/domain.md`.
