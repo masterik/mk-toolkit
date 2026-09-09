@@ -35,6 +35,16 @@ mkit's state moved — but there is nothing to migrate; see below.
     documents.** It was `|| true`, so on an unwritable state directory a sentence specified to
     be said once per tool was said every session forever. A message whose stamp cannot be
     written is now dropped and the hook stays silent.
+- **`cleanup`'s `--force` step could discard a tracked `.mkit/`.** Before treating an unignored
+  `.mkit/` as disposable scratch, it checked only the index (`git ls-files`) for tracked content —
+  missing a file `git rm --cached` had staged for deletion while it still sat in `HEAD`. Now checks
+  both the index and `git ls-tree -r HEAD -- .mkit`.
+- `mkit_tree_fingerprint`'s `EXIT` cleanup trap now installs before the first `mkit_tmpfile`
+  allocation, so a failure on `tmp_d`/`tmp_s`/`tmp_h` still removes `tmp_p` (the local declaration
+  was also missing `tmp_s`/`tmp_h`).
+- `finish`'s step 5 teardown verification now runs every command — not just the log check —
+  against the resolved surviving root, since the shell's own cwd can itself be inside the worktree
+  step 4 just removed.
 
 ### Changed
 - **BREAKING — state moved to two directories a grant can actually reach.** Repo scope is
@@ -72,6 +82,21 @@ mkit's state moved — but there is nothing to migrate; see below.
   than a re-read, repair by asking the same subagent about the gap, an exclusion for trees with
   more than ~3 mixed files, and a rule against polling or scheduling a wakeup on a subagent.
 - Enabled the `skill-creator` and `plugin-dev` plugins in the repo's Claude config.
+- `output-discipline.md`'s `mktemp` example now falls back to `/tmp` when `$TMPDIR` is unset,
+  matching `mkit_tmpfile`'s own fallback.
+- [ADR 0003](docs/adr/0003-two-distribution-channels.md) splits distribution into two independent
+  channels: Homebrew ships the binary only, the plugin payload ships from the GitHub marketplace
+  as it already does today, and the two version independently. Withdraws M3 (`mkit
+  install`/`status`/`uninstall`) rather than re-scoping it — inspecting the shipped `v0.12.0` cask
+  found no Homebrew-provided payload to register and no stable path to register it at (Caskroom is
+  version-pinned, no `opt/` symlink) — and promotes M7 (`mkit init`/`repo profile`/`doctor`) to
+  next, since nothing in the remaining ports blocks it.
+
+### Removed
+- `tools/purge-journal-state.sh` — every machine that needed it has run it; the 0.12.1 journal
+  state it cleared no longer exists to clean up.
+- `tools/migrate-state-layout.sh` — the one-time script that moved a machine to this release's
+  state layout (above). Every machine has run it, so `tools/` is empty again.
 
 ### Added
 - Two payload invariants, asserted statically in `tests/bats/payload.bats` because neither has a

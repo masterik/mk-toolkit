@@ -84,11 +84,8 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
   TTY. `Update` holds no prune logic — it only toggles selection.
 - `internal/buildinfo/` — version/commit/date, injected by `-X` ldflags at release.
 - `tools/` — shell that is not part of the plugin payload; staging for a port, and the home
-  for one-shot maintenance scripts. `purge-journal-state.sh` removes the state mkit <= 0.12.1
-  left behind when journaling was deleted (the user-scoped marker, the `mkit-journal` wrapper,
-  the stale `notice/v1` key, this repo's `journal.*` files). Dry-run by default, `--apply` to
-  act; it never removes a wrapper without mkit's generation marker, never follows a symlink,
-  and never deletes a directory. Delete it once the machines that need it have run it.
+  for one-shot maintenance scripts. Empty today — `purge-journal-state.sh` and
+  `migrate-state-layout.sh` both did their jobs (every machine ran them) and were deleted.
 
 ### The plugin payload
 - `plugin/` — the plugin payload, shipped from the **GitHub marketplace**

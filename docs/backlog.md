@@ -96,27 +96,6 @@ Neither of these is a port, and neither waits on a milestone. Both follow from
 [ADR 0002](adr/0002-state-locations-under-a-sandbox.md) landing and
 [ADR 0003](adr/0003-two-distribution-channels.md) being taken.
 
-- **One-time migration to the 0.14 state layout** ([#2](https://github.com/masterik/mk-toolkit/issues/2)).
-  A `tools/` script, in the family of `purge-journal-state.sh`: dry-run by default, `--apply` to
-  act, safe to re-run, and finished the moment every machine has run it once. Three jobs:
-  1. **Create `~/.mkit/`.** Not cosmetic and not skippable — a grant on `~/.mkit` covers the
-     directory's *interior*, so `mkdir` there is a write to `$HOME` that no allowlist entry
-     permits. Nothing inside a sandboxed session can create it, which makes a human-run script
-     the only thing that can. This is why the script exists at all rather than being advice.
-  2. **Remove `~/.claude/mkit/`.** `bootstrap.state` is regenerable — losing it costs at most one
-     repeated sentence per missing tool. If `bootstrap.disabled` is present the machine had the
-     hook silenced, so the script must re-create it at the new path, or the silencing silently
-     lapses; that is the one thing here that is a migration rather than a deletion.
-  3. **Remove `<git-dir>/mkit/` from every repo under `~/Projects`.** Run directories are spent
-     scratch. `gate.jsonl` is *not* carried over: the ledger records wall-clock savings, never
-     correctness, and an unrecognised command classifies `none` and simply runs. Deleting it is
-     cheaper than a migration that has to be right.
-
-  Departs from `purge-journal-state.sh` in one respect, deliberately: that script never deletes a
-  directory, and this one must. So the guards move to the target — only a directory named exactly
-  `mkit` directly inside a resolved `--git-dir`, never a symlink, never outside the scan root,
-  and the dry run prints every path before `--apply` touches one.
-
 - **Delete `plugin/install.sh`.** Its own commit, because the name is load-bearing in more places
   than the file: `facts.sh`'s `notes:` text and three script headers name it as the thing that
   writes the tombstone, `prerequisites.md` documents both flags, and `tests/bats/install.bats`
@@ -282,11 +261,6 @@ no conversation context, working from the artifact and the worklog alone.
   (M4's guard), reporting an unregistered marketplace, or creating `~/.mkit` outside a sandboxed
   session all plausibly are. Specify from what the binary needs then, not from what `install.sh`
   did.
-- Delete the 0.14 state-layout migration script (above) once every machine has run it — same
-  finishing condition as the next item, and the same reason for being tracked here.
-- Delete `tools/purge-journal-state.sh`. It exists only to clear what mkit ≤ 0.12.1 left behind
-  when journaling was removed, so it is finished the moment every machine that ran that version
-  has run it once. Tracked here because nothing else will surface it.
 - `mkit stage hunks` — the eventual replacement for `commit`'s Markdown patch-staging recipe.
   Mechanical throughout: cut a per-file diff, drop named hunks, `git apply --cached`, verify with a
   staged stat, and refuse a split that would cut inside a hunk (intermediate commits must build).
