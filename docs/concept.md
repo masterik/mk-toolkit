@@ -48,8 +48,9 @@ are plain Markdown, so support for another agent is a thin packaging step, not a
   (`node`, `jq` and `shasum` leave [`prerequisites.md`](prerequisites.md) as their consumers
   land), whole families of degradation branch go with them (`jq-missing`, `no-hash`,
   `gate_cache=no-jq` — a binary is never half-capable), and a real TUI becomes possible for the
-  steps where a human wants to tick a list before anything runs. Homebrew then ships binary and
-  plugin together, so one `brew upgrade` updates both. Ordered milestones and the invariants the
+  steps where a human wants to tick a list before anything runs. Homebrew ships the **binary
+  only**; the plugin payload ships from the GitHub marketplace, and the two version independently
+  ([ADR 0003](adr/0003-two-distribution-channels.md)). Ordered milestones and the invariants the
   port must hold: [`backlog.md`](backlog.md).
 - **A script for a mechanical invariant, never for a decision:** `scripts/` may open a
   directory, run a logged command, classify a worktree or do confidence arithmetic. It may not
@@ -189,7 +190,7 @@ the five skills link into via `../_shared/references/…`:
    +
  mkit (Go)                 the same mechanical steps, being ported off shell one at a time
    --json everywhere       the skill-facing contract · no TUI off a TTY · flags reach everything
-   M2 storage prune (done) · M3 install/status/uninstall · M4 findings · M5 the jq consumers
+   M2 storage prune (done) · M7 profile/init/doctor (next) · M4 findings · M5 the jq consumers
    work                    the per-branch worklog: what ran, over what content, concluding what
    plan                    task-graph arithmetic: frontier · blocked · cycles · edge validation
    repo profile            what this repo told us, and what a human pinned — reported apart
@@ -257,10 +258,12 @@ every worktree in the repo rather than just the current one.
 mkit facilitates the workflow at three levels, and they are deliberately different in kind. The
 rule across all three: **mkit computes and reports; the human or the agent decides.**
 
-**The machine** — is the toolchain here at all. `mkit status` reports the prerequisite table, the
-hook's state and the gate ledger's; the `SessionStart` hook names a missing tool once and then goes
-quiet forever. Neither installs anything. This is what exists today, as `install.sh`, and M3
-absorbs it.
+**The machine** — is the toolchain here at all. The `SessionStart` hook names a missing tool once
+and then goes quiet forever, and `facts.sh` reports the prerequisite-adjacent facts a skill needs
+at its first call. Neither installs anything, and neither is a place to *ask*: a human-run
+diagnostic is a separate surface, which `mkit doctor` becomes in M7
+([ADR 0003](adr/0003-two-distribution-channels.md) withdrew M3 and deleted `install.sh`, so
+between now and M7 there is deliberately no loud version of this).
 
 **The repo** — what this project can't tell you by inspection. `mkit repo profile --json` reports
 the gate commands, the spec store, commit scopes, reviewers and merge style, marking each as
@@ -297,7 +300,7 @@ internal/
   marketplace.json      # marketplace entry — source "./plugin". Must sit at the repo root:
                          #   `/plugin marketplace add owner/repo` only ever looks for
                          #   .claude-plugin/marketplace.json there, no subdirectory support
-plugin/                 # the payload M3 will register; not in the cask yet (backlog.md)
+plugin/                 # the payload, shipped from the GitHub marketplace (never the cask)
   .claude-plugin/
     plugin.json          # plugin manifest (name, skills discovered from skills/)
   hooks/
@@ -335,9 +338,12 @@ Install the plugin with:
 
 and the binary with `brew install masterik/tap/mkit`. Releases are tag-driven: pushing `vX.Y.Z`
 has GoReleaser build every platform archive and commit the Homebrew **cask** to
-`masterik/homebrew-tap` (`homebrew_casks` — `brews` is deprecated in GoReleaser v2). Once M3
-lands, `mkit install` registers the Homebrew-installed payload as a `directory` marketplace and
-the two steps collapse into one.
+`masterik/homebrew-tap` (`homebrew_casks` — `brews` is deprecated in GoReleaser v2). The cask
+carries the binary and nothing else, and **the two steps stay two**: the marketplace ships the
+skills, Homebrew ships the executable, and neither is on the other's release schedule
+([ADR 0003](adr/0003-two-distribution-channels.md)). The payload calls the binary for nothing
+yet, so the plugin works with no binary installed at all; from M4 it will say so up front when
+the binary is absent or too old, rather than failing partway.
 
 Plugin skills are namespaced (`mkit:commit`), which avoids clashing with any repo-local
 skills of the same name.
@@ -349,8 +355,8 @@ skills of the same name.
   exist and the line runs from an idea to a merge. The skills are the judgement; the binary
   contributes the mechanical parts they stand on — the worklog, task-graph frontier arithmetic, and
   the repo profile that stops every step discovering the same facts apart. Ordered as M6–M8 in
-  [`backlog.md`](backlog.md), and gated behind M3 rather than racing it: a workflow that spans
-  seven steps wants the payload actually shipping first.
+  [`backlog.md`](backlog.md), and sequenced behind the configuration surface rather than racing
+  it: a workflow spanning seven steps wants one place to read the repo's answers from.
 - **Next — configuration as a surface.** `mkit init`, `mkit repo profile` and `mkit doctor`,
   covering the repo and agent levels described above. `doctor` is the one with no predecessor:
   every other command reports something a script already computed, while the agent's own
@@ -358,8 +364,10 @@ skills of the same name.
 - **Now — the Go port.** `mkit`, a single binary with a subcommand tree, taking over the
   mechanical layer script by script so that prerequisites and degradation branches go away and a
   TUI becomes possible. M1 (scaffold, release chain, Homebrew cask) shipped in `v0.12.0`; M2
-  (`mkit storage prune`, `internal/core/storage/` + `internal/tui/storageprune/`) is done; M3
-  (`mkit install`/`status`/`uninstall`) is next. Each script's `.bats` file is the spec for its port, and the
+  (`mkit storage prune`, `internal/core/storage/` + `internal/tui/storageprune/`) is done; M3 was
+  **withdrawn** when the distribution model changed ([ADR 0003](adr/0003-two-distribution-channels.md)),
+  so **M7 (`repo profile`/`init`/`doctor`) is next** — `mkit init` per project is the priority and no
+  port blocks it. Each script's `.bats` file is the spec for its port, and the
   script is deleted in the same commit that replaces it — two implementations of one invariant is
   the failure the script layer exists to prevent. Ordered list: [`backlog.md`](backlog.md).
 - **Considered and dropped — recorded intent.** A commit journal once had a `Stop` /

@@ -40,9 +40,11 @@ The `mkit` binary, via Homebrew:
 brew install masterik/tap/mkit
 ```
 
-Nothing to build either way. The binary answers `mkit version` today and is
-[absorbing the script layer](docs/backlog.md) one milestone at a time; M3 will let it register
-the plugin itself, making `brew install` the only step. Until then the scripts need `git`,
+Nothing to build either way, and **both steps are meant to stay** — the marketplace ships the
+skills, Homebrew ships the binary, and the two version independently
+([ADR 0003](docs/adr/0003-two-distribution-channels.md)). The binary answers `mkit version` today
+and is [absorbing the script layer](docs/backlog.md) one milestone at a time; the payload calls it
+for nothing yet, so the plugin works with no binary installed at all. The scripts need `git`,
 `bash`, `node` and `jq`; `rg`, `gh` and `wt` are recommended — see
 [Prerequisites](docs/prerequisites.md).
 

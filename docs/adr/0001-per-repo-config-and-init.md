@@ -3,6 +3,10 @@
 **Status:** accepted · **Date:** 2026-09-09 ·
 **Partly superseded by** [ADR 0002](0002-state-locations-under-a-sandbox.md): the state-location
 table below, and decision 5's premise. Decisions 1–4 stand.
+**Also by** [ADR 0003](0003-two-distribution-channels.md): every reference below to settling
+something "in M3" is void — M3 was withdrawn. Decision 2's config **path** is now an open
+question, because ADR 0002 made `.mkit/` ignored and this ADR never named an alternative;
+tracked in [#3](https://github.com/masterik/mk-toolkit/issues/3).
 
 ## Context
 

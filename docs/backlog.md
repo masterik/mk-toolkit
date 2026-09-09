@@ -1,6 +1,8 @@
 # mkit — Backlog
 
-Migration from a shell-script plugin to a **Go binary + plugin**, distributed via Homebrew.
+Migration from a shell-script plugin to a **Go binary + plugin**, over **two deliberately
+independent distribution channels**: the binary via Homebrew, the plugin payload via the GitHub
+marketplace ([ADR 0003](adr/0003-two-distribution-channels.md)).
 Direction and rationale: [`concept.md`](concept.md). This file is the ordered work list.
 Researched but unscheduled ideas — deliberately off this list —
 live in [`ideas/`](ideas/README.md).
@@ -19,7 +21,21 @@ live in [`ideas/`](ideas/README.md).
   an untested OS in the matrix is a support claim nobody verifies.
 - **One binary, subcommand tree.** `mkit storage prune`, `mkit gate run`, `mkit status`.
 - **Dual front-end.** Rich TUI when interactive; flags + `--json` when driven by a skill.
-- **Homebrew ships binary *and* plugin payload.** `brew upgrade mkit` updates both.
+- **Two channels; Homebrew carries only the binary.** The plugin payload ships from the GitHub
+  marketplace — `/plugin marketplace add masterik/mk-toolkit`, which works today — and the cask
+  installs one executable and nothing else. This **dissolved** both packaging blockers M3 was
+  stuck on rather than solving them: no `files:` entry in the archive, no cask-vs-formula
+  rework, no version-pinned Caskroom path to register, and no write to
+  `~/.claude/settings.json`, which is inside the sandbox's protected region *and* explicitly
+  denied, so no allowlist entry could ever have lifted it. The cost is that the two artifacts
+  version independently — see M4 and Open questions
+  ([ADR 0003](adr/0003-two-distribution-channels.md)).
+- **Installation is manual in this phase.** No `mkit install`, and no `install.sh`. Adding a
+  marketplace and enabling a plugin are two lines a human runs once; a command that wraps them
+  buys nothing while it cannot write the file it would need to write. Silencing the
+  `SessionStart` hook is likewise manual — the tombstone is a file, and creating it is the whole
+  operation. `install`/`uninstall` get re-specified later, from whatever the binary actually
+  needs by then rather than from what the shell script happened to do.
 
 ## Invariants
 Rules that must hold through every milestone. A change that breaks one is a design error,
@@ -37,8 +53,10 @@ not a trade-off.
    from the shell layer unchanged.
 6. **Judgement stays in Markdown.** The binary owns mechanical invariants only. Where the
    line is unclear, report candidates and let the skill choose.
-7. **Skills stay as files.** Authored as Markdown in this repo, copied by the formula. Not
-   embedded via `embed.FS` — they must stay diffable and reviewable.
+7. **Skills stay as files.** Authored as Markdown in this repo and served from the marketplace
+   checkout Claude Code maintains. Not embedded via `embed.FS`, and not carried by the cask —
+   they must stay diffable and reviewable, and the binary must never be what makes a skill
+   available.
 8. **Every workflow step is entry-capable.** Any of the seven runs as the only thing in a session,
    in any order, with any subset of the others skipped. A step discovers what it needs, derives the
    thin version of what is missing, names what it assumed, and completes. It never sends the user
@@ -72,7 +90,51 @@ not a trade-off.
     it never becomes a precondition, and a pinned value cheap to verify gets verified
     ([ADR 0001](adr/0001-per-repo-config-and-init.md)).
 
+## Near-term, outside the port line
+
+Neither of these is a port, and neither waits on a milestone. Both follow from
+[ADR 0002](adr/0002-state-locations-under-a-sandbox.md) landing and
+[ADR 0003](adr/0003-two-distribution-channels.md) being taken.
+
+- **One-time migration to the 0.14 state layout** ([#2](https://github.com/masterik/mk-toolkit/issues/2)).
+  A `tools/` script, in the family of `purge-journal-state.sh`: dry-run by default, `--apply` to
+  act, safe to re-run, and finished the moment every machine has run it once. Three jobs:
+  1. **Create `~/.mkit/`.** Not cosmetic and not skippable — a grant on `~/.mkit` covers the
+     directory's *interior*, so `mkdir` there is a write to `$HOME` that no allowlist entry
+     permits. Nothing inside a sandboxed session can create it, which makes a human-run script
+     the only thing that can. This is why the script exists at all rather than being advice.
+  2. **Remove `~/.claude/mkit/`.** `bootstrap.state` is regenerable — losing it costs at most one
+     repeated sentence per missing tool. If `bootstrap.disabled` is present the machine had the
+     hook silenced, so the script must re-create it at the new path, or the silencing silently
+     lapses; that is the one thing here that is a migration rather than a deletion.
+  3. **Remove `<git-dir>/mkit/` from every repo under `~/Projects`.** Run directories are spent
+     scratch. `gate.jsonl` is *not* carried over: the ledger records wall-clock savings, never
+     correctness, and an unrecognised command classifies `none` and simply runs. Deleting it is
+     cheaper than a migration that has to be right.
+
+  Departs from `purge-journal-state.sh` in one respect, deliberately: that script never deletes a
+  directory, and this one must. So the guards move to the target — only a directory named exactly
+  `mkit` directly inside a resolved `--git-dir`, never a symlink, never outside the scan root,
+  and the dry run prints every path before `--apply` touches one.
+
+- **Delete `plugin/install.sh`.** Its own commit, because the name is load-bearing in more places
+  than the file: `facts.sh`'s `notes:` text and three script headers name it as the thing that
+  writes the tombstone, `prerequisites.md` documents both flags, and `tests/bats/install.bats`
+  is 25 tests that go with it. Two things it currently owns need somewhere to land first:
+  - **Writing the tombstone.** Becomes manual — a documented one-liner creating
+    `~/.mkit/bootstrap.disabled`. The hook's side is unchanged; it already treats the file as the
+    signal and never cared who wrote it.
+  - **Being the loud diagnostic.** `--status` is the only surface that *reports* an unwritable
+    user directory, because the hook is silent there by design. `facts.sh` still emits
+    `user_dir_writable=` as a starting fact, so no skill loses the information — only the
+    human-run surface goes, and M7's `doctor` is where it comes back. Say so in the removal
+    commit rather than discovering it later.
+
 ## Milestones
+
+**Order.** `mkit init` is the priority, so **M7 is next**, ahead of the remaining ports. Then M4,
+M5, M6, M8 as written. M3 is withdrawn. The M-numbers are stable identities referenced from
+`concept.md` and `AGENTS.md`, so nothing is renumbered when the order changes.
 
 ### M1 — Repo reorg + scaffold + release chain — done
 Repo renamed to `mk-toolkit`, tree reorganized (payload under `plugin/`, docs under `docs/`),
@@ -99,72 +161,42 @@ predicts.
 boundary case; `--apply` deletes the same set; a TUI mode offers a size-sorted tick-list before
 applying. All met.
 
-### M3 — `mkit install` / `status` / `uninstall`
-Absorbs `install.sh`. The `SessionStart` hook is **not** in scope — it stays in bash
-permanently (see "Staying in bash, permanently" below), because it cannot depend on a binary
-whose absence it may have to report. Registers the Homebrew-installed plugin payload as a
-`directory` marketplace in `~/.claude/settings.json`.
-Installer targets are an interface from the start — `claude` now, `codex` later. M1 already
-consolidated the payload under `plugin/`, so this milestone points at one path rather than
-enumerating root directories.
-**Blocked on two packaging gaps M1 left open — resolve these before writing any Go.** Both were
-found by inspecting the shipped `v0.12.0` cask, not by reading the config:
+### M3 — withdrawn
 
-1. **The payload is not in the archive.** `.goreleaser.yaml` declares `archives: [formats:
-   [tar.gz]]` with no `files:`, so the tarball carries only the binary plus goreleaser's default
-   `LICENSE` + `README.md`. The installed cask contains exactly those three entries — no
-   `plugin/` at all. Nothing can be registered until the payload is added to the archive.
-2. **A cask has no stable path to register.** `homebrew_casks` was chosen in M1 because `brews`
-   is deprecated, but a cask is not a keg: it installs to
-   `/opt/homebrew/Caskroom/mkit/<version>/` and **never creates `/opt/homebrew/opt/<name>`**.
-   Verified — `/opt/homebrew/opt/mkit` does not exist, and `/opt/homebrew/bin/mkit` is a symlink
-   straight into `Caskroom/mkit/0.12.0/mkit`. So the `opt` path this milestone was written
-   against does not exist, and the only path that does is version-pinned — precisely the failure
-   the bullet below is guarding against. Casks also have no artifact stanza for "install this
-   directory into `share/`"; `binary` is the one that applies.
+Was `mkit install` / `status` / `uninstall`, and it never started. It sat blocked on two
+packaging gaps found by inspecting the shipped `v0.12.0` cask — the payload was not in the
+archive, and a cask has no stable path to register (Caskroom is version-pinned and there is no
+`opt/` symlink). [ADR 0003](adr/0003-two-distribution-channels.md) removed the premise instead
+of the blockers: the plugin ships from GitHub, so there is no Homebrew-provided payload to
+register and no marketplace entry for a command to write.
 
-   Pick one, deliberately:
-   - **Switch the tap entry to a formula.** Kegs get `opt/`, and `share/mkit/plugin` installs
-     naturally, so the registration below works as originally written. Costs re-doing M1's
-     release chain and understanding why `brews` was deprecated before depending on it.
-   - **Keep the cask; register a path `mkit install` owns.** Copy the payload out of the
-     versioned Caskroom directory into a stable location the binary controls (e.g.
-     `$MKIT_HOME/plugin`) and register *that*. No tap rework, but `mkit install` becomes
-     load-bearing for upgrades — it must re-copy after every `brew upgrade`, which the
-     `SessionStart` hook is the natural thing to detect.
+What became of its three jobs:
 
-   Until this is settled, "Homebrew ships binary *and* plugin payload" in the Decision section
-   above, and the same claim in `README.md`, `concept.md` and `AGENTS.md`, are statements of
-   intent rather than fact.
+- **`install`** — nothing to do. Adding the marketplace and enabling the plugin is manual, and
+  `~/.claude/settings.json` is sandbox-denied besides.
+- **`status`** — folded into M7's `mkit doctor`, which was already specified to overlap it.
+- **`uninstall`** — the tombstone is a file; creating it is manual. See "Delete
+  `plugin/install.sh`" above.
 
-- Register the payload by a path that survives `brew upgrade`. Never a versioned path
-  (`Cellar/…`, `Caskroom/<version>/…`): it rots on the next upgrade.
-- `autoUpdate: false` — a directory source's autoUpdate implies a git pull and the Homebrew
-  payload is not a checkout. `brew upgrade mkit` is the update mechanism.
-- Merge into existing settings, never overwrite. `--dry-run` prints the diff.
-3. **Registration in `~/.claude/settings.json` is a human-run step. The tombstone is not, any more.**
-   Settled by [ADR 0002](adr/0002-state-locations-under-a-sandbox.md), which resolved the choice this
-   entry used to pose. The tombstone moved to `~/.mkit/` — outside the sandbox's protected region, so
-   one `permissions.additionalDirectories` entry genuinely opens it, and `mkit uninstall` is
-   skill-invocable on a machine that has the entry and reports the exact remedy on one that does not.
-   Repo-scoping the tombstone is no longer needed and was rejected: silencing that the user set once
-   should not have to be re-set per repo.
-
-   `~/.claude/settings.json` has no such escape — it is inside the protected region and explicitly
-   denied besides, and no allowlist entry lifts that. So **`mkit install`'s marketplace registration
-   is a human-run step** (`! mkit install`) and this milestone's "Done when" says so. Per invariant
-   10, it names the denied path *and* the fact that the command is human-run, rather than offering
-   configuration that cannot work.
-
-**Done when:** `brew install mkit && ! mkit install` yields a working plugin with no clone (the
-registration step named as human-run), the registered path still resolves after a `brew upgrade`, and
-`mkit status` reports what today's `install.sh --status` does — the prerequisite table, the state
-locations and whether the user-scoped one is writable, the `SessionStart` hook's state, and the gate
-ledger's — with its exit status still the prerequisite verdict alone.
+Re-specified later if the binary turns out to need either verb (see Later). Do not resurrect
+this entry as written — it is scoped against a distribution model the project no longer has.
 
 ### M4 — `mkit findings`
 Port `scripts/findings.mjs` (507 lines). Pure data transformation, so parity is testable.
-**Done when:** `node` is gone from [`prerequisites.md`](prerequisites.md).
+
+**Carries the version-skew guard, because it is the milestone that creates the problem.** Today
+nothing in the payload invokes `mkit` — it is bash plus one dependency-free `.mjs` — so the two
+distribution channels are genuinely decoupled and there is nothing to guard. This port is the
+first one that makes a *skill* call the binary, and from that moment a plugin from GitHub can
+meet a binary from Homebrew that is too old for it, with no shared release to keep them in step.
+Build the guard here, not earlier and not later: the payload declares the minimum binary version
+it needs, `facts.sh` reports the binary and its version as starting facts (the project's own
+"detect at the first call, turn it into a starting fact" rule), and an absent-or-too-old binary
+is named once by the `SessionStart` hook the way a missing `jq` already is. A skill discovering
+this by parsing a confusing failure mid-run is the outcome the guard exists to prevent.
+
+**Done when:** `node` is gone from [`prerequisites.md`](prerequisites.md), and a deliberately
+stale binary makes the skills say so up front rather than fail partway.
 
 ### M5 — the `jq` consumers
 Port `branch-scan.sh`, `gate-run.sh`, `facts.sh` and `gate-detect.sh`. Deletes a whole family
@@ -192,18 +224,34 @@ starts recording immediately and the front half has something to read.
 **Done when:** a branch that ran `commit` then `review` shows both in `mkit work show --json`, and
 `review` invoked cold on that branch takes its goal from the log instead of the branch name.
 
-### M7 — `mkit repo profile` + `init` + `doctor`
-The configuration surface ([ADR 0001](adr/0001-per-repo-config-and-init.md)). Independent of M6,
-and worth landing near it: every new skill would otherwise rediscover the same facts apart.
+### M7 — `mkit repo profile` + `init` + `doctor` — **next**
+The configuration surface ([ADR 0001](adr/0001-per-repo-config-and-init.md)). Independent of M6
+and of every remaining port, which is what lets it come first: `mkit init` in each project is the
+priority, and nothing in the ports blocks it.
+
+**Blocked on one decision, and it is small — settle it before writing any Go.** ADR 0001 says repo
+config "lives in the working tree, committed, so a colleague and a fresh clone inherit it". ADR
+0002 then made `.mkit/` ignored scratch, and this repo's own `.gitignore` now carries that rule.
+So `mkit init` currently has nowhere to write: anything under `.mkit/` is ignored by construction
+and no collaborator inherits it, which is the one property the config was for. Pick the committed
+path and record it as an amendment to ADR 0001 — the natural candidates are a root-level
+`mkit.toml`-style file or a path under `.claude/`, and the deciding question is whether the config
+is mkit's or the harness's.
 - `mkit repo profile --json` — gate commands, spec store, scopes, reviewers, merge style, each
   tagged `discovered` or `pinned`. Discovery reads `docs/agents/issue-tracker.md` where present.
 - `mkit init` — writes the pinned remainder, committed. Interactive TUI on a TTY, flags otherwise
   (invariants 2 and 3). Writes nothing outside the repo.
 - `mkit doctor` — prerequisites, permission-allowlist gaps against what the skills invoke, hook
   registration, plugin enablement, and the **sandbox writable set**. Reports; fixes nothing.
-- Fold `install.sh --status`'s degradation sentences in, so they keep one producer.
-**Done when:** `mkit doctor` names an unwritable `~/.mkit/` on a sandboxed run without failing, with
-the `additionalDirectories` remedy beside it,
+  **It is the diagnostic surface, not an addition to one** — `install.sh --status` is deleted
+  before this lands, so between the two the only report of an unwritable user directory is
+  `facts.sh`'s `user_dir_writable=` starting fact. Restoring the human-run surface is part of
+  this milestone's value, not a nice-to-have.
+- The degradation sentences keep exactly one producer. That is `lib/common.sh` until M5 ports
+  `facts.sh`; `doctor` must call it rather than re-word a remedy.
+**Done when:** the committed config path is decided and recorded, `mkit doctor` names an unwritable
+`~/.mkit/` on a sandboxed run without failing — with a remedy that names **both** halves, creating
+the directory and granting it, since the grant alone cannot create it —
 `mkit repo profile --json` distinguishes discovered from pinned on this repo, and `mkit init` is a
 no-op on a repo it has already configured.
 
@@ -228,6 +276,14 @@ support and can land whenever.
 no conversation context, working from the artifact and the worklog alone.
 
 ### Later
+- **Re-specify `install` / `uninstall`, if the binary earns them.** Withdrawn from M3, not
+  refuted. The bar is a job manual steps genuinely cannot do: `~/.claude/settings.json` stays
+  sandbox-denied, so registration will never be one of them, but detecting a plugin/binary skew
+  (M4's guard), reporting an unregistered marketplace, or creating `~/.mkit` outside a sandboxed
+  session all plausibly are. Specify from what the binary needs then, not from what `install.sh`
+  did.
+- Delete the 0.14 state-layout migration script (above) once every machine has run it — same
+  finishing condition as the next item, and the same reason for being tracked here.
 - Delete `tools/purge-journal-state.sh`. It exists only to clear what mkit ≤ 0.12.1 left behind
   when journaling was removed, so it is finished the moment every machine that ran that version
   has run it once. Tracked here because nothing else will surface it.
@@ -259,13 +315,25 @@ no conversation context, working from the artifact and the worklog alone.
   of one invariant is the failure mode the script layer exists to prevent.
 
 ## Open questions
-- **Version skew — the live state, no longer a hypothetical.** `plugin.json` is at `0.13.0`
-  while the newest tag is `v0.12.0`, so the only binary Homebrew can install is a minor behind
-  the payload — and because the cask carries no payload (M3), the plugin side is whatever
-  checkout the machine has. Does the binary assert a minimum plugin version, or stay backward
-  compatible? Settle it in M3: registering a Homebrew-provided payload is the point where the
-  two versions begin moving together and a skew stops being visible.
+- **Which way the version-skew guard points.** Deferred to M4 by decision, not by neglect — see
+  that milestone. What is still genuinely open is the *direction*: does the payload declare the
+  minimum binary it needs (the payload updates more often, so it knows), or does the binary
+  declare the payload range it serves (one place to look, but the binary is the artifact that
+  lags)? Answer it when M4 makes the first skill call `mkit`, with the shape of that call in
+  hand. Both channels are now permanently independent
+  ([ADR 0003](adr/0003-two-distribution-channels.md)), so skew is a standing condition to
+  report, never a state to eliminate.
+- **Whether repo config belongs to mkit or to the harness.** Blocks M7; see that milestone. The
+  narrow version: a root-level `mkit.toml` says the config is mkit's and travels with the repo
+  regardless of which agent reads it; a path under `.claude/` says it is harness configuration
+  that mkit happens to consume. ADR 0001 assumed the former without saying so, and ADR 0002 then
+  took `.mkit/` off the table by making it ignored.
 
-Resolved: Homebrew is the only distribution channel (no `curl | sh`, no `go install`) — see the
-M1 plan's decisions. The `SessionStart` hook still self-heals: it runs pre-install, before a
-Homebrew-provided binary is on PATH.
+Resolved:
+- **Two distribution channels, deliberately independent** — the binary via Homebrew, the payload
+  via the GitHub marketplace ([ADR 0003](adr/0003-two-distribution-channels.md)). Neither
+  `curl | sh` nor `go install` for the binary; no clone for the payload. This also settles what
+  the old skew question was really asking: the two versions never "begin moving together",
+  because nothing brings them together.
+- **The `SessionStart` hook still self-heals** and still runs before any binary is on PATH,
+  which is exactly why it stays in bash permanently.

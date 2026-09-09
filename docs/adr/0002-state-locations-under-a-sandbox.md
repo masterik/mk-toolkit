@@ -3,6 +3,9 @@
 **Status:** accepted · **Date:** 2026-09-09 ·
 **Supersedes:** the state-location table in [ADR 0001](0001-per-repo-config-and-init.md) (its
 "Context" table and decision 5's premise). ADR 0001's other four decisions stand unchanged.
+**Partly superseded by** [ADR 0003](0003-two-distribution-channels.md): the "M3 is unblocked"
+consequence below is void — M3 was withdrawn and `install.sh` is slated for deletion. Every
+decision here stands; one remedy is amended, see the note on decision 2.
 
 ## Context
 
@@ -117,9 +120,21 @@ without its run directory.
   template-less `mktemp`, and no payload script writes outside the run directory, `$TMPDIR` and the
   user-scoped root. Both are asserted statically, because neither has a behavioral seam — a bats run
   cannot create an OS sandbox.
-- **M3 is unblocked on the question ADR 0001 left open.** `mkit install` / `uninstall` can write user
-  scope on a machine with one `additionalDirectories` entry, and can say exactly what to add when
-  there is none. The tombstone does not have to move to repo scope.
+- ~~**M3 is unblocked on the question ADR 0001 left open.**~~ **Void** — see
+  [ADR 0003](0003-two-distribution-channels.md), which withdrew M3 and made installation manual.
+  What survives is the part that was actually about state: the tombstone does not have to move to
+  repo scope, because one `additionalDirectories` entry genuinely opens user scope. Who writes it
+  is no longer a command.
+- **The grant does not create the directory — an amendment to decision 2, measured after the
+  fact.** A `permissions.additionalDirectories` entry for `~/.mkit` covers that directory's
+  *interior*; `mkdir ~/.mkit` is a write to `$HOME`, which nothing grants
+  (`mkdir: /Users/mk/.mkit: Operation not permitted`). So "one grant and it works" is one step
+  short: the directory must exist first, and nothing inside a sandboxed session can create it.
+  Every remedy sentence must name **both** halves — create, then grant — and a human-run
+  migration script is required rather than merely convenient
+  ([#2](https://github.com/masterik/mk-toolkit/issues/2)). The remedy in `lib/common.sh`,
+  `prerequisites.md` and decision 2's wording all still name only the grant; correcting them is
+  tracked in [#3](https://github.com/masterik/mk-toolkit/issues/3).
 - **ADR 0001's decision 5 survives with a corrected premise.** "Sandbox degradation is named, never
   hit" still holds; what changes is that naming a path is not enough — the sentence has to name a
   path that can actually be granted.

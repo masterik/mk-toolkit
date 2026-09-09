@@ -10,8 +10,9 @@ Composition over replacement: the skills orchestrate `git`, `gh`, `wt`, and code
 no new git logic.
 
 **Current phase: the Go port.** M1 (scaffold + release chain) done at `v0.12.0`; M2
-(`mkit storage prune`) done; **M3 (`mkit install`/`status`/`uninstall`) is next.** Milestones and
-the full invariant list:
+(`mkit storage prune`) done; **M3 withdrawn** ([ADR 0003](docs/adr/0003-two-distribution-channels.md));
+**M7 (`mkit repo profile`/`init`/`doctor`) is next** — `mkit init` per project is the priority, and
+nothing in the remaining ports blocks it. Milestones and the full invariant list:
 [`backlog.md`](docs/backlog.md). Direction and rationale: [`concept.md`](docs/concept.md) — the
 place for *why*, so this file can stay operative.
 
@@ -90,11 +91,13 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
   and never deletes a directory. Delete it once the machines that need it have run it.
 
 ### The plugin payload
-- `plugin/` — the plugin payload: what Homebrew is *meant* to ship so M3 can register it as a
-  `directory` marketplace. **It does not ship yet** — `.goreleaser.yaml` declares no `files:`, so
-  the `v0.12.0` cask contains only the binary, `LICENSE` and `README.md`. M3 is blocked on that
-  and on the fact that a cask has no stable path to register (no `opt/` symlink; Caskroom is
-  version-pinned). Don't repeat "Homebrew ships the payload" as fact — see M3 in `backlog.md`.
+- `plugin/` — the plugin payload, shipped from the **GitHub marketplace**
+  (`/plugin marketplace add masterik/mk-toolkit`, resolving the root `.claude-plugin/marketplace.json`).
+  Homebrew ships the **binary only**: the cask carries one executable, `.goreleaser.yaml`
+  deliberately declares no `files:`, and there is nothing to register — a cask has no stable path
+  anyway (no `opt/` symlink; Caskroom is version-pinned), and `~/.claude/settings.json` is
+  sandbox-denied besides. The two artifacts version independently, which is accepted rather than
+  worked around ([ADR 0003](docs/adr/0003-two-distribution-channels.md), which withdrew M3).
 - `plugin/.claude-plugin/plugin.json` — manifest (skills auto-discovered from `skills/`).
   The marketplace entry, `marketplace.json` (`source: "./plugin"`), lives at the **repo root**
   `.claude-plugin/` — not nested under `plugin/` — because `/plugin marketplace add owner/repo`
@@ -149,8 +152,8 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
   **Stamp before emit is enforced, not just documented**: a message whose stamp could not be
   written is dropped and the hook stays silent. It used to be `|| true`, which on an unwritable
   state directory turned a once-per-tool sentence into a permanent greeting. Absence is the right
-  failure mode here — a `SessionStart` hook cannot be a diagnostic surface, which is why
-  `install.sh --status` is one. Never
+  failure mode here — a `SessionStart` hook cannot be a diagnostic surface, which is why one
+  exists separately (`install.sh --status` today, `mkit doctor` from M7). Never
   parses its stdin — that would need `jq`, the very tool it must be able to report as missing
   (hence `mkit_json_escape`). Never touches a repo or calls git. **Stays in bash permanently** —
   it cannot depend on a binary whose absence it may have to report.
@@ -161,7 +164,11 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
   the remedy, when it cannot). No arguments does what `--status` does, and **its exit status is the
   prerequisite verdict alone** — the writability row is reported, never folded into it. Sources
   `lib/common.sh` so the degradation sentences have exactly one producer. Never edits a shell rc,
-  never touches a repo. **M3 absorbs it.**
+  never touches a repo. **Slated for deletion, not for porting** — installation is manual in this
+  phase ([ADR 0003](docs/adr/0003-two-distribution-channels.md)). When it goes, writing the
+  tombstone becomes a documented one-liner and `--status`'s job falls to `facts.sh`'s
+  `user_dir_writable=` until M7's `doctor`. See "Near-term" in `backlog.md`; the name is
+  referenced from `facts.sh`'s `notes:` text and three script headers, so it is its own commit.
 - `<toplevel>/.mkit/` — the scripts' scratch root: per-run directories plus `gate.jsonl` (the gate
   ledger, append-only, rotated back to the newest 200 records once it passes 400). **Inside the
   working directory, not `<git-dir>/mkit`** ([ADR 0002](docs/adr/0002-state-locations-under-a-sandbox.md)):
