@@ -214,16 +214,20 @@ merge onto current base.
 
 ### 5. Verify the cleanup
 
-**`$toplevel` is stale here whenever step 4 removed a worktree.** It is the root `facts.sh` resolved at
-step 1 — the *feature* worktree on any linked path — and that directory no longer exists, so a call pinned
-to it fails with `cannot change to '<path>'` instead of verifying anything. Use `primary=` from `facts.sh`
-(or re-resolve the root) as the `-C` target for the log check; the other three commands run from wherever
-you now are. On `linked=no` there was nothing to remove and `$toplevel` is still correct.
+**`$toplevel` is stale here whenever step 4 removed a worktree — and so may the shell's cwd be**, if it was
+inside that worktree when `git worktree remove` ran. `$toplevel` is the root `facts.sh` resolved at step
+1 — the *feature* worktree on any linked path — and that directory no longer exists, so a call pinned to it,
+or one run from a cwd still inside it, fails instead of verifying anything. Resolve `<surviving-root>` once
+(`primary=` from `facts.sh`, or re-resolve the root) and put every command below against it — `cd
+"<surviving-root>"` first, since `pwd` and `git branch --show-current` have no `-C` equivalent, and pass
+`-C "<surviving-root>"` explicitly to the rest, including the pinned log check. On `linked=no` there was
+nothing to remove and `$toplevel`/the cwd are still correct.
 
-- `git worktree list` — the feature worktree is gone (if there was one).
-- `git branch` — the feature branch is gone (and, PR path, `git ls-remote --heads <remote> <feature-branch>`
-  is empty).
-- `git branch --show-current` / `pwd` — you are on the base branch (or back in the primary checkout).
+- `git -C "<surviving-root>" worktree list` — the feature worktree is gone (if there was one).
+- `git -C "<surviving-root>" branch` — the feature branch is gone (and, PR path, `git ls-remote --heads
+  <remote> <feature-branch>` is empty).
+- after `cd "<surviving-root>"`: `git branch --show-current` / `pwd` — you are on the base branch (or back
+  in the primary checkout).
 - `"$git_bin" -C "<surviving-root>" log --oneline -5` — the base contains the feature commits (PR path: the
   squash/merge/rebase commit `gh pr merge` produced).
 

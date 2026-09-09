@@ -157,8 +157,12 @@ For every branch approved in step 1, step 2, or just vacated in step 3, in this 
    not the user's work.** `branch-scan.sh` excludes `.mkit/` from its cleanliness check, but git does not:
    where `run_ignored=no` — an isolated session, which cannot write the exclude file — an unignored
    `.mkit/` is enough for git to call the worktree dirty and refuse. Check with
-   `git -C <path> status --porcelain -- . ':(exclude).mkit'`; if that is empty, `--force` discards only run
-   artefacts, and say exactly that instead of the "discards uncommitted work" sentence, which would be
+   `git -C <path> ls-files -- .mkit` **first** — if that names any path, `.mkit/` is tracked, which should
+   never happen and means the exclude pathspec below would hide the user's own committed changes under it
+   too; treat this the same as any other dirty worktree and never pass `--force`. Only when `ls-files`
+   comes back empty, check
+   `git -C <path> status --porcelain -- . ':(exclude).mkit'`; if that is also empty, `--force` discards only
+   run artefacts, and say exactly that instead of the "discards uncommitted work" sentence, which would be
    false here. Anything else in the output is the user's, and the normal rule applies.
 2. **Delete the branch, if it still exists.** Always `git branch -D <branch>` here, never plain `-d` — `-d`
    only checks whether the branch is merged into whatever you currently have checked out, which is not what

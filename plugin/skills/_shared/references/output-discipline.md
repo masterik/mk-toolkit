@@ -59,7 +59,8 @@ every grant this machine makes. A write to `tmp=` can still be refused — say s
 falling back somewhere else. Never `~/.claude/…` either (a protected region — a write there fails even
 when an allowlist entry appears to cover it), never a bare relative path, never a helper script into the
 target repository's working tree. A `mktemp` with no template resolves the Darwin per-user temp
-directory and **ignores `$TMPDIR`** — always give it a path: `mktemp "$TMPDIR/mkit-x.XXXXXX"`.
+directory and **ignores `$TMPDIR`** — always give it a path: `mktemp "${TMPDIR:-/tmp}/mkit-x.XXXXXX"`,
+the same fallback `mkit_tmpfile` uses, so a session with `$TMPDIR` unset still lands somewhere real.
 
 Two facts to act on before you stage anything:
 

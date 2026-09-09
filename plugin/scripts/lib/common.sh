@@ -367,7 +367,7 @@ mkit_tree_fingerprint() {
 		# absent hash tool must return 1, never kill the gate around us.
 		set +e
 		set +o pipefail
-		local root tmp_p tmp_d p out
+		local root tmp_p tmp_d tmp_s tmp_h p out
 		mkit_have_hash || exit 1
 		root="$(git rev-parse --show-toplevel 2>/dev/null)"
 		[ -n "$root" ] || exit 1
@@ -377,11 +377,16 @@ mkit_tree_fingerprint() {
 		# These four files die with the call, and rooting them in the run directory would
 		# recreate the original failure one layer down: the fingerprint is called from gate
 		# detection, in sessions where the run directory may itself be unreachable.
+		#
+		# Trap goes up front, before the first allocation: if tmp_d/tmp_s/tmp_h fails after
+		# tmp_p already exists, tmp_p must still be removed. `rm -f ""` on a not-yet-assigned
+		# one is a no-op, so installing the trap before any of them are set is safe.
+		tmp_p="" tmp_d="" tmp_s="" tmp_h=""
+		trap 'rm -f "$tmp_p" "$tmp_d" "$tmp_s" "$tmp_h"' EXIT
 		tmp_p="$(mkit_tmpfile mkitfp)" || exit 1
 		tmp_d="$(mkit_tmpfile mkitfp)" || exit 1
 		tmp_s="$(mkit_tmpfile mkitfp)" || exit 1
 		tmp_h="$(mkit_tmpfile mkitfp)" || exit 1
-		trap 'rm -f "$tmp_p" "$tmp_d" "$tmp_s" "$tmp_h"' EXIT
 
 		# Everything that differs from HEAD, plus everything untracked and not ignored,
 		# sorted into the four things a path can be. The enumeration is the point: one
