@@ -101,8 +101,15 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
   that silently never runs. **No `Stop` / `SubagentStop` hook, deliberately** — see
   `concept.md`'s "considered and dropped": that event's `additionalContext` is rendered verbatim
   in the transcript every turn and cannot be suppressed.
-- `plugin/skills/<name>/SKILL.md` — the five triggerable skills. `cleanup` (repo-wide
-  branch/worktree gardening) sits outside the edit → commit → review → integrate line.
+- `plugin/skills/<name>/SKILL.md` — the triggerable skills. The workflow is **seven steps**
+  (`brainstorm` → `spec` → `implement` → `commit` → `review` → `pr`/`finish`) plus `cleanup`
+  (repo-wide branch/worktree gardening, outside the line). **Five exist today** — `commit`,
+  `review`, `pr`, `finish`, `cleanup`; the front half is designed and unbuilt (`backlog.md`,
+  M6–M8), so don't describe `brainstorm`/`spec`/`implement` as shipping.
+  The steps are **composable, not sequential**: each is entry-capable, runs alone in any order with
+  any subset skipped, derives the thin version of what it can't find, and names what it assumed.
+  Never write a skill that tells the user to run another skill first, or that runs a step
+  downstream of itself. The contract is `_shared/references/workflow-contract.md`.
 - `plugin/skills/_shared/` — shared references (no `SKILL.md`); skills link in via
   `../_shared/references/…`. **Keep those relative paths intact** — they're what makes the bundle
   portable.
@@ -146,7 +153,9 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
 
 ### Docs and tests
 - `docs/` — `concept.md` (direction/roadmap), `backlog.md` (ordered work list + invariants),
-  `prerequisites.md` (required tooling, setup, permission allowlist), `ideas/` (researched but
+  `prerequisites.md` (required tooling, setup, permission allowlist), `adr/` (decisions that were
+  hard to reverse, one file per decision — `0001` reverses "no setup step" for repo scope and
+  records the sandbox-driven state-location rule), `ideas/` (researched but
   unscheduled, one file per idea — evidence parked so a later decision doesn't re-derive it;
   nothing in it is on the milestone line). Doc-only; nothing here ships in the cask.
 - `tests/` — dev-only, deliberately kept at repo root rather than under `plugin/` so `plugin/`

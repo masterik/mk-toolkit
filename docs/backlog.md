@@ -39,6 +39,24 @@ not a trade-off.
    line is unclear, report candidates and let the skill choose.
 7. **Skills stay as files.** Authored as Markdown in this repo, copied by the formula. Not
    embedded via `embed.FS` — they must stay diffable and reviewable.
+8. **Every workflow step is entry-capable.** Any of the seven runs as the only thing in a session,
+   in any order, with any subset of the others skipped. A step discovers what it needs, derives the
+   thin version of what is missing, names what it assumed, and completes. It never sends the user
+   to another step, and never runs one downstream of itself. Full contract:
+   [`workflow-contract.md`](../plugin/skills/_shared/references/workflow-contract.md).
+9. **State is repo-scoped.** `<git-dir>/mkit/` by default — run directories, the gate ledger, the
+   worklog. User scope (`MKIT_HOME`) holds only what must outlive every repo: the hook tombstone
+   and its once-per-tool messages. The sandbox enforces this from outside: `~/.claude/mkit/` is
+   unwritable from any skill-invoked run, so a command that needs it is a command a skill cannot
+   call.
+10. **Sandbox degradation is named, never hit.** A command that would write a sandbox-denied path
+    reports which path and falls back inside the repo, rather than surfacing `Operation not
+    permitted`. `mkit doctor` reports the writable set as a first-class fact. Same rule as a
+    missing prerequisite, one axis over.
+11. **Config is an input, never a permission.** Every command and every step runs with no config
+    present. `mkit init` removes repeated discovery and captures what inspection cannot establish;
+    it never becomes a precondition, and a pinned value cheap to verify gets verified
+    ([ADR 0001](adr/0001-per-repo-config-and-init.md)).
 
 ## Milestones
 
@@ -110,10 +128,29 @@ found by inspecting the shipped `v0.12.0` cask, not by reading the config:
 - `autoUpdate: false` — a directory source's autoUpdate implies a git pull and the Homebrew
   payload is not a checkout. `brew upgrade mkit` is the update mechanism.
 - Merge into existing settings, never overwrite. `--dry-run` prints the diff.
+3. **User-scoped writes are sandbox-denied, so two of these commands cannot be skill-invoked.**
+   Measured 2026-09-09: `~/.claude/mkit/` is `Operation not permitted` from an agent Bash call,
+   while `<git-dir>/mkit/` and `$TMPDIR` are writable. `bootstrap.state` exists there only because
+   the harness runs `SessionStart` hooks outside the sandbox. So `mkit install` registering a
+   marketplace in `~/.claude/settings.json` (itself explicitly denied) and `mkit uninstall` writing
+   the tombstone are both unreachable from a skill. Pick one, deliberately:
+   - **Human-run commands.** Document `install`/`uninstall` as `! mkit install` in-session or a
+     plain shell invocation, and have `mkit status` report which paths it could not read rather
+     than failing. Honest and cheap; means the install story is never fully agent-driven.
+   - **Move the tombstone to repo scope.** Silencing becomes per-repo, which is arguably more
+     useful anyway, and the user-scoped set shrinks to the once-per-tool messages. Changes the
+     hook's contract, which is bash and staying bash — so its side of the change is small but
+     load-bearing.
+
+   Registration in `~/.claude/settings.json` has no repo-scoped alternative, so whichever is
+   chosen, **plugin registration is a human-run step** and the milestone's "Done when" must say so.
+   Per invariant 10, both commands name the denied path rather than surfacing the raw errno.
+
 **Done when:** `brew install mkit && mkit install` yields a working plugin with no clone, the
-registered path still resolves after a `brew upgrade`, and `mkit status` reports what today's
+registered path still resolves after a `brew upgrade`, `mkit status` reports what today's
 `install.sh --status` does — the prerequisite table, the `SessionStart` hook's state, and the
-gate ledger's.
+gate ledger's — and the sandbox question above is settled in writing rather than discovered by a
+user hitting `Operation not permitted`.
 
 ### M4 — `mkit findings`
 Port `scripts/findings.mjs` (507 lines). Pure data transformation, so parity is testable.
@@ -129,6 +166,55 @@ skill consumes `fast=` or `fast_cache=`, yet `gate-detect.sh` still derives both
 ecosystem and the ledger still classifies them. Dead output is not a compatibility surface: the
 Go command proposes the full tier only.
 **Done when:** `jq` and `shasum` are gone from [`prerequisites.md`](prerequisites.md).
+
+### M6 — `mkit work` + the workflow contract
+The substrate the seven steps stand on, landed before any of the new skills, so the back half
+starts recording immediately and the front half has something to read.
+- `mkit work show|append`, `--json`. `<git-dir>/mkit/work/<branch>.jsonl`, append-only, rotated
+  like `gate.jsonl`, never committed, per-worktree. A record carries step, timestamp, content
+  fingerprint (reusing `mkit_tree_fingerprint`'s successor), artifact pointer, one-line gist, and
+  assumptions. Appending is bookkeeping; **reading it is judgement and stays in the skills.**
+- Ship [`workflow-contract.md`](../plugin/skills/_shared/references/workflow-contract.md) and link
+  it from all four existing skills.
+- Retrofit the back half: `commit`, `review`, `pr`, `finish` each append one record and each read
+  the log for a goal before deriving one. `review`'s step 1 goal derivation is the model — it
+  already degrades correctly, so this generalises an existing behaviour rather than inventing one.
+**Done when:** a branch that ran `commit` then `review` shows both in `mkit work show --json`, and
+`review` invoked cold on that branch takes its goal from the log instead of the branch name.
+
+### M7 — `mkit repo profile` + `init` + `doctor`
+The configuration surface ([ADR 0001](adr/0001-per-repo-config-and-init.md)). Independent of M6,
+and worth landing near it: every new skill would otherwise rediscover the same facts apart.
+- `mkit repo profile --json` — gate commands, spec store, scopes, reviewers, merge style, each
+  tagged `discovered` or `pinned`. Discovery reads `docs/agents/issue-tracker.md` where present.
+- `mkit init` — writes the pinned remainder, committed. Interactive TUI on a TTY, flags otherwise
+  (invariants 2 and 3). Writes nothing outside the repo.
+- `mkit doctor` — prerequisites, permission-allowlist gaps against what the skills invoke, hook
+  registration, plugin enablement, and the **sandbox writable set**. Reports; fixes nothing.
+- Fold `install.sh --status`'s degradation sentences in, so they keep one producer.
+**Done when:** `mkit doctor` names the `~/.claude/mkit/` denial on a sandboxed run without failing,
+`mkit repo profile --json` distinguishes discovered from pinned on this repo, and `mkit init` is a
+no-op on a repo it has already configured.
+
+### M8 — `mkit plan` + the `spec` and `implement` skills
+The front half's mechanical core plus the two skills that consume it. `brainstorm` needs no binary
+support and can land whenever.
+- `mkit plan frontier|blocked|validate`, `--json` — pure arithmetic over the task graph: which
+  slices are unblocked, which are gated by what, cycle and dangling-edge detection. It never
+  chooses a slice, sizes one, or decides one is done.
+- `spec` — synthesise, never re-interview; publish the spec and the graph to the store the profile
+  names, falling back to the run directory when that store is unreachable.
+- `implement` — work the frontier one slice at a time, gate between slices, full gate at the end.
+  **Sequential in place is the default**, not a worktree per slice: `wt` is sandbox-fragile
+  (observed failing to `mktemp`), and parallel editors over one tree is the collision `review`
+  already avoids. Parallel worktrees stay an opt-in for a graph with genuinely independent slices.
+- **Interaction with M5, settle it there or here:** M5 drops the fast tier because no skill consumes
+  `fast=`. `implement` is exactly the consumer that wants one — a per-slice cheap check with the
+  full gate held for the end. Either M5 keeps the fast tier for this milestone's sake, or
+  `implement` runs the full gate every slice and leans on the ledger for the cache. Decide before
+  M5 deletes it, because resurrecting it afterwards costs more than keeping it.
+**Done when:** a spec written by `spec` can be implemented by `implement` on a fresh session with
+no conversation context, working from the artifact and the worklog alone.
 
 ### Later
 - Delete `tools/purge-journal-state.sh`. It exists only to clear what mkit ≤ 0.12.1 left behind

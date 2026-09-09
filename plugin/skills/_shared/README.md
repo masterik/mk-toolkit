@@ -1,8 +1,13 @@
 # _shared — reference bundle
 
-The **shared library** for mkit's five skills. **Not a triggerable skill** — no `SKILL.md`.
+The **shared library** for mkit's skills. **Not a triggerable skill** — no `SKILL.md`.
 `commit`, `review`, `finish`, `pr` and `cleanup` link into `references/` via relative paths
 (`../_shared/references/…`), so safety rules and conventions live in exactly one place.
+
+The workflow is seven steps plus `cleanup`; `brainstorm`, `spec` and `implement` are designed and
+not yet built ([`backlog.md`](../../../docs/backlog.md), M6–M8), so the table below lists the four
+step skills that exist today. `references/workflow-contract.md` is what all seven are held to; the
+existing four are retrofitted to link and record against it in M6.
 
 > Keep those `../_shared/references/…` links intact — sibling-relative paths are what make the bundle
 > portable if it is lifted into another repo.
@@ -25,6 +30,10 @@ sweeps every local branch and worktree, not just the one the other four just tou
 
 ## References (`references/`)
 
+- `workflow-contract.md` — how the seven steps compose: every step **entry-capable** (runs alone, in any
+  order, with any subset skipped), the five rules that make that hold, the per-branch worklog they record
+  into, and what each step owes the next. The reason `commit` alone is a complete run rather than step four
+  of seven.
 - `git-safety.md` — the non-negotiable git safety protocol: no force-push, no config edits, no AI attribution,
   don't skip hooks, confirm before irreversible steps.
 - `conventional-commits.md` — message format, type table, scope detection.
@@ -67,6 +76,6 @@ sweeps every local branch and worktree, not just the one the other four just tou
   (`output-discipline.md`).
 - **A script for a mechanical invariant, never for a decision** — `scripts/` owns the steps that are the same
   every run and fail silently when hand-rolled (opening the run directory, logging a gate step, classifying a
-  worktree, confidence arithmetic). Judgement stays in Markdown; see [`concept.md`](../../concept.md).
+  worktree, confidence arithmetic). Judgement stays in Markdown; see [`concept.md`](../../../docs/concept.md).
 
-For the plugin's overall design and roadmap see [`concept.md`](../../concept.md).
+For the plugin's overall design and roadmap see [`concept.md`](../../../docs/concept.md).

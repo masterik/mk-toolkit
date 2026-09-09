@@ -70,6 +70,22 @@ are plain Markdown, so support for another agent is a thin packaging step, not a
     `cached`. A run printing `gate=ok` having executed nothing is the failure this guards.
 - **Composition over replacement:** orchestrate `git`, GitHub CLI (`gh`), and Worktrunk
   (`wt`); never reimplement what they already do well.
+- **Sandbox-aware from day one:** the agent's Bash calls run in a sandbox whose write allowlist
+  covers the project directory and `$TMPDIR` — and *not* `~/.claude/mkit/`, mkit's own user-scoped
+  state, which is `Operation not permitted` from any skill-invoked run (measured 2026-09-09; the
+  `SessionStart` hook can write it only because the harness runs hooks outside the sandbox).
+  Composed tools are exposed too: `wt` fails to `mktemp` under it. This is the same shape as a
+  missing prerequisite and gets the same treatment — **named, never hit**. A command that would
+  write a denied path says which path, and falls back inside the repo; `mkit doctor` reports the
+  writable set beside the prerequisite table. It also sets the default for where state goes:
+  repo-scoped, because that is the scope that works.
+- **Configuration is per-repo, and is an input:** what a repo can't tell you by inspection — which
+  store holds its specs, which of three test commands is the cheap one, who reviews what — is
+  pinned once by `mkit init` and committed, so a colleague and a fresh clone inherit it. User scope
+  keeps only what must outlive every repo, which is the hook's tombstone and its once-per-tool
+  messages. Every step still runs with no config at all, discovering what it can and reporting what
+  it assumed: config removes repeated discovery, and never becomes a precondition
+  ([ADR 0001](adr/0001-per-repo-config-and-init.md)).
 - **Safe by default:** irreversible actions (force-push, branch delete, history rewrite,
   hook-skipping) are gated by an explicit safety protocol the skills share.
 - **DRY via shared references:** the skills link into one `_shared/references/` bundle
@@ -87,14 +103,26 @@ are plain Markdown, so support for another agent is a thin packaging step, not a
   anyway. amd64 + arm64 is the whole matrix. Other platforms stay out until someone needs one.
 
 ## The Skills
-Five skills. Four move work through its lifecycle: `commit` is the shared front-end;
-`finish` and `pr` both begin by committing, and you pick the finisher by
-**destination** — merge it yourself locally, or push it for review. `cleanup` sits outside
-that line: repo-wide gardening — it doesn't touch code, it sweeps every local branch and
-worktree the other four leave behind.
+Eight skills. Seven are **steps** in one workflow — think it through, write it down, build it,
+record it, check it, ship it — and `cleanup` sits outside the line: repo-wide gardening that
+doesn't touch code, sweeping every branch and worktree the steps leave behind.
+
+The steps are **composable, not sequential**. Any one of them runs as the only thing in a session,
+in any order, with any subset of the others skipped; a step that can't find what an earlier step
+would have produced derives the thin version itself and says it did. That property is a contract,
+not an emergent convenience, and it lives in one place:
+[`workflow-contract.md`](../plugin/skills/_shared/references/workflow-contract.md). Three of the
+seven — `brainstorm`, `spec`, `implement` — are the front half, and are not built yet
+([`backlog.md`](backlog.md), M6–M8).
+
+Within the back half, `commit` is the shared front-end; `finish` and `pr` both begin by committing,
+and you pick the finisher by **destination** — merge it yourself locally, or push it for review.
 
 | Skill | Does | Trigger examples |
 |-------|------|------------------|
+| **`brainstorm`** | Interview the idea until the open questions are answered or deferred on purpose. Facts are the agent's job, decisions are yours. Produces decisions, not artifacts. | "help me think through", "let's brainstorm", "poke holes in this" |
+| **`spec`** | Synthesise what's already been discussed into a spec plus a task graph of vertical slices with blocking edges. Never re-interviews. | "write it up", "turn this into a spec", "break this down" |
+| **`implement`** | Work the task graph's frontier: build a slice, gate it, take the next. Gate-cached between slices. | "implement this", "build the spec", "work the tickets" |
 | **`commit`** | Inspect the tree, stage intentionally, split into logical Conventional Commits. | "commit", "split into commits" |
 | **`review`** | Review the local diff/commits — full (CodeRabbit + Codex + Claude, all lenses) or quick (CodeRabbit + Codex, bugs/impl only) — verify the findings, fix what's worth fixing, summarize. | "review my changes", "quick review", "run codex and coderabbit" |
 | **`finish`** | Commit → merge the branch back into its base → delete branch / remove worktree. **Local**, no PR. | "finish this feature", "merge back and clean up" |
@@ -136,7 +164,8 @@ the five skills link into via `../_shared/references/…`:
    │   loads plugin skills (via .claude-plugin/plugin.json)
    │   loads plugin hooks (via hooks/hooks.json — auto-discovered)
    ▼
- commit · review · finish · pr · cleanup   ← SKILL.md (when & how)
+ brainstorm · spec · implement · commit · review · pr · finish   ← SKILL.md (when & how)
+ cleanup                                    (the seven steps, plus repo-wide gardening)
    │   all link into
    ▼
  _shared/references/*.md   (safety · conventions · quality gate · worktree · branching
@@ -157,6 +186,11 @@ the five skills link into via `../_shared/references/…`:
  mkit (Go)                 the same mechanical steps, being ported off shell one at a time
    --json everywhere       the skill-facing contract · no TUI off a TTY · flags reach everything
    M2 storage prune (done) · M3 install/status/uninstall · M4 findings · M5 the jq consumers
+   work                    the per-branch worklog: what ran, over what content, concluding what
+   plan                    task-graph arithmetic: frontier · blocked · cycles · edge validation
+   repo profile            what this repo told us, and what a human pinned — reported apart
+   init                    write the repo config (the one command that writes it)
+   doctor                  the agent's environment: prereqs · permissions · hooks · sandbox
    │   drive
    ▼
  git   +   gh (GitHub CLI)   +   wt (Worktrunk)   +   rg   +   jq
@@ -177,20 +211,70 @@ The skills are the single source of truth for the *workflow*; the underlying too
 the source of truth for the *operations*. The plugin never re-encodes git logic.
 
 ## Workflow Model
-Work is modeled as a **feature** — edits that become commits and then get integrated:
+Work is modeled as a **feature** — a branch that accumulates thinking, then edits, then commits,
+then gets integrated:
 
 ```
-edit → commit → review → finish
-                          ├── finish  (local merge, delete branch / worktree)
-                          └── pr      (push, open PR, review remotely)
+brainstorm → spec → implement → commit → review → pr ──┐
+                                                        ├─→ (merged)
+                                              finish ──┘
 
 cleanup  (repo-wide, not per-feature: sweep every local branch/worktree finish and pr left behind)
 ```
+
+**The arrows are the common path, never a required one.** This is the workflow's load-bearing
+property, and the reason it is a set of steps rather than a pipeline: real work enters in the
+middle. A bug fix starts at `implement` with no spec. A branch someone else pushed starts at
+`review`. Half the commits in this repo were `commit` alone. A workflow that only pays off when
+walked end to end is a workflow that gets abandoned at the first exception, so each step is
+**entry-capable** — it establishes what it needs by discovery, derives the thin version of anything
+missing, and names what it assumed.
+
+What makes that cheap rather than merely possible is the **worklog**:
+`<git-dir>/mkit/work/<branch>.jsonl`, one append-only record per finished step, carrying the gist,
+the artifact pointer, and the content fingerprint it ran over. A step reads it to skip work the
+branch has already done — `review` taking the goal `spec` wrote instead of re-deriving it from
+commit messages — and never to decide whether it is allowed to run. It is the gate ledger's rule
+one level up: *a recorded fact is an input, never a permission*. The full contract, including what
+each step owes the next, is
+[`workflow-contract.md`](../plugin/skills/_shared/references/workflow-contract.md).
+
+Two things follow that are easy to get wrong. A step never sends the user to another step, because
+"run `spec` first" is a refusal in a suggestion's clothing; and a step never runs anything
+**downstream** of itself, because a `review` that commits has taken a decision that was the user's
+to make.
 
 Worktree awareness is built in: the finishing skills detect whether they're in a Worktrunk
 worktree, a Claude Code agent worktree, or a plain checkout, and use the matching cleanup
 path for the *one* branch they just merged. `cleanup` uses the same lookup table, applied to
 every worktree in the repo rather than just the current one.
+
+## Configuration
+mkit facilitates the workflow at three levels, and they are deliberately different in kind. The
+rule across all three: **mkit computes and reports; the human or the agent decides.**
+
+**The machine** — is the toolchain here at all. `mkit status` reports the prerequisite table, the
+hook's state and the gate ledger's; the `SessionStart` hook names a missing tool once and then goes
+quiet forever. Neither installs anything. This is what exists today, as `install.sh`, and M3
+absorbs it.
+
+**The repo** — what this project can't tell you by inspection. `mkit repo profile --json` reports
+the gate commands, the spec store, commit scopes, reviewers and merge style, marking each as
+**discovered** or **pinned** so a skill can tell a fact from a preference. Discovery runs first and
+stays authoritative for anything it can establish; `mkit init` writes only the remainder, committed,
+so the answer is the same for every clone and every collaborator. Discovery also reads formats mkit
+did not write — `docs/agents/issue-tracker.md` where a repo has one — because a store the user has
+already declared beats a heuristic over `git remote`. Pinning is cached with the ledger's existing
+vocabulary (`fresh` / `drifted` / `stale`), which is what keeps a pin from outliving its truth.
+
+**The agent** — the level nobody builds, and where a broken run actually comes from. A workflow
+step doesn't usually fail because `git` is missing; it fails because a permission prompt blocked a
+command mid-run, a hook wasn't registered, an expected plugin was disabled, or the sandbox denied a
+write the step assumed. `mkit doctor` reports that surface: the prerequisite gaps, the permission
+allowlist against what the skills actually invoke ([`prerequisites.md`](prerequisites.md) already
+documents the set), hook registration, and **the writable path set under the current sandbox**. It
+fixes none of it — a tool that quietly widens its own permissions is the thing a permission prompt
+exists to prevent — and hands the gap back as a named finding.
 
 ## Distribution
 mkit ships as a Homebrew-installed binary plus a standard Claude Code plugin payload:
@@ -255,8 +339,18 @@ Plugin skills are namespaced (`mkit:commit`), which avoids clashing with any rep
 skills of the same name.
 
 ## Roadmap
-- **Now — Claude Code plugin.** The five skills + the shared reference bundle, packaged and
+- **Now — Claude Code plugin.** The back-half skills + the shared reference bundle, packaged and
   installable. This is the product; everything below serves it.
+- **Next — the workflow's front half.** `brainstorm`, `spec` and `implement`, so the seven steps
+  exist and the line runs from an idea to a merge. The skills are the judgement; the binary
+  contributes the mechanical parts they stand on — the worklog, task-graph frontier arithmetic, and
+  the repo profile that stops every step discovering the same facts apart. Ordered as M6–M8 in
+  [`backlog.md`](backlog.md), and gated behind M3 rather than racing it: a workflow that spans
+  seven steps wants the payload actually shipping first.
+- **Next — configuration as a surface.** `mkit init`, `mkit repo profile` and `mkit doctor`,
+  covering the repo and agent levels described above. `doctor` is the one with no predecessor:
+  every other command reports something a script already computed, while the agent's own
+  environment — permissions, hooks, sandbox — has never been reported at all.
 - **Now — the Go port.** `mkit`, a single binary with a subcommand tree, taking over the
   mechanical layer script by script so that prerequisites and degradation branches go away and a
   TUI becomes possible. M1 (scaffold, release chain, Homebrew cask) shipped in `v0.12.0`; M2
