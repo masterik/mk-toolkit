@@ -7,6 +7,7 @@
 
 # Claude Code local config — ignore local state, keep a shared settings.json if one is added
 .claude/*
+!.claude/skills
 !.claude/settings.json
 
 # mkit's own scratch root — run directories + gate.jsonl, never committed.
