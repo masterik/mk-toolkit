@@ -156,11 +156,13 @@ For every branch approved in step 1, step 2, or just vacated in step 3, in this 
    **A plain `git worktree remove` that refuses on a worktree reported `clean=yes` is mkit's own scratch,
    not the user's work.** `branch-scan.sh` excludes `.mkit/` from its cleanliness check, but git does not:
    where `run_ignored=no` — an isolated session, which cannot write the exclude file — an unignored
-   `.mkit/` is enough for git to call the worktree dirty and refuse. Check with
-   `git -C <path> ls-files -- .mkit` **first** — if that names any path, `.mkit/` is tracked, which should
-   never happen and means the exclude pathspec below would hide the user's own committed changes under it
-   too; treat this the same as any other dirty worktree and never pass `--force`. Only when `ls-files`
-   comes back empty, check
+   `.mkit/` is enough for git to call the worktree dirty and refuse. Check **both**
+   `git -C <path> ls-files -- .mkit` and `git -C <path> ls-tree -r --name-only HEAD -- .mkit` **first** — if
+   either names any path, `.mkit/` is tracked, which should never happen and means the exclude pathspec
+   below would hide the user's own changes under it too. `ls-files` alone misses a committed `.mkit` file
+   staged for deletion (`git rm --cached`): it drops out of the index while still sitting in `HEAD`, so only
+   the `HEAD` check catches it. Either hit means treat this the same as any other dirty worktree and never
+   pass `--force`. Only when both come back empty, check
    `git -C <path> status --porcelain -- . ':(exclude).mkit'`; if that is also empty, `--force` discards only
    run artefacts, and say exactly that instead of the "discards uncommitted work" sentence, which would be
    false here. Anything else in the output is the user's, and the normal rule applies.
