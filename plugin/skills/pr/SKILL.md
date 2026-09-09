@@ -106,8 +106,8 @@ supplement (`../_shared/references/output-discipline.md`).
 Hand drafting to a subagent that reads what it needs and returns only the draft. Spawn it **in the same
 message as step 6's reviewer lookup** — both read-only and independent.
 
-Its brief carries: base and branch names, the `git log --oneline <base>..HEAD` output, the `--stat`, the
-format spec below, and its return budget. It runs the full diff itself
+Its brief carries: base and branch names, the `"$git_bin" -C "$toplevel" log --oneline <base>..HEAD`
+output, the `--stat`, the format spec below, and its return budget. It runs the full diff itself
 (`git diff <base> -- . ':(exclude)*.lock' ':(exclude)*.snap'`) and **returns at most 25 lines**: title,
 description, and any note about what it could not explain from the commits. No diff, no file contents, no
 narration.

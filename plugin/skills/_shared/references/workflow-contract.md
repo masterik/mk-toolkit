@@ -43,7 +43,7 @@ reporting less than was actually found.
 
 ## The worklog
 
-`<git-dir>/mkit/work/<branch>.jsonl` — append-only, one record per finished step, never committed,
+`<toplevel>/.mkit/work/<branch>.jsonl` — append-only, one record per finished step, never committed,
 a linked worktree gets its own. Read and written through the binary; no skill parses it by hand.
 
 ```

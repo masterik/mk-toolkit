@@ -50,6 +50,10 @@
 #   - warn about anything twice. bootstrap.state is the ledger of what has been said.
 #   - stay quiet forever about a gap that went away and came back. A tool that is present
 #     again loses its key, so a later removal warns again.
+#   - say anything it cannot stamp. If the state file refuses the write — an unwritable
+#     user directory, which under a sandbox is a real and permanent condition, not a
+#     transient one — the message is dropped rather than emitted unstamped. Enforced at
+#     gate 6, not merely documented there.
 #
 # Exit: always 0.
 
@@ -101,16 +105,16 @@ state="$user_dir/bootstrap.state"
 prereq_rows="$(mkit_prereq_rows --missing-only)" || true
 
 # Which one-time warnings are unspent. Keys, not sentences, so the wording can change
-# without re-nagging everyone.
+# without re-nagging everyone — and *only* keys: the sentences are assembled at gate 6,
+# after each stamp lands, because a sentence built here would be one gate 6 is not allowed
+# to say. Building both and discarding one left the wording duplicated in two places with
+# nothing keeping them in step.
 warn_keys=""
-warn_lines=""
 if [ -n "$prereq_rows" ]; then
 	while IFS="$(printf '\t')" read -r tool st text; do
 		[ -n "$tool" ] || continue
 		mkit_state_has "$state" "prereq/$tool" && continue
 		warn_keys="$warn_keys prereq/$tool"
-		warn_lines="$warn_lines
-  $tool $st — $text"
 	done <<EOF
 $prereq_rows
 EOF
@@ -127,15 +131,46 @@ if [ -z "$warn_keys" ]; then
 	exit 0
 fi
 
-# --- gate 6: spend the stamps, before emitting -----------------------------------------
+# --- gate 6: spend the stamps, and say only what got stamped ---------------------------
 #
 # The asymmetry is the reason for the order: a stamp written for a message that never
 # arrived costs one cosmetic line, while a message that arrives without its stamp is the
 # repeating nag this whole file exists to prevent.
+#
+# So the ordering is *enforced*, not merely documented. It used to be `|| true`, which
+# meant that on a machine whose state directory is unwritable — under the OS sandbox the
+# old `~/.claude/mkit` was unwritable always, and inertly so, since a protected path
+# cannot be allowlisted — the message went out every session forever. A sentence specified
+# to be said once per tool became a recurring greeting.
+#
+# A message whose stamp could not be written is therefore dropped, and if that leaves
+# nothing to say the hook exits 0 having emitted zero bytes. This is the right failure
+# mode for a SessionStart hook: absence, not noise. Nothing louder belongs here — a
+# SessionStart hook cannot be a diagnostic surface, which is why `install.sh --status`
+# exists and reports the unwritable directory with its remedy.
 mkdir -p "$user_dir" 2>/dev/null || true
+
+stamped_keys=""
+stamped_lines=""
 for key in $warn_keys; do
-	mkit_state_add "$state" "$key" || true
+	mkit_state_add "$state" "$key" || continue
+	stamped_keys="$stamped_keys $key"
+	# The sentence for this key, read straight off the rows — a second pass over
+	# `$prereq_rows`, once per stamped key. Quadratic in the number of missing tools,
+	# which is at most four, and bash 3.2 has no associative array to do better. The rows
+	# stay the single source of the wording; nothing re-derives it.
+	tool="${key#prereq/}"
+	while IFS="$(printf '\t')" read -r r_tool r_st r_text; do
+		[ "$r_tool" = "$tool" ] || continue
+		stamped_lines="$stamped_lines
+  $r_tool $r_st — $r_text"
+	done <<EOF
+$prereq_rows
+EOF
 done
+
+[ -n "$stamped_keys" ] || exit 0
+warn_lines="$stamped_lines"
 
 # A tool that is present again loses its key, so a later removal warns again — a new gap
 # deserves a new warning.

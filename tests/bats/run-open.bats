@@ -4,11 +4,11 @@ load helpers.bash
 setup() { mkit_setup_repo; }
 teardown() { mkit_teardown_repo; }
 
-@test "opens a run dir under <git-dir>/mkit/<skill>-..." {
+@test "opens a run dir under <toplevel>/.mkit/<skill>-..." {
 	run "$SCRIPTS/run-open.sh" commit
 	[ "$status" -eq 0 ]
 	[ -d "$output" ]
-	[[ "$output" == "$MKIT_TMP/.git/mkit/commit-"* ]]
+	[[ "$output" == "$MKIT_TMP/.mkit/commit-"* ]]
 }
 
 @test "two runs of the same skill get distinct directories" {
@@ -57,8 +57,7 @@ teardown() { mkit_teardown_repo; }
 }
 
 @test "--prune removes only the oldest dirs beyond keep, per skill, once stale" {
-	git_dir="$(git rev-parse --absolute-git-dir)"
-	mkit_dir="$git_dir/mkit"
+	mkit_dir="$(git rev-parse --show-toplevel)/.mkit"
 	mkdir -p "$mkit_dir"
 	# Five commit run dirs, oldest to newest by name; back-date mtimes past the
 	# 60-minute "still active" guard so prune is willing to remove any of them.
@@ -84,8 +83,7 @@ teardown() { mkit_teardown_repo; }
 }
 
 @test "--prune skips a dir beyond keep whose mtime is under an hour old" {
-	git_dir="$(git rev-parse --absolute-git-dir)"
-	mkit_dir="$git_dir/mkit"
+	mkit_dir="$(git rev-parse --show-toplevel)/.mkit"
 	# rank 1 by name (newest): always kept, mtime irrelevant.
 	mkdir -p "$mkit_dir/commit-20260103T000000Z-c"
 	# rank 2: beyond keep=1 and backdated — eligible for removal.
@@ -106,8 +104,7 @@ teardown() { mkit_teardown_repo; }
 	# A skill added after this list was first written is the exact way a run
 	# directory quietly stops being pruned — guard the list itself, not just the
 	# mechanism that walks it.
-	git_dir="$(git rev-parse --absolute-git-dir)"
-	mkit_dir="$git_dir/mkit"
+	mkit_dir="$(git rev-parse --show-toplevel)/.mkit"
 	for i in 1 2 3; do
 		d="$mkit_dir/cleanup-2026010${i}T000000Z-aaaaa$i"
 		mkdir -p "$d"
@@ -122,8 +119,7 @@ teardown() { mkit_teardown_repo; }
 }
 
 @test "--prune never touches gate.jsonl" {
-	git_dir="$(git rev-parse --absolute-git-dir)"
-	mkit_dir="$git_dir/mkit"
+	mkit_dir="$(git rev-parse --show-toplevel)/.mkit"
 	mkdir -p "$mkit_dir"
 	printf '{"kind":"gate","step":"lint"}\n' >"$mkit_dir/gate.jsonl"
 	# A decoy *file* whose name matches prune's `-name "<skill>-*"` glob. It is what
@@ -153,8 +149,7 @@ teardown() { mkit_teardown_repo; }
 # mkit directory would be unguarded. So the assertion is the general one: prune removes
 # `<skill>-*` DIRECTORIES and nothing else, whatever else happens to be in there.
 @test "--prune removes only <skill>-* directories and leaves every other entry alone" {
-	git_dir="$(git rev-parse --absolute-git-dir)"
-	mkit_dir="$git_dir/mkit"
+	mkit_dir="$(git rev-parse --show-toplevel)/.mkit"
 	mkdir -p "$mkit_dir/scratch" "$mkit_dir/random-dir"
 	printf '{"kind":"gate","step":"lint"}\n' >"$mkit_dir/gate.jsonl"
 	: >"$mkit_dir/some.marker"
@@ -187,4 +182,77 @@ teardown() { mkit_teardown_repo; }
 	[ -d "$mkit_dir/commit-20260103T000000Z-aaaaa3" ]
 	[ ! -d "$mkit_dir/commit-20260101T000000Z-aaaaa1" ]
 	[ ! -d "$mkit_dir/commit-20260102T000000Z-aaaaa2" ]
+}
+
+# --- the relocation: inside the working tree, ignored, and torn down cleanly ---------
+#
+# `<git-dir>/mkit` resolved into the MAIN checkout from a linked worktree, where Claude
+# Code's worktree-isolation guard refuses every write. `<toplevel>/.mkit` is inside the
+# working directory the session is actually in.
+#
+# What a bats test can assert is *resolution* — the guard is a permission check on tool
+# calls and does not apply to a git repo a test creates, so its behavior is verified by
+# the refusal messages in the transcripts, not here. That limit is the reason these tests
+# assert paths and porcelain rather than pretending to exercise the guard.
+
+@test "the run root is inside the toplevel, not the git dir" {
+	run "$SCRIPTS/run-open.sh" commit
+	[ "$status" -eq 0 ]
+	[[ "$output" == "$(git rev-parse --show-toplevel)/.mkit/"* ]]
+	[[ "$output" != *"/.git/"* ]]
+}
+
+@test "a linked worktree gets its own run root, inside itself" {
+	git worktree add -q -b wt-a "$MKIT_TMP/wt-a" >/dev/null
+	run env -u MKIT_RUN_DIR bash -c "cd '$MKIT_TMP/wt-a' && '$SCRIPTS/run-open.sh' review"
+	[ "$status" -eq 0 ]
+	# Inside the worktree, and provably NOT in the main checkout, which is the whole point.
+	[[ "$output" == "$MKIT_TMP/wt-a/.mkit/review-"* ]]
+	[[ "$output" != "$MKIT_TMP/.mkit/"* ]]
+	[ -d "$output" ]
+}
+
+@test "opening a run directory adds the ignore rule to the common-dir exclude" {
+	run bash -c "'$SCRIPTS/run-open.sh' commit >/dev/null && git check-ignore -q .mkit/"
+	[ "$status" -eq 0 ]
+	grep -qxF '.mkit/' "$(git rev-parse --git-common-dir)/info/exclude"
+}
+
+@test "the ignore rule is written once, not appended on every run" {
+	"$SCRIPTS/run-open.sh" commit >/dev/null
+	"$SCRIPTS/run-open.sh" commit >/dev/null
+	"$SCRIPTS/run-open.sh" review >/dev/null
+	[ "$(grep -cxF '.mkit/' "$(git rev-parse --git-common-dir)/info/exclude")" -eq 1 ]
+}
+
+@test "a run directory leaves git status --porcelain empty" {
+	"$SCRIPTS/run-open.sh" commit >/dev/null
+	printf 'notes\n' >"$(git rev-parse --show-toplevel)/.mkit/scratch.txt"
+	run git status --porcelain
+	[ "$status" -eq 0 ]
+	[ -z "$output" ]
+}
+
+@test "a worktree holding only a run directory is removed without --force" {
+	git worktree add -q -b wt-b "$MKIT_TMP/wt-b" >/dev/null
+	# The exclude lives in the common dir, so the worktree inherits the rule the main
+	# checkout's first run wrote.
+	bash -c "cd '$MKIT_TMP/wt-b' && '$SCRIPTS/run-open.sh' finish" >/dev/null
+	[ -d "$MKIT_TMP/wt-b/.mkit" ]
+	run bash -c "cd '$MKIT_TMP/wt-b' && git status --porcelain"
+	[ -z "$output" ]
+	run git worktree remove "$MKIT_TMP/wt-b"
+	[ "$status" -eq 0 ]
+	[ ! -d "$MKIT_TMP/wt-b" ]
+}
+
+@test "a run directory does not change the tree fingerprint" {
+	# shellcheck source=../../plugin/scripts/lib/common.sh
+	. "$SCRIPTS/lib/common.sh"
+	before="$(mkit_tree_fingerprint)"
+	[ -n "$before" ]
+	run_dir="$("$SCRIPTS/run-open.sh" review)"
+	printf 'a gate running writes here\n' >"$run_dir/step.log"
+	after="$(mkit_tree_fingerprint)"
+	[ "$before" = "$after" ]
 }

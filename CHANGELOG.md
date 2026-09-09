@@ -5,21 +5,114 @@ were cut, so entries were derived from commit messages and `docs/`. Versions are
 `plugin.json` manifest version, set by the `chore(plugin|release): …` commit that closes
 each block of work.
 
-**Tags vs. versions.** Only `v0.12.0` is tagged. `0.12.1` and `0.13.0` exist as manifest
-versions with no release tag, so GoReleaser never built a cask for them — the newest
-`brew install masterik/tap/mkit` still delivers the `v0.12.0` binary.
+**Tags vs. versions.** `v0.12.0` and `v0.13.0` are tagged and pushed; `0.12.1` exists as a
+manifest version only, so GoReleaser never built a cask for it. A version with no tag ships
+nothing — `brew install masterik/tap/mkit` delivers whatever the newest tag built.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project
 predates any semver commitment and is pre-1.0, so minor bumps carry breaking changes.
 
-## [Unreleased]
+## [0.14.0] — 2026-09-09
+
+The release that makes the payload usable on a machine with write boundaries. Breaking, because
+mkit's state moved — but there is nothing to migrate; see below.
+
+### Fixed
+- **BREAKING — the payload works under a sandboxed, auto-mode, worktree-isolated session.**
+  Three independent boundaries were refusing writes the payload assumed it could make
+  ([#1](https://github.com/masterik/mk-toolkit/issues/1),
+  [ADR 0002](docs/adr/0002-state-locations-under-a-sandbox.md)).
+  - **Two template-less `mktemp` calls were failing 49 of the 190 shell tests.** On macOS
+    `mktemp` with no template — bare or `-t` — resolves the Darwin per-user temp directory and
+    ignores `$TMPDIR`, so the sandbox denies it. The gate fingerprint collapsed to no
+    fingerprint (the cache was off, not slow) and the branch classifier *aborted* after
+    `fetch=ok`, emitting no `gh=` line and no branch rows at all. Everything ephemeral now goes
+    through `mkit_tmpfile`, which always passes a template.
+  - **The branch classifier's PR cache is no longer load-bearing.** A cache it cannot create is
+    `gh=no-cache`, with every branch and worktree row still emitted and the PR column reporting
+    its own absence — like `gh-missing` and `gh-unauthenticated` already did.
+  - **The `SessionStart` hook enforces the stamp-before-emit ordering its own comment
+    documents.** It was `|| true`, so on an unwritable state directory a sentence specified to
+    be said once per tool was said every session forever. A message whose stamp cannot be
+    written is now dropped and the hook stays silent.
 
 ### Changed
+- **BREAKING — state moved to two directories a grant can actually reach.** Repo scope is
+  `<toplevel>/.mkit/` (was `<git-dir>/mkit/`), which from a linked worktree resolved into the
+  main checkout, where the worktree-isolation guard refuses every write — and `facts.sh` opens
+  the run directory as every skill's first call, so the toolkit was unusable in the sessions it
+  is driven from. User scope is `~/.mkit/` (was `~/.claude/mkit/`), which was inside the
+  sandbox's *protected* region where an allowlist entry is inert: the remedy the docs implied
+  could not work. One `permissions.additionalDirectories` entry now genuinely opens it.
+  Neither file is migrated, and nothing in the payload reads the old path. For
+  `bootstrap.state` that costs nothing — it only records what has already been said. For the
+  `--uninstall` tombstone it means a machine that silenced the hook before this release
+  **warns once more per missing tool**, then stamps into the new location and is silent again;
+  `install.sh --uninstall` re-silences it immediately. Only machines outside the sandbox are
+  affected: inside it, `~/.claude/mkit` was unwritable, so `--uninstall` failed loudly there
+  and there was never a tombstone to orphan.
+- `run-open.sh` adds `.mkit/` to the common dir's `.git/info/exclude` **before** the first
+  write. Not tidiness: unignored, `git worktree remove` refuses, `git add -A` would commit run
+  artefacts, and the gate fingerprint sees a directory that changes while the gate runs.
+- `facts.sh` reports four new starting facts — `tmp=`, `run_ignored=`, `user_dir=` /
+  `user_dir_writable=`, `git_bin=` — plus a trailing `notes:` block carrying any cause that
+  needs a sentence, and a remedy that works.
+- `install.sh --status` gained a `state:` section (locations, and whether the user-scoped one is
+  writable). Its exit status is still the prerequisite verdict alone. `--uninstall` now says the
+  hook is *not* silenced when the tombstone cannot be written, with the remedy.
+- `commit` gained a **non-interactive patch-staging recipe** — per-file diff to `$TMPDIR`, drop
+  hunks by editing it, `git apply --cached`, verify with a staged stat — replacing the
+  `git add -p` instruction, which needs a terminal there isn't one of. It states that hunks
+  sharing lines are not split, because intermediate commits must build.
+- Git calls whose output a skill parses or judges are pinned to `git_bin -C <toplevel>`: an
+  output-reshaping hook can hand a skill a summarized status that reads exactly like the tree,
+  and the isolation guard refuses any wrapper it cannot read a git target through.
+- The delegation contract gained a coverage requirement (every changed path in exactly one
+  proposed commit, a hunk assignment per mixed file), verification by set comparison rather
+  than a re-read, repair by asking the same subagent about the gap, an exclusion for trees with
+  more than ~3 mixed files, and a rule against polling or scheduling a wakeup on a subagent.
 - Enabled the `skill-creator` and `plugin-dev` plugins in the repo's Claude config.
 
+### Added
+- Two payload invariants, asserted statically in `tests/bats/payload.bats` because neither has a
+  behavioral seam: no shipped script uses a template-less `mktemp`, and every write target is a
+  shell parameter on a reviewed allowlist — so the writable set is a property of the payload
+  rather than a habit.
+
 ### Documentation
+- [ADR 0002](docs/adr/0002-state-locations-under-a-sandbox.md) supersedes ADR 0001's
+  state-location table (its other four decisions stand) and records why the protected-path
+  region made relocation the only fix rather than one option among several.
+- `docs/prerequisites.md` gained a sandbox section: the one grant mkit needs, the composed-tool
+  grants (`~/.cache/gh`, the Go cache redirection, `~/.codex`, `~/.coderabbit`), the hosts the
+  remote-facing skills reach, and the two facts no script may forget — `ps`/`pgrep` cannot list
+  processes at all, and a template-less `mktemp` ignores `$TMPDIR`.
 - `docs/ideas/`: recorded post-journal ideas (journal replacement, a native statusline
   provider), one file per idea.
+
+### Migration
+
+**One required step, and it is a permission, not a move:** grant `~/.mkit` by adding it to
+`permissions.additionalDirectories`. Without it the user-scoped files cannot be written, and
+`install.sh --status` reports the directory as `NOT WRITABLE` with that same remedy.
+`sandbox.filesystem.allowWrite` is *not* a substitute — it grants the OS sandbox only and leaves
+the auto-mode classifier refusing.
+
+**Nothing needs copying.** Both old locations hold only regenerable state, so the honest migration
+is to delete them:
+
+- `~/.claude/mkit/` — `bootstrap.state` records which one-time prerequisite messages have already
+  been said. Dropping it costs at most one repeated sentence per missing tool, after which the new
+  location takes over permanently. If `bootstrap.disabled` is there, the hook was silenced: it will
+  speak again once per missing tool until you re-run `install.sh --uninstall`, which writes the
+  tombstone to the new location. Nothing reads the old path, deliberately —
+  `tests/bats/payload.bats` asserts that no shipped script names it.
+- `<git-dir>/mkit/` in each repo — per-run directories (scratch, already consumed) plus
+  `gate.jsonl`. Losing the ledger costs wall-clock, never correctness: an unrecognised command
+  classifies `none` and the gate step simply runs.
+
+Machines inside the OS sandbox have nothing to clean up either way: `~/.claude/mkit` was unwritable
+there, so no state was ever created and `--uninstall` failed loudly rather than leaving a tombstone.
 
 ## [0.13.0] — 2026-09-05
 

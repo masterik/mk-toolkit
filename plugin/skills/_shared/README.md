@@ -72,8 +72,8 @@ sweeps every local branch and worktree, not just the one the other four just tou
   meaningful.
 - **The main session holds decisions, not evidence** — stages that read a lot and decide a little run in
   subagents and hand back a summary; diffs, transcripts and finding bodies live in a per-run directory under
-  the git dir, opened before anything logs, and command output is bounded before it arrives
-  (`output-discipline.md`).
+  `<toplevel>/.mkit/` — ignored, one per worktree — opened before anything logs, and command output is
+  bounded before it arrives (`output-discipline.md`).
 - **A script for a mechanical invariant, never for a decision** — `scripts/` owns the steps that are the same
   every run and fail silently when hand-rolled (opening the run directory, logging a gate step, classifying a
   worktree, confidence arithmetic). Judgement stays in Markdown; see [`concept.md`](../../../docs/concept.md).

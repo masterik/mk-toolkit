@@ -162,7 +162,7 @@ node_repo() {
 	git commit -q -m 'node repo'
 }
 
-ledger() { printf '%s\n' "$MKIT_TMP/.git/mkit/gate.jsonl"; }
+ledger() { printf '%s\n' "$MKIT_TMP/.mkit/gate.jsonl"; }
 
 # The fingerprint a forged record has to carry to classify as anything other than
 # `drifted`. Taken from the shared helper rather than from gate-detect's output, because

@@ -89,13 +89,61 @@ has_text() { printf '%s\n' "$1" | grep -qF -- "$2"; }
 	[ ! -e 'relative/path' ]
 }
 
-@test "an unwritable user dir is a silent exit 0" {
+# A test that asserts silence must force the condition that would otherwise speak, or it
+# asserts nothing. The version this replaced forced no missing prerequisite, so it exited
+# at gate 5 with nothing to say and would have passed against any code at all — including
+# the code that emitted an unstamped message every session forever.
+#
+# Two shapes, because the sandbox produces the second one and only the second one:
+#   1. the parent directory refuses the mkdir, so the state file never exists;
+#   2. the directory exists and takes a `mkdir`, and an append to the state file is denied.
+
+@test "an unwritable user dir stays silent even with a real prerequisite gap" {
 	mkdir -p "$MKIT_TMP/ro"
 	chmod 500 "$MKIT_TMP/ro"
-	run env MKIT_HOME="$MKIT_TMP/ro/mkit" bash -c "'$HOOK' </dev/null"
+	run env PATH="$(mkit_fake_path node)" MKIT_HOME="$MKIT_TMP/ro/mkit" \
+		bash -c "'$HOOK' </dev/null"
 	chmod 700 "$MKIT_TMP/ro"
 	[ "$status" -eq 0 ]
 	[ -z "$output" ]
+}
+
+@test "a gap that cannot be stamped is dropped, not emitted unstamped" {
+	# The case the sandbox actually produces: mkdir succeeds (the directory is already
+	# there), the append does not. Gate 6's own comment says the stamp comes first; this
+	# is the assertion that makes the code agree with it.
+	mkdir -p "$USER_DIR"
+	chmod 500 "$USER_DIR"
+	run env PATH="$(mkit_fake_path node)" bash -c "'$HOOK' </dev/null"
+	chmod 700 "$USER_DIR"
+	[ "$status" -eq 0 ]
+	[ -z "$output" ]
+	[ ! -f "$STATE" ]
+}
+
+@test "the same gap on a writable dir does speak — the control for the two above" {
+	run env PATH="$(mkit_fake_path node)" bash -c "'$HOOK' </dev/null"
+	[ "$status" -eq 0 ]
+	[ -n "$output" ]
+	printf '%s\n' "$output" | grep -q node
+	grep -qxF prereq/node "$STATE"
+}
+
+@test "with two gaps, the emitted set is exactly the stamped set" {
+	# Named for what it asserts. It used to promise "one stampable gap is still reported
+	# when another is not" and then create no such case: both keys go into the same state
+	# file, so either both stamp or neither does, as its own comment conceded. The partial
+	# case is not reachable from here, and the `|| continue` that would handle it is
+	# covered by the two unwritable-directory tests above plus their control.
+	#
+	# What is left is still worth pinning: two gaps produce two sentences and two stamps,
+	# with no key emitted that was not also recorded.
+	run env PATH="$(mkit_fake_path node shasum)" bash -c "'$HOOK' </dev/null"
+	[ "$status" -eq 0 ]
+	printf '%s\n' "$output" | grep -q node
+	printf '%s\n' "$output" | grep -q sha256
+	grep -qxF prereq/node "$STATE"
+	grep -qxF prereq/sha256 "$STATE"
 }
 
 # --- the opt-out tombstone -------------------------------------------------------------

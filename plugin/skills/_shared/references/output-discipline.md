@@ -13,8 +13,11 @@ Scale, on a *small* markdown-only branch: `git diff <base>` 57 KB · `--stat` 57
 A skill's first act is `${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh <skill>`. It opens this run's directory
 **and** returns every read-only fact the skill starts from, as `key=value` lines:
 
-- **`run=`** — this run's directory: atomic (`mktemp -d`), absolute, inside the git dir, its own per
-  worktree. Every log and run file lives in it.
+- **`run=`** — this run's directory: atomic (`mktemp -d`), absolute, `<toplevel>/.mkit/<skill>-…`, its
+  own per worktree. Every log and run file lives in it.
+- **`tmp=`** — where a file that dies with the command goes. See "Where a write may land".
+- **`run_ignored=` `user_dir=` `user_dir_writable=` `git_bin=`** — the four facts about what this
+  machine will let you write and how to call git. See below, and `git-safety.md`.
 - **`refs=`** — the resolved path of this bundle. Hand subagents *that*; `../_shared/references/…` means
   nothing without the calling skill loaded.
 - **`branch` `upstream` `default_branch` `linked` `worktree_origin` `cleanup_path` `clean` `staged`
@@ -22,6 +25,9 @@ A skill's first act is `${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh <skill>`. It open
 - **Both diff stats, separately.** A bare `git diff --shortstat` reports nothing when the work is fully
   staged, which reads exactly like a clean tree; `unstaged_stat` and `staged_stat` make that misread
   unavailable.
+- **`notes:`** — the last block, present only when something needs a sentence: a cause and the remedy
+  for it. Values with spaces never go on a `key=value` line, because several of those lines pack more
+  than one pair.
 - Flags: `--base <branch>` (adds `base..HEAD` commits, stat, `ff_from_base`) · `--range <range>` ·
   `--gh` (does a PR already exist) · `--no-run` (probe without opening a directory).
 - Nonzero exit says why. Empty `${CLAUDE_PLUGIN_ROOT}` fails as `/scripts/facts.sh: not found` —
@@ -30,6 +36,39 @@ A skill's first act is `${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh <skill>`. It open
 Then, for the rest of the run: write only inside `run=`; name it in the final summary (it is the record,
 which is what lets the summary stay short); prune with `run-open.sh --prune` at the **end**, never the
 start — a concurrent run may be reading the older directories.
+
+## Where a write may land
+
+Three boundaries can refuse a write, independently, and none of them announces itself in advance: the
+OS sandbox (the kernel, over the whole process tree), the permission gate's auto-mode classifier
+(before the tool runs), and the worktree-isolation guard (also before the tool runs). `facts.sh`
+reports what each of them permits **as a starting fact**, so a refusal is something you read at the
+start rather than hit in the middle.
+
+**The rule is by lifetime, not by caller.**
+
+| what | where | why |
+| --- | --- | --- |
+| dies with the command — a diff you are about to edit, a scratch list | **`tmp=`** (`$TMPDIR`) | the one location no grant is needed for in a normal session |
+| a later step or a later session reads it — logs, findings, plans, briefs | **`run=`** | inside the working directory, so all three layers permit it |
+| the user's own tracked content | **nowhere** | mkit's only in-tree write is the ignored `.mkit/`; it never touches your files |
+
+**Use the `tmp=` value; never write the literal `/tmp`.** They are not the same instruction: `tmp=` is
+whatever `$TMPDIR` resolves to and is where an ephemeral file belongs, while a hardcoded `/tmp` is outside
+every grant this machine makes. A write to `tmp=` can still be refused — say so and stop rather than
+falling back somewhere else. Never `~/.claude/…` either (a protected region — a write there fails even
+when an allowlist entry appears to cover it), never a bare relative path, never a helper script into the
+target repository's working tree. A `mktemp` with no template resolves the Darwin per-user temp
+directory and **ignores `$TMPDIR`** — always give it a path: `mktemp "$TMPDIR/mkit-x.XXXXXX"`.
+
+Two facts to act on before you stage anything:
+
+- **`run_ignored=no`** — `.mkit/` is not ignored in this repo, so `git add -A` would sweep run
+  artefacts into a commit and `git worktree remove` would refuse. **Do not run a staging step.** The
+  `notes:` block names the remedy; it has to be applied from the main checkout.
+- **`user_dir_writable=no`** — mkit cannot record what it has already told the user. Report it with
+  the remedy from `notes:` and move on. Do not retry the write, and never suggest allowlisting a path
+  under `~/.claude`: that region cannot be granted.
 
 ### Carry the path, not a variable
 

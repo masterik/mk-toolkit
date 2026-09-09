@@ -170,3 +170,69 @@ has_text() { printf '%s\n' "$1" | grep -qF -- "$2"; }
 	run env PATH="$fake" bash -c "'$HOOK' </dev/null"
 	has_text "$output" "$sentence"
 }
+
+# --- the state section -----------------------------------------------------------------
+#
+# The diagnostic surface is the one place that gets to be loud about an unwritable state
+# directory: the SessionStart hook now drops any message it cannot stamp, so the condition
+# is silent there by design. Someone who ran a diagnostic on purpose is who wants to hear
+# about it.
+
+@test "--status reports where state lives, all three locations" {
+	run bash "$INSTALL" --status
+	[ "$status" -eq 0 ]
+	has_text "$output" 'state:'
+	has_text "$output" "$MKIT_HOME"
+	has_text "$output" '.mkit/'
+	has_text "$output" 'TMPDIR'
+}
+
+@test "--status reports the user dir as writable when it is" {
+	run bash "$INSTALL" --status
+	[ "$status" -eq 0 ]
+	has_text "$output" 'writable'
+}
+
+@test "--status names an unwritable user dir and a remedy that works" {
+	mkdir -p "$MKIT_HOME"
+	chmod 500 "$MKIT_HOME"
+	run bash "$INSTALL" --status
+	chmod 700 "$MKIT_HOME"
+	has_text "$output" 'NOT WRITABLE'
+	has_text "$output" 'permissions.additionalDirectories'
+	# Never the unreachable remedy: a path under ~/.claude cannot be allowlisted at all,
+	# so a surface that offers it is telling the user to change nothing.
+	case "$output" in
+	*'claude/mkit'*) return 1 ;;
+	esac
+}
+
+@test "an unwritable user dir does not change the exit status" {
+	# The exit status is the prerequisite verdict and nothing else — a caller scripting
+	# "does this machine have the tools" must not start failing over a missing grant.
+	mkdir -p "$MKIT_HOME"
+	chmod 500 "$MKIT_HOME"
+	run bash "$INSTALL" --status
+	chmod 700 "$MKIT_HOME"
+	[ "$status" -eq 0 ]
+}
+
+@test "the state section does not create the user dir" {
+	[ ! -d "$MKIT_HOME" ]
+	run bash "$INSTALL" --status
+	[ "$status" -eq 0 ]
+	[ ! -d "$MKIT_HOME" ]
+}
+
+@test "--uninstall says the hook is NOT silenced when the tombstone cannot be written" {
+	mkdir -p "$MKIT_HOME"
+	chmod 500 "$MKIT_HOME"
+	run bash "$INSTALL" --uninstall
+	chmod 700 "$MKIT_HOME"
+	[ "$status" -eq 1 ]
+	has_text "$output" 'NOT silenced'
+	has_text "$output" 'permissions.additionalDirectories'
+	# Where configuration might not be available, the human-run form is offered.
+	has_text "$output" '--uninstall'
+	[ ! -f "$TOMBSTONE" ]
+}

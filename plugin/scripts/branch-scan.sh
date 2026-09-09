@@ -22,7 +22,7 @@
 #   protected=<branch>[,<branch>] the branches this run will never suggest deleting
 #   remote=<name>|none
 #   fetch=ok|skipped|no-remote|failed
-#   gh=ok|skipped|no-remote|gh-missing|jq-missing|gh-unauthenticated|gh-error
+#   gh=ok|skipped|no-remote|gh-missing|jq-missing|gh-unauthenticated|gh-error|no-cache
 #
 #   branches:
 #     <name>\t<class>\t<upstream>\t<merged_into>\t<pr>
@@ -155,8 +155,15 @@ elif ! command -v jq >/dev/null 2>&1; then
 	gh_state=jq-missing
 elif ! gh auth status >/dev/null 2>&1; then
 	gh_state=gh-unauthenticated
+elif ! pr_cache="$(mkit_tmpfile mkit-pr-cache)"; then
+	# The cache is a latency optimization — one batched call instead of a per-branch API
+	# round trip — and it is not load-bearing. Under `set -e` a bare assignment from a
+	# failed `mktemp` aborted the whole script after printing `fetch=ok`: no `gh=` line,
+	# not one branch row, `cleanup` dead rather than degraded. The contract is one row per
+	# branch and per worktree, and it is met in full while the PR column reports its own
+	# absence — exactly as it already does for gh-missing, gh-unauthenticated and gh-error.
+	gh_state=no-cache
 else
-	pr_cache="$(mktemp -t mkit-pr-cache)"
 	trap 'rm -f "$pr_cache"' EXIT
 	if ! gh pr list --state all --json headRefName,number,state,headRefOid --limit 500 \
 		>"$pr_cache" 2>/dev/null; then
@@ -294,8 +301,15 @@ git worktree list --porcelain | awk '
 		# worktree instead of reporting it. A failed `status` and stdout suppressed to
 		# `/dev/null` both read as empty, so they must not collapse into the same
 		# `clean=yes` a real clean worktree gets.
+		# `:(exclude).mkit` for the same reason facts.sh carries it: the run directory
+		# lives inside the working directory now, so a worktree holding nothing but
+		# mkit's own scratch read `clean=no`. That is a machine-consumed key —
+		# cleanup/SKILL.md demotes a `merged` branch from auto-delete to ask on it, then
+		# offers `worktree remove --force` with its "discards uncommitted work" sentence
+		# for a worktree whose only untracked file is a log mkit wrote.
 		status_rc=0
-		status_out="$(git -C "$path" status --porcelain 2>/dev/null)" || status_rc=$?
+		status_out="$(git -C "$path" status --porcelain -- . ':(exclude).mkit' 2>/dev/null)" ||
+			status_rc=$?
 		if [ "$status_rc" -ne 0 ]; then
 			clean=error
 		elif [ -z "$status_out" ]; then

@@ -3,7 +3,7 @@ load helpers.bash
 
 setup() {
 	mkit_setup_repo
-	RUN="$MKIT_TMP/.git/mkit/run1"
+	RUN="$MKIT_TMP/.mkit/run1"
 	mkdir -p "$RUN"
 }
 teardown() { mkit_teardown_repo; }
@@ -88,7 +88,7 @@ teardown() { mkit_teardown_repo; }
 
 # --- the gate ledger ---------------------------------------------------------------
 
-ledger() { printf '%s\n' "$MKIT_TMP/.git/mkit/gate.jsonl"; }
+ledger() { printf '%s\n' "$MKIT_TMP/.mkit/gate.jsonl"; }
 
 # Append <count> synthetic records carrying <head>, cheaply — a jq call per line would
 # dominate the runtime of the rotation tests.
@@ -187,9 +187,9 @@ seed_ledger() {
 
 @test "an unwritable ledger does not fail the gate" {
 	[ "$(id -u)" -eq 0 ] && skip "root ignores mode bits"
-	chmod 500 "$MKIT_TMP/.git/mkit"
+	chmod 500 "$MKIT_TMP/.mkit"
 	run "$SCRIPTS/gate-run.sh" "$RUN" lint -- true
-	chmod 700 "$MKIT_TMP/.git/mkit"
+	chmod 700 "$MKIT_TMP/.mkit"
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"lint ok"* ]]
 	[[ "$output" == *"gate=ok steps=lint"* ]]
@@ -197,7 +197,7 @@ seed_ledger() {
 }
 
 @test "the skill is derived from the run-dir basename" {
-	REVIEW_RUN="$MKIT_TMP/.git/mkit/review-20260101T000000Z-aaaaaa"
+	REVIEW_RUN="$MKIT_TMP/.mkit/review-20260101T000000Z-aaaaaa"
 	mkdir -p "$REVIEW_RUN"
 	run "$SCRIPTS/gate-run.sh" "$REVIEW_RUN" lint -- true
 	[ "$status" -eq 0 ]
@@ -285,4 +285,28 @@ seed_ledger() {
 	while IFS= read -r line; do
 		printf '%s' "$line" | jq -e . >/dev/null
 	done <"$(ledger)"
+}
+
+@test "gate-run.sh ignores .mkit/ itself when it is the first to create it" {
+	# ledger_append calls mkit_ensure_run_ignored because gate-run, not run-open.sh, can
+	# be what first creates `.mkit/` — a caller passing its own run directory, or a ledger
+	# write into a repo whose run dirs were pruned. Unignored, `git worktree remove`
+	# refuses and the fingerprint watches a directory change mid-gate. This suite
+	# pre-creates $RUN under .mkit/ in setup(), so nothing else here reaches that path.
+	#
+	# The run directory goes OUTSIDE the repo, so the only thing that can dirty the tree
+	# is the ledger write itself.
+	own="$BATS_TEST_TMPDIR/own-run"
+	mkdir -p "$own"
+	rm -rf "$MKIT_TMP/.mkit"
+	run git check-ignore -q .mkit/
+	[ "$status" -ne 0 ]
+
+	run "$SCRIPTS/gate-run.sh" "$own" lint -- true
+	[ "$status" -eq 0 ]
+	[ -f "$MKIT_TMP/.mkit/gate.jsonl" ]
+	# The rule landed, so the ledger it just wrote is invisible to git.
+	run git check-ignore -q .mkit/
+	[ "$status" -eq 0 ]
+	[ -z "$(git status --porcelain)" ]
 }

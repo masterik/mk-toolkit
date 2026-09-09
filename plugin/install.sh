@@ -12,11 +12,16 @@
 #
 # Two jobs, both of which a hook cannot do:
 #
-#   --status        report what is present and what is missing, `ok` rows included. The
-#                   SessionStart hook deliberately reports only gaps, once each; a human
-#                   who ran a diagnostic on purpose wants the whole picture.
+#   --status        report what is present and what is missing, `ok` rows included, plus
+#                   where mkit's state lives and whether the user-scoped directory is
+#                   actually writable. The SessionStart hook deliberately reports only
+#                   gaps, once each, and now drops any message whose stamp it could not
+#                   write — so an unwritable state directory is silent there by design and
+#                   loud here, which is the whole reason this surface exists.
 #   --uninstall     silence that hook for good. It writes a tombstone the hook honours;
 #                   without one, a dismissal would last exactly until the next session.
+#                   If that write is refused it says the hook is NOT silenced, names the
+#                   remedy, and exits 1 — believing it worked is worse than the nag.
 #
 # With no arguments it does what `--status` does, since there is no other mode left.
 #
@@ -38,7 +43,9 @@
 #
 # Exit: 0 ok, 1 a *hard* prerequisite (git, jq) is missing or a write failed, 2 bad usage.
 # A soft gap (node, sha256) is reported and still exits 0 — it degrades a feature, it does
-# not make the machine unready.
+# not make the machine unready. So is an unwritable state directory: the status exit code is
+# the prerequisite verdict and nothing else, because that is what a caller scripting "does
+# this machine have the tools" branches on.
 
 set -euo pipefail
 
@@ -111,10 +118,35 @@ EOF
 	return "$status"
 }
 
+# --- where mkit's state lives, and whether it can actually be written -----------------
+#
+# Beside the tool prerequisites because a machine is only "ready" if both are true, and
+# because this is the surface that gets to be loud: the SessionStart hook now drops any
+# message it cannot stamp, so an unwritable state directory is silent there by design.
+# Someone who ran a diagnostic on purpose is the one who wants to hear about it.
+#
+# It does NOT feed the exit status — that stays the prerequisite verdict, so a script can
+# still branch on "does this machine have the tools".
+report_state() {
+	printf 'state:\n'
+	printf '  user-scoped  %s\n' "$user_dir"
+	if mkit_user_dir_writable; then
+		printf '               writable\n'
+	else
+		printf '               NOT WRITABLE — bootstrap.state and the uninstall tombstone\n'
+		printf '               cannot be written, so the session hook stays silent instead\n'
+		printf '               of repeating itself.\n'
+		printf '               remedy: %s\n' "$(mkit_user_dir_remedy)"
+	fi
+	printf '  repo-scoped  <toplevel>/.mkit/ — run directories + gate.jsonl, per worktree\n'
+	printf '               inside the working directory, so it needs no grant at all\n'
+	printf '  ephemeral    $TMPDIR, with an explicit mktemp template\n'
+}
+
 # --- the gate ledger: report, never enable --------------------------------------------
 report_ledger() {
 	printf 'gate ledger:\n'
-	printf '  always on — gate-run.sh writes <git-dir>/mkit/gate.jsonl in every repo.\n'
+	printf '  always on — gate-run.sh writes <toplevel>/.mkit/gate.jsonl in every repo.\n'
 	printf '  nothing to install; --no-ledger / --no-cache are the opt-outs.\n'
 	if mkit_have jq && mkit_have_hash; then
 		printf '  status: usable (jq + sha256 present)\n'
@@ -159,12 +191,23 @@ uninstall)
 		# The tombstone is the entire reason a dismissal outlives the session: the hook
 		# re-checks every time it runs, and cannot tell "never warned" from "warned and
 		# dismissed" by looking at absent files. This records the intent.
-		mkdir -p "$user_dir" 2>/dev/null || die "cannot create $user_dir"
-		{
-			printf 'mkit bootstrap disabled by install.sh --uninstall.\n'
-			printf 'While this file exists, the SessionStart hook stays silent.\n'
-			printf 'Undo: remove this file. Remove it now: install.sh --uninstall --purge.\n'
-		} >"$tombstone" || die "cannot write $tombstone"
+		# A refused write must say so, and say what to change. Believing the hook has been
+		# silenced when it has not is worse than the nag: the user stops looking.
+		mkdir -p "$user_dir" 2>/dev/null ||
+			die "cannot create $user_dir — $(mkit_user_dir_remedy)"
+		# One simple command with the redirect, not a `{ … } >file` group: bash reports a
+		# group's failed redirection and then hands back 0, so the "cannot write" branch
+		# below never fired and the script cheerfully claimed to have silenced the hook.
+		# `[ -f ]` after it is the belt — a status is a claim, a file on disk is the fact.
+		tomb_text='mkit bootstrap disabled by install.sh --uninstall.
+While this file exists, the SessionStart hook stays silent.
+Undo: remove this file. Remove it now: install.sh --uninstall --purge.'
+		if ! printf '%s\n' "$tomb_text" >"$tombstone" 2>/dev/null || [ ! -f "$tombstone" ]; then
+			printf 'install.sh: cannot write %s — the hook is NOT silenced.\n' "$tombstone" >&2
+			printf 'install.sh: %s\n' "$(mkit_user_dir_remedy)" >&2
+			printf 'install.sh: or run this by hand, outside the sandbox: ! %s --uninstall\n' "$0" >&2
+			exit 1
+		fi
 		[ "$removed" -eq 1 ] || printf 'nothing to remove\n'
 		printf 'silenced: %s\n' "$tombstone"
 		printf '\nThe SessionStart hook will now stay quiet instead of reporting a missing\n'
@@ -179,6 +222,8 @@ esac
 # "is this machine ready", and that is exactly what a MISSING row means.
 prereq_status=0
 report_prereqs || prereq_status=$?
+printf '\n'
+report_state
 printf '\n'
 report_hook
 printf '\n'

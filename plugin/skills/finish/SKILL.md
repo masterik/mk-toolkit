@@ -93,7 +93,8 @@ suggested fix. The log stays on disk.
 
 Before merging or deleting anything, print a one-screen summary and get a go-ahead (unless the user already
 said "finish and clean up" or gave standing authorization). Step 0's `commits:` block predates step 1, so if
-step 1 committed, re-read the log (`git log --oneline <base>..HEAD`) first — approving a plan that omits the
+step 1 committed, re-read the log (`"$git_bin" -C "$toplevel" log --oneline <base>..HEAD` — pinned, per
+`../_shared/references/git-safety.md`) first — approving a plan that omits the
 commits the merge actually carries is worse than asking twice.
 
 **Local path:**
@@ -213,12 +214,18 @@ merge onto current base.
 
 ### 5. Verify the cleanup
 
+**`$toplevel` is stale here whenever step 4 removed a worktree.** It is the root `facts.sh` resolved at
+step 1 — the *feature* worktree on any linked path — and that directory no longer exists, so a call pinned
+to it fails with `cannot change to '<path>'` instead of verifying anything. Use `primary=` from `facts.sh`
+(or re-resolve the root) as the `-C` target for the log check; the other three commands run from wherever
+you now are. On `linked=no` there was nothing to remove and `$toplevel` is still correct.
+
 - `git worktree list` — the feature worktree is gone (if there was one).
 - `git branch` — the feature branch is gone (and, PR path, `git ls-remote --heads <remote> <feature-branch>`
   is empty).
 - `git branch --show-current` / `pwd` — you are on the base branch (or back in the primary checkout).
-- `git log --oneline -5` — the base contains the feature commits (PR path: the squash/merge/rebase commit
-  `gh pr merge` produced).
+- `"$git_bin" -C "<surviving-root>" log --oneline -5` — the base contains the feature commits (PR path: the
+  squash/merge/rebase commit `gh pr merge` produced).
 
 ## Deliverable
 

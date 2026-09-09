@@ -39,6 +39,25 @@ hand-made worktree — and nothing needs to. What differs is the teardown.
 which a script may not inherit even though the agent's own shell has it. Treat a missing `wt`
 as "check before concluding", not as proof.
 
+**Every one of these teardown paths stays fully capable.** `exit-worktree` in particular is not a
+degraded fallback — it is the correct teardown for a supported environment, and a machine configured
+differently from the author's depends on it.
+
+## Two things a worktree changes about writing
+
+- **Your run directory is inside the worktree you are in.** `<toplevel>/.mkit/`, so a write of
+  yours never targets the shared checkout. That is not a nicety: in a session Claude Code has marked
+  as worktree-isolated, every write to a path in the main checkout is refused — *"This session is
+  isolated in the worktree …; edit the worktree copy of this file instead of the shared-checkout
+  path"* — and the run directory is the first thing any skill opens.
+- **`run_ignored=` is the one thing you cannot fix from here.** The ignore rule lives in the *common
+  dir's* `info/exclude`, which is in the main checkout. `run-open.sh` writes it when it can; from an
+  isolated session it cannot. While `run_ignored=no`, mkit's scratch shows up in
+  `git status --porcelain`, `git worktree remove` refuses without `--force`, and `git add -A` would
+  commit run artefacts — so **do not stage, and do not tear a worktree down with `--force` to get
+  around it.** Report the remedy from the `notes:` block; it has to be applied from the main
+  checkout.
+
 ## worktrunk (`wt`)
 
 Prefer worktrunk's own commands — they respect the user's hooks and config.

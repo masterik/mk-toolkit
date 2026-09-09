@@ -53,8 +53,9 @@ of the ones in play — see step 3).
 
 From `branch-scan.sh`: `protected=`, `develop=`, `remote=`, `fetch=` (say if it came back `failed` — classify
 on what you have and note it), `gh=` (say if it is anything but `ok` — some classes below then rest on git
-alone), the `branches:` table and the `worktrees:` table. Full column meaning is in the script's own header
-comment; the short version:
+alone; `no-cache` means the batched PR lookup had nowhere to write, so the PR column is empty while every
+branch and worktree row is still complete), the `branches:` table and the `worktrees:` table. Full column
+meaning is in the script's own header comment; the short version:
 
 | `class` | means | default handling |
 | --- | --- | --- |
@@ -151,6 +152,14 @@ For every branch approved in step 1, step 2, or just vacated in step 3, in this 
    itself** — after it runs, check `git show-ref --verify --quiet refs/heads/<branch>` before step 4.2; if it's
    already gone, you're done with this branch, and running a delete on it anyway is a redundant, avoidable
    error, not a real failure worth reporting as one.
+
+   **A plain `git worktree remove` that refuses on a worktree reported `clean=yes` is mkit's own scratch,
+   not the user's work.** `branch-scan.sh` excludes `.mkit/` from its cleanliness check, but git does not:
+   where `run_ignored=no` — an isolated session, which cannot write the exclude file — an unignored
+   `.mkit/` is enough for git to call the worktree dirty and refuse. Check with
+   `git -C <path> status --porcelain -- . ':(exclude).mkit'`; if that is empty, `--force` discards only run
+   artefacts, and say exactly that instead of the "discards uncommitted work" sentence, which would be
+   false here. Anything else in the output is the user's, and the normal rule applies.
 2. **Delete the branch, if it still exists.** Always `git branch -D <branch>` here, never plain `-d` — `-d`
    only checks whether the branch is merged into whatever you currently have checked out, which is not what
    any of this skill's own evidence is measured against (a `merged` branch may be an ancestor of `develop`

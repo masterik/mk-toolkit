@@ -70,7 +70,7 @@ sentence or two, caused-by-this-change or pre-existing, a concrete suggested fix
 
 ## The gate ledger — what was already proven
 
-`gate-run.sh` records every step it finishes into `<git-dir>/mkit/gate.jsonl`:
+`gate-run.sh` records every step it finishes into `<toplevel>/.mkit/gate.jsonl`:
 `(step, command, exit code, seconds, fingerprint of the content it ran over)`.
 `gate-detect.sh` compares each command it proposes against the newest record for that
 **exact command string** and annotates it. The `*_cache=` keys above are that annotation.
@@ -153,8 +153,10 @@ One key, one cause — the same discipline as `scripts_state`:
 - `gate_cache=empty` — nothing to compare against: no ledger yet, or one with no records.
 - `gate_cache=no-hash` — no `shasum` on the machine, so no fingerprint is possible.
 - `gate_cache=no-fingerprint` — a hash tool *is* present but the fingerprint could not be
-  computed anyway. A distinct cause on purpose: "install `shasum`" is the wrong advice for
-  someone who already has it.
+  computed anyway: no work tree, an unwritable `$TMPDIR`, or a hash batch that refused to answer.
+  A distinct cause on purpose: "install `shasum`" is the wrong advice for someone who already has
+  it. It used to fire on every sandboxed run, from a temp-file denial rather than anything about
+  this repo — fixed at the source, so it now means what it says.
 - `gate_cache=no-jq` — no `jq`.
 
 Each degrades to today's behavior exactly: detect, then run everything.

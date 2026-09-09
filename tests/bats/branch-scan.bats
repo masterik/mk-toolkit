@@ -291,3 +291,72 @@ EOF
 	run env PATH="$bindir:$PATH" "$SCRIPTS/branch-scan.sh" --default main --no-fetch
 	[ "$(branch_field feature 2)" = merged-pr ]
 }
+
+# --- the PR cache is not load-bearing --------------------------------------------------
+#
+# A template-less `mktemp` under the sandbox failed with `Operation not permitted`, and
+# under `set -e` a bare assignment from it aborted the whole script after printing
+# `fetch=ok`: no `gh=` line, not one branch row. `cleanup` was dead, not degraded.
+#
+# The contract is one row per local branch and one per worktree. It is met in full while
+# the PR column reports its own absence — the same way gh-missing and gh-unauthenticated
+# already behave. `$TMPDIR` unwritable is the seam: `mkit_tmpfile` fails there for the
+# same reason the Darwin temp dir failed under the sandbox.
+
+@test "a PR cache that cannot be created reports gh=no-cache and still scans" {
+	make_diverged_branch feature
+	git remote add origin https://example.invalid/repo.git
+	bindir="$(fake_gh '[{"headRefName":"feature","number":7,"state":"OPEN","headRefOid":""}]')"
+	ro="$MKIT_TMP/ro-tmp"
+	mkdir -p "$ro"
+	chmod 500 "$ro"
+	run env PATH="$bindir" TMPDIR="$ro" "$SCRIPTS/branch-scan.sh" --default main --no-fetch
+	chmod 700 "$ro"
+	[ "$status" -eq 0 ]
+	[ "$(kv gh)" = no-cache ]
+	# Every row still there — the whole point.
+	[[ "$output" == *"branches:"* ]]
+	[[ "$output" == *"worktrees:"* ]]
+	[ "$(branch_field main 2)" = protected ]
+	[ "$(branch_field feature 2)" = unpushed ]
+	# The PR column reports its absence, it does not lie.
+	[ "$(branch_field feature 5)" = - ]
+}
+
+@test "a scan with no PR cache still classifies every worktree" {
+	git remote add origin https://example.invalid/repo.git
+	git worktree add -q -b wt-e "$MKIT_TMP/wt-e" >/dev/null
+	bindir="$(fake_gh '[]')"
+	ro="$MKIT_TMP/ro-tmp2"
+	mkdir -p "$ro"
+	chmod 500 "$ro"
+	run env PATH="$bindir" TMPDIR="$ro" "$SCRIPTS/branch-scan.sh" --default main --no-fetch
+	chmod 700 "$ro"
+	[ "$status" -eq 0 ]
+	[ "$(kv gh)" = no-cache ]
+	[ "$(worktree_field main 3)" = primary ]
+	[ "$(worktree_field wt-e 3)" = linked ]
+}
+
+@test "a worktree holding only mkit's run directory still reports clean=yes" {
+	# `clean=` is machine-consumed: cleanup demotes a merged branch from auto-delete to
+	# ask on a `no`, then offers `worktree remove --force` with its "discards uncommitted
+	# work" sentence. A log mkit wrote must never be what triggers that.
+	wt_dir="$BATS_TEST_TMPDIR/wt-feature"
+	git worktree add -q -b feature "$wt_dir" main
+	mkdir -p "$wt_dir/.mkit/review-x"
+	printf 'step output\n' >"$wt_dir/.mkit/review-x/step.log"
+	# Unignored, which is the isolated-session case: the exclude write was refused.
+	run git -C "$wt_dir" check-ignore -q .mkit/
+	[ "$status" -ne 0 ]
+	[ -n "$(git -C "$wt_dir" status --porcelain)" ]
+
+	run "$SCRIPTS/branch-scan.sh" --default main --no-fetch --no-gh
+	[ "$(worktree_field feature 4)" = yes ]
+
+	# ...and a real uncommitted file in the same worktree still reads dirty.
+	printf 'dirty\n' >"$wt_dir/dirty.txt"
+	run "$SCRIPTS/branch-scan.sh" --default main --no-fetch --no-gh
+	[ "$(worktree_field feature 4)" = no ]
+	git worktree remove --force "$wt_dir"
+}
