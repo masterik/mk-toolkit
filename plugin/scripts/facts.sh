@@ -17,8 +17,10 @@
 # the classification at the end — which kind of worktree this is — is a lookup table,
 # not a judgement.
 #
-# It reports. It never acts: no staging, no merging, no `wt` invocation, no writes
-# outside the run directory it opens.
+# It reports. It never acts: no staging, no merging, no `wt` invocation, and the only
+# things it writes are the run directory it opens and the one `.mkit/` line `run-open.sh`
+# adds to the common-dir exclude so that directory does not show up in `git status`. The
+# user-dir writability probe is net-zero by construction — see `mkit_user_dir_writable`.
 #
 # Output is `key=value` lines, then optional `block:` sections. Stable and greppable.
 # Exit: 0 ok, 1 not a git repo, 2 bad usage.
@@ -104,6 +106,67 @@ linked=no
 [ "$git_dir" != "$common_dir" ] && linked=yes
 printf 'linked=%s\nworktrees=%s\n' "$linked" \
 	"$(git worktree list --porcelain | grep -c '^worktree ')"
+
+# --- where a write is allowed to land ---------------------------------------------
+# Three boundaries can refuse a write on this machine and none of them announce
+# themselves: the OS sandbox, the auto-mode classifier, and the worktree-isolation guard.
+# Reported here, at the first call, so a refusal is a starting fact instead of a mid-run
+# `Operation not permitted`. `../_shared/references/output-discipline.md` states the rule
+# these three keys support.
+#
+# `tmp=` is the home for anything that dies with the command; `run=` (above) for anything
+# a later step or session reads. Nothing of mkit's ever reaches the user's own content: the
+# single in-tree write is the ignored `.mkit/` that holds `run=` itself.
+printf 'tmp=%s\n' "${TMPDIR:-/tmp}"
+
+# `.mkit/` unignored is not a cosmetic problem: `git worktree remove` refuses, `git add -A`
+# would commit run artefacts, and the gate fingerprint sees a directory that changes while
+# the gate runs. `run-open.sh` tries to add the rule to the common-dir exclude on every
+# call; a worktree-isolated session cannot reach that file, so the answer is a fact.
+notes=""
+if mkit_run_ignored; then
+	printf 'run_ignored=yes\n'
+else
+	printf 'run_ignored=no\n'
+	notes="$notes
+  run_ignored=no — .mkit/ is not ignored here, so a staging step would sweep run
+  artefacts into a commit and \`git worktree remove\` would refuse. Do not stage while
+  this says no. Remedy, from the main checkout: add \`.mkit/\` to
+  $common_dir/info/exclude, or to .gitignore."
+fi
+
+# The user-scoped state directory: `bootstrap.state` and the uninstall tombstone. An
+# unwritable one is reported with the one remedy that works — `~/.claude/mkit` was
+# unfixable by configuration, which is why the directory moved (docs/adr/0002).
+printf 'user_dir=%s\n' "$(mkit_user_dir)"
+if mkit_user_dir_writable; then
+	printf 'user_dir_writable=yes\n'
+else
+	printf 'user_dir_writable=no\n'
+	notes="$notes
+  user_dir_writable=no — mkit cannot record what it has already told the user, and
+  \`install.sh --uninstall\` cannot write its tombstone. Remedy: $(mkit_user_dir_remedy).
+  Tell the user; do not retry the write."
+fi
+
+# --- the git invocation a skill parses --------------------------------------------
+# One key, absolute, no spaces — the invocation is `$git_bin -C $toplevel`, spelled out in
+# `../_shared/references/git-safety.md`. Emitted as a fact because a skill must not
+# assemble it from a guess, and for two measured reasons:
+#
+#   - a PreToolUse hook on this machine rewrites `git status --short` into a wrapper that
+#     reshapes output for reading, so a summarized status can reach a skill looking
+#     exactly like the tree it is judging;
+#   - the worktree-isolation guard refuses any launcher it cannot read a git target
+#     through, while an absolute binary path is not rewritten at all — so the command text
+#     reaches the guard as plain git.
+git_bin="$(command -v git 2>/dev/null || true)"
+case "$git_bin" in
+/*) ;;
+'') git_bin=git ;;
+*) git_bin="$(cd "$(dirname "$git_bin")" 2>/dev/null && pwd)/git" ;;
+esac
+printf 'git_bin=%s\n' "$git_bin"
 
 # --- worktree origin: the lookup table from worktree.md, run here ------------------
 wt_config=none
@@ -193,7 +256,14 @@ if [ -n "$upstream" ]; then
 fi
 
 # --- working tree ------------------------------------------------------------------
-porcelain="$(git status --porcelain)"
+# `:(exclude).mkit` on every enumeration of the user's work, for the same reason
+# mkit_tree_fingerprint carries it: the run directory now lives *inside* the working
+# directory, so without this the scratch mkit just created is reported back to the skill
+# as the user's own change. `run_ignored=no` is exactly the session that hits it — an
+# isolated one, which cannot write the exclude file — and there the damage is a `clean=no`
+# and an `untracked_file_list` naming mkit's own logs, which is what a commit or review
+# scope is then built from. The reserved root is never the user's work by construction.
+porcelain="$(git status --porcelain -- . ':(exclude).mkit')"
 conflicted="$(git diff --name-only --diff-filter=U | grep -c . || true)"
 printf 'clean=%s\n' "$([ -z "$porcelain" ] && echo yes || echo no)"
 printf 'staged=%s unstaged=%s untracked=%s conflicted=%s\n' \
@@ -237,7 +307,8 @@ emit_scope() {
 # silently omits every new implementation file. Same shape, its own keys.
 emit_untracked() {
 	local list count
-	list="$(git ls-files --others --exclude-standard -- ':(exclude)*.lock' ':(exclude)*.snap')"
+	list="$(git ls-files --others --exclude-standard \
+		-- . ':(exclude)*.lock' ':(exclude)*.snap' ':(exclude).mkit')"
 	count="$(printf '%s\n' "$list" | grep -c . || true)"
 	printf 'untracked_files=%s\n' "$count"
 	if [ "$count" -gt 0 ]; then
@@ -310,4 +381,12 @@ if [ "$want_gh" = yes ]; then
 			printf 'pr=none\n'
 		fi
 	fi
+fi
+
+# --- causes and remedies, last -----------------------------------------------------
+# Values with spaces never go on a key=value line: several of those lines pack more than
+# one pair, so a reader splitting on whitespace would mis-parse one. Anything that needs a
+# sentence goes here, after every key, and every sentence names a remedy that works.
+if [ -n "$notes" ]; then
+	printf 'notes:%s\n' "$notes"
 fi

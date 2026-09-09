@@ -70,15 +70,19 @@ are plain Markdown, so support for another agent is a thin packaging step, not a
     `cached`. A run printing `gate=ok` having executed nothing is the failure this guards.
 - **Composition over replacement:** orchestrate `git`, GitHub CLI (`gh`), and Worktrunk
   (`wt`); never reimplement what they already do well.
-- **Sandbox-aware from day one:** the agent's Bash calls run in a sandbox whose write allowlist
-  covers the project directory and `$TMPDIR` — and *not* `~/.claude/mkit/`, mkit's own user-scoped
-  state, which is `Operation not permitted` from any skill-invoked run (measured 2026-09-09; the
-  `SessionStart` hook can write it only because the harness runs hooks outside the sandbox).
-  Composed tools are exposed too: `wt` fails to `mktemp` under it. This is the same shape as a
-  missing prerequisite and gets the same treatment — **named, never hit**. A command that would
-  write a denied path says which path, and falls back inside the repo; `mkit doctor` reports the
-  writable set beside the prerequisite table. It also sets the default for where state goes:
-  repo-scoped, because that is the scope that works.
+- **Boundary-aware from day one:** three independent layers can refuse a write — the OS sandbox
+  (the kernel, over the whole process tree), the permission gate's auto-mode classifier, and the
+  worktree-isolation guard — and telling them apart is what makes a fix reviewable, since they are
+  configured in different places and one of them cannot be configured at all. Anything under
+  `~/.claude` is a *protected* path where an allowlist entry is inert, so mkit's user-scoped state
+  is `~/.mkit/` instead, where one `permissions.additionalDirectories` entry actually opens it
+  ([ADR 0002](adr/0002-state-locations-under-a-sandbox.md), measured 2026-09-09). Composed tools are
+  exposed too: a `mktemp` with no template ignores `$TMPDIR` on macOS and is denied outright. This
+  is the same shape as a missing prerequisite and gets the same treatment — **named, never hit**,
+  and named with a remedy that works. A command that would write a denied path says which path and
+  what to change; `mkit doctor` reports the writable set beside the prerequisite table. It also sets
+  the default for where state goes: `<toplevel>/.mkit/`, inside the working directory, because that
+  is the one place all three layers permit with no configuration at all.
 - **Configuration is per-repo, and is an input:** what a repo can't tell you by inspection — which
   store holds its specs, which of three test commands is the cheap one, who reviews what — is
   pinned once by `mkit init` and committed, so a colleague and a fresh clone inherit it. User scope
@@ -151,8 +155,8 @@ the five skills link into via `../_shared/references/…`:
 - `triage-reconcile.md` / `triage-verify.md` / `fix-checks.md` — reconcile (dedupe +
   corroboration), verify (five verdicts + the materiality test), and the three checks on every
   fix — one file per stage, so each stage loads only its own.
-- `agent-delegation.md` — context discipline: the per-run directory inside the git dir as the
-  transport between stages, subagent return budgets, resolved reference paths, parallel-vs-
+- `agent-delegation.md` — context discipline: the per-run directory under `<toplevel>/.mkit/` as
+  the transport between stages, subagent return budgets, resolved reference paths, parallel-vs-
   sequential rules, and which model each stage shape wants.
 - `output-discipline.md` — bounding command output: gate logs written to a file and read by
   their tail, `--stat` before any diff, never a full branch diff to write prose — plus what
@@ -198,7 +202,7 @@ the five skills link into via `../_shared/references/…`:
 
 The scripts never act: no staging, no merging, no `wt merge`, no edits. They report facts and
 run commands the skill named. One of them also *remembers*: `gate-run.sh` records that a command
-exited 0 over a fingerprint of the content it read — `<git-dir>/mkit/gate.jsonl`, beside the run
+exited 0 over a fingerprint of the content it read — `<toplevel>/.mkit/gate.jsonl`, beside the run
 directories, never committed, and a linked worktree gets its own. It adds no script: the ledger
 is a side effect of a gate that was running anyway, read back by the detector that already prints
 the commands. The hook is the only piece that runs without a skill asking, and it is held to the
@@ -231,7 +235,7 @@ walked end to end is a workflow that gets abandoned at the first exception, so e
 missing, and names what it assumed.
 
 What makes that cheap rather than merely possible is the **worklog**:
-`<git-dir>/mkit/work/<branch>.jsonl`, one append-only record per finished step, carrying the gist,
+`<toplevel>/.mkit/work/<branch>.jsonl`, one append-only record per finished step, carrying the gist,
 the artifact pointer, and the content fingerprint it ran over. A step reads it to skip work the
 branch has already done — `review` taking the goal `spec` wrote instead of re-deriving it from
 commit messages — and never to decide whether it is allowed to run. It is the gate ledger's rule

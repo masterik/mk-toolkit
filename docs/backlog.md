@@ -44,16 +44,30 @@ not a trade-off.
    thin version of what is missing, names what it assumed, and completes. It never sends the user
    to another step, and never runs one downstream of itself. Full contract:
    [`workflow-contract.md`](../plugin/skills/_shared/references/workflow-contract.md).
-9. **State is repo-scoped.** `<git-dir>/mkit/` by default — run directories, the gate ledger, the
-   worklog. User scope (`MKIT_HOME`) holds only what must outlive every repo: the hook tombstone
-   and its once-per-tool messages. The sandbox enforces this from outside: `~/.claude/mkit/` is
-   unwritable from any skill-invoked run, so a command that needs it is a command a skill cannot
-   call.
+9. **State is repo-scoped.** `<toplevel>/.mkit/` by default — run directories, the gate ledger, the
+   worklog; inside the working directory, so the sandbox, the auto-mode classifier and the
+   worktree-isolation guard all permit it with no configuration. User scope (`~/.mkit/`, overridable
+   with `MKIT_HOME`) holds only what must outlive every repo: the hook tombstone and its
+   once-per-tool messages. Not `~/.claude/…`: that is a *protected* region where an allowlist entry
+   is inert, so it is a path no remedy sentence can point at
+   ([ADR 0002](adr/0002-state-locations-under-a-sandbox.md)).
 10. **Sandbox degradation is named, never hit.** A command that would write a sandbox-denied path
-    reports which path and falls back inside the repo, rather than surfacing `Operation not
-    permitted`. `mkit doctor` reports the writable set as a first-class fact. Same rule as a
-    missing prerequisite, one axis over.
-11. **Config is an input, never a permission.** Every command and every step runs with no config
+    reports which path *and a remedy that works*, rather than surfacing `Operation not permitted`.
+    `mkit doctor` reports the writable set as a first-class fact. Same rule as a missing
+    prerequisite, one axis over.
+11. **Ephemeral files go to `$TMPDIR`, always with an explicit `mktemp` template.** The division is
+    by lifetime, not by caller: a file that dies with the command uses `$TMPDIR`, a file a later
+    step or a later session reads uses the run directory. The bare and `-t` forms of `mktemp` are
+    banned outright — on macOS they resolve the Darwin per-user temp directory and *ignore*
+    `$TMPDIR`, so they are unfixable by environment. Asserted statically over the payload; it has no
+    behavioral seam, since a test cannot create an OS sandbox.
+12. **The writable set is a property of the payload.** No shipped script writes outside the run
+    directory, `$TMPDIR` and the user-scoped root — plus one named exception, the common dir's
+    `info/exclude`, one line, so `.mkit/` stays out of `git status`. Nothing is ever written to the
+    user's own files: `.mkit/` is inside a working tree by design, and is the only thing that is.
+    Asserted statically, by shape: every write target is a shell parameter on a reviewed allowlist,
+    never a literal path.
+13. **Config is an input, never a permission.** Every command and every step runs with no config
     present. `mkit init` removes repeated discovery and captures what inspection cannot establish;
     it never becomes a precondition, and a pinned value cheap to verify gets verified
     ([ADR 0001](adr/0001-per-repo-config-and-init.md)).
@@ -128,29 +142,25 @@ found by inspecting the shipped `v0.12.0` cask, not by reading the config:
 - `autoUpdate: false` — a directory source's autoUpdate implies a git pull and the Homebrew
   payload is not a checkout. `brew upgrade mkit` is the update mechanism.
 - Merge into existing settings, never overwrite. `--dry-run` prints the diff.
-3. **User-scoped writes are sandbox-denied, so two of these commands cannot be skill-invoked.**
-   Measured 2026-09-09: `~/.claude/mkit/` is `Operation not permitted` from an agent Bash call,
-   while `<git-dir>/mkit/` and `$TMPDIR` are writable. `bootstrap.state` exists there only because
-   the harness runs `SessionStart` hooks outside the sandbox. So `mkit install` registering a
-   marketplace in `~/.claude/settings.json` (itself explicitly denied) and `mkit uninstall` writing
-   the tombstone are both unreachable from a skill. Pick one, deliberately:
-   - **Human-run commands.** Document `install`/`uninstall` as `! mkit install` in-session or a
-     plain shell invocation, and have `mkit status` report which paths it could not read rather
-     than failing. Honest and cheap; means the install story is never fully agent-driven.
-   - **Move the tombstone to repo scope.** Silencing becomes per-repo, which is arguably more
-     useful anyway, and the user-scoped set shrinks to the once-per-tool messages. Changes the
-     hook's contract, which is bash and staying bash — so its side of the change is small but
-     load-bearing.
+3. **Registration in `~/.claude/settings.json` is a human-run step. The tombstone is not, any more.**
+   Settled by [ADR 0002](adr/0002-state-locations-under-a-sandbox.md), which resolved the choice this
+   entry used to pose. The tombstone moved to `~/.mkit/` — outside the sandbox's protected region, so
+   one `permissions.additionalDirectories` entry genuinely opens it, and `mkit uninstall` is
+   skill-invocable on a machine that has the entry and reports the exact remedy on one that does not.
+   Repo-scoping the tombstone is no longer needed and was rejected: silencing that the user set once
+   should not have to be re-set per repo.
 
-   Registration in `~/.claude/settings.json` has no repo-scoped alternative, so whichever is
-   chosen, **plugin registration is a human-run step** and the milestone's "Done when" must say so.
-   Per invariant 10, both commands name the denied path rather than surfacing the raw errno.
+   `~/.claude/settings.json` has no such escape — it is inside the protected region and explicitly
+   denied besides, and no allowlist entry lifts that. So **`mkit install`'s marketplace registration
+   is a human-run step** (`! mkit install`) and this milestone's "Done when" says so. Per invariant
+   10, it names the denied path *and* the fact that the command is human-run, rather than offering
+   configuration that cannot work.
 
-**Done when:** `brew install mkit && mkit install` yields a working plugin with no clone, the
-registered path still resolves after a `brew upgrade`, `mkit status` reports what today's
-`install.sh --status` does — the prerequisite table, the `SessionStart` hook's state, and the
-gate ledger's — and the sandbox question above is settled in writing rather than discovered by a
-user hitting `Operation not permitted`.
+**Done when:** `brew install mkit && ! mkit install` yields a working plugin with no clone (the
+registration step named as human-run), the registered path still resolves after a `brew upgrade`, and
+`mkit status` reports what today's `install.sh --status` does — the prerequisite table, the state
+locations and whether the user-scoped one is writable, the `SessionStart` hook's state, and the gate
+ledger's — with its exit status still the prerequisite verdict alone.
 
 ### M4 — `mkit findings`
 Port `scripts/findings.mjs` (507 lines). Pure data transformation, so parity is testable.
@@ -170,7 +180,7 @@ Go command proposes the full tier only.
 ### M6 — `mkit work` + the workflow contract
 The substrate the seven steps stand on, landed before any of the new skills, so the back half
 starts recording immediately and the front half has something to read.
-- `mkit work show|append`, `--json`. `<git-dir>/mkit/work/<branch>.jsonl`, append-only, rotated
+- `mkit work show|append`, `--json`. `<toplevel>/.mkit/work/<branch>.jsonl`, append-only, rotated
   like `gate.jsonl`, never committed, per-worktree. A record carries step, timestamp, content
   fingerprint (reusing `mkit_tree_fingerprint`'s successor), artifact pointer, one-line gist, and
   assumptions. Appending is bookkeeping; **reading it is judgement and stays in the skills.**
@@ -192,7 +202,8 @@ and worth landing near it: every new skill would otherwise rediscover the same f
 - `mkit doctor` — prerequisites, permission-allowlist gaps against what the skills invoke, hook
   registration, plugin enablement, and the **sandbox writable set**. Reports; fixes nothing.
 - Fold `install.sh --status`'s degradation sentences in, so they keep one producer.
-**Done when:** `mkit doctor` names the `~/.claude/mkit/` denial on a sandboxed run without failing,
+**Done when:** `mkit doctor` names an unwritable `~/.mkit/` on a sandboxed run without failing, with
+the `additionalDirectories` remedy beside it,
 `mkit repo profile --json` distinguishes discovered from pinned on this repo, and `mkit init` is a
 no-op on a repo it has already configured.
 
@@ -220,6 +231,12 @@ no conversation context, working from the artifact and the worklog alone.
 - Delete `tools/purge-journal-state.sh`. It exists only to clear what mkit ≤ 0.12.1 left behind
   when journaling was removed, so it is finished the moment every machine that ran that version
   has run it once. Tracked here because nothing else will surface it.
+- `mkit stage hunks` — the eventual replacement for `commit`'s Markdown patch-staging recipe.
+  Mechanical throughout: cut a per-file diff, drop named hunks, `git apply --cached`, verify with a
+  staged stat, and refuse a split that would cut inside a hunk (intermediate commits must build).
+  The recipe works and is the right thing to ship first; a command earns its place by removing the
+  `@@`-block editing an agent currently does by hand, not by unbreaking anything. Separate from
+  invariant 6, since which hunks go in which commit stays a judgement in the skill.
 - `mkit cleanup` TUI — multi-select over `branch-scan.sh`'s classification.
 - `mkit review` TUI — live parallel reviewer progress.
 - Codex installer target (`~/.codex/`).

@@ -293,5 +293,7 @@ Fold `${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh --prune` into step 6's call rath
 ## Git safety
 
 Follow `git-safety.md`. Apply only fixes to the working tree; never rewrite pushed history, never force-push,
-never commit or push as a side effect of the review unless explicitly asked. The run directory is the one thing
-this skill writes outside the working tree, and it goes only in `<git-dir>/mkit/`.
+never commit or push as a side effect of the review unless explicitly asked. Everything this skill writes of
+its own goes in `run=` (`<toplevel>/.mkit/…`, which is ignored) or in `tmp=` if it dies with the command —
+never anywhere else in the working tree. `output-discipline.md` has the rule; a fix applied to a source file
+is the user's change, not the skill's scratch.

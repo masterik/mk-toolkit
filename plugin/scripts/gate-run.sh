@@ -26,7 +26,7 @@
 # Exit: the failing step's exit code, 0 if everything passed, 2 on bad usage.
 #
 # Side effect — the gate ledger. Each finished step also appends one record to
-# <git-dir>/mkit/gate.jsonl: what was proven, over which content. `gate-detect.sh` reads
+# <toplevel>/.mkit/gate.jsonl: what was proven, over which content. `gate-detect.sh` reads
 # it back and classifies; nothing here ever skips a step. The ledger is strictly a side
 # effect: it never changes the exit code, the output, or where a chain stops, and a
 # failed append is silent. Losing a cache entry is nothing; failing a gate over its own
@@ -235,6 +235,11 @@ ledger_trim() {
 ledger_append() {
 	local line
 	[ -n "$ledger" ] && [ -n "$fingerprint" ] || return 0
+	# Before the mkdir, in case this script — not `run-open.sh` — is what creates `.mkit/`
+	# in this repo. An unignored scratch root feeds the fingerprint a directory that
+	# changes while the gate runs, which is a run invalidating its own cache entry.
+	# Best effort, like everything on the ledger path: a gate verdict never depends on it.
+	mkit_ensure_run_ignored || true
 	mkdir -p "$(dirname -- "$ledger")" 2>/dev/null
 	# `epoch` beside the ISO `ts`: age arithmetic must not go through `date -d` (GNU) or
 	# `date -j -f` (BSD), which is precisely the portability trap this layer avoids.

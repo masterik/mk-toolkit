@@ -6,7 +6,7 @@
 #          run-open.sh --prune [keep]     remove all but the newest <keep> run
 #                                         directories per skill (default 5)
 #
-#   e.g.:  run-open.sh review  ->  /repo/.git/mkit/review-20260819T111347Z-RPfCbj
+#   e.g.:  run-open.sh review  ->  /repo/.mkit/review-20260819T111347Z-RPfCbj
 #
 # Why this is a script and not three lines in a SKILL.md: the invariants below are
 # mechanical, they run at the start of every skill, and getting any of them wrong fails
@@ -15,10 +15,14 @@
 #   - mktemp -d, not mkdir -p     the timestamp is second-resolution, so two runs in one
 #                                 checkout can pick the same name; mkdir -p would merge them
 #                                 and let each clobber the other's logs and findings
-#   - --absolute-git-dir          the path is handed to subagents and reused across shells,
-#                                 where a relative .git/... would resolve somewhere else
-#   - inside the git dir          never committed, never shows up in git status, and a
-#                                 linked worktree gets its own
+#   - --show-toplevel, absolute   the path is handed to subagents and reused across shells,
+#                                 where a relative .mkit/... would resolve somewhere else
+#   - inside the working tree     a linked worktree gets its own, and no write of a
+#                                 worktree-isolated session targets the shared checkout
+#   - ignored before the first    `.mkit/` enters the common-dir exclude *before* this
+#     write                       creates anything under it, or the first thing that walks
+#                                 the tree — `git worktree remove`, `git add -A`, the gate
+#                                 fingerprint — sees run artefacts
 #
 # Prints the path on stdout and nothing else, so it is safe in a command substitution.
 # Errors go to stderr. Exit: 0 ok, 1 not a git repo, 2 bad usage.
@@ -81,6 +85,15 @@ skill="$1"
 mkit_check_slug "$skill"
 
 mkit_dir="$(mkit_dir_or_die)"
+
+# Before the mkdir, never after: an unignored `.mkit/` makes `git worktree remove` refuse,
+# puts run artefacts in reach of `git add -A`, and feeds the gate fingerprint a directory
+# that changes while the gate runs. Best effort — the write lands in the main checkout's
+# `.git/info/exclude`, which a worktree-isolated session cannot reach — so the answer is
+# reported by `facts.sh` as `run_ignored=` rather than enforced here. Opening the run
+# directory is every skill's first call and may not fail over an ignore rule.
+mkit_ensure_run_ignored || true
+
 mkdir -p "$mkit_dir"
 
 run_dir="$(mktemp -d "$mkit_dir/$skill-$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX")"

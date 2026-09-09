@@ -109,3 +109,121 @@ field() { printf '%s\n' "$output" | tr ' ' '\n' | sed -n "s/^$1=//p" | head -1; 
 	[ "$status" -eq 0 ]
 	[ "$(field pr)" = gh-missing ]
 }
+
+# --- where a write may land ---------------------------------------------------------
+# Three boundaries can refuse a write on the author's machine — the OS sandbox, the
+# auto-mode classifier, the worktree-isolation guard — and none announces itself. These
+# keys turn a mid-run `Operation not permitted` into a starting fact.
+
+@test "tmp= names the ephemeral scratch root" {
+	run "$SCRIPTS/facts.sh" commit --no-run
+	[ "$status" -eq 0 ]
+	[ "$(field tmp)" = "${TMPDIR:-/tmp}" ]
+}
+
+@test "run_ignored=no when .mkit/ is not ignored, with its remedy in notes:" {
+	run "$SCRIPTS/facts.sh" commit --no-run
+	[ "$status" -eq 0 ]
+	[ "$(field run_ignored)" = no ]
+	[[ "$output" == *"notes:"* ]]
+	[[ "$output" == *"run_ignored=no"*"Do not stage while"* ]]
+	[[ "$output" == *"info/exclude"* ]]
+}
+
+@test "run_ignored=yes once the common-dir exclude carries the rule" {
+	mkdir -p "$(git rev-parse --git-common-dir)/info"
+	printf '.mkit/\n' >>"$(git rev-parse --git-common-dir)/info/exclude"
+	run "$SCRIPTS/facts.sh" commit --no-run
+	[ "$status" -eq 0 ]
+	[ "$(field run_ignored)" = yes ]
+	[[ "$output" != *"Do not stage while"* ]]
+}
+
+@test "opening a run directory is what makes .mkit/ ignored" {
+	run "$SCRIPTS/facts.sh" commit
+	[ "$status" -eq 0 ]
+	[ "$(field run_ignored)" = yes ]
+	run git status --porcelain
+	[ -z "$output" ]
+}
+
+@test "user_dir is reported, and its writability with it" {
+	run "$SCRIPTS/facts.sh" commit --no-run
+	[ "$status" -eq 0 ]
+	[ "$(field user_dir)" = "$MKIT_HOME" ]
+	[ "$(field user_dir_writable)" = yes ]
+}
+
+@test "an unwritable user dir is a named fact with a remedy that works" {
+	mkdir -p "$MKIT_HOME"
+	chmod 500 "$MKIT_HOME"
+	run "$SCRIPTS/facts.sh" commit --no-run
+	chmod 700 "$MKIT_HOME"
+	[ "$status" -eq 0 ]
+	[ "$(field user_dir_writable)" = no ]
+	[[ "$output" == *"user_dir_writable=no"* ]]
+	[[ "$output" == *"permissions.additionalDirectories"* ]]
+	# Never the unreachable remedy: a protected path cannot be allowlisted.
+	[[ "$output" != *".claude/mkit"* ]]
+}
+
+@test "reporting on the user dir does not create it" {
+	[ ! -d "$MKIT_HOME" ]
+	run "$SCRIPTS/facts.sh" commit --no-run
+	[ "$(field user_dir_writable)" = yes ]
+	[ ! -d "$MKIT_HOME" ]
+}
+
+@test "git_bin is an absolute path to the real binary" {
+	run "$SCRIPTS/facts.sh" commit --no-run
+	[ "$status" -eq 0 ]
+	bin="$(field git_bin)"
+	[[ "$bin" == /* ]]
+	[ -x "$bin" ]
+}
+
+# --- mkit's own scratch is not the user's work ------------------------------------------
+#
+# The run directory moved *inside* the working directory (ADR 0002), which put mkit's logs
+# in range of every enumeration facts.sh performs. `run_ignored=no` — an isolated session,
+# which cannot write the exclude file — is exactly where that bites, and the result is a
+# commit or review scope built from mkit's own output.
+#
+# The `notes:` block legitimately names `.mkit/` when reporting run_ignored=no, so these
+# assertions look at the facts above it, never at the whole output.
+facts_only() { printf '%s\n' "$output" | sed '/^notes:/,$d'; }
+
+@test "an unignored .mkit/ is not reported as the user's work" {
+	mkdir -p .mkit/review-x
+	printf 'step output\n' >.mkit/review-x/step.log
+	printf '{"step":"test"}\n' >.mkit/gate.jsonl
+	# Nothing ignores it here, or the test proves nothing: no .gitignore, no exclude entry.
+	run git check-ignore -q .mkit/
+	[ "$status" -ne 0 ]
+	[ -n "$(git status --porcelain)" ]
+
+	run "$SCRIPTS/facts.sh" commit --no-run
+	[ "$status" -eq 0 ]
+	# A tree holding nothing but mkit's scratch is a clean tree, so the scope keys are
+	# absent for the same reason they are on a fresh checkout — not merely empty.
+	[ "$(field clean)" = yes ]
+	[ "$(field untracked)" = 0 ]
+	[[ "$output" != *"status:"* ]]
+	[[ "$output" != *"untracked_file_list"* ]]
+	case "$(facts_only)" in *.mkit/review-x* | *gate.jsonl*) return 1 ;; esac
+}
+
+@test "excluding .mkit/ does not hide the user's own untracked files" {
+	# The narrowness matters as much as the exclusion: the bug this guards against would
+	# be re-introduced just as badly by dropping untracked reporting altogether.
+	mkdir -p .mkit/review-x
+	printf 'step output\n' >.mkit/review-x/step.log
+	printf 'real work\n' >new-feature.txt
+	run "$SCRIPTS/facts.sh" commit --no-run
+	[ "$status" -eq 0 ]
+	[ "$(field clean)" = no ]
+	[ "$(field untracked)" = 1 ]
+	[ "$(field untracked_files)" = 1 ]
+	[[ "$output" == *"new-feature.txt"* ]]
+	case "$(facts_only)" in *.mkit/review-x* | *gate.jsonl*) return 1 ;; esac
+}

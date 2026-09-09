@@ -1,6 +1,8 @@
 # ADR 0001 — Per-repo configuration, an `init` command, and repo-scoped state
 
-**Status:** accepted · **Date:** 2026-09-09
+**Status:** accepted · **Date:** 2026-09-09 ·
+**Partly superseded by** [ADR 0002](0002-state-locations-under-a-sandbox.md): the state-location
+table below, and decision 5's premise. Decisions 1–4 stand.
 
 ## Context
 
@@ -28,6 +30,13 @@ a sandbox whose write allowlist covers the project directory and `$TMPDIR`. Meas
 | `<git-dir>/mkit/` (run dirs, `gate.jsonl`) | permitted |
 | `$TMPDIR` | permitted |
 | `~/.claude/mkit/` (`MKIT_HOME`) | **`Operation not permitted`** |
+
+> **Superseded by [ADR 0002](0002-state-locations-under-a-sandbox.md).** The symptoms are right and
+> the conclusion is not: `~/.claude/mkit` cannot be allowlisted at all (it is a *protected* path, so
+> an `allowWrite` entry covering it is inert), and the run-directory row was measured in a main
+> checkout — from a linked worktree that path resolves into the main checkout, where the
+> worktree-isolation guard refuses every write. State has since moved to `<toplevel>/.mkit/` and
+> `~/.mkit/`.
 
 `bootstrap.state` exists in `~/.claude/mkit/` only because the harness executes `SessionStart`
 hooks outside the sandbox. Anything a *skill* invokes that writes user scope fails: `install.sh
@@ -81,8 +90,10 @@ doctor` reports the writable set as a first-class fact, beside the prerequisite 
 
 - **Keep discovery only, no config.** Portable and stale-proof, but the spec store cannot be
   discovered reliably and every step would guess independently — the one thing they must agree on.
-- **User-profile config (`~/.claude/mkit/config`).** Matches where mkit's state lives today, and is
-  unwritable from a skill under the sandbox. It also makes a per-project answer global, which is
-  wrong for the spec store regardless of the sandbox.
+- **User-profile config (`~/.claude/mkit/config`).** Matched where mkit's state lived when this was
+  written, and is unwritable from a skill under the sandbox — that path is in the protected region
+  and mkit's user scope has since moved to `~/.mkit/` ([ADR 0002](0002-state-locations-under-a-sandbox.md)).
+  It also makes a per-project answer global, which is wrong for the spec store regardless of the
+  sandbox, and that is the reason this stays rejected.
 - **Config in `.claude/settings.json`.** Already sandbox-denied (`denyWithinAllow`), and it is the
   harness's file, not mkit's.

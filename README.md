@@ -56,7 +56,7 @@ so committing the gated tree does not invalidate the proof. A later run over the
 **Wall-clock only — there are no token savings here.** Gate output already goes to a log rather
 than into context. Nothing is automatic and nothing is silent: the scripts never skip a step,
 the skill decides, and a step served from the ledger is reported as `cached (6m ago)`, never as
-a pass. `gate.jsonl` lives in `<git-dir>/mkit/`, on by default, with `--no-cache` to ignore it
+a pass. `gate.jsonl` lives in `<toplevel>/.mkit/`, on by default, with `--no-cache` to ignore it
 and `--no-ledger` to stop writing it. Details:
 [`skills/_shared/references/quality-gate.md`](plugin/skills/_shared/references/quality-gate.md).
 

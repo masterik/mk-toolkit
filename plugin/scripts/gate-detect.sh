@@ -236,10 +236,15 @@ else
 	gate_fp="$(mkit_tree_fingerprint)" || gate_fp=""
 	if [ -z "$gate_fp" ]; then
 		# NOT `no-hash`: a hash tool exists (the branch above proved it), so the
-		# fingerprint failed for some other reason — no git dir, an unusable temp dir, or
-		# a short hash batch refusing to answer. Telling the reader to install `shasum`
-		# when they already have one is exactly the misdiagnosis `scripts_state` exists
-		# to avoid.
+		# fingerprint failed for some other reason — no work tree, an unwritable
+		# `$TMPDIR`, or a short hash batch refusing to answer. Telling the reader to
+		# install `shasum` when they already have one is exactly the misdiagnosis
+		# `scripts_state` exists to avoid.
+		#
+		# This used to fire on every sandboxed run, because the fingerprint's working
+		# files came from a template-less `mktemp` that ignores `$TMPDIR` and is denied
+		# outright. That was an environmental refusal wearing a diagnosis; it is fixed at
+		# the source (`mkit_tmpfile`), so this cause now means what it says.
 		gate_cause=no-fingerprint
 	elif [ -z "$ledger" ] || [ ! -s "$ledger" ]; then
 		gate_cause=empty

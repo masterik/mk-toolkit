@@ -266,7 +266,7 @@ fp() { bash -c "$(src)mkit_tree_fingerprint"; }
 @test "mkit_gate_ledger_path points at gate.jsonl in the repo mkit dir" {
 	run bash -c "$(src)mkit_gate_ledger_path"
 	[ "$status" -eq 0 ]
-	[ "$output" = "$MKIT_TMP/.git/mkit/gate.jsonl" ]
+	[ "$output" = "$MKIT_TMP/.mkit/gate.jsonl" ]
 }
 
 @test "mkit_gate_ledger_path fails quietly outside a repo" {
@@ -325,4 +325,234 @@ fp() { bash -c "$(src)mkit_tree_fingerprint"; }
 @test "mkit_have_hash finds a sha256 tool" {
 	run bash -c "$(src)mkit_have_hash"
 	[ "$status" -eq 0 ]
+}
+
+# --- where state lives, and whether it can be written ---------------------------------
+#
+# `~/.claude/mkit` was inside the OS sandbox's protected-path region, where an allowlist
+# entry is inert: a path there already covered by `sandbox.filesystem.allowWrite` still
+# failed with `Operation not permitted`. So the remedy the docs implied could not work,
+# and the directory moved. docs/adr/0002 records the measurement.
+
+@test "mkit_user_dir defaults to ~/.mkit, outside the sandbox's protected region" {
+	run env -u MKIT_HOME HOME=/home/example bash -c "$(src)mkit_user_dir"
+	[ "$status" -eq 0 ]
+	[ "$output" = /home/example/.mkit ]
+	# Never under ~/.claude: that region cannot be granted, only disabled wholesale.
+	[[ "$output" != *"/.claude/"* ]]
+}
+
+@test "MKIT_HOME still overrides it, which is what sandboxes the suite" {
+	run bash -c "$(src)mkit_user_dir"
+	[ "$status" -eq 0 ]
+	[ "$output" = "$MKIT_HOME" ]
+}
+
+@test "mkit_user_dir_writable reports yes for a writable dir and creates nothing" {
+	[ ! -d "$MKIT_HOME" ]
+	run bash -c "$(src)mkit_user_dir_writable"
+	[ "$status" -eq 0 ]
+	[ ! -d "$MKIT_HOME" ]
+}
+
+@test "mkit_user_dir_writable reports no for a dir that refuses a write" {
+	mkdir -p "$MKIT_HOME"
+	chmod 500 "$MKIT_HOME"
+	run bash -c "$(src)mkit_user_dir_writable"
+	chmod 700 "$MKIT_HOME"
+	[ "$status" -eq 1 ]
+}
+
+@test "mkit_user_dir_writable leaves no probe file behind" {
+	mkdir -p "$MKIT_HOME"
+	run bash -c "$(src)mkit_user_dir_writable"
+	[ "$status" -eq 0 ]
+	[ -z "$(ls -A "$MKIT_HOME")" ]
+}
+
+@test "the remedy names additionalDirectories, and never a protected path" {
+	run bash -c "$(src)mkit_user_dir_remedy"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"permissions.additionalDirectories"* ]]
+	[[ "$output" == *"$MKIT_HOME"* ]]
+	[[ "$output" != *".claude/mkit"* ]]
+}
+
+@test "mkit_dir_or_die resolves inside the toplevel, never the git dir" {
+	run bash -c "$(src)mkit_dir_or_die"
+	[ "$status" -eq 0 ]
+	[ "$output" = "$MKIT_TMP/.mkit" ]
+}
+
+@test "mkit_dir_or_die follows a linked worktree into itself" {
+	git worktree add -q -b wt-c "$MKIT_TMP/wt-c" >/dev/null
+	run bash -c "cd '$MKIT_TMP/wt-c' && $(src)mkit_dir_or_die"
+	[ "$status" -eq 0 ]
+	[ "$output" = "$MKIT_TMP/wt-c/.mkit" ]
+}
+
+@test "mkit_dir_or_die fails outside a repo" {
+	cd "$MKIT_TMP/.."
+	run bash -c "$(src)mkit_dir_or_die"
+	[ "$status" -eq 1 ]
+}
+
+# --- mkit_tmpfile -----------------------------------------------------------------------
+#
+# On macOS `mktemp` with no template — bare or `-t` — resolves the Darwin per-user temp
+# directory and ignores `$TMPDIR`, so under the sandbox it fails outright. Everything
+# ephemeral goes through here instead, with an explicit template.
+
+@test "mkit_tmpfile creates a file under \$TMPDIR with the given prefix" {
+	run bash -c "$(src)mkit_tmpfile mkit-probe"
+	[ "$status" -eq 0 ]
+	[ -f "$output" ]
+	[[ "$output" == "${TMPDIR%/}/mkit-probe."* ]]
+	rm -f -- "$output"
+}
+
+@test "mkit_tmpfile honours \$TMPDIR rather than the Darwin per-user temp dir" {
+	alt="$MKIT_TMP/alt-tmp"
+	mkdir -p "$alt"
+	run env TMPDIR="$alt" bash -c "$(src)mkit_tmpfile mkitfp"
+	[ "$status" -eq 0 ]
+	[[ "$output" == "$alt/mkitfp."* ]]
+	[ -f "$output" ]
+}
+
+@test "mkit_tmpfile normalizes a trailing slash on \$TMPDIR" {
+	alt="$MKIT_TMP/alt-tmp2"
+	mkdir -p "$alt"
+	run env TMPDIR="$alt/" bash -c "$(src)mkit_tmpfile mkitfp"
+	[ "$status" -eq 0 ]
+	[[ "$output" == "$alt/mkitfp."* ]]
+}
+
+@test "mkit_tmpfile fails, rather than falling back, when \$TMPDIR is unwritable" {
+	alt="$MKIT_TMP/ro-tmp"
+	mkdir -p "$alt"
+	chmod 500 "$alt"
+	run env TMPDIR="$alt" bash -c "$(src)mkit_tmpfile mkitfp"
+	chmod 700 "$alt"
+	[ "$status" -ne 0 ]
+	[ -z "$output" ]
+}
+
+# --- the ignore rule --------------------------------------------------------------------
+
+@test "mkit_run_ignored answers no before the rule exists, and yes after" {
+	run bash -c "$(src)mkit_run_ignored"
+	[ "$status" -ne 0 ]
+	mkdir -p .git/info
+	printf '.mkit/\n' >>.git/info/exclude
+	run bash -c "$(src)mkit_run_ignored"
+	[ "$status" -eq 0 ]
+}
+
+@test "mkit_run_ignored sees a directory-only rule before the directory exists" {
+	mkdir -p .git/info
+	printf '.mkit/\n' >>.git/info/exclude
+	[ ! -d .mkit ]
+	run bash -c "$(src)mkit_run_ignored"
+	[ "$status" -eq 0 ]
+}
+
+@test "mkit_run_ignored accepts a committed .gitignore line too" {
+	printf '.mkit/\n' >.gitignore
+	git add .gitignore
+	git commit -q -m 'ignore mkit scratch'
+	run bash -c "$(src)mkit_run_ignored"
+	[ "$status" -eq 0 ]
+}
+
+@test "mkit_ensure_run_ignored writes the common-dir exclude and is idempotent" {
+	run bash -c "$(src)mkit_ensure_run_ignored"
+	[ "$status" -eq 0 ]
+	[ "$(grep -cxF '.mkit/' .git/info/exclude)" -eq 1 ]
+	run bash -c "$(src)mkit_ensure_run_ignored"
+	[ "$status" -eq 0 ]
+	[ "$(grep -cxF '.mkit/' .git/info/exclude)" -eq 1 ]
+}
+
+@test "a linked worktree inherits the rule from the common dir" {
+	bash -c "$(src)mkit_ensure_run_ignored"
+	git worktree add -q -b wt-d "$MKIT_TMP/wt-d" >/dev/null
+	run bash -c "cd '$MKIT_TMP/wt-d' && $(src)mkit_run_ignored"
+	[ "$status" -eq 0 ]
+}
+
+@test "mkit_tree_fingerprint ignores .mkit/ even when the ignore rule is missing" {
+	# The pathspec exclusion, not the exclude file: in the one session where the exclude
+	# write was refused, a gate must still not invalidate its own cache entry by writing
+	# its own logs.
+	run bash -c "$(src)mkit_run_ignored"
+	[ "$status" -ne 0 ]
+	before="$(fp)"
+	mkdir -p .mkit/review-x
+	printf 'step output\n' >.mkit/review-x/step.log
+	printf '{"step":"test"}\n' >.mkit/gate.jsonl
+	after="$(fp)"
+	[ "$before" = "$after" ]
+	# And the tree really was dirty by git's own reckoning, or the test proves nothing.
+	[ -n "$(git status --porcelain)" ]
+}
+
+# --- the reserved root, on both sides of the fingerprint --------------------------------
+
+@test "a .mkit path tracked in HEAD is excluded from the fingerprint too" {
+	# `:(exclude).mkit` covers the two worktree overlays but `git ls-tree` refuses
+	# pathspec magic, so the HEAD mapping needs its own guard. Half-applied, the
+	# exclusion broke the one property the ledger rests on: editing a tracked scratch
+	# file left the fingerprint alone while *committing* that identical worktree moved
+	# it, so a `pr` -> `finish` cache hit became impossible in the repos that hit it.
+	# Reachable only where `.mkit/` was tracked before the upgrade — .gitignore and the
+	# exclude file stop it being added from here on, but neither untracks what already is.
+	mkdir -p .mkit
+	printf 'v1\n' >.mkit/run.log
+	git add -f .mkit/run.log
+	git commit -q -m 'legacy tracked scratch'
+	before="$(fp)"
+	[ -n "$before" ]
+
+	printf 'v2\n' >.mkit/run.log
+	[ "$(fp)" = "$before" ]
+
+	git add -f .mkit/run.log
+	git commit -q -m 'commit the identical worktree'
+	[ "$(fp)" = "$before" ]
+}
+
+@test "a tracked file whose name merely starts with .mkit is still fingerprinted" {
+	# The guard is the reserved root, not a prefix match: `.mkitrc` is the user's file.
+	printf 'v1\n' >.mkitrc
+	git add .mkitrc
+	git commit -q -m 'a file of the user own'
+	before="$(fp)"
+	printf 'v2\n' >.mkitrc
+	[ "$(fp)" != "$before" ]
+}
+
+# --- the writability probe is net-zero, however deep ------------------------------------
+
+@test "the writability probe removes every directory it had to create" {
+	# `mkdir -p` creates the whole chain; one rmdir removes only the leaf. facts.sh and
+	# install.sh --status call this purely to *report*, so structure left behind means the
+	# report changed what it reported on.
+	export MKIT_HOME="$MKIT_TMP/absent-parent/deeper/state"
+	[ ! -d "$MKIT_TMP/absent-parent" ]
+	run bash -c "$(src)mkit_user_dir_writable"
+	[ "$status" -eq 0 ]
+	[ ! -d "$MKIT_TMP/absent-parent" ]
+}
+
+@test "the writability probe never removes a directory that already existed" {
+	# The converse hazard, and the reason it counts what it created rather than rmdir-ing
+	# on the way out: this directory is the user's state, not the probe's scratch.
+	export MKIT_HOME="$MKIT_TMP/pre-existing/state"
+	mkdir -p "$MKIT_HOME"
+	printf 'prereq/jq\n' >"$MKIT_HOME/bootstrap.state"
+	run bash -c "$(src)mkit_user_dir_writable"
+	[ "$status" -eq 0 ]
+	[ -d "$MKIT_HOME" ]
+	[ -f "$MKIT_HOME/bootstrap.state" ]
 }

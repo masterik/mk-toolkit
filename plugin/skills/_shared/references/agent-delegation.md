@@ -48,6 +48,29 @@ adversarial all covered`. Ten lines is generous; a hundred means the brief had n
 - **Hand over facts already established** (range, shortstat, file list, goal) as given, not to be measured.
 - **One line to the user before spawning**, naming the subject in their terms — "Reviewing the branch against
   main with three reviewers…". Then spawn and stop talking until results are in.
+- **Never poll, and never schedule a wakeup.** A finished subagent notifies you on its own. A wait loop, a
+  `sleep`, a repeated "is it done yet" check, or a scheduled wakeup all spend turns waiting for something
+  that arrives by itself. If the user asks before it lands, say it is still running.
+
+## A delegated plan is complete, or it is repaired
+
+A plan that quietly omits a changed file is worse than no plan: it reads as a decision and is a gap. Two
+rules, both cheap, and they apply to any stage that returns a plan over a file set — the commit plan is the
+case that has bitten.
+
+- **The brief states the coverage contract**: every path in the file list appears in **exactly one**
+  proposed group, and every file the plan calls mixed carries a hunk assignment. Omitting a path is a rule
+  violation, not a judgement call, so a subagent that cannot place one says so instead of dropping it.
+- **The caller verifies by arithmetic, not by re-reading.** Compare the plan's path list against the
+  `*_file_list` blocks `facts.sh` already returned: same set, no path twice, nothing invented. That is a
+  set comparison over lines you already hold — it costs nothing and it is the whole check.
+- **On a gap, send the gap back to the same subagent** — name the missing paths and ask only where they go.
+  Its context still holds the diff, so the answer is cheap. Re-reading the diff in the main session pays for
+  the delegation twice, which is what happened the one time this was left unspecified.
+
+**Do not delegate a hunk-level judgement.** A tree with more than roughly three files whose changes span
+commit boundaries is read in the main session, whatever its size: a per-hunk assignment cannot survive a
+twenty-line return budget, and a plan that compresses it is a plan you have to re-derive.
 
 ## Parallel vs sequential
 
