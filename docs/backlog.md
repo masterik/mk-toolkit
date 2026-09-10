@@ -104,11 +104,11 @@ Neither of these is a port, and neither waits on a milestone. Both follow from
   reporting moves to the binary rather than being reimplemented in shell.
   - **The tombstone is gone, not manual.** With no hook to silence, `~/.mkit/bootstrap.disabled`
     signals nothing; `prerequisites.md` says to delete a leftover one.
-  - **Unprompted prerequisite detection is accepted as lost until M7.** A missing tool now
-    surfaces only as a thinner `facts.sh` block or a `gate_cache=no-hash` annotation. `doctor`
-    restores the human-run report but cannot restore the unprompted one, and cannot report a
-    missing `mkit` at all — see the note under "Staying in bash, permanently" below. Do not
-    re-add a shell reporter in the meantime.
+  - **Unprompted prerequisite detection stays lost after M7.** A missing tool surfaces only as a
+    thinner `facts.sh` block or a `gate_cache=no-hash` annotation until someone runs `doctor`.
+    `doctor` restored the human-run report and cannot restore the unprompted one, and cannot
+    report a missing `mkit` at all — see the note under "Staying in bash, permanently" below. Do
+    not re-add a shell reporter for either gap.
   - **`facts.sh`'s `user_dir_writable=` survives**, so no skill lost information. `~/.mkit/` is
     empty but still the declared home for user-scoped state.
 

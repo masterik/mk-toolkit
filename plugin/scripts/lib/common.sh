@@ -129,8 +129,25 @@ $created"
 # construction: no sandboxed session can perform it, so it is spelled with the `!`
 # prefix that runs a command in the user's own shell.
 mkit_user_dir_remedy() {
+	local dir
+	dir="$(mkit_user_dir)"
 	printf 'run `! mkdir -p %s` (a sandboxed session cannot create it), then add %s to permissions.additionalDirectories (sandbox.filesystem.allowWrite grants the sandbox only)\n' \
-		"$(mkit_user_dir)" "$(mkit_user_dir)"
+		"$(mkit_shell_quote "$dir")" "$dir"
+}
+
+# Quote a path for the copy-and-run half of a remedy. Only the command is quoted;
+# the allowlist entry is JSON the user types into settings, not shell.
+#
+# MKIT_HOME can point anywhere, including a path with spaces, and a remedy printed
+# as `! mkdir -p /Users/x/my state` creates two wrong directories rather than
+# failing — the worst kind of wrong, since it looks like it worked. bash 3.2 has
+# printf %q, but its output is unquoted-with-backslashes and reads badly in a
+# sentence, so this is the single-quote form.
+mkit_shell_quote() {
+	case "$1" in
+	*[!A-Za-z0-9/._-]*) printf "'%s'\n" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")" ;;
+	*) printf '%s\n' "$1" ;;
+	esac
 }
 
 # Absolute path of this repo's committed config file, or failure outside a work tree.
@@ -229,10 +246,18 @@ mkit_dir_or_die() {
 # directory-only `.mkit/` and the current `.mkit/*` pair alike.
 MKIT_SCRATCH_PROBE='.mkit/gate.jsonl'
 
+# The ledger is not the only thing that must be ignored, and one probe cannot speak
+# for both. An unrelated `*.jsonl` rule hides `gate.jsonl` while leaving every
+# `.mkit/<skill>-*/` run directory untracked — under which `run_ignored=yes` would be
+# reported to a skill whose worktree teardown then fails. So a run-directory-shaped
+# path is probed too, and both must be ignored for the answer to be yes.
+MKIT_RUN_PROBE='.mkit/probe-0/log'
+
 mkit_run_ignored() {
 	local toplevel
 	toplevel="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
-	git -C "$toplevel" check-ignore -q "$MKIT_SCRATCH_PROBE" 2>/dev/null
+	git -C "$toplevel" check-ignore -q -- "$MKIT_SCRATCH_PROBE" 2>/dev/null &&
+		git -C "$toplevel" check-ignore -q -- "$MKIT_RUN_PROBE" 2>/dev/null
 }
 
 # The other half of the same question, and the one a legacy repo gets wrong: can the
@@ -245,7 +270,7 @@ mkit_run_ignored() {
 mkit_config_committable() {
 	local toplevel
 	toplevel="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
-	! git -C "$toplevel" check-ignore -q .mkit/config.toml 2>/dev/null
+	! git -C "$toplevel" check-ignore -q -- .mkit/config.toml 2>/dev/null
 }
 
 # The one remedy sentence for a shadowed config path. One producer, same rule as
@@ -256,11 +281,36 @@ mkit_config_committable() {
 # `.mkit/` line that lives in a committed `.gitignore`. Where git reports the source, name
 # it; that is the only file where editing the rule does anything.
 mkit_config_ignored_remedy() {
-	local toplevel src
+	local toplevel fields src pat
 	toplevel="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
-	src="$(git -C "$toplevel" check-ignore -v .mkit/config.toml 2>/dev/null | cut -d: -f1)"
-	printf 'replace the `.mkit/` rule in %s with `.mkit/*` followed by `!.mkit/config.toml` — git cannot re-include a file whose parent directory is excluded\n' \
-		"${src:-.gitignore}"
+	# -z, so each field is read whole. The default format is
+	# `<source>:<line>:<pattern>\t<path>`, and `cut -d:` truncates any source path
+	# containing a colon — a core.excludesFile under such a directory would be named
+	# wrong, which is the one thing this sentence exists to get right. git accepts
+	# -z only with --stdin ("-z only makes sense with --stdin"), hence the pipe.
+	fields="$(printf '.mkit/config.toml\0' | git -C "$toplevel" check-ignore -v -z --stdin 2>/dev/null | tr '\0' '\n')"
+	src="$(printf '%s\n' "$fields" | sed -n 1p)"
+	pat="$(printf '%s\n' "$fields" | sed -n 3p)"
+	: "${src:=.gitignore}"
+
+	# Which fix applies depends on which rule matched. A rule excluding the parent
+	# directory cannot be undone by a negation at all — git never descends into an
+	# excluded directory — so that rule has to become `.mkit/*`. Any other pattern is
+	# lifted by a negation after it, and telling that reader to replace a `.mkit/`
+	# rule sends them looking for a line their file does not contain.
+	case "$pat" in
+	'' )
+		printf 'an ignore rule in %s excludes `.mkit/config.toml`; if it is a `.mkit/` rule, replace it with `.mkit/*` followed by `!.mkit/config.toml` — git cannot re-include a file whose parent directory is excluded\n' "$src"
+		;;
+	.mkit | .mkit/ | /.mkit | /.mkit/ )
+		printf 'replace the `%s` rule in %s with `.mkit/*` followed by `!.mkit/config.toml` — git cannot re-include a file whose parent directory is excluded\n' \
+			"$pat" "$src"
+		;;
+	* )
+		printf 'the `%s` rule in %s excludes it; add `!.mkit/config.toml` after that line in the same file\n' \
+			"$pat" "$src"
+		;;
+	esac
 }
 
 # Make mkit's scratch ignored, once, and report whether it now is. Best effort: returns 0

@@ -344,6 +344,15 @@ fp() { bash -c "$(src)mkit_tree_fingerprint"; }
 	[[ "$output" == *"! mkdir"* ]]
 }
 
+# MKIT_HOME can point anywhere, a path with spaces included, and the mkdir half of the
+# remedy is meant to be copied and run. Unquoted it creates two wrong directories
+# rather than failing, which is worse than failing.
+@test "the remedy quotes a user dir containing spaces" {
+	run env MKIT_HOME="$MKIT_TMP/my state" bash -c "$(src)mkit_user_dir_remedy"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"mkdir -p '$MKIT_TMP/my state'"* ]]
+}
+
 @test "mkit_dir_or_die resolves inside the toplevel, never the git dir" {
 	run bash -c "$(src)mkit_dir_or_die"
 	[ "$status" -eq 0 ]
@@ -441,6 +450,16 @@ fp() { bash -c "$(src)mkit_tree_fingerprint"; }
 	[ "$status" -eq 0 ]
 }
 
+# One probe cannot answer for the whole scratch root. An unrelated `*.jsonl` rule hides
+# the ledger while leaving every `.mkit/<skill>-*/` run directory untracked — under
+# which `run_ignored=yes` would be reported to a skill whose worktree teardown then
+# fails on the untracked run dir.
+@test "mkit_run_ignored is not satisfied by a rule that hides only the ledger" {
+	printf '*.jsonl\n' >.gitignore
+	run bash -c "$(src)mkit_run_ignored"
+	[ "$status" -ne 0 ]
+}
+
 @test "mkit_run_ignored still accepts a legacy directory-only rule" {
 	mkdir -p .git/info
 	printf '.mkit/\n' >>.git/info/exclude
@@ -505,6 +524,37 @@ fp() { bash -c "$(src)mkit_tree_fingerprint"; }
 	[ "$status" -eq 0 ]
 	[[ "$output" == *".gitignore"* ]]
 	[[ "$output" == *'!.mkit/config.toml'* ]]
+}
+
+# The fix depends on which rule matched, so the rule is named. A pattern that excludes
+# the parent directory cannot be undone by a negation at all — git never descends into
+# an excluded directory — but any other pattern is lifted by one. Telling the second
+# reader to go replace a `.mkit/` rule sends them looking for a line their file does
+# not contain.
+@test "the shadowed-config remedy names the rule that actually matched" {
+	printf '*.toml\n' >.gitignore
+	run bash -c "$(src)mkit_config_committable"
+	[ "$status" -ne 0 ]
+
+	run bash -c "$(src)mkit_config_ignored_remedy"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *'*.toml'* ]]
+	[[ "$output" == *'!.mkit/config.toml'* ]]
+	# The rule to edit is a file pattern, so there is nothing to "replace".
+	[[ "$output" != *'replace the `.mkit/` rule'* ]]
+}
+
+# git's default `check-ignore -v` prints `<source>:<line>:<pattern>\t<path>`, so
+# `cut -d:` truncates any source path containing a colon — and the whole point of the
+# sentence is naming the file where editing the rule does something.
+@test "the shadowed-config remedy survives a colon in the excludes-file path" {
+	mkdir -p "$MKIT_TMP/od:d"
+	printf '.mkit/\n' >"$MKIT_TMP/od:d/ignore"
+	git config core.excludesFile "$MKIT_TMP/od:d/ignore"
+
+	run bash -c "$(src)mkit_config_ignored_remedy"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"$MKIT_TMP/od:d/ignore"* ]]
 }
 
 # `.gitignore` outranks the common dir's `info/exclude`, so a negation written into the

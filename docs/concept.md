@@ -86,9 +86,10 @@ are plain Markdown, so support for another agent is a thin packaging step, not a
   is the one place all three layers permit with no configuration at all.
 - **Configuration is per-repo, and is an input:** what a repo can't tell you by inspection — which
   store holds its specs, which of three test commands is the cheap one, who reviews what — is
-  pinned once by `mkit init` and committed, so a colleague and a fresh clone inherit it. User scope
-  keeps only what must outlive every repo, which is the hook's tombstone and its once-per-tool
-  messages. Every step still runs with no config at all, discovering what it can and reporting what
+  pinned once by `mkit init` and committed to `.mkit/config.toml`, so a colleague and a fresh clone
+  inherit it. User scope keeps only what must outlive every repo — which is nothing today: the
+  hook's tombstone and its once-per-tool messages went with the hook in 0.15.0. Every step still
+  runs with no config at all, discovering what it can and reporting what
   it assumed: config removes repeated discovery, and never becomes a precondition
   ([ADR 0001](adr/0001-per-repo-config-and-init.md)).
 - **Safe by default:** irreversible actions (force-push, branch delete, history rewrite,
@@ -257,9 +258,9 @@ rule across all three: **mkit computes and reports; the human or the agent decid
 **The machine** — is the toolchain here at all. `facts.sh` reports the prerequisite-adjacent
 facts a skill needs at its first call, and that is now the whole of it: the `SessionStart` hook
 that named a missing tool once, and `install.sh --status`, are both gone. Neither installed
-anything, and neither was a place to *ask* — a human-run diagnostic is a separate surface, which
-`mkit doctor` becomes in M7. Between now and then there is deliberately no version of this at
-all, loud or quiet ([ADR 0003](adr/0003-two-distribution-channels.md) withdrew M3 and made
+anything, and neither was a place to *ask* — a human-run diagnostic is a separate surface, and
+`mkit doctor` is it (M7). Nothing runs unprompted: there is deliberately no automatic version of
+this at all, loud or quiet ([ADR 0003](adr/0003-two-distribution-channels.md) withdrew M3 and made
 installation manual).
 
 **The repo** — what this project can't tell you by inspection. `mkit repo profile --json` reports

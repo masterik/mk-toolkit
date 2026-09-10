@@ -39,7 +39,7 @@ just build / vet / test          # go build|vet|test ./...
 just lint                        # golangci-lint run (CI pins v2.12, brew install golangci-lint)
 just run version --json          # exercise the front-end contract
 just run doctor                  # prerequisites, sandbox writability, plugin state
-just run repo profile --json     # how this repo works, each value discovered|pinned
+just run repo profile --json     # how this repo works: discovered|pinned|unavailable
 just shtest                      # shell layer: node --test + bats (brew install bats-core)
 ```
 
@@ -93,10 +93,14 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
     read in a diff, and no Go TOML marshaller preserves comments.
   - `profile/` (M7): merges discovered with pinned, tagging every value. Gate discovery is
     **delegated to `gate-detect.sh`**, never reimplemented, until M5 ports it.
-  - `pluginroot/` (M7): locates the payload — `CLAUDE_PLUGIN_ROOT`, `MKIT_PLUGIN_ROOT`, the
-    marketplace checkout, then a `plugin/` beside the work tree. Identified by the **manifest's
-    own name**, never by path: the checkout is named after the marketplace *owner*
-    (`marketplaces/masterik/plugin`), so a path test for the repo name matches nothing.
+  - `pluginroot/` (M7): locates the payload — `CLAUDE_PLUGIN_ROOT`, `MKIT_PLUGIN_ROOT`, a
+    `plugin/` beside the work tree, then the marketplace checkout. Every *searched* candidate is
+    identified by the **manifest's own name**, never by path: the checkout is named after the
+    marketplace *owner* (`marketplaces/masterik/plugin`), so a path test for the repo name
+    matches nothing. The two environment variables are explicit overrides and are trusted as
+    given. **The work tree comes before the installed copy** — in a payload checkout the tree
+    being edited is what a report is about, and an installed 0.14.0 answering for a 0.16.0 work
+    tree is a wrong answer that looks right.
     `CommonFunc` is how the binary calls a `lib/common.sh` helper instead of re-wording it.
   - `doctor/` (M7): the checks. Reports; fixes nothing; exit status stays 0 with findings.
 - `internal/tui/` — Bubble Tea rendering over `core`, one subpackage per command.

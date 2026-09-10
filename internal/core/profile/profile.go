@@ -144,6 +144,7 @@ func buildGate(repo *gitrepo.Repo, cfg *repoconfig.Config, root *pluginroot.Root
 		if err != nil && out == "" {
 			g.Cause = "gate-detect.sh did not run"
 		}
+		var scriptsState string
 		for _, line := range strings.Split(out, "\n") {
 			key, val, ok := strings.Cut(line, "=")
 			if !ok {
@@ -154,6 +155,8 @@ func buildGate(repo *gitrepo.Repo, cfg *repoconfig.Config, root *pluginroot.Root
 				if val != "none" {
 					g.Ecosystem = val
 				}
+			case "scripts_state":
+				scriptsState = val
 			case "full":
 				if val == "none" || val == "" {
 					continue
@@ -167,6 +170,18 @@ func buildGate(repo *gitrepo.Repo, cfg *repoconfig.Config, root *pluginroot.Root
 						Step: stepName(cmd, len(g.Steps)), Command: cmd, Source: Discovered,
 					})
 				}
+			}
+		}
+		// `full=none` from a degraded run is not the same answer as `full=none`
+		// from a repo with no gate. gate-detect.sh exits 0 either way, so without
+		// this the profile reports "no gate" when the truth is "not looked".
+		if len(g.Steps) == 0 && g.Cause == "" {
+			switch scriptsState {
+			case "no-jq":
+				g.Cause = "gate discovery could not read package.json — jq is missing, " +
+					"so a Node repo's scripts were not inspected"
+			case "unreadable":
+				g.Cause = "gate discovery could not read package.json"
 			}
 		}
 	}
@@ -348,11 +363,15 @@ func discoverMerge(repo *gitrepo.Repo, cfg *repoconfig.Config) Value {
 	if cfg.Merge.Style != "" {
 		return Value{Value: cfg.Merge.Style, Source: Pinned}
 	}
-	if repo.ConfigValue("pull.rebase") == "true" {
-		return Value{Value: "rebase", Source: Discovered}
-	}
-	if v := repo.ConfigValue("mkit.mergeStyle"); v != "" {
+	if v := repo.LocalConfigValue("mkit.mergeStyle"); v != "" {
 		return Value{Value: v, Source: Discovered}
+	}
+	// Repo-local only, and every rebase flavour counts. `pull.rebase` takes
+	// true|false|merges|interactive, and reading it through `git config --get`
+	// would surface a developer's global habit as this repo's convention.
+	switch repo.LocalConfigValue("pull.rebase") {
+	case "true", "merges", "interactive":
+		return Value{Value: "rebase", Source: Discovered}
 	}
 	return Value{Source: Unavailable,
 		Cause: "not discoverable locally — the remote's merge settings are a network call, " +

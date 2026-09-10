@@ -29,8 +29,9 @@ M7: the configuration surface, and the diagnostic surface 0.15.0 removed.
   implementation until M5 ports it.
 - **`mkit doctor`** — prerequisites, sandbox writability, the writable set, plugin payload and
   enablement, hook registration, and permission-allowlist gaps. Reports; fixes nothing; exit status
-  stays 0 with findings. It reads its remedy sentences **from `lib/common.sh`** rather than wording
-  its own, so there is still exactly one producer per sentence.
+  stays 0 with findings. Where a sentence already has a shell producer — the `~/.mkit` probe and
+  its remedy — it is read **from `lib/common.sh`** rather than re-worded; the checks with no shell
+  counterpart word their own.
   - It does **not** restore everything the hook did: it cannot run unprompted at session start and
     cannot report that `mkit` itself is absent. Both remain accepted losses.
   - The allowlist check distinguishes `permissions.additionalDirectories` from

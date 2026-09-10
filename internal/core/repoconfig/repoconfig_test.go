@@ -20,7 +20,11 @@ func newRepo(t *testing.T) *gitrepo.Repo {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = dir
 		cmd.Env = append(os.Environ(),
-			"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+			"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t",
+			// The developer's own git config must not reach these repos: a global
+			// commit.gpgsign, an init.templateDir hook or a commit.template would
+			// otherwise make the suite pass or fail by whose machine it runs on.
+			"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v\n%s", args, err, out)
 		}
@@ -47,6 +51,9 @@ func git(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
+	// A global core.excludesFile would otherwise decide the ignore tests below.
+	cmd.Env = append(os.Environ(),
+		"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
@@ -214,14 +221,36 @@ func TestIsZero(t *testing.T) {
 // The remedy must name the file git reported, because `.gitignore` outranks the
 // common dir's `info/exclude` — editing the wrong one changes nothing.
 func TestShadowedRemedyNamesTheSource(t *testing.T) {
-	got := ShadowedRemedy(".git/info/exclude")
+	got := ShadowedRemedy(".git/info/exclude", ".mkit/")
 	if !strings.Contains(got, ".git/info/exclude") {
 		t.Errorf("remedy does not name the source: %s", got)
 	}
 	if !strings.Contains(got, "!.mkit/config.toml") {
 		t.Errorf("remedy does not name the negation: %s", got)
 	}
-	if !strings.Contains(ShadowedRemedy(""), ".gitignore") {
+	if !strings.Contains(ShadowedRemedy("", ""), ".gitignore") {
 		t.Error("want a sensible default when git named no source")
+	}
+}
+
+// A rule that is not `.mkit/` needs a different fix, and naming the `.mkit/` one
+// sends the reader looking for a line that is not in the file. A directory rule
+// must be rewritten (git never descends into an excluded directory); anything
+// else is lifted by a negation after it.
+func TestShadowedRemedyDependsOnTheRule(t *testing.T) {
+	dir := ShadowedRemedy(".gitignore", ".mkit/")
+	if !strings.Contains(dir, "replace") || !strings.Contains(dir, ".mkit/*") {
+		t.Errorf("directory rule should be rewritten: %s", dir)
+	}
+
+	other := ShadowedRemedy(".gitignore", "*.toml")
+	if !strings.Contains(other, "*.toml") {
+		t.Errorf("remedy does not name the rule that actually matched: %s", other)
+	}
+	if strings.Contains(other, "replace the `.mkit/` rule") {
+		t.Errorf("remedy names a rule that is not in the file: %s", other)
+	}
+	if !strings.Contains(other, "!.mkit/config.toml") {
+		t.Errorf("remedy does not name the negation: %s", other)
 	}
 }

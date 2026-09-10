@@ -44,15 +44,24 @@ func newDoctorCmd() *cobra.Command {
 // what is wrong" has succeeded; a non-zero exit would make it unusable in the `&&`
 // chains a skill writes, and the findings are the output either way.
 func renderDoctor(out io.Writer, r *doctor.Report) {
-	var group string
+	// Grouped before printing, in first-seen order. Run order is not group order —
+	// the sandbox checks straddle the repo ones — and a heading printed on every
+	// change prints "sandbox" twice with unrelated rows between.
+	var order []string
+	byGroup := map[string][]doctor.Check{}
 	for _, c := range r.Checks {
-		if c.Group != group {
-			group = c.Group
-			_, _ = fmt.Fprintf(out, "\n%s\n", group)
+		if _, seen := byGroup[c.Group]; !seen {
+			order = append(order, c.Group)
 		}
-		_, _ = fmt.Fprintf(out, "  %-4s %-22s %s\n", mark(c.Status), c.Name, c.Detail)
-		if c.Remedy != "" {
-			_, _ = fmt.Fprintf(out, "       %-22s remedy: %s\n", "", c.Remedy)
+		byGroup[c.Group] = append(byGroup[c.Group], c)
+	}
+	for _, group := range order {
+		_, _ = fmt.Fprintf(out, "\n%s\n", group)
+		for _, c := range byGroup[group] {
+			_, _ = fmt.Fprintf(out, "  %-4s %-22s %s\n", mark(c.Status), c.Name, c.Detail)
+			if c.Remedy != "" {
+				_, _ = fmt.Fprintf(out, "       %-22s remedy: %s\n", "", c.Remedy)
+			}
 		}
 	}
 	counts := r.Counts()

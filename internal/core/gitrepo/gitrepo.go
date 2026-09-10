@@ -56,25 +56,43 @@ func Open(dir string) (*Repo, error) {
 // backwards for the one path this repo negates. `-q` is the boolean; `-v` runs
 // only afterwards, to name the file a remedy must edit.
 func (r *Repo) Ignored(path string) (ignored bool, source string) {
-	if _, err := run(r.Toplevel, "check-ignore", "-q", path); err != nil {
-		return false, ""
+	ignored, source, _ = r.IgnoreRule(path)
+	return ignored, source
+}
+
+// IgnoreRule additionally returns the pattern that decided the path. A remedy
+// needs both: the file to edit, and which line in it — the fix for a
+// directory-only `.mkit/` is not the fix for a stray `*.toml`.
+func (r *Repo) IgnoreRule(path string) (ignored bool, source, pattern string) {
+	if _, err := run(r.Toplevel, "check-ignore", "-q", "--", path); err != nil {
+		return false, "", ""
 	}
-	out, err := run(r.Toplevel, "check-ignore", "-v", path)
+	// -z, so each field is read whole. Without it the format is
+	// `<source>:<line>:<pattern>\t<path>` and splitting at the first colon
+	// truncates any source path containing one — a core.excludesFile under a
+	// directory with a colon in its name would name the wrong file to edit.
+	//
+	// git refuses `-z` except with `--stdin` ("-z only makes sense with
+	// --stdin"), which is no loss: passing the path as data rather than as an
+	// argument is also what makes a leading dash harmless.
+	out, err := runStdin(r.Toplevel, path+"\x00", "check-ignore", "-v", "-z", "--stdin")
 	if err != nil || out == "" {
-		return true, ""
+		return true, "", ""
 	}
-	// `<source>:<line>:<pattern>\t<path>` — the source contains no colon in
-	// practice (.gitignore, .git/info/exclude), so the first field is enough.
-	if i := strings.IndexByte(out, ':'); i > 0 {
-		return true, out[:i]
+	f := strings.Split(out, "\x00")
+	if len(f) >= 3 {
+		return true, f[0], f[2]
 	}
-	return true, ""
+	if len(f) >= 1 {
+		return true, f[0], ""
+	}
+	return true, "", ""
 }
 
 // Tracked reports whether path is in the index. A tracked file is unaffected by
 // ignore rules, which is why this is asked separately from Ignored.
 func (r *Repo) Tracked(path string) bool {
-	_, err := run(r.Toplevel, "ls-files", "--error-unmatch", path)
+	_, err := run(r.Toplevel, "ls-files", "--error-unmatch", "--", path)
 	return err == nil
 }
 
@@ -88,9 +106,16 @@ func (r *Repo) Log(n string) []string {
 	return strings.Split(out, "\n")
 }
 
-// ConfigValue returns a git config value, or "" when unset.
-func (r *Repo) ConfigValue(key string) string {
-	out, _ := run(r.Toplevel, "config", "--get", key)
+// LocalConfigValue reads a key from this repository's own config only, ignoring
+// the user's global and the system files.
+//
+// The distinction is load-bearing wherever a value is reported as *discovered from
+// this repo*: `git config --get` walks system → global → local, so a developer's
+// personal `pull.rebase=true` in ~/.gitconfig would otherwise be presented as a
+// property every repository on the machine had declared. A profile that reports a
+// user's habit as a repo's convention is worse than reporting nothing.
+func (r *Repo) LocalConfigValue(key string) string {
+	out, _ := run(r.Toplevel, "config", "--local", "--get", key)
 	return out
 }
 
@@ -107,6 +132,16 @@ func (r *Repo) Remote() string {
 func (r *Repo) RemoteURL(remote string) string {
 	out, _ := run(r.Toplevel, "remote", "get-url", remote)
 	return out
+}
+
+func runStdin(dir, stdin string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	if dir != "" {
+		cmd.Dir = dir
+	}
+	cmd.Stdin = strings.NewReader(stdin)
+	out, err := cmd.Output()
+	return string(out), err
 }
 
 func run(dir string, args ...string) (string, error) {

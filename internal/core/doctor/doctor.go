@@ -102,7 +102,7 @@ func Run(opts Options) *Report {
 
 	root, rootErr := pluginroot.Find(toplevel)
 	r.binary()
-	r.payload(root, rootErr)
+	r.payload(root, rootErr, toplevel)
 	r.prerequisites()
 	r.userDir(root)
 	if opts.Repo != nil {
@@ -112,7 +112,7 @@ func Run(opts Options) *Report {
 			Detail: "not inside a git repository — the repo checks were skipped"})
 	}
 	r.writableSet(toplevel)
-	r.allowlist()
+	r.allowlist(toplevel)
 	return r
 }
 
@@ -123,12 +123,17 @@ func (r *Report) binary() {
 		Detail: buildinfo.Version + " (" + buildinfo.Commit + ")"})
 }
 
-func (r *Report) payload(root *pluginroot.Root, err error) {
+func (r *Report) payload(root *pluginroot.Root, err error, toplevel string) {
 	if err != nil {
 		r.add(Check{Group: "install", Name: "plugin payload", Status: Fail,
 			Detail: "not found — the skills are unavailable, and so is every remedy " +
 				"sentence the binary reads from lib/common.sh",
 			Remedy: pluginroot.Remedy()})
+		// Enablement is an independent question — the harness's settings say
+		// whether the plugin is switched on whether or not a checkout was found,
+		// and "payload missing *and* not enabled" is a different report from
+		// "payload missing". Skipping it here hid half the answer.
+		r.enabled(toplevel)
 		return
 	}
 	detail := root.Dir + " (" + root.Via + ")"
@@ -158,15 +163,15 @@ func (r *Report) payload(root *pluginroot.Root, err error) {
 			Detail: "no hooks declared, as intended since 0.15.0"})
 	}
 
-	r.enabled()
+	r.enabled(toplevel)
 }
 
 // enabled reads the harness's own settings to say whether the plugin is switched
 // on. Read-only: `~/.claude/settings.json` is sandbox-denied for writes, so this
 // can never offer to fix it and says so.
-func (r *Report) enabled() {
+func (r *Report) enabled(toplevel string) {
 	found, where := false, ""
-	for _, f := range settingsFiles() {
+	for _, f := range settingsFiles(toplevel) {
 		var s struct {
 			EnabledPlugins map[string]bool `json:"enabledPlugins"`
 		}
@@ -186,7 +191,7 @@ func (r *Report) enabled() {
 	r.add(Check{Group: "install", Name: "plugin enabled", Status: Warn,
 		Detail: "no enabled `" + pluginroot.PluginName + "@…` entry in any readable settings file",
 		Remedy: "enable it with `/plugin` — this is a human-run step: " +
-			"~/.claude/settings.json is sandbox-denied, so nothing here can write it"})
+			userSettingsFile() + " is sandbox-denied, so nothing here can write it"})
 }
 
 // tool is one prerequisite.
@@ -287,7 +292,7 @@ func (r *Report) repo(repo *gitrepo.Repo) {
 		r.add(Check{Group: "repo", Name: "config", Status: Fail,
 			Detail: st.Path + " is ignored here, so `mkit init` would write a file that " +
 				"never reaches a fresh clone — the one property it exists for",
-			Remedy: repoconfig.ShadowedRemedy(st.IgnoreSource)})
+			Remedy: repoconfig.ShadowedRemedy(st.IgnoreSource, st.IgnorePattern)})
 	default:
 		// Absent is a normal state, not a finding: config is an input, never a
 		// permission (ADR 0001 decision 3). Reported so the path is visible.
@@ -316,12 +321,26 @@ func (r *Report) writableSet(toplevel string) {
 }
 
 func (r *Report) probe(label, dir, what, cannotFix string) {
+	// doctor reports and fixes nothing, and that includes leaving the filesystem
+	// as it found it: on a fresh clone `<toplevel>/.mkit` does not exist yet, and
+	// a probe that creates it has made the repo dirty to answer a question about
+	// it. Only directories this call created are removed, and only if still empty
+	// — never one that was already there, and never one another process has since
+	// written into.
+	created := createdDirs(dir)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		r.add(Check{Group: "sandbox", Name: label, Status: Fail,
 			Detail: "cannot create " + dir + " (" + what + "): " + err.Error(),
 			Remedy: cannotFix})
 		return
 	}
+	defer func() {
+		// Deepest first; os.Remove on a non-empty directory fails, which is the
+		// guard we want rather than a check to race against.
+		for i := len(created) - 1; i >= 0; i-- {
+			_ = os.Remove(created[i])
+		}
+	}()
 	f, err := os.CreateTemp(dir, ".mkit-doctor-*")
 	if err != nil {
 		r.add(Check{Group: "sandbox", Name: label, Status: Fail,
@@ -332,6 +351,28 @@ func (r *Report) probe(label, dir, what, cannotFix string) {
 	_ = f.Close()
 	_ = os.Remove(name)
 	r.add(Check{Group: "sandbox", Name: label, Status: OK, Detail: dir + " — " + what})
+}
+
+// createdDirs lists the path components missing right now, outermost first — the
+// set MkdirAll is about to create, and so the only set this probe may remove.
+func createdDirs(dir string) []string {
+	var missing []string
+	for p := filepath.Clean(dir); ; {
+		if _, err := os.Stat(p); err == nil {
+			break
+		}
+		missing = append(missing, p)
+		parent := filepath.Dir(p)
+		if parent == p {
+			break
+		}
+		p = parent
+	}
+	// Reverse to outermost-first, so callers can undo from the deepest end.
+	for i, j := 0, len(missing)-1; i < j; i, j = i+1, j-1 {
+		missing[i], missing[j] = missing[j], missing[i]
+	}
+	return missing
 }
 
 // grant is a directory a composed tool needs in permissions.additionalDirectories.
@@ -359,9 +400,9 @@ var grants = []grant{
 // `sandbox.filesystem.allowWrite` grants only the sandbox and leaves that rule
 // biting. Reporting the narrower one as a clean pass would hide the failure it
 // still produces; reporting it as missing would be wrong. It gets its own state.
-func (r *Report) allowlist() {
+func (r *Report) allowlist(toplevel string) {
 	full, sandboxOnly := map[string]bool{}, map[string]bool{}
-	for _, f := range settingsFiles() {
+	for _, f := range settingsFiles(toplevel) {
 		var s struct {
 			Permissions struct {
 				AdditionalDirectories []string `json:"additionalDirectories"`
@@ -400,8 +441,8 @@ func (r *Report) allowlist() {
 	sort.Strings(missing)
 	sort.Strings(narrow)
 
-	const remedy = "add them to permissions.additionalDirectories in ~/.claude/settings.json " +
-		"(human-run: that file is sandbox-denied)"
+	remedy := "add them to permissions.additionalDirectories in " + userSettingsFile() +
+		" (human-run: that file is sandbox-denied)"
 
 	switch {
 	case len(missing) > 0:
@@ -422,23 +463,48 @@ func (r *Report) allowlist() {
 	}
 }
 
-func settingsFiles() []string {
-	var out []string
+// userSettingsFile is the file every remedy here must name — CLAUDE_CONFIG_DIR
+// relocates it, and a remedy pointing at ~/.claude/settings.json when the active
+// configuration lives elsewhere is a change the reader makes that does nothing.
+func userSettingsFile() string {
 	cfg := os.Getenv("CLAUDE_CONFIG_DIR")
 	if cfg == "" {
-		if home, err := os.UserHomeDir(); err == nil {
-			cfg = filepath.Join(home, ".claude")
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "~/.claude/settings.json"
 		}
+		cfg = filepath.Join(home, ".claude")
 	}
-	if cfg != "" {
-		out = append(out, filepath.Join(cfg, "settings.json"))
-	}
-	if wd, err := os.Getwd(); err == nil {
+	return filepath.Join(cfg, "settings.json")
+}
+
+// settingsFiles lists every settings file that can answer these questions, user
+// scope first.
+//
+// Project settings hang off the *work tree root*, not the working directory: run
+// from a subdirectory, a cwd-only search finds nothing and reports a project that
+// enables the plugin as one that does not.
+func settingsFiles(toplevel string) []string {
+	out := []string{userSettingsFile()}
+	seen := map[string]bool{}
+	for _, base := range []string{toplevel, cwd()} {
+		if base == "" || seen[base] {
+			continue
+		}
+		seen[base] = true
 		out = append(out,
-			filepath.Join(wd, ".claude", "settings.json"),
-			filepath.Join(wd, ".claude", "settings.local.json"))
+			filepath.Join(base, ".claude", "settings.json"),
+			filepath.Join(base, ".claude", "settings.local.json"))
 	}
 	return out
+}
+
+func cwd() string {
+	wd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	return wd
 }
 
 func readJSON(path string, v any) error {

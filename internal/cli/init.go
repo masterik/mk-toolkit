@@ -62,7 +62,7 @@ func newInitCmd() *cobra.Command {
 				return emitInit(out, opts, initResult{
 					Path: st.Path, State: "shadowed",
 					Detail: "an ignore rule covers this path, so the config would never reach a fresh clone",
-					Remedy: repoconfig.ShadowedRemedy(st.IgnoreSource),
+					Remedy: repoconfig.ShadowedRemedy(st.IgnoreSource, st.IgnorePattern),
 				})
 			}
 
@@ -83,7 +83,9 @@ func newInitCmd() *cobra.Command {
 			}
 
 			cfg := existing
-			applyFlags(cfg, gate, specStore, specRef, scopes, reviewers, merge)
+			if err := applyFlags(cfg, gate, specStore, specRef, scopes, reviewers, merge); err != nil {
+				return err
+			}
 
 			// The TUI runs only when there is a terminal and the caller pinned
 			// nothing on the command line. Flags win: a skill driving this must
@@ -99,7 +101,9 @@ func newInitCmd() *cobra.Command {
 						Detail: "aborted — nothing written",
 					})
 				}
-				applyFields(cfg, fields)
+				if err := applyFields(cfg, fields); err != nil {
+					return err
+				}
 			}
 
 			if cfg.IsZero() {
@@ -130,11 +134,20 @@ func newInitCmd() *cobra.Command {
 	return cmd
 }
 
-func applyFlags(cfg *repoconfig.Config, gate []string, store, ref string, scopes, reviewers []string, merge string) {
+// Enumerated fields are validated before anything is written. A pinned value is
+// read back by every later run and by a skill that branches on it, so persisting
+// `--merge sqaush` buys a typo a long life; failing at the flag is where it costs
+// least.
+var (
+	specStores  = []string{"github-issues", "gitlab", "files", "none"}
+	mergeStyles = []string{"merge", "squash", "rebase"}
+)
+
+func applyFlags(cfg *repoconfig.Config, gate []string, store, ref string, scopes, reviewers []string, merge string) error {
 	for _, g := range gate {
 		step, command, ok := strings.Cut(g, "=")
 		if !ok || step == "" || command == "" {
-			continue
+			return fmt.Errorf("--gate %q: expected step=command", g)
 		}
 		if cfg.Gate.Commands == nil {
 			cfg.Gate.Commands = map[string]string{}
@@ -142,6 +155,9 @@ func applyFlags(cfg *repoconfig.Config, gate []string, store, ref string, scopes
 		cfg.Gate.Commands[step] = command
 	}
 	if store != "" {
+		if !oneOf(store, specStores) {
+			return fmt.Errorf("--spec-store %q: expected one of %s", store, strings.Join(specStores, ", "))
+		}
 		cfg.Spec.Store = store
 	}
 	if ref != "" {
@@ -154,8 +170,21 @@ func applyFlags(cfg *repoconfig.Config, gate []string, store, ref string, scopes
 		cfg.Review.Reviewers = reviewers
 	}
 	if merge != "" {
+		if !oneOf(merge, mergeStyles) {
+			return fmt.Errorf("--merge %q: expected one of %s", merge, strings.Join(mergeStyles, ", "))
+		}
 		cfg.Merge.Style = merge
 	}
+	return nil
+}
+
+func oneOf(v string, allowed []string) bool {
+	for _, a := range allowed {
+		if v == a {
+			return true
+		}
+	}
+	return false
 }
 
 // initFields shows the discovered answer beside every field, so the form is a
@@ -181,7 +210,9 @@ func initFields(p *profile.Profile) []tui.Field {
 	}
 }
 
-func applyFields(cfg *repoconfig.Config, fields []tui.Field) {
+// The form validates the same enumerated fields as the flags. A typed answer is
+// no more trustworthy than a flag, and the file it lands in is committed.
+func applyFields(cfg *repoconfig.Config, fields []tui.Field) error {
 	for _, f := range fields {
 		v := strings.TrimSpace(f.Value)
 		if v == "" {
@@ -200,6 +231,9 @@ func applyFields(cfg *repoconfig.Config, fields []tui.Field) {
 				cfg.Gate.Commands[strings.TrimSpace(step)] = strings.TrimSpace(command)
 			}
 		case "spec-store":
+			if !oneOf(v, specStores) {
+				return fmt.Errorf("spec store %q: expected one of %s", v, strings.Join(specStores, ", "))
+			}
 			cfg.Spec.Store = v
 		case "spec-ref":
 			cfg.Spec.Ref = v
@@ -208,9 +242,13 @@ func applyFields(cfg *repoconfig.Config, fields []tui.Field) {
 		case "reviewers":
 			cfg.Review.Reviewers = splitList(v)
 		case "merge":
+			if !oneOf(v, mergeStyles) {
+				return fmt.Errorf("merge style %q: expected one of %s", v, strings.Join(mergeStyles, ", "))
+			}
 			cfg.Merge.Style = v
 		}
 	}
+	return nil
 }
 
 func splitList(s string) []string {

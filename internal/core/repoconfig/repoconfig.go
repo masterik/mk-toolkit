@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -103,6 +104,9 @@ type Status struct {
 	// reported rather than assumed because `.gitignore` outranks the common dir's
 	// `info/exclude`: a negation written into the wrong one changes nothing.
 	IgnoreSource string `json:"ignore_source,omitempty"`
+	// IgnorePattern is the rule inside that file which decided the path. The
+	// remedy differs by rule, so reporting the file alone is not enough.
+	IgnorePattern string `json:"ignore_pattern,omitempty"`
 }
 
 // Stat reports the config file's standing. Tracked is checked before ignored,
@@ -113,9 +117,10 @@ func Stat(repo *gitrepo.Repo) Status {
 	case repo.Tracked(RelPath):
 		st.State = StateTracked
 	default:
-		if ignored, source := repo.Ignored(RelPath); ignored {
+		if ignored, source, pattern := repo.IgnoreRule(RelPath); ignored {
 			st.State = StateShadowed
 			st.IgnoreSource = source
+			st.IgnorePattern = pattern
 			return st
 		}
 		if _, err := os.Stat(st.Path); err == nil {
@@ -133,13 +138,35 @@ func Stat(repo *gitrepo.Repo) Status {
 //
 // Naming the file git actually reported is the whole point: editing any other one
 // has no effect.
-func ShadowedRemedy(source string) string {
+func ShadowedRemedy(source, pattern string) string {
 	if source == "" {
 		source = ".gitignore"
 	}
-	return fmt.Sprintf(
-		"replace the `.mkit/` rule in %s with `.mkit/*` followed by `!.mkit/config.toml` — "+
-			"git cannot re-include a file whose parent directory is excluded", source)
+	// The fix depends on which rule caught the file, so the rule is named. A
+	// pattern that excludes the *parent directory* cannot be undone by a negation
+	// at all — git never descends into an excluded directory, so the rule itself
+	// has to become `.mkit/*`. Any other pattern (a stray `*.toml`, say) is lifted
+	// by a negation placed after it, and telling that user to go replace a
+	// `.mkit/` rule sends them looking for a line that is not there.
+	if pattern == "" {
+		return fmt.Sprintf("an ignore rule in %s excludes `%s`; if it is a `.mkit/` rule, "+
+			"replace it with `.mkit/*` followed by `!%s` — git cannot re-include a file "+
+			"whose parent directory is excluded", source, RelPath, RelPath)
+	}
+	if excludesParent(pattern) {
+		return fmt.Sprintf("replace the `%s` rule in %s with `.mkit/*` followed by `!%s` — "+
+			"git cannot re-include a file whose parent directory is excluded",
+			pattern, source, RelPath)
+	}
+	return fmt.Sprintf("the `%s` rule in %s excludes it; add `!%s` after that line in the "+
+		"same file", pattern, source, RelPath)
+}
+
+// excludesParent reports whether a pattern excludes `.mkit` itself rather than the
+// file. Only these need the rule rewritten instead of negated.
+func excludesParent(pattern string) bool {
+	p := strings.TrimSuffix(strings.TrimPrefix(pattern, "/"), "/")
+	return p == ".mkit"
 }
 
 // Load reads the config. A missing file is not an error: it returns a zero Config
@@ -202,7 +229,7 @@ func render(c *Config) string {
 		b.WriteString("# wrong — which of three test commands is the real one, what lint means here.\n")
 		b.WriteString("[gate.commands]\n")
 		for _, k := range sortedKeys(c.Gate.Commands) {
-			fmt.Fprintf(&b, "%s = %s\n", k, quote(c.Gate.Commands[k]))
+			fmt.Fprintf(&b, "%s = %s\n", quoteKey(k), quote(c.Gate.Commands[k]))
 		}
 	}
 	if c.Spec.Store != "" || c.Spec.Ref != "" {
@@ -247,6 +274,18 @@ func sortedKeys(m map[string]string) []string {
 // quote emits a TOML basic string. Delegated to the marshaller rather than
 // hand-rolled, so escaping is the library's problem and not a bug waiting in a
 // repo whose lint command contains a quote or a backslash.
+// bareKey is TOML's unquoted key grammar. A step named `build.fast` written bare
+// would parse back as a *nested table*, and one with a space would not parse at
+// all — either way `mkit init` writes a file it cannot read.
+var bareKey = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
+func quoteKey(k string) string {
+	if bareKey.MatchString(k) {
+		return k
+	}
+	return quote(k)
+}
+
 func quote(s string) string {
 	b, err := toml.Marshal(map[string]string{"v": s})
 	if err == nil {

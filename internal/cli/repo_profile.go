@@ -54,6 +54,11 @@ func renderProfile(out io.Writer, p *profile.Profile) {
 	}
 	if len(p.Gate.Steps) == 0 {
 		_, _ = fmt.Fprintf(out, "  %s\n", cause(p.Gate.Cause, "no gate commands found or pinned"))
+	} else if p.Gate.Cause != "" {
+		// Pinned steps do not mean discovery worked. Printing the cause alongside
+		// them is the difference between "these are the steps" and "these are the
+		// steps we were told about, having failed to look for others".
+		_, _ = fmt.Fprintf(out, "  discovery: %s %s\n", p.Gate.Cause, tag("unavailable"))
 	}
 	for _, s := range p.Gate.Steps {
 		_, _ = fmt.Fprintf(out, "  %-10s %-40s %s\n", s.Step, s.Command, tag(string(s.Source)))
@@ -83,7 +88,7 @@ func renderProfile(out io.Writer, p *profile.Profile) {
 
 func renderValue(out io.Writer, label string, v profile.Value) {
 	if v.Source == profile.Unavailable {
-		_, _ = fmt.Fprintf(out, "%s: %s\n", label, cause(v.Cause, "unavailable"))
+		_, _ = fmt.Fprintf(out, "%s: %s %s\n", label, cause(v.Cause, "none"), tag(string(profile.Unavailable)))
 		return
 	}
 	_, _ = fmt.Fprintf(out, "%s: %s %s\n", label, v.Value, tag(string(v.Source)))
@@ -91,7 +96,7 @@ func renderValue(out io.Writer, label string, v profile.Value) {
 
 func renderList(out io.Writer, label string, l profile.List) {
 	if l.Source == profile.Unavailable || len(l.Values) == 0 {
-		_, _ = fmt.Fprintf(out, "%s: %s\n", label, cause(l.Cause, "unavailable"))
+		_, _ = fmt.Fprintf(out, "%s: %s %s\n", label, cause(l.Cause, "none"), tag(string(profile.Unavailable)))
 		return
 	}
 	_, _ = fmt.Fprintf(out, "%s: %s %s\n", label, strings.Join(l.Values, ", "), tag(string(l.Source)))

@@ -64,6 +64,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if !ok {
 		return m, nil
 	}
+	// Ctrl+C aborts from anywhere, editing included. A terminal's universal
+	// interrupt that a mode swallows is the kind of thing a user escapes with
+	// SIGKILL, and the other TUI in this binary honours it unconditionally.
+	if key.Type == tea.KeyCtrlC {
+		m.quit = true
+		return m, tea.Quit
+	}
 	if m.editing {
 		return m.updateEditing(key)
 	}
@@ -87,7 +94,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.saved = true
 		m.quit = true
 		return m, tea.Quit
-	case "q", "esc", "ctrl+c":
+	case "q", "esc":
 		m.quit = true
 		return m, tea.Quit
 	}
@@ -139,7 +146,11 @@ func (m model) View() string {
 		case value == "":
 			value = dimStyle.Render("—")
 		}
-		fmt.Fprintf(&b, "%s%-14s %s\n", cursor, label, value)
+		// Padded on the label's *rendered* width. %-14s counts the bytes of the
+		// ANSI escapes lipgloss wraps the selected label in, so the styled row's
+		// value column would jump left by the length of the escape sequence.
+		fmt.Fprintf(&b, "%s%s%s %s\n", cursor, label,
+			strings.Repeat(" ", max(0, 14-lipgloss.Width(label))), value)
 		if i == m.cursor && f.Help != "" {
 			b.WriteString(dimStyle.Render("                 " + f.Help))
 			b.WriteString("\n")

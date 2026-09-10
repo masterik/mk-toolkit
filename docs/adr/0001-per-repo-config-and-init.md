@@ -5,7 +5,7 @@
 table below, and decision 5's premise. Decisions 1–4 stand.
 **Also by** [ADR 0003](0003-two-distribution-channels.md): every reference below to settling
 something "in M3" is void — M3 was withdrawn.
-**Amended 2026-09-10** — decision 2's config **path** is now settled: `<toplevel>/.mkit/config.toml`.
+**Amended 2026-09-10** — decision 1's config **path** is now settled: `<toplevel>/.mkit/config.toml`.
 See [Amendment: the config path](#amendment-the-config-path) at the end.
 
 ## Context

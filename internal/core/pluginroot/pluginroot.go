@@ -43,17 +43,28 @@ type Root struct {
 //  1. CLAUDE_PLUGIN_ROOT — set by the harness when a skill invokes us. When it is
 //     present it is definitionally the payload this session is running.
 //  2. MKIT_PLUGIN_ROOT — the explicit override, and what the tests use.
-//  3. The marketplace checkout under the Claude config dir. This is where a normal
-//     install lives.
-//  4. A `plugin/` directory beside the work tree root — the development case, so
-//     `just run doctor` in this repo reports on the payload in this repo rather
-//     than on whatever is installed.
+//  3. A `plugin/` directory beside the work tree root, *and* carrying our manifest
+//     name — the development case. Ahead of the installed copy on purpose: in a
+//     payload checkout the tree being edited is the one a report is about, and an
+//     installed 0.14.0 answering for a 0.16.0 work tree is a wrong answer that
+//     looks right. In any other repo the manifest test fails and this falls
+//     through.
+//  4. The marketplace checkout under the Claude config dir — where a normal
+//     install lives, and the answer everywhere that is not a payload checkout.
+//
+// Every *searched* candidate is identified by its manifest name, never by its path.
+// The two environment variables are explicit overrides and are trusted as given.
 func Find(toplevel string) (*Root, error) {
 	if d := os.Getenv("CLAUDE_PLUGIN_ROOT"); isPayload(d) {
 		return &Root{Dir: d, Via: "CLAUDE_PLUGIN_ROOT"}, nil
 	}
 	if d := os.Getenv("MKIT_PLUGIN_ROOT"); isPayload(d) {
 		return &Root{Dir: d, Via: "MKIT_PLUGIN_ROOT"}, nil
+	}
+	if toplevel != "" {
+		if d := filepath.Join(toplevel, "plugin"); isPayload(d) && manifestField(d, "name") == PluginName {
+			return &Root{Dir: d, Via: "development checkout"}, nil
+		}
 	}
 	for _, base := range marketplaceBases() {
 		// A marketplace checkout is the whole repo, with the payload in a
@@ -75,11 +86,6 @@ func Find(toplevel string) (*Root, error) {
 			if isPayload(d) && manifestField(d, "name") == PluginName {
 				return &Root{Dir: d, Via: "marketplace checkout"}, nil
 			}
-		}
-	}
-	if toplevel != "" {
-		if d := filepath.Join(toplevel, "plugin"); isPayload(d) {
-			return &Root{Dir: d, Via: "development checkout"}, nil
 		}
 	}
 	return nil, ErrNotFound

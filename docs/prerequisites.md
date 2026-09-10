@@ -13,8 +13,10 @@ nothing below requires it. It is [taking over the script layer](backlog.md) one 
 time, and each script it replaces deletes a row from this page: `node` goes with `findings.mjs`
 (M4), `jq` and `shasum` with the gate port (M5).
 
-> **`mkit doctor` checks everything on this page**, plus the sandbox writable set, the plugin
-> payload and the allowlist gaps below — on demand, reporting only. Two things it cannot tell
+> **`mkit doctor` reports on this page's tooling**, plus the sandbox writable set, the plugin
+> payload and the allowlist gaps below — on demand, reporting only. It checks *presence on
+> `PATH`*, not versions, `gh` authentication or cache state, so a too-old tool still reads as
+> healthy here and fails later. Two things it cannot tell
 > you, both deliberate: it does not run unprompted at session start, and it cannot report that
 > `mkit` itself is missing.
 
@@ -91,14 +93,14 @@ its lenses and says so in the summary. It never reports a partial review as clea
 The plugin ships **no hooks** and no installer. Both existed once: a `SessionStart` hook
 (`session-bootstrap.sh`) named a missing prerequisite once per tool, and `install.sh` provided
 `--status` and an `--uninstall` tombstone to silence it. Both were removed in 0.15.0 — the
-prerequisite report belongs to the binary, where `mkit doctor` (M7) will own it.
+prerequisite report belongs to the binary, and `mkit doctor` (M7) owns it now.
 
 **The gap that leaves, stated plainly:** nothing tells you unprompted that a tool from the table
 above is missing. It surfaces later — a thinner `facts.sh` block, a `gate_cache=no-hash`
-annotation on a gate report — which is exactly the debugging cost the hook existed to avoid. Until
-`doctor` lands, the Verify block below is the check, and it is human-run. Note that `doctor` will
-not fully replace the hook: a binary cannot report its own absence, and cannot speak at session
-start. That is accepted.
+annotation on a gate report — which is exactly the debugging cost the hook existed to avoid.
+`mkit doctor` is the check, and it is human-run: you have to think to run it. It does not fully
+replace the hook and never will — a binary cannot report its own absence, and cannot speak at
+session start. That is accepted.
 
 Nothing needs silencing any more, so `~/.mkit/bootstrap.disabled` no longer does anything; delete
 it if you have one.
