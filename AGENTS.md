@@ -90,7 +90,10 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
     `tracked|untracked|shadowed|absent`; **shadowed** is a repo carrying the legacy
     directory-only `.mkit/` rule, where a written config would silently never travel.
     `Write` renders a **commented template** rather than marshalling — the file is committed and
-    read in a diff, and no Go TOML marshaller preserves comments.
+    read in a diff, and no Go TOML marshaller preserves comments. `ShadowedRemedy` is the one
+    **deliberate second producer** of a degradation sentence (`mkit_config_ignored_remedy` is the
+    other): `init` must refuse before it has located a payload. `TestRemedyParityWithShell`
+    compares the two byte for byte over every rule shape — keep it that way, or delete one.
   - `profile/` (M7): merges discovered with pinned, tagging every value. Gate discovery is
     **delegated to `gate-detect.sh`**, never reimplemented, until M5 ports it.
   - `pluginroot/` (M7): locates the payload — `CLAUDE_PLUGIN_ROOT`, `MKIT_PLUGIN_ROOT`, a
