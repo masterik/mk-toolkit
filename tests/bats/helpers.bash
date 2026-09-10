@@ -11,10 +11,9 @@ mkit_setup_repo() {
 	# Canonicalize: TMPDIR is a symlink on macOS (/tmp -> /private/tmp), and git
 	# reports --absolute-git-dir resolved, so a raw mktemp path never matches it.
 	MKIT_TMP="$(cd "$MKIT_TMP" && pwd -P)"
-	# Point the user-scoped config at the throwaway repo before anything runs. Without
-	# this the suite reads the developer's real ~/.claude/mkit, so a machine whose
-	# bootstrap.state already records a warning would see the hook's one-time-message
-	# assertions fail — the tests would be measuring the developer, not the code.
+	# Point the user-scoped config at the throwaway repo before anything runs, so no
+	# suite can read or write the developer's real ~/.mkit — a test that touches it is
+	# measuring the developer, not the code.
 	# Exported, because the scripts run as children.
 	export MKIT_HOME="$MKIT_TMP/.mkit-home"
 	cd "$MKIT_TMP" || return 1

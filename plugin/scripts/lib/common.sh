@@ -25,10 +25,14 @@ mkit_refs_dir() {
 	printf '%s/skills/_shared/references\n' "$(mkit_plugin_root)"
 }
 
-# The user-scoped config directory — the one piece of mkit state that lives outside a
-# repo. It holds exactly two things: `bootstrap.state` (which one-time messages the
-# SessionStart hook has already said) and `bootstrap.disabled` (the tombstone that
-# silences it).
+# The user-scoped config directory — where mkit state that outlives a repo goes.
+#
+# **Empty today.** It held exactly two files, `bootstrap.state` and `bootstrap.disabled`,
+# and both died with the `SessionStart` hook. The directory keeps its definition anyway:
+# it is the answer to "where does user-scoped state go", the path a remedy sentence can
+# point at, and what `MKIT_HOME` redirects — all three of which the binary needs before
+# it writes its first user-scoped file. `facts.sh` still probes it, so a machine that
+# would refuse that write says so at the first call rather than at the first write.
 #
 # `~/.mkit`, not `~/.claude/mkit`, and the reason is a hard boundary rather than taste
 # (docs/adr/0002): `~/.claude` — and whatever `CLAUDE_CONFIG_DIR` points at — is a
@@ -39,14 +43,12 @@ mkit_refs_dir() {
 # decision to run unsandboxed. Outside it, one `permissions.additionalDirectories` entry
 # genuinely opens the path — so this directory is somewhere a remedy sentence can point.
 #
-# Not `$TMPDIR`, either: sandboxed and unsandboxed commands resolve `$TMPDIR` to
-# different directories, and the SessionStart hook runs unsandboxed while the skills that
-# read the same state do not.
+# Not `$TMPDIR`, either: that is the location for what dies with the command, and
+# sandboxed and unsandboxed commands do not even resolve it to the same directory.
 #
-# MKIT_HOME is not a convenience: the bats suite exports it at a temp path so a developer
-# whose own bootstrap.state already records a warning cannot make the hook's say-it-once
-# assertions pass or fail by accident — the tests would be measuring the developer, not
-# the code. Any future user-scoped file goes here for the same reason.
+# MKIT_HOME is not a convenience: the bats suite exports it at a temp path so a run can
+# never read or write a developer's real state — the tests would be measuring the
+# developer, not the code. Any future user-scoped file goes here for the same reason.
 mkit_user_dir() {
 	printf '%s\n' "${MKIT_HOME:-$HOME/.mkit}"
 }
@@ -109,8 +111,8 @@ $created"
 	return "$rc"
 }
 
-# The one remedy sentence for an unwritable user-scoped directory, in one place because
-# `facts.sh` and `install.sh` must not word it differently.
+# The one remedy sentence for an unwritable user-scoped directory. One producer, so a
+# second caller — `mkit doctor` from M7 — cannot word it differently.
 #
 # `permissions.additionalDirectories` rather than `sandbox.filesystem.allowWrite`: the
 # former grants the sandbox write *and* makes the path a working directory, which is what
@@ -484,178 +486,4 @@ mkit_age_human() {
 	else
 		printf '%dd' "$((s / 86400))"
 	fi
-}
-
-# --- user-scoped setup: prerequisites, one-time state -----------------------------------
-#
-# Everything below is shared by `install.sh` (run by hand) and
-# `scripts/hooks/session-bootstrap.sh` (the SessionStart hook). Two callers is the whole
-# point: the degradation sentences are only one source of truth if neither caller writes
-# its own.
-
-mkit_have() {
-	command -v "$1" >/dev/null 2>&1
-}
-
-# The prerequisite table, one row per tool: <tool>\t<state>\t<consequence>.
-#
-#   state  MISSING  a hard requirement — a skill cannot get its starting facts without it
-#          missing  a soft one — some feature degrades, nothing breaks
-#          ok       present
-#
-# A table rather than a print function, because the two callers need different subsets:
-# install.sh prints every row (a human watching wants to see the `ok`s) and derives its
-# exit status from whether any row is MISSING, while the hook prints only the non-ok
-# rows, once each, and never blocks on them. Same sentences either way.
-#
-#   mkit_prereq_rows [--missing-only]
-#
-# Returns 1 if any hard requirement is missing, so a caller can branch on the status
-# without parsing the rows back.
-mkit_prereq_rows() {
-	local missing_only=no missing_hard=0 tool state text
-	[ "${1:-}" = --missing-only ] && missing_only=yes
-
-	# `bash` is deliberately absent from this table. A bash script cannot report that
-	# bash is missing, so the row could only ever read `ok` — and a check that can only
-	# produce one answer is not a check.
-	#
-	# One sentence per tool rather than one for the pair: "a hard requirement" is the
-	# same verdict either way, but what breaks is not, and a report that cannot say
-	# which feature just died sends the reader to the wrong place.
-	for tool in git jq; do
-		if mkit_have "$tool"; then
-			state=ok text=''
-		else
-			state=MISSING
-			case "$tool" in
-			git) text='every skill reads the repo through it' ;;
-			jq) text='facts.sh, branch-scan.sh and the gate ledger all parse JSON with it' ;;
-			esac
-			missing_hard=1
-		fi
-		[ "$missing_only" = yes ] && [ "$state" = ok ] && continue
-		printf '%s\t%s\t%s\n' "$tool" "$state" "$text"
-	done
-
-	if mkit_have node; then
-		state=ok text=''
-	else
-		state=missing text='only findings.mjs (the review skill) needs it'
-	fi
-	[ "$missing_only" = yes ] && [ "$state" = ok ] || printf '%s\t%s\t%s\n' node "$state" "$text"
-
-	if mkit_have_hash; then
-		state=ok text=''
-	else
-		state=missing text='the gate ledger still records, but reports gate_cache=no-hash'
-	fi
-	[ "$missing_only" = yes ] && [ "$state" = ok ] || printf '%s\t%s\t%s\n' sha256 "$state" "$text"
-
-	return "$missing_hard"
-}
-
-# --- one-time state: "have I already said this?" ---------------------------------------
-#
-# A line-per-key file: `grep -qxF` membership, an atomic `>>` append to add, a mktemp+mv
-# rewrite to drop. It needs no prune — its key space is fixed by construction (a handful
-# of `prereq/` keys), not an unbounded stream.
-
-mkit_state_has() {
-	[ -f "$1" ] || return 1
-	grep -qxF -- "$2" "$1" 2>/dev/null
-}
-
-mkit_state_add() {
-	local file="$1" key="$2"
-	mkdir -p "$(dirname -- "$file")" 2>/dev/null || return 1
-	# Braced, so the stderr redirect is in place before the append can report its own
-	# failure — the bare `>>"$f" 2>/dev/null` form lets that diagnostic escape.
-	{ printf '%s\n' "$key" >>"$file"; } 2>/dev/null || return 1
-	return 0
-}
-
-# Drop $2 from $1, and dedupe while rewriting: two sessions starting at once can each
-# append the same key, which is harmless for membership but worth cleaning up when a
-# rewrite is happening anyway.
-mkit_state_drop() {
-	local file="$1" key="$2" tmp
-	[ -f "$file" ] || return 0
-	mkit_state_has "$file" "$key" || return 0
-	tmp="$(mktemp "$file.XXXXXX" 2>/dev/null)" || return 1
-	if ! awk -v k="$key" '$0 != k && !seen[$0]++' "$file" >"$tmp" 2>/dev/null ||
-		! mv -f -- "$tmp" "$file" 2>/dev/null; then
-		rm -f -- "$tmp" 2>/dev/null
-		return 1
-	fi
-	return 0
-}
-
-# Keys in state file $1 that are stale — a `prereq/<tool>` recorded as warned about, for
-# a tool that is now present. $2 is the current `--missing-only` table, so the comparison
-# is against what is true *now* rather than against what the file remembers: the state
-# file is the ledger of what has been said, never the source of truth for what is missing.
-#
-# Prints the stale keys, one per line, for the caller to drop. At most one rewrite per
-# tool ever happens — the session right after it gets installed — so the steady state
-# stays grep-only.
-mkit_state_missing_keys() {
-	local file="$1" rows="$2" line key tool
-	[ -f "$file" ] || return 0
-	while IFS= read -r line; do
-		case "$line" in
-		prereq/*) ;;
-		*) continue ;;
-		esac
-		tool="${line#prereq/}"
-		# Still missing → the key is earned, keep it. Silenced like every other external
-		# call on this path: the sole caller is a hook contractually forbidden from
-		# writing to stderr, and "grep is missing too" is not a message it can act on.
-		printf '%s\n' "$rows" | cut -f1 2>/dev/null | grep -qxF -- "$tool" 2>/dev/null && continue
-		printf '%s\n' "$line"
-	done <"$file"
-	return 0
-}
-
-# --- JSON, without jq -----------------------------------------------------------------
-#
-# Escape stdin as the *contents* of a JSON string (no surrounding quotes), on one line.
-#
-# Why not jq: the one caller is the SessionStart hook, whose job includes reporting that
-# `jq` is missing. Building that report with jq would make the message unavailable in
-# exactly the case that must produce it. awk is POSIX and present wherever bash is, so
-# this leaves the hook with no external prerequisite at all.
-#
-# Defensive rather than load-bearing today: the hook's payload is assembled from the fixed
-# prerequisite sentences and interpolates no path at all — not $HOME, not $MKIT_HOME — so
-# nothing user-controlled currently reaches it. That is a property of the present message
-# set, not a guarantee, and it is the kind of property a later message quietly revokes. The
-# escape stays so the first string that does carry a path cannot turn one stray quote into
-# a document that parses as nothing.
-# stderr is silenced because the only caller is a hook forbidden from writing any. If awk
-# itself were missing the result is an empty string in a still-valid JSON document — a
-# message that says nothing, rather than a document that parses as nothing.
-mkit_json_escape() {
-	awk 2>/dev/null '
-		BEGIN {
-			for (i = 0; i < 32; i++) ctl[sprintf("%c", i)] = sprintf("\\u%04x", i)
-			ctl[sprintf("%c", 127)] = "\\u007f"
-			first = 1
-		}
-		{
-			line = $0
-			out = ""
-			n = length(line)
-			for (i = 1; i <= n; i++) {
-				c = substr(line, i, 1)
-				if (c == "\\") out = out "\\\\"
-				else if (c == "\"") out = out "\\\""
-				else if (c == "\t") out = out "\\t"
-				else if (c in ctl) out = out ctl[c]
-				else out = out c
-			}
-			if (first) { printf "%s", out; first = 0 }
-			else printf "\\n%s", out
-		}
-	'
 }

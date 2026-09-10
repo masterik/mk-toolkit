@@ -135,8 +135,9 @@ else
   $common_dir/info/exclude, or to .gitignore."
 fi
 
-# The user-scoped state directory: `bootstrap.state` and the uninstall tombstone. An
-# unwritable one is reported with the one remedy that works — `~/.claude/mkit` was
+# The user-scoped state directory. Nothing writes to it today — it emptied when the
+# `SessionStart` hook went — but it is still where user-scoped state will land, and an
+# unwritable one is reported with the one remedy that works: `~/.claude/mkit` was
 # unfixable by configuration, which is why the directory moved (docs/adr/0002).
 printf 'user_dir=%s\n' "$(mkit_user_dir)"
 if mkit_user_dir_writable; then
@@ -144,8 +145,8 @@ if mkit_user_dir_writable; then
 else
 	printf 'user_dir_writable=no\n'
 	notes="$notes
-  user_dir_writable=no — mkit cannot record what it has already told the user, and
-  \`install.sh --uninstall\` cannot write its tombstone. Remedy: $(mkit_user_dir_remedy).
+  user_dir_writable=no — nothing needs that directory today, so nothing is failing
+  yet; a later user-scoped write would. Remedy: $(mkit_user_dir_remedy).
   Tell the user; do not retry the write."
 fi
 
