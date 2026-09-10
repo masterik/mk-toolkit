@@ -22,7 +22,7 @@ setup() {
 	PAYLOAD="$(cd "$(dirname "${BATS_TEST_FILENAME}")/../../plugin" && pwd)"
 }
 
-# Every shipped shell file: the scripts, the sourced library, the hook, install.sh.
+# Every shipped shell file: the scripts and the sourced library.
 # Not tools/ — that is staging for a port and is not part of the plugin payload.
 payload_shell() {
 	find "$PAYLOAD" -type f -name '*.sh' | LC_ALL=C sort
@@ -30,10 +30,9 @@ payload_shell() {
 
 @test "the payload ships at least the files these assertions are about" {
 	n="$(payload_shell | grep -c .)"
-	[ "$n" -ge 7 ]
+	[ "$n" -ge 5 ]
 	payload_shell | grep -q '/scripts/lib/common.sh$'
-	payload_shell | grep -q '/scripts/hooks/session-bootstrap.sh$'
-	payload_shell | grep -q '/install.sh$'
+	payload_shell | grep -q '/scripts/facts.sh$'
 }
 
 # --- invariant 1: no template-less mktemp ---------------------------------------------
@@ -106,11 +105,15 @@ $f: $hits"
 # mkit writes in exactly three places, and nowhere else:
 #
 #   $TMPDIR                anything that dies with the command   (mkit_tmpfile)
-#   <toplevel>/.mkit/      run directories and gate.jsonl        (mkit_dir_or_die)
-#   ~/.mkit/               bootstrap.state, bootstrap.disabled   (mkit_user_dir)
+#   <toplevel>/.mkit/      run directories, gate.jsonl, and the   (mkit_dir_or_die)
+#                          one committed file, config.toml
+#   ~/.mkit/               nothing today; still the declared      (mkit_user_dir)
+#                          home for user-scoped state, and the
+#                          probe target facts.sh reports on
 #
-# plus one named exception: the common dir's `info/exclude`, one line, so `.mkit/` does
-# not show up in `git status`. Nothing is ever written to the user's working tree — an
+# plus one named exception: the common dir's `info/exclude`, where the payload writes the
+# two-line rule (`.mkit/*` and `!.mkit/config.toml`) that keeps the scratch out of
+# `git status` while leaving repo config committable. Nothing is ever written to the user's working tree — an
 # improvised helper script landed in a target repository's working tree once, and that
 # incident is why this is an assertion rather than a habit.
 #
@@ -125,12 +128,12 @@ $f: $hits"
 #   dir prefix                          the same, inside mkit_tmpfile itself
 #   mkit_dir run_dir d ledger tmp       <toplevel>/.mkit — run dirs, gate.jsonl and its
 #   alive lock log skill                rewrite files, the step logs, the ledger lock
-#   user_dir probe file state_file      ~/.mkit, via mkit_user_dir
-#   tombstone
+#   user_dir probe                      ~/.mkit, via mkit_user_dir — the writability
+#                                       probe is the only thing that touches it now
 #   common exclude                      the one named exception: the common-dir exclude
 #   dirname                             `$(dirname -- "$X")`, the parent of a target
 #                                       already on this list
-WRITE_VARS='tmp_p tmp_d tmp_s tmp_h pr_cache dir prefix mkit_dir run_dir d ledger tmp alive lock log skill user_dir probe file state_file tombstone common exclude dirname'
+WRITE_VARS='tmp_p tmp_d tmp_s tmp_h pr_cache dir prefix mkit_dir run_dir d ledger tmp alive lock log skill user_dir probe common exclude dirname'
 
 # Comments go first: these files document the very mistakes being asserted against.
 payload_uncommented() {
@@ -270,7 +273,6 @@ $(payload_write_targets "$f" || true)"
 	printf '%s\n' "$all" | grep -q 'pr_cache'  # the branch classifier's PR cache
 	printf '%s\n' "$all" | grep -q 'ledger'    # gate.jsonl
 	printf '%s\n' "$all" | grep -q 'exclude'   # the ignore rule
-	printf '%s\n' "$all" | grep -q 'tombstone' # the uninstall tombstone
 	printf '%s\n' "$all" | grep -q 'mkit_dir'  # the run root
 }
 

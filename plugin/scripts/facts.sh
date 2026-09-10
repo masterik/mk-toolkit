@@ -135,8 +135,33 @@ else
   $common_dir/info/exclude, or to .gitignore."
 fi
 
-# The user-scoped state directory: `bootstrap.state` and the uninstall tombstone. An
-# unwritable one is reported with the one remedy that works — `~/.claude/mkit` was
+# The repo's committed config, if any. `mkit init` writes it, `mkit repo profile` reads
+# it, and every skill runs fine without it — config is an input, never a permission
+# (ADR 0001 decision 3), so `absent` is a normal state and never a note.
+#
+# The state worth a sentence is `shadowed`: a repo set up before the config existed
+# carries a directory-only `.mkit/` rule, under which the file can be written and then
+# silently never travels to a fresh clone — the one property it exists for. Reported here
+# because it is a fact about this checkout, discovered at the first call, and because the
+# remedy differs by which file carries the rule.
+printf 'config=%s\n' "$(mkit_config_path)"
+config_file="$(mkit_config_path)"
+if git ls-files --error-unmatch .mkit/config.toml >/dev/null 2>&1; then
+	printf 'config_state=tracked\n'
+elif ! mkit_config_committable; then
+	printf 'config_state=shadowed\n'
+	notes="$notes
+  config_state=shadowed — .mkit/config.toml is ignored in this checkout, so \`mkit init\`
+  would write a file that never reaches a fresh clone. Remedy: $(mkit_config_ignored_remedy)."
+elif [ -f "$config_file" ]; then
+	printf 'config_state=untracked\n'
+else
+	printf 'config_state=absent\n'
+fi
+
+# The user-scoped state directory. Nothing writes to it today — it emptied when the
+# `SessionStart` hook went — but it is still where user-scoped state will land, and an
+# unwritable one is reported with the one remedy that works: `~/.claude/mkit` was
 # unfixable by configuration, which is why the directory moved (docs/adr/0002).
 printf 'user_dir=%s\n' "$(mkit_user_dir)"
 if mkit_user_dir_writable; then
@@ -144,8 +169,8 @@ if mkit_user_dir_writable; then
 else
 	printf 'user_dir_writable=no\n'
 	notes="$notes
-  user_dir_writable=no — mkit cannot record what it has already told the user, and
-  \`install.sh --uninstall\` cannot write its tombstone. Remedy: $(mkit_user_dir_remedy).
+  user_dir_writable=no — nothing needs that directory today, so nothing is failing
+  yet; a later user-scoped write would. Remedy: $(mkit_user_dir_remedy).
   Tell the user; do not retry the write."
 fi
 

@@ -60,11 +60,19 @@ out-of-working-directory rules do not apply. `--show-toplevel`, so a linked work
 own.
 
 **2. User scope becomes `~/.mkit/`**, holding the two files ADR 0001 assigned to user scope. Outside
-the protected region, so one `permissions.additionalDirectories` entry genuinely opens it — and that
+the protected region, so a `permissions.additionalDirectories` entry genuinely opens it — and that
 entry grants the sandbox write *and* makes the path a working directory, satisfying the classifier's
 rule in the same line. `sandbox.filesystem.allowWrite` is the narrower alternative that leaves that
 rule biting. `MKIT_HOME` still overrides, which is how the bats suite stays off a developer's real
 state.
+
+> **Amended 2026-09-10 — it is two steps, not one.** This decision was written as "one
+> `additionalDirectories` entry and it works". Measured afterwards: the grant covers the
+> directory's *interior*, so `mkdir ~/.mkit` is a write to `$HOME`, which nothing grants
+> (`mkdir: /Users/mk/.mkit: Operation not permitted`). The directory must exist **first**, and no
+> sandboxed session can create it. Every remedy sentence names both halves — `! mkdir -p ~/.mkit`,
+> run in the user's own shell, then the grant — and `mkit_user_dir_remedy()` is the single producer
+> of that sentence, which `mkit doctor` calls rather than re-wording.
 
 **3. Ephemeral files go to `$TMPDIR`, with an explicit `mktemp` template, never to the run
 directory.** The division is by *lifetime*, not by caller: a file that dies with the command uses
@@ -87,10 +95,20 @@ for Claude Code's own sweep, which keeps any worktree holding changed or untrack
 -A`, which would commit run artefacts; and the gate cache, since the fingerprint enumerates with
 `git ls-files --others --exclude-standard` and an unignored scratch directory enters the fingerprint
 and then changes while the gate runs. The rule goes in the **common dir's** `info/exclude` —
-uncommitted, shared by every worktree, no diff noise. A committed `.gitignore` line is the variant
-for repos whose teammates run mkit from fresh clones. Neither can be written from a worktree-isolated
-session, so `facts.sh` reports `run_ignored=yes|no` as a starting fact and no staging step runs while
-it is `no`.
+uncommitted, shared by every worktree, no diff noise. A committed `.gitignore` carrying the same
+rule is the variant for repos whose teammates run mkit from fresh clones. Neither can be written
+from a worktree-isolated session, so `facts.sh` reports `run_ignored=yes|no` as a starting fact and
+no staging step runs while it is `no`.
+
+> **Amended 2026-09-10 — the rule is a pair, not a line.** [ADR 0001's config-path
+> amendment](0001-per-repo-config-and-init.md#amendment-the-config-path) put one committed file,
+> `config.toml`, inside this directory. Git cannot re-include a file whose parent directory is
+> excluded, so the directory-only `.mkit/` becomes `.mkit/*` plus `!.mkit/config.toml`, and the
+> two lines are written together. Consequently `mkit_run_ignored` probes `.mkit/gate.jsonl`
+> rather than `.mkit/`: `.mkit/*` does not match the directory itself. A repo still carrying the
+> old directory-only rule is detected (`config_state=shadowed`) rather than silently writing a
+> config that never travels — and because `.gitignore` outranks `info/exclude`, the remedy has to
+> name whichever file actually carries the rule.
 
 **6. Every remedy sentence names a remedy that works.** No surface may say `~/.claude/mkit` can be
 allowlisted, because it cannot. Where a write is genuinely impossible, the surface says the command
@@ -132,9 +150,10 @@ without its run directory.
   short: the directory must exist first, and nothing inside a sandboxed session can create it.
   Every remedy sentence must name **both** halves — create, then grant — and a human-run
   migration script is required rather than merely convenient
-  ([#2](https://github.com/masterik/mk-toolkit/issues/2)). The remedy in `lib/common.sh`,
-  `prerequisites.md` and decision 2's wording all still name only the grant; correcting them is
-  tracked in [#3](https://github.com/masterik/mk-toolkit/issues/3).
+  ([#2](https://github.com/masterik/mk-toolkit/issues/2)). **Corrected 2026-09-10**
+  ([#3](https://github.com/masterik/mk-toolkit/issues/3)): `mkit_user_dir_remedy()` in
+  `lib/common.sh`, `prerequisites.md` and decision 2's wording above all name both halves now,
+  and `mkit doctor` calls that one producer instead of wording its own.
 - **ADR 0001's decision 5 survives with a corrected premise.** "Sandbox degradation is named, never
   hit" still holds; what changes is that naming a path is not enough — the sentence has to name a
   path that can actually be granted.
@@ -151,7 +170,9 @@ without its run directory.
   gives the same per-worktree property from the side of the boundary the session is on.
 - **Write the ignore rule into a committed `.gitignore` by default.** It is a diff in the user's
   repo that mkit did not ask permission for. The common-dir exclude is uncommitted and invisible;
-  `.gitignore` stays the documented variant for teams who want it.
+  `.gitignore` stays the documented variant for teams who want it. (Still rejected after the
+  2026-09-10 amendment: the rule is two lines now, which makes the unasked-for diff bigger, not
+  smaller.)
 - **Fix the temp files without moving state.** The fingerprint is called from gate detection, so
   rooting its working files in the run directory would recreate the same failure one layer down in
   any session where the run directory is unreachable. Doing the work twice.

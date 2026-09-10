@@ -25,10 +25,14 @@ mkit_refs_dir() {
 	printf '%s/skills/_shared/references\n' "$(mkit_plugin_root)"
 }
 
-# The user-scoped config directory — the one piece of mkit state that lives outside a
-# repo. It holds exactly two things: `bootstrap.state` (which one-time messages the
-# SessionStart hook has already said) and `bootstrap.disabled` (the tombstone that
-# silences it).
+# The user-scoped config directory — where mkit state that outlives a repo goes.
+#
+# **Empty today.** It held exactly two files, `bootstrap.state` and `bootstrap.disabled`,
+# and both died with the `SessionStart` hook. The directory keeps its definition anyway:
+# it is the answer to "where does user-scoped state go", the path a remedy sentence can
+# point at, and what `MKIT_HOME` redirects — all three of which the binary needs before
+# it writes its first user-scoped file. `facts.sh` still probes it, so a machine that
+# would refuse that write says so at the first call rather than at the first write.
 #
 # `~/.mkit`, not `~/.claude/mkit`, and the reason is a hard boundary rather than taste
 # (docs/adr/0002): `~/.claude` — and whatever `CLAUDE_CONFIG_DIR` points at — is a
@@ -39,14 +43,12 @@ mkit_refs_dir() {
 # decision to run unsandboxed. Outside it, one `permissions.additionalDirectories` entry
 # genuinely opens the path — so this directory is somewhere a remedy sentence can point.
 #
-# Not `$TMPDIR`, either: sandboxed and unsandboxed commands resolve `$TMPDIR` to
-# different directories, and the SessionStart hook runs unsandboxed while the skills that
-# read the same state do not.
+# Not `$TMPDIR`, either: that is the location for what dies with the command, and
+# sandboxed and unsandboxed commands do not even resolve it to the same directory.
 #
-# MKIT_HOME is not a convenience: the bats suite exports it at a temp path so a developer
-# whose own bootstrap.state already records a warning cannot make the hook's say-it-once
-# assertions pass or fail by accident — the tests would be measuring the developer, not
-# the code. Any future user-scoped file goes here for the same reason.
+# MKIT_HOME is not a convenience: the bats suite exports it at a temp path so a run can
+# never read or write a developer's real state — the tests would be measuring the
+# developer, not the code. Any future user-scoped file goes here for the same reason.
 mkit_user_dir() {
 	printf '%s\n' "${MKIT_HOME:-$HOME/.mkit}"
 }
@@ -109,17 +111,55 @@ $created"
 	return "$rc"
 }
 
-# The one remedy sentence for an unwritable user-scoped directory, in one place because
-# `facts.sh` and `install.sh` must not word it differently.
+# The one remedy sentence for an unwritable user-scoped directory. One producer, so a
+# second caller — `mkit doctor` — cannot word it differently. The binary shells out to
+# this function rather than re-wording it; that is the whole reason it is a function.
 #
 # `permissions.additionalDirectories` rather than `sandbox.filesystem.allowWrite`: the
 # former grants the sandbox write *and* makes the path a working directory, which is what
 # also satisfies the auto-mode classifier's "no writes outside the working directories"
 # rule. allowWrite alone leaves that rule biting, so it is named as the narrower
 # alternative and never as the remedy.
+#
+# **Both halves, always.** The grant covers the directory's *interior*; creating the
+# directory is a write to its parent, which nothing grants — measured:
+# `mkdir: /Users/mk/.mkit: Operation not permitted`. A sentence naming only the grant
+# produced a configuration that looked right and changed nothing, which is the exact
+# failure ADR 0002 was written about, one level down. The `mkdir` half is human-run by
+# construction: no sandboxed session can perform it, so it is spelled with the `!`
+# prefix that runs a command in the user's own shell.
 mkit_user_dir_remedy() {
-	printf 'add %s to permissions.additionalDirectories (sandbox.filesystem.allowWrite grants the sandbox only)\n' \
-		"$(mkit_user_dir)"
+	local dir
+	dir="$(mkit_user_dir)"
+	printf 'run `! mkdir -p %s` (a sandboxed session cannot create it), then add %s to permissions.additionalDirectories (sandbox.filesystem.allowWrite grants the sandbox only)\n' \
+		"$(mkit_shell_quote "$dir")" "$dir"
+}
+
+# Quote a path for the copy-and-run half of a remedy. Only the command is quoted;
+# the allowlist entry is JSON the user types into settings, not shell.
+#
+# MKIT_HOME can point anywhere, including a path with spaces, and a remedy printed
+# as `! mkdir -p /Users/x/my state` creates two wrong directories rather than
+# failing — the worst kind of wrong, since it looks like it worked. bash 3.2 has
+# printf %q, but its output is unquoted-with-backslashes and reads badly in a
+# sentence, so this is the single-quote form.
+mkit_shell_quote() {
+	case "$1" in
+	*[!A-Za-z0-9/._-]*) printf "'%s'\n" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")" ;;
+	*) printf '%s\n' "$1" ;;
+	esac
+}
+
+# Absolute path of this repo's committed config file, or failure outside a work tree.
+#
+# `<toplevel>/.mkit/config.toml` — the same directory as the scratch, and the one file in
+# it that is committed (ADR 0001, amended). Resolving it is all this does; `mkit init`
+# writes it and `mkit repo profile` reads it.
+mkit_config_path() {
+	local toplevel
+	toplevel="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
+	[ -n "$toplevel" ] || return 1
+	printf '%s/.mkit/config.toml\n' "$toplevel"
 }
 
 # A temp file that dies with the command, always with an explicit template.
@@ -187,22 +227,106 @@ mkit_dir_or_die() {
 	printf '%s/.mkit\n' "$toplevel"
 }
 
-# Is `.mkit/` ignored in this repo? A plain question with a plain answer, asked of git
-# rather than of a file's contents so a `.gitignore` line, a global excludes file and the
-# common-dir exclude all count.
+# Is mkit's scratch ignored in this repo? A plain question with a plain answer, asked of
+# git rather than of a file's contents so a `.gitignore` line, a global excludes file and
+# the common-dir exclude all count.
 #
-# The trailing slash is load-bearing. `.mkit/` is the natural rule to write and it is a
-# directory-only pattern, so `check-ignore .mkit` answers "no" whenever the directory does
-# not exist yet — which is every first call, the one that has to get this right. Asking
-# about `.mkit/` matches a directory-only pattern and a plain `.mkit` alike.
+# Asked about `.mkit/gate.jsonl` — a real scratch path — rather than about `.mkit/`.
+#
+# The old subject still works, and the reason is obscure enough to be worth not relying
+# on: `check-ignore .mkit/`, *with the trailing slash*, is matched by `.mkit/*`, because
+# git reads the trailing slash as naming something inside the directory. Drop the slash
+# and it stops matching. That subtlety was already load-bearing once here — a
+# directory-only pattern needs the slash to match before the directory exists — and
+# depending on it twice, for two different reasons, is a trap for whoever edits this next.
+#
+# A concrete path inside the scratch depends on none of it. It answers correctly before
+# anything exists on disk (`check-ignore` is pattern matching, not a stat), which is the
+# first call, the one that has to be right; and every rule shape matches it — the legacy
+# directory-only `.mkit/` and the current `.mkit/*` pair alike.
+MKIT_SCRATCH_PROBE='.mkit/gate.jsonl'
+
+# The ledger is not the only thing that must be ignored, and one probe cannot speak
+# for both. An unrelated `*.jsonl` rule hides `gate.jsonl` while leaving every
+# `.mkit/<skill>-*/` run directory untracked — under which `run_ignored=yes` would be
+# reported to a skill whose worktree teardown then fails. So a run-directory-shaped
+# path is probed too, and both must be ignored for the answer to be yes.
+MKIT_RUN_PROBE='.mkit/probe-0/log'
+
 mkit_run_ignored() {
 	local toplevel
 	toplevel="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
-	git -C "$toplevel" check-ignore -q .mkit/ 2>/dev/null
+	git -C "$toplevel" check-ignore -q -- "$MKIT_SCRATCH_PROBE" 2>/dev/null &&
+		git -C "$toplevel" check-ignore -q -- "$MKIT_RUN_PROBE" 2>/dev/null
 }
 
-# Make `.mkit/` ignored, once, and report whether it now is. Best effort: returns 0 when
-# the directory is ignored on exit, 1 otherwise, and never fails a caller.
+# The other half of the same question, and the one a legacy repo gets wrong: can the
+# committed config file actually be committed here?
+#
+# A repo set up before the config existed carries a directory-only `.mkit/` rule, under
+# which `git add .mkit/config.toml` is refused and a fresh clone inherits nothing — so
+# `mkit init` would write a file that silently never travels. Returns 0 when the path is
+# committable, 1 when a rule is shadowing it.
+mkit_config_committable() {
+	local toplevel
+	toplevel="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
+	! git -C "$toplevel" check-ignore -q -- .mkit/config.toml 2>/dev/null
+}
+
+# The one remedy sentence for a shadowed config path. One producer, same rule as
+# `mkit_user_dir_remedy`.
+#
+# Which file to name is not cosmetic: git reads `.gitignore` at a *higher* precedence than
+# the common dir's `info/exclude`, so a negation written into the exclude cannot lift a
+# `.mkit/` line that lives in a committed `.gitignore`. Where git reports the source, name
+# it; that is the only file where editing the rule does anything.
+mkit_config_ignored_remedy() {
+	local toplevel fields src pat parent
+	toplevel="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
+	# -z, so each field is read whole. The default format is
+	# `<source>:<line>:<pattern>\t<path>`, and `cut -d:` truncates any source path
+	# containing a colon — a core.excludesFile under such a directory would be named
+	# wrong, which is the one thing this sentence exists to get right. git accepts
+	# -z only with --stdin ("-z only makes sense with --stdin"), hence the pipe.
+	fields="$(printf '.mkit/config.toml\0' | git -C "$toplevel" check-ignore -v -z --stdin 2>/dev/null | tr '\0' '\n')"
+	src="$(printf '%s\n' "$fields" | sed -n 1p)"
+	pat="$(printf '%s\n' "$fields" | sed -n 3p)"
+	: "${src:=.gitignore}"
+
+	# Which fix applies depends on whether the rule excludes the `.mkit` *directory*
+	# or only the file. A directory cannot be undone by a negation at all — git never
+	# descends into an excluded one — so that rule has to become `.mkit/*`; anything
+	# else is lifted by a negation after it, and telling that reader to go replace a
+	# `.mkit/` rule sends them looking for a line their file does not contain.
+	#
+	# Two signals, because neither is complete alone (measured over every rule shape,
+	# see the Go counterpart's TestParentExcludedMatchesGit):
+	#
+	#   - a directory-form pattern, trailing `/`, matches only directories — so if it
+	#     decided a *file* path it matched a directory component, and `.mkit` is the
+	#     only one. This is the case the probe below misses before the directory
+	#     exists, which on a fresh clone it does not: `.mkit/`, `**/.mkit/`, `.mki?/`.
+	#   - asking git about the bare `.mkit` catches every non-directory pattern that
+	#     swallows the parent: `.m*`, `.mkit*`, `/.mkit`, a bare `*`.
+	if [ -z "$pat" ]; then
+		printf 'an ignore rule in %s excludes `.mkit/config.toml`; if it is a `.mkit/` rule, replace it with `.mkit/*` followed by `!.mkit/config.toml` — git cannot re-include a file whose parent directory is excluded\n' "$src"
+		return 0
+	fi
+	case "$pat" in
+	*/) parent=yes ;;
+	*) if git -C "$toplevel" check-ignore -q -- .mkit 2>/dev/null; then parent=yes; else parent=no; fi ;;
+	esac
+	if [ "$parent" = yes ]; then
+		printf 'replace the `%s` rule in %s with `.mkit/*` followed by `!.mkit/config.toml` — git cannot re-include a file whose parent directory is excluded\n' \
+			"$pat" "$src"
+	else
+		printf 'the `%s` rule in %s excludes it; add `!.mkit/config.toml` after that line in the same file\n' \
+			"$pat" "$src"
+	fi
+}
+
+# Make mkit's scratch ignored, once, and report whether it now is. Best effort: returns 0
+# when the scratch is ignored on exit, 1 otherwise, and never fails a caller.
 #
 # Three things break while it is unignored, all measured in a throwaway repo with a linked
 # worktree, and none of them cosmetic:
@@ -217,10 +341,15 @@ mkit_run_ignored() {
 #     --exclude-standard`, so an unignored scratch directory enters the fingerprint and
 #     then changes while the gate runs — a run invalidating its own cache entry.
 #
+# Two lines, not one, and the pair is the unit: `.mkit/*` excludes the scratch while
+# leaving `.mkit/` itself includable, and `!.mkit/config.toml` re-includes the one
+# committed file. Writing only the first would hide repo config from `git add`; writing
+# the old directory-only `.mkit/` would make the negation impossible to add later.
+#
 # Written into the **common dir's** `info/exclude`: shared by every worktree, uncommitted,
 # no diff noise, and writable — only `.git/config` and `.git/hooks` are protected inside a
-# working directory. A committed `.gitignore` line is the variant for repos whose
-# teammates run mkit from fresh clones; either satisfies `mkit_run_ignored`.
+# working directory. A committed `.gitignore` carrying the same pair is the variant for
+# repos whose teammates run mkit from fresh clones, and is what this repo itself ships.
 #
 # It cannot be written from a worktree-isolated session (the file lives in the main
 # checkout), which is why the answer is reported as a starting fact rather than assumed.
@@ -235,7 +364,9 @@ mkit_ensure_run_ignored() {
 	# else's exclude file is indistinguishable from cruft.
 	{
 		printf '\n# mkit scratch root (run directories + gate.jsonl). Added by mkit.\n'
-		printf '.mkit/\n'
+		printf '# config.toml is repo config and stays committable — the pair is the rule.\n'
+		printf '.mkit/*\n'
+		printf '!.mkit/config.toml\n'
 	} >>"$exclude" 2>/dev/null || return 1
 	mkit_run_ignored
 }
@@ -484,178 +615,4 @@ mkit_age_human() {
 	else
 		printf '%dd' "$((s / 86400))"
 	fi
-}
-
-# --- user-scoped setup: prerequisites, one-time state -----------------------------------
-#
-# Everything below is shared by `install.sh` (run by hand) and
-# `scripts/hooks/session-bootstrap.sh` (the SessionStart hook). Two callers is the whole
-# point: the degradation sentences are only one source of truth if neither caller writes
-# its own.
-
-mkit_have() {
-	command -v "$1" >/dev/null 2>&1
-}
-
-# The prerequisite table, one row per tool: <tool>\t<state>\t<consequence>.
-#
-#   state  MISSING  a hard requirement — a skill cannot get its starting facts without it
-#          missing  a soft one — some feature degrades, nothing breaks
-#          ok       present
-#
-# A table rather than a print function, because the two callers need different subsets:
-# install.sh prints every row (a human watching wants to see the `ok`s) and derives its
-# exit status from whether any row is MISSING, while the hook prints only the non-ok
-# rows, once each, and never blocks on them. Same sentences either way.
-#
-#   mkit_prereq_rows [--missing-only]
-#
-# Returns 1 if any hard requirement is missing, so a caller can branch on the status
-# without parsing the rows back.
-mkit_prereq_rows() {
-	local missing_only=no missing_hard=0 tool state text
-	[ "${1:-}" = --missing-only ] && missing_only=yes
-
-	# `bash` is deliberately absent from this table. A bash script cannot report that
-	# bash is missing, so the row could only ever read `ok` — and a check that can only
-	# produce one answer is not a check.
-	#
-	# One sentence per tool rather than one for the pair: "a hard requirement" is the
-	# same verdict either way, but what breaks is not, and a report that cannot say
-	# which feature just died sends the reader to the wrong place.
-	for tool in git jq; do
-		if mkit_have "$tool"; then
-			state=ok text=''
-		else
-			state=MISSING
-			case "$tool" in
-			git) text='every skill reads the repo through it' ;;
-			jq) text='facts.sh, branch-scan.sh and the gate ledger all parse JSON with it' ;;
-			esac
-			missing_hard=1
-		fi
-		[ "$missing_only" = yes ] && [ "$state" = ok ] && continue
-		printf '%s\t%s\t%s\n' "$tool" "$state" "$text"
-	done
-
-	if mkit_have node; then
-		state=ok text=''
-	else
-		state=missing text='only findings.mjs (the review skill) needs it'
-	fi
-	[ "$missing_only" = yes ] && [ "$state" = ok ] || printf '%s\t%s\t%s\n' node "$state" "$text"
-
-	if mkit_have_hash; then
-		state=ok text=''
-	else
-		state=missing text='the gate ledger still records, but reports gate_cache=no-hash'
-	fi
-	[ "$missing_only" = yes ] && [ "$state" = ok ] || printf '%s\t%s\t%s\n' sha256 "$state" "$text"
-
-	return "$missing_hard"
-}
-
-# --- one-time state: "have I already said this?" ---------------------------------------
-#
-# A line-per-key file: `grep -qxF` membership, an atomic `>>` append to add, a mktemp+mv
-# rewrite to drop. It needs no prune — its key space is fixed by construction (a handful
-# of `prereq/` keys), not an unbounded stream.
-
-mkit_state_has() {
-	[ -f "$1" ] || return 1
-	grep -qxF -- "$2" "$1" 2>/dev/null
-}
-
-mkit_state_add() {
-	local file="$1" key="$2"
-	mkdir -p "$(dirname -- "$file")" 2>/dev/null || return 1
-	# Braced, so the stderr redirect is in place before the append can report its own
-	# failure — the bare `>>"$f" 2>/dev/null` form lets that diagnostic escape.
-	{ printf '%s\n' "$key" >>"$file"; } 2>/dev/null || return 1
-	return 0
-}
-
-# Drop $2 from $1, and dedupe while rewriting: two sessions starting at once can each
-# append the same key, which is harmless for membership but worth cleaning up when a
-# rewrite is happening anyway.
-mkit_state_drop() {
-	local file="$1" key="$2" tmp
-	[ -f "$file" ] || return 0
-	mkit_state_has "$file" "$key" || return 0
-	tmp="$(mktemp "$file.XXXXXX" 2>/dev/null)" || return 1
-	if ! awk -v k="$key" '$0 != k && !seen[$0]++' "$file" >"$tmp" 2>/dev/null ||
-		! mv -f -- "$tmp" "$file" 2>/dev/null; then
-		rm -f -- "$tmp" 2>/dev/null
-		return 1
-	fi
-	return 0
-}
-
-# Keys in state file $1 that are stale — a `prereq/<tool>` recorded as warned about, for
-# a tool that is now present. $2 is the current `--missing-only` table, so the comparison
-# is against what is true *now* rather than against what the file remembers: the state
-# file is the ledger of what has been said, never the source of truth for what is missing.
-#
-# Prints the stale keys, one per line, for the caller to drop. At most one rewrite per
-# tool ever happens — the session right after it gets installed — so the steady state
-# stays grep-only.
-mkit_state_missing_keys() {
-	local file="$1" rows="$2" line key tool
-	[ -f "$file" ] || return 0
-	while IFS= read -r line; do
-		case "$line" in
-		prereq/*) ;;
-		*) continue ;;
-		esac
-		tool="${line#prereq/}"
-		# Still missing → the key is earned, keep it. Silenced like every other external
-		# call on this path: the sole caller is a hook contractually forbidden from
-		# writing to stderr, and "grep is missing too" is not a message it can act on.
-		printf '%s\n' "$rows" | cut -f1 2>/dev/null | grep -qxF -- "$tool" 2>/dev/null && continue
-		printf '%s\n' "$line"
-	done <"$file"
-	return 0
-}
-
-# --- JSON, without jq -----------------------------------------------------------------
-#
-# Escape stdin as the *contents* of a JSON string (no surrounding quotes), on one line.
-#
-# Why not jq: the one caller is the SessionStart hook, whose job includes reporting that
-# `jq` is missing. Building that report with jq would make the message unavailable in
-# exactly the case that must produce it. awk is POSIX and present wherever bash is, so
-# this leaves the hook with no external prerequisite at all.
-#
-# Defensive rather than load-bearing today: the hook's payload is assembled from the fixed
-# prerequisite sentences and interpolates no path at all — not $HOME, not $MKIT_HOME — so
-# nothing user-controlled currently reaches it. That is a property of the present message
-# set, not a guarantee, and it is the kind of property a later message quietly revokes. The
-# escape stays so the first string that does carry a path cannot turn one stray quote into
-# a document that parses as nothing.
-# stderr is silenced because the only caller is a hook forbidden from writing any. If awk
-# itself were missing the result is an empty string in a still-valid JSON document — a
-# message that says nothing, rather than a document that parses as nothing.
-mkit_json_escape() {
-	awk 2>/dev/null '
-		BEGIN {
-			for (i = 0; i < 32; i++) ctl[sprintf("%c", i)] = sprintf("\\u%04x", i)
-			ctl[sprintf("%c", 127)] = "\\u007f"
-			first = 1
-		}
-		{
-			line = $0
-			out = ""
-			n = length(line)
-			for (i = 1; i <= n; i++) {
-				c = substr(line, i, 1)
-				if (c == "\\") out = out "\\\\"
-				else if (c == "\"") out = out "\\\""
-				else if (c == "\t") out = out "\\t"
-				else if (c in ctl) out = out ctl[c]
-				else out = out c
-			}
-			if (first) { printf "%s", out; first = 0 }
-			else printf "\\n%s", out
-		}
-	'
 }

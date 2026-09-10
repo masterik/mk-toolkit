@@ -213,16 +213,31 @@ teardown() { mkit_teardown_repo; }
 }
 
 @test "opening a run directory adds the ignore rule to the common-dir exclude" {
-	run bash -c "'$SCRIPTS/run-open.sh' commit >/dev/null && git check-ignore -q .mkit/"
+	run bash -c "'$SCRIPTS/run-open.sh' commit >/dev/null && git check-ignore -q .mkit/gate.jsonl"
 	[ "$status" -eq 0 ]
-	grep -qxF '.mkit/' "$(git rev-parse --git-common-dir)/info/exclude"
+	exclude="$(git rev-parse --git-common-dir)/info/exclude"
+	# Both lines, because the pair is the rule: `.mkit/*` alone would hide repo config
+	# from `git add`, and a directory-only `.mkit/` makes the negation impossible.
+	grep -qxF '.mkit/*' "$exclude"
+	grep -qxF '!.mkit/config.toml' "$exclude"
+}
+
+@test "the ignore rule leaves the committed config committable" {
+	"$SCRIPTS/run-open.sh" commit >/dev/null
+	printf 'version = 1\n' >"$(git rev-parse --show-toplevel)/.mkit/config.toml"
+	run git check-ignore -q .mkit/config.toml
+	[ "$status" -ne 0 ]
+	run git add .mkit/config.toml
+	[ "$status" -eq 0 ]
 }
 
 @test "the ignore rule is written once, not appended on every run" {
 	"$SCRIPTS/run-open.sh" commit >/dev/null
 	"$SCRIPTS/run-open.sh" commit >/dev/null
 	"$SCRIPTS/run-open.sh" review >/dev/null
-	[ "$(grep -cxF '.mkit/' "$(git rev-parse --git-common-dir)/info/exclude")" -eq 1 ]
+	exclude="$(git rev-parse --git-common-dir)/info/exclude"
+	[ "$(grep -cxF '.mkit/*' "$exclude")" -eq 1 ]
+	[ "$(grep -cxF '!.mkit/config.toml' "$exclude")" -eq 1 ]
 }
 
 @test "a run directory leaves git status --porcelain empty" {

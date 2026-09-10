@@ -13,4 +13,10 @@
 # mkit's own scratch root — run directories + gate.jsonl, never committed.
 # Committed here rather than left to .git/info/exclude because this repo's own
 # contributors run mkit from fresh clones.
-.mkit/
+#
+# `.mkit/*` and not `.mkit/`, so the one committed file in there can be negated:
+# git cannot re-include a path whose parent directory is itself excluded, and a
+# directory-only rule excludes the parent. `config.toml` is repo config, inherited
+# by a fresh clone (ADR 0001, amended); everything else under .mkit/ is scratch.
+.mkit/*
+!.mkit/config.toml

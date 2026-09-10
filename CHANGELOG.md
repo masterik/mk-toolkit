@@ -12,6 +12,101 @@ nothing — `brew install masterik/tap/mkit` delivers whatever the newest tag bu
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project
 predates any semver commitment and is pre-1.0, so minor bumps carry breaking changes.
 
+## [0.16.0] — 2026-09-10
+
+M7: the configuration surface, and the diagnostic surface 0.15.0 removed.
+
+### Added
+- **`mkit init`** — writes `<toplevel>/.mkit/config.toml`, committed, so a colleague and a fresh
+  clone inherit it. Interactive form on a TTY, every field also a flag. Pins only what inspection
+  cannot establish; a no-op on a repo that already has a config (`--force` rewrites). **Config is
+  an input, never a permission** — every command still runs with the file absent.
+- **`mkit repo profile [--json]`** — gate commands, spec store, commit scopes, reviewers and merge
+  style, each tagged `discovered`, `pinned` or `unavailable` **with a cause**; an empty value is
+  never presented as an answer. Scopes come from history ranked by use, reviewers from CODEOWNERS,
+  the spec store from `docs/agents/issue-tracker.md` and the ref from the remote. Gate discovery is
+  **delegated to `gate-detect.sh`**, not reimplemented — that script stays the single
+  implementation until M5 ports it.
+- **`mkit doctor`** — prerequisites, sandbox writability, the writable set, plugin payload and
+  enablement, hook registration, and permission-allowlist gaps. Reports; fixes nothing; exit status
+  stays 0 with findings. Where a sentence already has a shell producer — the `~/.mkit` probe and
+  its remedy — it is read **from `lib/common.sh`** rather than re-worded; the checks with no shell
+  counterpart word their own.
+  - **One exception, deliberate:** the shadowed-config remedy exists in both languages
+    (`repoconfig.ShadowedRemedy` and `mkit_config_ignored_remedy`), worded to match. `mkit init`
+    must refuse a shadowed path *before* it has located a payload, and a remedy that is
+    unavailable exactly when the payload is missing is not a remedy. A parity test compares the
+    two **byte for byte** over every rule shape, so a reword on either side fails the build —
+    a documented exception is one that drifts.
+  - It does **not** restore everything the hook did: it cannot run unprompted at session start and
+    cannot report that `mkit` itself is absent. Both remain accepted losses.
+  - The allowlist check distinguishes `permissions.additionalDirectories` from
+    `sandbox.filesystem.allowWrite`, because they are not equivalent — the latter grants the
+    sandbox only and leaves the auto-mode classifier's rule biting.
+- **`config=` and `config_state=` starting facts in `facts.sh`**
+  (`tracked|untracked|shadowed|absent`), plus `mkit_config_path`, `mkit_config_committable` and
+  `mkit_config_ignored_remedy` in `lib/common.sh`.
+
+### Changed
+- **BREAKING (repo setup) — the `.mkit/` ignore rule is a pair, not a line.** `.mkit/*` followed by
+  `!.mkit/config.toml`, written together into the common dir's `info/exclude`, and shipped in this
+  repo's `.gitignore`. Git cannot re-include a file whose parent directory is excluded, so a
+  directory-only rule made repo config impossible
+  ([ADR 0001's config-path amendment](docs/adr/0001-per-repo-config-and-init.md#amendment-the-config-path)).
+  - **A repo carrying the old rule is detected, not broken.** `facts.sh` reports
+    `config_state=shadowed` and `mkit doctor` fails that check, both naming the file to edit.
+    Nothing migrates automatically: `.gitignore` is the user's file.
+  - `mkit_run_ignored` now probes `.mkit/gate.jsonl` rather than `.mkit/`. The directory form still
+    works — `check-ignore .mkit/` *with the trailing slash* is matched by `.mkit/*` — but only via
+    a subtlety already load-bearing here for an unrelated reason, and a concrete path turns on none
+    of it.
+- **The unwritable-user-directory remedy names both halves.** `! mkdir -p ~/.mkit` first, then the
+  `additionalDirectories` grant: the grant covers the directory's *interior*, so it cannot create
+  it, and the `mkdir` is a write to `$HOME` that no sandboxed session can perform. The
+  grant-only wording had survived in `lib/common.sh`, `docs/prerequisites.md` and ADR 0002's
+  decision 2 — all three corrected ([#3](https://github.com/masterik/mk-toolkit/issues/3)).
+
+### Fixed
+- **`git check-ignore -v` was being read as a boolean.** It exits 0 and prints the matching pattern
+  for a **negated** path too, so it answers "which rule decided this", not "is it ignored" — which
+  reported every deliberately re-included file as excluded, `.mkit/config.toml` first among them.
+  Truth now comes from `-q`; `-v` runs only afterwards, to name the file a remedy must edit.
+- **The payload is identified by its manifest name, never by path.** A marketplace checkout is
+  named after the marketplace *owner* (`marketplaces/masterik/plugin`), so a path test for the repo
+  name matched nothing.
+
+### Dependencies
+- `github.com/pelletier/go-toml/v2` — parsing the repo config. The file is *rendered* from a
+  commented template rather than marshalled: it is committed and read in a diff, and no Go TOML
+  marshaller preserves comments.
+
+## [0.15.0] — 2026-09-10
+
+### Removed
+- **BREAKING — the plugin ships no hooks and no installer.** `hooks/hooks.json`,
+  `scripts/hooks/session-bootstrap.sh` and `install.sh` are all deleted, along with
+  `tests/bats/session-bootstrap.bats`, `tests/bats/install.bats`, and the helpers that existed
+  only for them: `mkit_have`, `mkit_prereq_rows`, `mkit_state_has/add/drop/missing_keys` and
+  `mkit_json_escape` in `lib/common.sh`. Prerequisite reporting belongs to the binary — M7's
+  `mkit doctor` — and keeping a shell implementation alive until then meant two implementations
+  of one invariant. Completes the deletion planned in
+  [ADR 0003](docs/adr/0003-two-distribution-channels.md); every remaining script in the payload
+  is called by a skill.
+- **`~/.mkit/bootstrap.disabled` and `~/.mkit/bootstrap.state` are no longer written or read.**
+  The tombstone silenced a hook that no longer exists. Delete a leftover one; nothing migrates.
+
+### Changed
+- **Nothing reports a missing prerequisite unprompted any more.** A missing `jq`, `gh` or `node`
+  now surfaces where it bites — a thinner `facts.sh` block, a `gate_cache=no-hash` annotation —
+  instead of once at session start. This is an **accepted regression** until `mkit doctor`, and
+  `doctor` will not fully close it: a binary cannot report its own absence and cannot speak at
+  session start. `docs/backlog.md` records the reasoning under "Staying in bash, permanently",
+  where the hook used to be listed as permanent.
+- **`~/.mkit/` is empty but still declared.** It remains the home for user-scoped state and what
+  `MKIT_HOME` redirects, and `facts.sh` still emits `user_dir=` / `user_dir_writable=`, so no
+  skill lost a fact and an unwritable directory is still a starting fact rather than a later
+  failed write. Its `notes:` sentence no longer names `install.sh --uninstall`.
+
 ## [0.14.0] — 2026-09-09
 
 The release that makes the payload usable on a machine with write boundaries. Breaking, because

@@ -48,6 +48,9 @@ func NewRoot() *cobra.Command {
 
 	root.AddCommand(newVersionCmd())
 	root.AddCommand(newStorageCmd())
+	root.AddCommand(newRepoCmd())
+	root.AddCommand(newInitCmd())
+	root.AddCommand(newDoctorCmd())
 
 	return root
 }
