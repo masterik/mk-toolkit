@@ -11,8 +11,9 @@ no new git logic.
 
 **Current phase: the Go port.** M1 (scaffold + release chain) done at `v0.12.0`; M2
 (`mkit storage prune`) done; **M3 withdrawn** ([ADR 0003](docs/adr/0003-two-distribution-channels.md));
-**M7 (`mkit repo profile`/`init`/`doctor`) is next** — `mkit init` per project is the priority, and
-nothing in the remaining ports blocks it. Milestones and the full invariant list:
+**M7 (`mkit repo profile`/`init`/`doctor`) done** — repo config is `<toplevel>/.mkit/config.toml`,
+committed ([ADR 0001's config-path amendment](docs/adr/0001-per-repo-config-and-init.md#amendment-the-config-path)).
+**M4 (`mkit findings`) is next.** Milestones and the full invariant list:
 [`backlog.md`](docs/backlog.md). Direction and rationale: [`concept.md`](docs/concept.md) — the
 place for *why*, so this file can stay operative.
 
@@ -37,6 +38,8 @@ just ci                          # build, vet, test, lint, shtest — what CI ru
 just build / vet / test          # go build|vet|test ./...
 just lint                        # golangci-lint run (CI pins v2.12, brew install golangci-lint)
 just run version --json          # exercise the front-end contract
+just run doctor                  # prerequisites, sandbox writability, plugin state
+just run repo profile --json     # how this repo works, each value discovered|pinned
 just shtest                      # shell layer: node --test + bats (brew install bats-core)
 ```
 
@@ -76,12 +79,30 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
   context. Read it via `cli.FromContext(cmd)` — never re-check a flag or call `term.IsTerminal`
   inside a command.
 - `internal/core/` — data-returning logic. Never prints, never assumes a terminal.
-  `internal/core/storage/` (M2): `provider.go` (the provider/category table), `scan.go`
-  (read-only), `apply.go` (deletes only what `Scan` named, home-containment guarded), `size.go`
-  (`HumanBytes`).
+  - `storage/` (M2): `provider.go` (the provider/category table), `scan.go` (read-only),
+    `apply.go` (deletes only what `Scan` named, home-containment guarded), `size.go`
+    (`HumanBytes`).
+  - `gitrepo/` (M7): the few git questions the config surfaces ask. **`Ignored` runs
+    `check-ignore` twice on purpose** — `-v` exits 0 and prints the pattern for a *negated* path
+    too, so it answers "which rule decided this", not "is it ignored"; `-q` is the boolean and
+    `-v` runs only afterwards, to name the file a remedy must edit.
+  - `repoconfig/` (M7): `<toplevel>/.mkit/config.toml`. `Stat` returns
+    `tracked|untracked|shadowed|absent`; **shadowed** is a repo carrying the legacy
+    directory-only `.mkit/` rule, where a written config would silently never travel.
+    `Write` renders a **commented template** rather than marshalling — the file is committed and
+    read in a diff, and no Go TOML marshaller preserves comments.
+  - `profile/` (M7): merges discovered with pinned, tagging every value. Gate discovery is
+    **delegated to `gate-detect.sh`**, never reimplemented, until M5 ports it.
+  - `pluginroot/` (M7): locates the payload — `CLAUDE_PLUGIN_ROOT`, `MKIT_PLUGIN_ROOT`, the
+    marketplace checkout, then a `plugin/` beside the work tree. Identified by the **manifest's
+    own name**, never by path: the checkout is named after the marketplace *owner*
+    (`marketplaces/masterik/plugin`), so a path test for the repo name matches nothing.
+    `CommonFunc` is how the binary calls a `lib/common.sh` helper instead of re-wording it.
+  - `doctor/` (M7): the checks. Reports; fixes nothing; exit status stays 0 with findings.
 - `internal/tui/` — Bubble Tea rendering over `core`, one subpackage per command.
   `internal/tui/storageprune/` (M2): the size-sorted tick-list `storage prune --apply` opens on a
-  TTY. `Update` holds no prune logic — it only toggles selection.
+  TTY. `internal/tui/repoinit/` (M7): the `mkit init` form. Neither `Update` holds command logic —
+  one toggles selection, the other edits strings.
 - `internal/buildinfo/` — version/commit/date, injected by `-X` ldflags at release.
 - `tools/` — shell that is not part of the plugin payload; staging for a port, and the home
   for one-shot maintenance scripts. Empty today — `purge-journal-state.sh` and
@@ -146,17 +167,25 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
     cache hit possible at all.
 - **No prerequisite reporting in the payload.** `session-bootstrap.sh` and `install.sh` are both
   gone (0.15.0), and with them `mkit_prereq_rows`, `mkit_state_*` and `mkit_json_escape` from
-  `lib/common.sh`. Nothing now tells a user unprompted that `jq` or `gh` is missing — it surfaces
-  as a thinner `facts.sh` block or a `gate_cache=no-hash` annotation until M7's `mkit doctor`
-  lands. That gap is **accepted, not overlooked**: don't re-add a shell reporter for it. What
-  survives is `facts.sh`'s `user_dir_writable=` starting fact, so no skill lost information.
+  `lib/common.sh`. **`mkit doctor` is the report now** (M7) — human-run, on demand. What it does
+  not restore, deliberately: it cannot run unprompted at session start, and cannot report that
+  `mkit` itself is absent. Both were the hook's job and both stay accepted losses; don't re-add a
+  shell reporter for them. `facts.sh`'s `user_dir_writable=` and `config_state=` starting facts
+  are what a *skill* reads, since `doctor` is for a human.
 - `<toplevel>/.mkit/` — the scripts' scratch root: per-run directories plus `gate.jsonl` (the gate
-  ledger, append-only, rotated back to the newest 200 records once it passes 400). **Inside the
+  ledger, append-only, rotated back to the newest 200 records once it passes 400) — **and one
+  committed file, `config.toml`**, the repo config `mkit init` writes
+  ([ADR 0001](docs/adr/0001-per-repo-config-and-init.md#amendment-the-config-path)). That is why
+  the ignore rule is the **pair** `.mkit/*` + `!.mkit/config.toml` and not a directory-only line:
+  git cannot re-include a file whose parent directory is excluded. Both lines go in together —
+  `.mkit/*` alone would hide repo config from `git add`. `.gitignore` **outranks** the common
+  dir's `info/exclude`, so a negation in the exclude cannot lift a `.mkit/` rule in a committed
+  `.gitignore`; the remedy names whichever file git reported. **Inside the
   working directory, not `<git-dir>/mkit`** ([ADR 0002](docs/adr/0002-state-locations-under-a-sandbox.md)):
   under a shared `.git` it resolved into the main checkout, where the worktree-isolation guard
   refuses every write, and `facts.sh` opens it as every skill's first call. `--show-toplevel`, so a
-  linked worktree still gets its own. Never committed — `run-open.sh` puts `.mkit/` in the common
-  dir's `info/exclude` **before** the first write, which is load-bearing rather than tidy: unignored,
+  linked worktree still gets its own. Scratch is never committed — `run-open.sh` puts the rule in
+  the common dir's `info/exclude` **before** the first write, which is load-bearing rather than tidy: unignored,
   `git worktree remove` refuses, `git add -A` would commit run artefacts, and the gate fingerprint
   sees a directory that changes while the gate runs. `facts.sh` reports `run_ignored=` because an
   isolated session cannot write that file. `--prune` only removes `<skill>-*` **directories**, which

@@ -64,7 +64,9 @@ not a trade-off.
    [`workflow-contract.md`](../plugin/skills/_shared/references/workflow-contract.md).
 9. **State is repo-scoped.** `<toplevel>/.mkit/` by default — run directories, the gate ledger, the
    worklog; inside the working directory, so the sandbox, the auto-mode classifier and the
-   worktree-isolation guard all permit it with no configuration. User scope (`~/.mkit/`, overridable
+   worktree-isolation guard all permit it with no configuration. One file in there is **committed**
+   and not scratch: `config.toml`, the repo config, which is why the ignore rule is the pair
+   `.mkit/*` + `!.mkit/config.toml` rather than a directory-only line. User scope (`~/.mkit/`, overridable
    with `MKIT_HOME`) holds only what must outlive every repo: the hook tombstone and its
    once-per-tool messages. Not `~/.claude/…`: that is a *protected* region where an allowlist entry
    is inert, so it is a path no remedy sentence can point at
@@ -112,9 +114,10 @@ Neither of these is a port, and neither waits on a milestone. Both follow from
 
 ## Milestones
 
-**Order.** `mkit init` is the priority, so **M7 is next**, ahead of the remaining ports. Then M4,
-M5, M6, M8 as written. M3 is withdrawn. The M-numbers are stable identities referenced from
-`concept.md` and `AGENTS.md`, so nothing is renumbered when the order changes.
+**Order.** `mkit init` was the priority, so **M7 went first**, ahead of the remaining ports; it is
+done. **M4 is next**, then M5, M6, M8 as written. M3 is withdrawn. The M-numbers are stable
+identities referenced from `concept.md` and `AGENTS.md`, so nothing is renumbered when the order
+changes.
 
 ### M1 — Repo reorg + scaffold + release chain — done
 Repo renamed to `mk-toolkit`, tree reorganized (payload under `plugin/`, docs under `docs/`),
@@ -204,39 +207,54 @@ starts recording immediately and the front half has something to read.
 **Done when:** a branch that ran `commit` then `review` shows both in `mkit work show --json`, and
 `review` invoked cold on that branch takes its goal from the log instead of the branch name.
 
-### M7 — `mkit repo profile` + `init` + `doctor` — **next**
+### M7 — `mkit repo profile` + `init` + `doctor` — done
 The configuration surface ([ADR 0001](adr/0001-per-repo-config-and-init.md)). Independent of M6
-and of every remaining port, which is what lets it come first: `mkit init` in each project is the
-priority, and nothing in the ports blocks it.
+and of every remaining port, which is what let it come first: `mkit init` in each project was the
+priority, and nothing in the ports blocked it.
 
-**Blocked on one decision, and it is small — settle it before writing any Go.** ADR 0001 says repo
-config "lives in the working tree, committed, so a colleague and a fresh clone inherit it". ADR
-0002 then made `.mkit/` ignored scratch, and this repo's own `.gitignore` now carries that rule.
-So `mkit init` currently has nowhere to write: anything under `.mkit/` is ignored by construction
-and no collaborator inherits it, which is the one property the config was for. Pick the committed
-path and record it as an amendment to ADR 0001 — the natural candidates are a root-level
-`mkit.toml`-style file or a path under `.claude/`, and the deciding question is whether the config
-is mkit's or the harness's.
+**The blocking decision is settled:** repo config is `<toplevel>/.mkit/config.toml`, committed —
+one mkit directory in a working tree, not two. Recorded as
+[ADR 0001's config-path amendment](adr/0001-per-repo-config-and-init.md#amendment-the-config-path),
+which also records why a root-level `mkit.toml`, a path under `.claude/`, and `.agents/mkit.toml`
+were each rejected. The ignore rule becomes a **pair** — `.mkit/*` plus `!.mkit/config.toml` —
+because git cannot re-include a file whose parent directory is excluded.
 - `mkit repo profile --json` — gate commands, spec store, scopes, reviewers, merge style, each
-  tagged `discovered` or `pinned`. Discovery reads `docs/agents/issue-tracker.md` where present.
+  tagged `discovered` or `pinned` (or `unavailable`, with a cause — an empty value is never
+  presented as an answer). Discovery reads `docs/agents/issue-tracker.md` where present; scopes
+  come from history, reviewers from CODEOWNERS, the spec ref from the remote.
+  **Gate discovery is delegated to `gate-detect.sh`, not reimplemented** — that script is the
+  single implementation of the invariant until M5 ports it, and a second one in Go is the failure
+  the porting rules name. `internal/core/pluginroot` is what locates it, and the same mechanism
+  fetches the remedy sentences below.
 - `mkit init` — writes the pinned remainder, committed. Interactive TUI on a TTY, flags otherwise
-  (invariants 2 and 3). Writes nothing outside the repo.
-- `mkit doctor` — prerequisites, permission-allowlist gaps against what the skills invoke, hook
-  registration, plugin enablement, and the **sandbox writable set**. Reports; fixes nothing.
+  (invariants 2 and 3). Writes nothing outside the repo. Refuses on a shadowed path rather than
+  writing a config that never travels.
+- `mkit doctor` — prerequisites, permission-allowlist gaps, hook registration, plugin enablement,
+  and the **sandbox writable set**. Reports; fixes nothing. Exit status stays 0 with findings: a
+  report that answered is a report that succeeded.
   **It is the diagnostic surface, not an addition to one** — `install.sh --status` and the
-  `SessionStart` hook are both already deleted (0.15.0), so until this lands the only report of an
-  unwritable user directory is `facts.sh`'s `user_dir_writable=` starting fact, and there is no
-  report of a missing tool at all. Restoring the human-run surface is this milestone's value, not
-  a nice-to-have. **It cannot restore all of it**: `doctor` cannot run unprompted at session
-  start, and cannot report that `mkit` itself is absent. Both were the hook's job; both are
-  accepted losses.
+  `SessionStart` hook were both deleted in 0.15.0, so between then and this the only report of an
+  unwritable user directory was `facts.sh`'s `user_dir_writable=` starting fact, and there was no
+  report of a missing tool at all. **It does not restore all of it**: `doctor` cannot run
+  unprompted at session start, and cannot report that `mkit` itself is absent. Both were the
+  hook's job; both remain accepted losses.
 - The degradation sentences keep exactly one producer. That is `lib/common.sh` until M5 ports
-  `facts.sh`; `doctor` must call it rather than re-word a remedy.
-**Done when:** the committed config path is decided and recorded, `mkit doctor` names an unwritable
-`~/.mkit/` on a sandboxed run without failing — with a remedy that names **both** halves, creating
-the directory and granting it, since the grant alone cannot create it —
-`mkit repo profile --json` distinguishes discovered from pinned on this repo, and `mkit init` is a
-no-op on a repo it has already configured.
+  `facts.sh`, and `doctor` **calls** it — `mkit_user_dir_writable` for the probe and
+  `mkit_user_dir_remedy` for the sentence, through `pluginroot.CommonFunc`. Where the payload
+  cannot be found, the affected checks report `unknown` and say why, rather than wording their own.
+**Done — all four met:** the committed config path is decided and recorded; `mkit doctor` names an
+unwritable `~/.mkit/` without failing, with a remedy naming **both** halves (create, then grant —
+the grant alone cannot create it); `mkit repo profile --json` distinguishes discovered from pinned
+on this repo; and `mkit init` is a no-op on a repo it has already configured.
+
+Two measured facts the implementation turned up, both now pinned by tests:
+- **`git check-ignore -v` exits 0 for a *negated* path too**, printing the `!` pattern that
+  re-included it. It answers "which rule decided this", not "is it ignored" — so truth comes from
+  `-q` and `-v` runs only afterwards, to name the file a remedy must edit. Reading truth off `-v`
+  reports every deliberately re-included file as excluded.
+- **`.gitignore` outranks the common dir's `info/exclude`.** A negation written into the exclude
+  cannot lift a `.mkit/` rule that lives in a committed `.gitignore`, which is why the remedy names
+  whichever file git actually reported.
 
 ### M8 — `mkit plan` + the `spec` and `implement` skills
 The front half's mechanical core plus the two skills that consume it. `brainstorm` needs no binary
@@ -305,13 +323,15 @@ no conversation context, working from the artifact and the worklog alone.
   hand. Both channels are now permanently independent
   ([ADR 0003](adr/0003-two-distribution-channels.md)), so skew is a standing condition to
   report, never a state to eliminate.
-- **Whether repo config belongs to mkit or to the harness.** Blocks M7; see that milestone. The
-  narrow version: a root-level `mkit.toml` says the config is mkit's and travels with the repo
-  regardless of which agent reads it; a path under `.claude/` says it is harness configuration
-  that mkit happens to consume. ADR 0001 assumed the former without saying so, and ADR 0002 then
-  took `.mkit/` off the table by making it ignored.
 
 Resolved:
+- **Whether repo config belongs to mkit or to the harness** — neither, as posed. It is the
+  *repo's* agent configuration and mkit is one consumer, and it lives at
+  `<toplevel>/.mkit/config.toml`, committed, with `.mkit/*` + `!.mkit/config.toml` as the ignore
+  rule ([ADR 0001's config-path amendment](adr/0001-per-repo-config-and-init.md#amendment-the-config-path)).
+  `.agents/mkit.toml` was the closest rejected alternative and the one to revisit if `.agents/`
+  ever specifies a config slot: it is already generated and reconciled by a skills installer
+  against `skills-lock.json`, so writing there means writing into a tree another tool owns.
 - **Two distribution channels, deliberately independent** — the binary via Homebrew, the payload
   via the GitHub marketplace ([ADR 0003](adr/0003-two-distribution-channels.md)). Neither
   `curl | sh` nor `go install` for the binary; no clone for the payload. This also settles what

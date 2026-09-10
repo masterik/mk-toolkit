@@ -105,13 +105,15 @@ $f: $hits"
 # mkit writes in exactly three places, and nowhere else:
 #
 #   $TMPDIR                anything that dies with the command   (mkit_tmpfile)
-#   <toplevel>/.mkit/      run directories and gate.jsonl        (mkit_dir_or_die)
+#   <toplevel>/.mkit/      run directories, gate.jsonl, and the   (mkit_dir_or_die)
+#                          one committed file, config.toml
 #   ~/.mkit/               nothing today; still the declared      (mkit_user_dir)
 #                          home for user-scoped state, and the
 #                          probe target facts.sh reports on
 #
-# plus one named exception: the common dir's `info/exclude`, one line, so `.mkit/` does
-# not show up in `git status`. Nothing is ever written to the user's working tree — an
+# plus one named exception: the common dir's `info/exclude`, where the payload writes the
+# two-line rule (`.mkit/*` and `!.mkit/config.toml`) that keeps the scratch out of
+# `git status` while leaving repo config committable. Nothing is ever written to the user's working tree — an
 # improvised helper script landed in a target repository's working tree once, and that
 # incident is why this is an assertion rather than a habit.
 #

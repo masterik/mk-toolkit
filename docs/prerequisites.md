@@ -1,13 +1,22 @@
 # Prerequisites
 
 mkit's plugin payload is Markdown plus six helpers — five shell scripts and one dependency-free
-Node file — and one hook. Nothing in it needs building and there is no setup step: installing the
-plugin is a clone. What follows is what those scripts call.
+Node file. No hooks (removed in 0.15.0), nothing to build, and no *machine* setup step: installing
+the plugin is a clone. What follows is what those scripts call.
+
+Per **repo** there is now one optional step, `mkit init`, which writes `.mkit/config.toml`
+([ADR 0001](adr/0001-per-repo-config-and-init.md)). It pins what inspection cannot establish and
+is never a precondition: every command and every skill runs with no config present.
 
 The `mkit` **binary** is a separate, optional install (`brew install masterik/tap/mkit`), and
 nothing below requires it. It is [taking over the script layer](backlog.md) one milestone at a
 time, and each script it replaces deletes a row from this page: `node` goes with `findings.mjs`
 (M4), `jq` and `shasum` with the gate port (M5).
+
+> **`mkit doctor` checks everything on this page**, plus the sandbox writable set, the plugin
+> payload and the allowlist gaps below — on demand, reporting only. Two things it cannot tell
+> you, both deliberate: it does not run unprompted at session start, and it cannot report that
+> `mkit` itself is missing.
 
 **macOS is the supported platform — for the scripts and for the binary.** Nothing detects an OS or
 branches on one; the scripts are simply written to what macOS provides, which is the narrower
@@ -142,10 +151,28 @@ it delegates that trust; leave it out if you would rather approve each gate.
 ## Running under the OS sandbox
 
 Claude Code can run Bash tool calls inside an OS sandbox (Seatbelt on macOS). Everything below was
-measured on 2026-09-09 with `sandbox.enabled: true`. **One entry is all mkit itself needs**; the rest
-of this section is what the tools mkit *composes* need, and the two facts that no script may forget.
+measured on 2026-09-09 with `sandbox.enabled: true`. **One directory is all mkit itself needs** —
+though opening it takes two steps, not one; the rest of this section is what the tools mkit
+*composes* need, and the two facts that no script may forget.
 
-### The one grant mkit needs
+### The two steps mkit needs
+
+**Both, in this order.** A grant covers a directory's *interior*, so it cannot bring the directory
+into existence — and creating it is a write to `$HOME`, which nothing grants. The grant alone
+produces a configuration that looks correct and still fails.
+
+**1. Create the directory — from your own shell, not from a session.** In Claude Code, the `!`
+prefix runs a command outside the sandbox:
+
+```
+! mkdir -p ~/.mkit
+```
+
+Skipping this and adding only the grant below gets you
+`mkdir: /Users/mk/.mkit: Operation not permitted` at the first write — measured, and the reason
+this section is two steps instead of one.
+
+**2. Grant it:**
 
 ```json
 {
@@ -156,10 +183,11 @@ of this section is what the tools mkit *composes* need, and the two facts that n
 ```
 
 `~/.mkit/` is **empty today** — its two files went with the hook — but it stays the declared home
-for user-scoped state, and it is what `MKIT_HOME` redirects. Nothing writes there yet, so the entry
-is not required for anything the payload currently does; `facts.sh` reports `user_dir_writable=no`
-without it, with this same remedy, so the first user-scoped write the binary makes does not fail
-as a surprise.
+for user-scoped state, and it is what `MKIT_HOME` redirects. Nothing writes there yet, so neither
+step is required for anything the payload currently does; `facts.sh` reports `user_dir_writable=no`
+without them, with this same two-part remedy, so the first user-scoped write the binary makes does
+not fail as a surprise. `mkit doctor` reports the same thing on demand, from the same producer —
+`mkit_user_dir_remedy()` in `lib/common.sh` is the only place this sentence is written.
 
 `additionalDirectories` rather than `sandbox.filesystem.allowWrite` deliberately — it grants the
 sandbox write *and* makes the path a working directory, which also satisfies the auto-mode
