@@ -12,6 +12,33 @@ nothing — `brew install masterik/tap/mkit` delivers whatever the newest tag bu
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project
 predates any semver commitment and is pre-1.0, so minor bumps carry breaking changes.
 
+## [0.15.0] — 2026-09-10
+
+### Removed
+- **BREAKING — the plugin ships no hooks and no installer.** `hooks/hooks.json`,
+  `scripts/hooks/session-bootstrap.sh` and `install.sh` are all deleted, along with
+  `tests/bats/session-bootstrap.bats`, `tests/bats/install.bats`, and the helpers that existed
+  only for them: `mkit_have`, `mkit_prereq_rows`, `mkit_state_has/add/drop/missing_keys` and
+  `mkit_json_escape` in `lib/common.sh`. Prerequisite reporting belongs to the binary — M7's
+  `mkit doctor` — and keeping a shell implementation alive until then meant two implementations
+  of one invariant. Completes the deletion planned in
+  [ADR 0003](docs/adr/0003-two-distribution-channels.md); every remaining script in the payload
+  is called by a skill.
+- **`~/.mkit/bootstrap.disabled` and `~/.mkit/bootstrap.state` are no longer written or read.**
+  The tombstone silenced a hook that no longer exists. Delete a leftover one; nothing migrates.
+
+### Changed
+- **Nothing reports a missing prerequisite unprompted any more.** A missing `jq`, `gh` or `node`
+  now surfaces where it bites — a thinner `facts.sh` block, a `gate_cache=no-hash` annotation —
+  instead of once at session start. This is an **accepted regression** until `mkit doctor`, and
+  `doctor` will not fully close it: a binary cannot report its own absence and cannot speak at
+  session start. `docs/backlog.md` records the reasoning under "Staying in bash, permanently",
+  where the hook used to be listed as permanent.
+- **`~/.mkit/` is empty but still declared.** It remains the home for user-scoped state and what
+  `MKIT_HOME` redirects, and `facts.sh` still emits `user_dir=` / `user_dir_writable=`, so no
+  skill lost a fact and an unwritable directory is still a starting fact rather than a later
+  failed write. Its `notes:` sentence no longer names `install.sh --uninstall`.
+
 ## [0.14.0] — 2026-09-09
 
 The release that makes the payload usable on a machine with write boundaries. Breaking, because
