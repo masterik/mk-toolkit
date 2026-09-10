@@ -112,16 +112,37 @@ $created"
 }
 
 # The one remedy sentence for an unwritable user-scoped directory. One producer, so a
-# second caller — `mkit doctor` from M7 — cannot word it differently.
+# second caller — `mkit doctor` — cannot word it differently. The binary shells out to
+# this function rather than re-wording it; that is the whole reason it is a function.
 #
 # `permissions.additionalDirectories` rather than `sandbox.filesystem.allowWrite`: the
 # former grants the sandbox write *and* makes the path a working directory, which is what
 # also satisfies the auto-mode classifier's "no writes outside the working directories"
 # rule. allowWrite alone leaves that rule biting, so it is named as the narrower
 # alternative and never as the remedy.
+#
+# **Both halves, always.** The grant covers the directory's *interior*; creating the
+# directory is a write to its parent, which nothing grants — measured:
+# `mkdir: /Users/mk/.mkit: Operation not permitted`. A sentence naming only the grant
+# produced a configuration that looked right and changed nothing, which is the exact
+# failure ADR 0002 was written about, one level down. The `mkdir` half is human-run by
+# construction: no sandboxed session can perform it, so it is spelled with the `!`
+# prefix that runs a command in the user's own shell.
 mkit_user_dir_remedy() {
-	printf 'add %s to permissions.additionalDirectories (sandbox.filesystem.allowWrite grants the sandbox only)\n' \
-		"$(mkit_user_dir)"
+	printf 'run `! mkdir -p %s` (a sandboxed session cannot create it), then add %s to permissions.additionalDirectories (sandbox.filesystem.allowWrite grants the sandbox only)\n' \
+		"$(mkit_user_dir)" "$(mkit_user_dir)"
+}
+
+# Absolute path of this repo's committed config file, or failure outside a work tree.
+#
+# `<toplevel>/.mkit/config.toml` — the same directory as the scratch, and the one file in
+# it that is committed (ADR 0001, amended). Resolving it is all this does; `mkit init`
+# writes it and `mkit repo profile` reads it.
+mkit_config_path() {
+	local toplevel
+	toplevel="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
+	[ -n "$toplevel" ] || return 1
+	printf '%s/.mkit/config.toml\n' "$toplevel"
 }
 
 # A temp file that dies with the command, always with an explicit template.
@@ -189,22 +210,61 @@ mkit_dir_or_die() {
 	printf '%s/.mkit\n' "$toplevel"
 }
 
-# Is `.mkit/` ignored in this repo? A plain question with a plain answer, asked of git
-# rather than of a file's contents so a `.gitignore` line, a global excludes file and the
-# common-dir exclude all count.
+# Is mkit's scratch ignored in this repo? A plain question with a plain answer, asked of
+# git rather than of a file's contents so a `.gitignore` line, a global excludes file and
+# the common-dir exclude all count.
 #
-# The trailing slash is load-bearing. `.mkit/` is the natural rule to write and it is a
-# directory-only pattern, so `check-ignore .mkit` answers "no" whenever the directory does
-# not exist yet — which is every first call, the one that has to get this right. Asking
-# about `.mkit/` matches a directory-only pattern and a plain `.mkit` alike.
+# Asked about `.mkit/gate.jsonl` — a real scratch path — rather than about `.mkit/`.
+#
+# The old subject still works, and the reason is obscure enough to be worth not relying
+# on: `check-ignore .mkit/`, *with the trailing slash*, is matched by `.mkit/*`, because
+# git reads the trailing slash as naming something inside the directory. Drop the slash
+# and it stops matching. That subtlety was already load-bearing once here — a
+# directory-only pattern needs the slash to match before the directory exists — and
+# depending on it twice, for two different reasons, is a trap for whoever edits this next.
+#
+# A concrete path inside the scratch depends on none of it. It answers correctly before
+# anything exists on disk (`check-ignore` is pattern matching, not a stat), which is the
+# first call, the one that has to be right; and every rule shape matches it — the legacy
+# directory-only `.mkit/` and the current `.mkit/*` pair alike.
+MKIT_SCRATCH_PROBE='.mkit/gate.jsonl'
+
 mkit_run_ignored() {
 	local toplevel
 	toplevel="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
-	git -C "$toplevel" check-ignore -q .mkit/ 2>/dev/null
+	git -C "$toplevel" check-ignore -q "$MKIT_SCRATCH_PROBE" 2>/dev/null
 }
 
-# Make `.mkit/` ignored, once, and report whether it now is. Best effort: returns 0 when
-# the directory is ignored on exit, 1 otherwise, and never fails a caller.
+# The other half of the same question, and the one a legacy repo gets wrong: can the
+# committed config file actually be committed here?
+#
+# A repo set up before the config existed carries a directory-only `.mkit/` rule, under
+# which `git add .mkit/config.toml` is refused and a fresh clone inherits nothing — so
+# `mkit init` would write a file that silently never travels. Returns 0 when the path is
+# committable, 1 when a rule is shadowing it.
+mkit_config_committable() {
+	local toplevel
+	toplevel="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
+	! git -C "$toplevel" check-ignore -q .mkit/config.toml 2>/dev/null
+}
+
+# The one remedy sentence for a shadowed config path. One producer, same rule as
+# `mkit_user_dir_remedy`.
+#
+# Which file to name is not cosmetic: git reads `.gitignore` at a *higher* precedence than
+# the common dir's `info/exclude`, so a negation written into the exclude cannot lift a
+# `.mkit/` line that lives in a committed `.gitignore`. Where git reports the source, name
+# it; that is the only file where editing the rule does anything.
+mkit_config_ignored_remedy() {
+	local toplevel src
+	toplevel="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
+	src="$(git -C "$toplevel" check-ignore -v .mkit/config.toml 2>/dev/null | cut -d: -f1)"
+	printf 'replace the `.mkit/` rule in %s with `.mkit/*` followed by `!.mkit/config.toml` — git cannot re-include a file whose parent directory is excluded\n' \
+		"${src:-.gitignore}"
+}
+
+# Make mkit's scratch ignored, once, and report whether it now is. Best effort: returns 0
+# when the scratch is ignored on exit, 1 otherwise, and never fails a caller.
 #
 # Three things break while it is unignored, all measured in a throwaway repo with a linked
 # worktree, and none of them cosmetic:
@@ -219,10 +279,15 @@ mkit_run_ignored() {
 #     --exclude-standard`, so an unignored scratch directory enters the fingerprint and
 #     then changes while the gate runs — a run invalidating its own cache entry.
 #
+# Two lines, not one, and the pair is the unit: `.mkit/*` excludes the scratch while
+# leaving `.mkit/` itself includable, and `!.mkit/config.toml` re-includes the one
+# committed file. Writing only the first would hide repo config from `git add`; writing
+# the old directory-only `.mkit/` would make the negation impossible to add later.
+#
 # Written into the **common dir's** `info/exclude`: shared by every worktree, uncommitted,
 # no diff noise, and writable — only `.git/config` and `.git/hooks` are protected inside a
-# working directory. A committed `.gitignore` line is the variant for repos whose
-# teammates run mkit from fresh clones; either satisfies `mkit_run_ignored`.
+# working directory. A committed `.gitignore` carrying the same pair is the variant for
+# repos whose teammates run mkit from fresh clones, and is what this repo itself ships.
 #
 # It cannot be written from a worktree-isolated session (the file lives in the main
 # checkout), which is why the answer is reported as a starting fact rather than assumed.
@@ -237,7 +302,9 @@ mkit_ensure_run_ignored() {
 	# else's exclude file is indistinguishable from cruft.
 	{
 		printf '\n# mkit scratch root (run directories + gate.jsonl). Added by mkit.\n'
-		printf '.mkit/\n'
+		printf '# config.toml is repo config and stays committable — the pair is the rule.\n'
+		printf '.mkit/*\n'
+		printf '!.mkit/config.toml\n'
 	} >>"$exclude" 2>/dev/null || return 1
 	mkit_run_ignored
 }

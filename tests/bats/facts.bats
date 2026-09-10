@@ -132,7 +132,7 @@ field() { printf '%s\n' "$output" | tr ' ' '\n' | sed -n "s/^$1=//p" | head -1; 
 
 @test "run_ignored=yes once the common-dir exclude carries the rule" {
 	mkdir -p "$(git rev-parse --git-common-dir)/info"
-	printf '.mkit/\n' >>"$(git rev-parse --git-common-dir)/info/exclude"
+	printf '.mkit/*\n!.mkit/config.toml\n' >>"$(git rev-parse --git-common-dir)/info/exclude"
 	run "$SCRIPTS/facts.sh" commit --no-run
 	[ "$status" -eq 0 ]
 	[ "$(field run_ignored)" = yes ]
@@ -145,6 +145,50 @@ field() { printf '%s\n' "$output" | tr ' ' '\n' | sed -n "s/^$1=//p" | head -1; 
 	[ "$(field run_ignored)" = yes ]
 	run git status --porcelain
 	[ -z "$output" ]
+}
+
+# --- the committed config -----------------------------------------------------------
+#
+# `config_state=absent` is a normal state and never a note: config is an input, never a
+# permission (ADR 0001 decision 3). The state worth a sentence is `shadowed`.
+
+@test "config= names the path, and absent is silent" {
+	run "$SCRIPTS/facts.sh" commit --no-run
+	[ "$status" -eq 0 ]
+	[ "$(field config)" = "$MKIT_TMP/.mkit/config.toml" ]
+	[ "$(field config_state)" = absent ]
+	[[ "$output" != *"config_state=shadowed"* ]]
+}
+
+@test "config_state=untracked once the file exists but is not committed" {
+	mkdir -p .mkit
+	printf 'version = 1\n' >.mkit/config.toml
+	run "$SCRIPTS/facts.sh" commit --no-run
+	[ "$status" -eq 0 ]
+	[ "$(field config_state)" = untracked ]
+}
+
+@test "config_state=tracked once it is committed" {
+	mkdir -p .mkit
+	printf 'version = 1\n' >.mkit/config.toml
+	git add -f .mkit/config.toml
+	git commit -q -m 'mkit config'
+	run "$SCRIPTS/facts.sh" commit --no-run
+	[ "$status" -eq 0 ]
+	[ "$(field config_state)" = tracked ]
+}
+
+# A repo carrying the legacy directory-only rule: `mkit init` would write a file that
+# never reaches a fresh clone, so it is named at the first call with a remedy.
+@test "config_state=shadowed under a legacy directory-only rule, with a remedy" {
+	printf '.mkit/\n' >.gitignore
+	run "$SCRIPTS/facts.sh" commit --no-run
+	[ "$status" -eq 0 ]
+	[ "$(field config_state)" = shadowed ]
+	[[ "$output" == *"notes:"* ]]
+	[[ "$output" == *"config_state=shadowed"* ]]
+	[[ "$output" == *'!.mkit/config.toml'* ]]
+	[[ "$output" == *".gitignore"* ]]
 }
 
 @test "user_dir is reported, and its writability with it" {
@@ -198,7 +242,7 @@ facts_only() { printf '%s\n' "$output" | sed '/^notes:/,$d'; }
 	printf 'step output\n' >.mkit/review-x/step.log
 	printf '{"step":"test"}\n' >.mkit/gate.jsonl
 	# Nothing ignores it here, or the test proves nothing: no .gitignore, no exclude entry.
-	run git check-ignore -q .mkit/
+	run git check-ignore -q .mkit/gate.jsonl
 	[ "$status" -ne 0 ]
 	[ -n "$(git status --porcelain)" ]
 

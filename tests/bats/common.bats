@@ -332,6 +332,18 @@ fp() { bash -c "$(src)mkit_tree_fingerprint"; }
 	[[ "$output" != *".claude/mkit"* ]]
 }
 
+# The grant covers the directory's interior, so it cannot create the directory —
+# `mkdir` there is a write to the parent, which nothing grants. A sentence naming only
+# the grant produced a configuration that looked right and changed nothing (ADR 0002,
+# amended), so both halves are asserted rather than left to review.
+@test "the remedy names creating the directory as well as granting it" {
+	run bash -c "$(src)mkit_user_dir_remedy"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"mkdir -p $MKIT_HOME"* ]]
+	# Human-run, because no sandboxed session can perform it.
+	[[ "$output" == *"! mkdir"* ]]
+}
+
 @test "mkit_dir_or_die resolves inside the toplevel, never the git dir" {
 	run bash -c "$(src)mkit_dir_or_die"
 	[ "$status" -eq 0 ]
@@ -393,39 +405,123 @@ fp() { bash -c "$(src)mkit_tree_fingerprint"; }
 }
 
 # --- the ignore rule --------------------------------------------------------------------
+#
+# The rule is a pair, not a line: `.mkit/*` excludes the scratch while leaving `.mkit/`
+# itself includable, and `!.mkit/config.toml` re-includes the one committed file. Git
+# cannot re-include a file whose parent directory is excluded, so the old directory-only
+# `.mkit/` made repo config impossible (ADR 0001's config-path amendment).
 
 @test "mkit_run_ignored answers no before the rule exists, and yes after" {
 	run bash -c "$(src)mkit_run_ignored"
 	[ "$status" -ne 0 ]
 	mkdir -p .git/info
+	printf '.mkit/*\n' >>.git/info/exclude
+	run bash -c "$(src)mkit_run_ignored"
+	[ "$status" -eq 0 ]
+}
+
+# The probe is a concrete scratch path rather than the directory, and this pins why
+# the directory form is not relied on. `.mkit/` *with* the trailing slash is matched by
+# `.mkit/*` — git reads the slash as naming something inside — while the bare `.mkit`
+# is not. The distinction is invisible at a glance and already load-bearing here for a
+# second, unrelated reason, so the probe avoids it entirely.
+@test "the directory probe depends on a trailing-slash subtlety the scratch probe avoids" {
+	mkdir -p .git/info
+	printf '.mkit/*\n!.mkit/config.toml\n' >>.git/info/exclude
+
+	run git check-ignore -q .mkit/
+	[ "$status" -eq 0 ]
+	run git check-ignore -q .mkit
+	[ "$status" -ne 0 ]
+
+	# What mkit_run_ignored actually asks, and it turns on none of that.
+	run git check-ignore -q .mkit/gate.jsonl
+	[ "$status" -eq 0 ]
+	run bash -c "$(src)mkit_run_ignored"
+	[ "$status" -eq 0 ]
+}
+
+@test "mkit_run_ignored still accepts a legacy directory-only rule" {
+	mkdir -p .git/info
 	printf '.mkit/\n' >>.git/info/exclude
 	run bash -c "$(src)mkit_run_ignored"
 	[ "$status" -eq 0 ]
 }
 
-@test "mkit_run_ignored sees a directory-only rule before the directory exists" {
+@test "mkit_run_ignored sees the rule before the directory exists" {
 	mkdir -p .git/info
-	printf '.mkit/\n' >>.git/info/exclude
+	printf '.mkit/*\n' >>.git/info/exclude
 	[ ! -d .mkit ]
 	run bash -c "$(src)mkit_run_ignored"
 	[ "$status" -eq 0 ]
 }
 
-@test "mkit_run_ignored accepts a committed .gitignore line too" {
-	printf '.mkit/\n' >.gitignore
+@test "mkit_run_ignored accepts a committed .gitignore rule too" {
+	printf '.mkit/*\n!.mkit/config.toml\n' >.gitignore
 	git add .gitignore
 	git commit -q -m 'ignore mkit scratch'
 	run bash -c "$(src)mkit_run_ignored"
 	[ "$status" -eq 0 ]
 }
 
-@test "mkit_ensure_run_ignored writes the common-dir exclude and is idempotent" {
+@test "mkit_ensure_run_ignored writes both lines and is idempotent" {
 	run bash -c "$(src)mkit_ensure_run_ignored"
 	[ "$status" -eq 0 ]
-	[ "$(grep -cxF '.mkit/' .git/info/exclude)" -eq 1 ]
+	[ "$(grep -cxF '.mkit/*' .git/info/exclude)" -eq 1 ]
+	[ "$(grep -cxF '!.mkit/config.toml' .git/info/exclude)" -eq 1 ]
 	run bash -c "$(src)mkit_ensure_run_ignored"
 	[ "$status" -eq 0 ]
-	[ "$(grep -cxF '.mkit/' .git/info/exclude)" -eq 1 ]
+	[ "$(grep -cxF '.mkit/*' .git/info/exclude)" -eq 1 ]
+	[ "$(grep -cxF '!.mkit/config.toml' .git/info/exclude)" -eq 1 ]
+}
+
+# The pair's whole purpose: scratch invisible, config committable. Asserted against git
+# itself rather than against the file's contents, because what matters is the effect.
+@test "the rule hides the scratch and leaves the config committable" {
+	bash -c "$(src)mkit_ensure_run_ignored"
+	mkdir -p .mkit/review-x
+	printf 'log\n' >.mkit/review-x/step.log
+	printf '{}\n' >.mkit/gate.jsonl
+	[ -z "$(git status --porcelain)" ]
+
+	printf 'version = 1\n' >.mkit/config.toml
+	run bash -c "$(src)mkit_config_committable"
+	[ "$status" -eq 0 ]
+	run git add .mkit/config.toml
+	[ "$status" -eq 0 ]
+	[[ "$(git status --porcelain)" == *".mkit/config.toml"* ]]
+}
+
+# A repo set up before the config existed. `mkit init` there would write a file that
+# never reaches a fresh clone, so the state is detected rather than discovered later.
+@test "a legacy directory-only rule shadows the config, and the remedy names the file" {
+	printf '.mkit/\n' >.gitignore
+	run bash -c "$(src)mkit_run_ignored"
+	[ "$status" -eq 0 ]
+	run bash -c "$(src)mkit_config_committable"
+	[ "$status" -ne 0 ]
+
+	run bash -c "$(src)mkit_config_ignored_remedy"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *".gitignore"* ]]
+	[[ "$output" == *'!.mkit/config.toml'* ]]
+}
+
+# `.gitignore` outranks the common dir's `info/exclude`, so a negation written into the
+# exclude cannot lift a rule that lives in a committed `.gitignore`. Measured, and the
+# reason the remedy names whichever file git reported rather than a fixed one.
+@test "an exclude-file negation cannot lift a .gitignore rule" {
+	printf '.mkit/\n' >.gitignore
+	mkdir -p .git/info
+	printf '!.mkit/config.toml\n' >>.git/info/exclude
+	run bash -c "$(src)mkit_config_committable"
+	[ "$status" -ne 0 ]
+}
+
+@test "mkit_config_path resolves inside the toplevel" {
+	run bash -c "$(src)mkit_config_path"
+	[ "$status" -eq 0 ]
+	[ "$output" = "$MKIT_TMP/.mkit/config.toml" ]
 }
 
 @test "a linked worktree inherits the rule from the common dir" {
