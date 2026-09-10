@@ -221,14 +221,14 @@ func TestIsZero(t *testing.T) {
 // The remedy must name the file git reported, because `.gitignore` outranks the
 // common dir's `info/exclude` — editing the wrong one changes nothing.
 func TestShadowedRemedyNamesTheSource(t *testing.T) {
-	got := ShadowedRemedy(".git/info/exclude", ".mkit/")
+	got := ShadowedRemedy(Status{IgnoreSource: ".git/info/exclude", IgnorePattern: ".mkit/", ParentExcluded: true})
 	if !strings.Contains(got, ".git/info/exclude") {
 		t.Errorf("remedy does not name the source: %s", got)
 	}
 	if !strings.Contains(got, "!.mkit/config.toml") {
 		t.Errorf("remedy does not name the negation: %s", got)
 	}
-	if !strings.Contains(ShadowedRemedy("", ""), ".gitignore") {
+	if !strings.Contains(ShadowedRemedy(Status{}), ".gitignore") {
 		t.Error("want a sensible default when git named no source")
 	}
 }
@@ -238,12 +238,12 @@ func TestShadowedRemedyNamesTheSource(t *testing.T) {
 // must be rewritten (git never descends into an excluded directory); anything
 // else is lifted by a negation after it.
 func TestShadowedRemedyDependsOnTheRule(t *testing.T) {
-	dir := ShadowedRemedy(".gitignore", ".mkit/")
+	dir := ShadowedRemedy(Status{IgnoreSource: ".gitignore", IgnorePattern: ".mkit/", ParentExcluded: true})
 	if !strings.Contains(dir, "replace") || !strings.Contains(dir, ".mkit/*") {
 		t.Errorf("directory rule should be rewritten: %s", dir)
 	}
 
-	other := ShadowedRemedy(".gitignore", "*.toml")
+	other := ShadowedRemedy(Status{IgnoreSource: ".gitignore", IgnorePattern: "*.toml"})
 	if !strings.Contains(other, "*.toml") {
 		t.Errorf("remedy does not name the rule that actually matched: %s", other)
 	}
@@ -252,5 +252,55 @@ func TestShadowedRemedyDependsOnTheRule(t *testing.T) {
 	}
 	if !strings.Contains(other, "!.mkit/config.toml") {
 		t.Errorf("remedy does not name the negation: %s", other)
+	}
+}
+
+// The remedy is only correct if ParentExcluded matches what git will actually do,
+// so this checks the prediction against the ground truth: append the negation and
+// ask git whether the file came back. A wrong answer here is a remedy the reader
+// applies and which changes nothing — the exact failure ADR 0002 was written about.
+func TestParentExcludedMatchesGit(t *testing.T) {
+	// Every shape that reaches this code: directory-only rules, wildcards that
+	// swallow the parent, and patterns that catch only the file.
+	rules := []string{
+		".mkit/", ".mkit/*", ".m*", "*.toml", "*", ".mkit*",
+		"**/.mkit/", ".mki?/", "/.mkit", "config.toml", ".mkit/config.toml",
+	}
+	for _, rule := range rules {
+		for _, dirExists := range []bool{false, true} {
+			name := rule
+			if dirExists {
+				name += " (.mkit present)"
+			}
+			t.Run(name, func(t *testing.T) {
+				dir := t.TempDir()
+				git(t, dir, "init", "-q", ".")
+				if dirExists {
+					if err := os.MkdirAll(filepath.Join(dir, ".mkit"), 0o755); err != nil {
+						t.Fatal(err)
+					}
+				}
+				repo, err := gitrepo.Open(dir)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				writeFile(t, dir, ".gitignore", rule+"\n")
+				st := Stat(repo)
+				if st.State != StateShadowed {
+					t.Skipf("rule %q does not shadow the config", rule)
+				}
+
+				// Ground truth: does a negation after the rule bring it back?
+				writeFile(t, dir, ".gitignore", rule+"\n!"+RelPath+"\n")
+				stillIgnored, _, _ := repo.IgnoreRule(RelPath)
+
+				if st.ParentExcluded != stillIgnored {
+					t.Errorf("rule %q: ParentExcluded=%v, but a negation %s",
+						rule, st.ParentExcluded,
+						map[bool]string{true: "does not work", false: "works"}[stillIgnored])
+				}
+			})
+		}
 	}
 }

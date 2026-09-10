@@ -175,7 +175,11 @@ func buildGate(repo *gitrepo.Repo, cfg *repoconfig.Config, root *pluginroot.Root
 		// `full=none` from a degraded run is not the same answer as `full=none`
 		// from a repo with no gate. gate-detect.sh exits 0 either way, so without
 		// this the profile reports "no gate" when the truth is "not looked".
-		if len(g.Steps) == 0 && g.Cause == "" {
+		//
+		// Independent of whether steps were found: a polyglot repo can yield a Go
+		// sequence while the Node half went uninspected, and an incomplete gate
+		// presented as a complete one is the worse of the two failures.
+		if g.Cause == "" {
 			switch scriptsState {
 			case "no-jq":
 				g.Cause = "gate discovery could not read package.json — jq is missing, " +

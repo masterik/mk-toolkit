@@ -62,7 +62,7 @@ func newInitCmd() *cobra.Command {
 				return emitInit(out, opts, initResult{
 					Path: st.Path, State: "shadowed",
 					Detail: "an ignore rule covers this path, so the config would never reach a fresh clone",
-					Remedy: repoconfig.ShadowedRemedy(st.IgnoreSource, st.IgnorePattern),
+					Remedy: repoconfig.ShadowedRemedy(st),
 				})
 			}
 

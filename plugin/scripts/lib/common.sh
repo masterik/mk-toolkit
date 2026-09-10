@@ -281,7 +281,7 @@ mkit_config_committable() {
 # `.mkit/` line that lives in a committed `.gitignore`. Where git reports the source, name
 # it; that is the only file where editing the rule does anything.
 mkit_config_ignored_remedy() {
-	local toplevel fields src pat
+	local toplevel fields src pat parent
 	toplevel="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
 	# -z, so each field is read whole. The default format is
 	# `<source>:<line>:<pattern>\t<path>`, and `cut -d:` truncates any source path
@@ -293,24 +293,36 @@ mkit_config_ignored_remedy() {
 	pat="$(printf '%s\n' "$fields" | sed -n 3p)"
 	: "${src:=.gitignore}"
 
-	# Which fix applies depends on which rule matched. A rule excluding the parent
-	# directory cannot be undone by a negation at all — git never descends into an
-	# excluded directory — so that rule has to become `.mkit/*`. Any other pattern is
-	# lifted by a negation after it, and telling that reader to replace a `.mkit/`
-	# rule sends them looking for a line their file does not contain.
-	case "$pat" in
-	'' )
+	# Which fix applies depends on whether the rule excludes the `.mkit` *directory*
+	# or only the file. A directory cannot be undone by a negation at all — git never
+	# descends into an excluded one — so that rule has to become `.mkit/*`; anything
+	# else is lifted by a negation after it, and telling that reader to go replace a
+	# `.mkit/` rule sends them looking for a line their file does not contain.
+	#
+	# Two signals, because neither is complete alone (measured over every rule shape,
+	# see the Go counterpart's TestParentExcludedMatchesGit):
+	#
+	#   - a directory-form pattern, trailing `/`, matches only directories — so if it
+	#     decided a *file* path it matched a directory component, and `.mkit` is the
+	#     only one. This is the case the probe below misses before the directory
+	#     exists, which on a fresh clone it does not: `.mkit/`, `**/.mkit/`, `.mki?/`.
+	#   - asking git about the bare `.mkit` catches every non-directory pattern that
+	#     swallows the parent: `.m*`, `.mkit*`, `/.mkit`, a bare `*`.
+	if [ -z "$pat" ]; then
 		printf 'an ignore rule in %s excludes `.mkit/config.toml`; if it is a `.mkit/` rule, replace it with `.mkit/*` followed by `!.mkit/config.toml` — git cannot re-include a file whose parent directory is excluded\n' "$src"
-		;;
-	.mkit | .mkit/ | /.mkit | /.mkit/ )
+		return 0
+	fi
+	case "$pat" in
+	*/) parent=yes ;;
+	*) if git -C "$toplevel" check-ignore -q -- .mkit 2>/dev/null; then parent=yes; else parent=no; fi ;;
+	esac
+	if [ "$parent" = yes ]; then
 		printf 'replace the `%s` rule in %s with `.mkit/*` followed by `!.mkit/config.toml` — git cannot re-include a file whose parent directory is excluded\n' \
 			"$pat" "$src"
-		;;
-	* )
+	else
 		printf 'the `%s` rule in %s excludes it; add `!.mkit/config.toml` after that line in the same file\n' \
 			"$pat" "$src"
-		;;
-	esac
+	fi
 }
 
 # Make mkit's scratch ignored, once, and report whether it now is. Best effort: returns 0

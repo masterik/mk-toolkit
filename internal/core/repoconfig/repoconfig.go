@@ -107,6 +107,10 @@ type Status struct {
 	// IgnorePattern is the rule inside that file which decided the path. The
 	// remedy differs by rule, so reporting the file alone is not enough.
 	IgnorePattern string `json:"ignore_pattern,omitempty"`
+	// ParentExcluded reports that the rule excludes `.mkit` itself rather than
+	// the file. Only then must the rule be rewritten; otherwise a negation after
+	// it is enough.
+	ParentExcluded bool `json:"parent_excluded,omitempty"`
 }
 
 // Stat reports the config file's standing. Tracked is checked before ignored,
@@ -121,6 +125,7 @@ func Stat(repo *gitrepo.Repo) Status {
 			st.State = StateShadowed
 			st.IgnoreSource = source
 			st.IgnorePattern = pattern
+			st.ParentExcluded = parentExcluded(repo, pattern)
 			return st
 		}
 		if _, err := os.Stat(st.Path); err == nil {
@@ -138,7 +143,8 @@ func Stat(repo *gitrepo.Repo) Status {
 //
 // Naming the file git actually reported is the whole point: editing any other one
 // has no effect.
-func ShadowedRemedy(source, pattern string) string {
+func ShadowedRemedy(st Status) string {
+	source := st.IgnoreSource
 	if source == "" {
 		source = ".gitignore"
 	}
@@ -146,27 +152,47 @@ func ShadowedRemedy(source, pattern string) string {
 	// pattern that excludes the *parent directory* cannot be undone by a negation
 	// at all — git never descends into an excluded directory, so the rule itself
 	// has to become `.mkit/*`. Any other pattern (a stray `*.toml`, say) is lifted
-	// by a negation placed after it, and telling that user to go replace a
+	// by a negation placed after it, and telling that reader to go replace a
 	// `.mkit/` rule sends them looking for a line that is not there.
-	if pattern == "" {
+	if st.IgnorePattern == "" {
 		return fmt.Sprintf("an ignore rule in %s excludes `%s`; if it is a `.mkit/` rule, "+
 			"replace it with `.mkit/*` followed by `!%s` — git cannot re-include a file "+
 			"whose parent directory is excluded", source, RelPath, RelPath)
 	}
-	if excludesParent(pattern) {
+	if st.ParentExcluded {
 		return fmt.Sprintf("replace the `%s` rule in %s with `.mkit/*` followed by `!%s` — "+
 			"git cannot re-include a file whose parent directory is excluded",
-			pattern, source, RelPath)
+			st.IgnorePattern, source, RelPath)
 	}
 	return fmt.Sprintf("the `%s` rule in %s excludes it; add `!%s` after that line in the "+
-		"same file", pattern, source, RelPath)
+		"same file", st.IgnorePattern, source, RelPath)
 }
 
-// excludesParent reports whether a pattern excludes `.mkit` itself rather than the
-// file. Only these need the rule rewritten instead of negated.
-func excludesParent(pattern string) bool {
-	p := strings.TrimSuffix(strings.TrimPrefix(pattern, "/"), "/")
-	return p == ".mkit"
+// parentExcluded reports whether the rule that shadowed the config excludes the
+// `.mkit` *directory* rather than the file inside it. Only then is a negation
+// useless and the rule itself has to change.
+//
+// Two signals, because neither is complete on its own and the whole point is a
+// remedy that works:
+//
+//   - **Ask git about the bare `.mkit`.** Exact wherever git can tell it is a
+//     directory, and it catches every non-directory pattern that swallows the
+//     parent — `.m*`, `.mkit*`, `/.mkit`, a bare `*`. It cannot answer for a
+//     directory-only rule before the directory exists, which on a fresh clone it
+//     does not.
+//   - **A directory-form pattern (trailing `/`).** Such a pattern matches only
+//     directories, so if it decided the fate of a *file* path it must have matched
+//     a directory component of it — and `.mkit` is the only one. This is the case
+//     the probe misses: `.mkit/`, `**/.mkit/`, `.mki?/`.
+//
+// Measured across all eleven rule shapes in TestParentExcludedMatchesGit, which
+// checks the prediction against whether a negation actually re-includes the file.
+func parentExcluded(repo *gitrepo.Repo, pattern string) bool {
+	if strings.HasSuffix(pattern, "/") {
+		return true
+	}
+	ignored, _, _ := repo.IgnoreRule(".mkit")
+	return ignored
 }
 
 // Load reads the config. A missing file is not an error: it returns a zero Config

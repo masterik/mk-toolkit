@@ -292,7 +292,7 @@ func (r *Report) repo(repo *gitrepo.Repo) {
 		r.add(Check{Group: "repo", Name: "config", Status: Fail,
 			Detail: st.Path + " is ignored here, so `mkit init` would write a file that " +
 				"never reaches a fresh clone — the one property it exists for",
-			Remedy: repoconfig.ShadowedRemedy(st.IgnoreSource, st.IgnorePattern)})
+			Remedy: repoconfig.ShadowedRemedy(st)})
 	default:
 		// Absent is a normal state, not a finding: config is an input, never a
 		// permission (ADR 0001 decision 3). Reported so the path is visible.

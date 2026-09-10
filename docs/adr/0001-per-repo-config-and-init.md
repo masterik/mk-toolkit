@@ -55,6 +55,13 @@ Repo config lives in the working tree, committed, so a colleague and a fresh clo
 scope keeps exactly two things, both of which are about silencing rather than behaviour: the hook
 tombstone and the record of which one-time prerequisite messages have been said.
 
+> **Amended 2026-09-10 — user scope is empty, and the principle is unchanged.** Both files
+> existed only to silence the `SessionStart` hook, which was removed in 0.15.0 along with
+> `install.sh`; `~/.mkit/` holds nothing today. It keeps its definition because it is where the
+> binary's user-scoped state will land, and because `facts.sh` still probes it so an unwritable
+> one is a starting fact rather than a later surprise. The **path** of the repo config is settled
+> separately — see [Amendment: the config path](#amendment-the-config-path).
+
 **2. `mkit init` exists, and it is the only command that writes repo config.** This reverses
 "there is no setup step" for the repo, and only for the repo. It stays true of the *machine*:
 nothing is installed, no shell rc is edited, no global state is seeded.

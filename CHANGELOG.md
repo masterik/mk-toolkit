@@ -32,6 +32,11 @@ M7: the configuration surface, and the diagnostic surface 0.15.0 removed.
   stays 0 with findings. Where a sentence already has a shell producer — the `~/.mkit` probe and
   its remedy — it is read **from `lib/common.sh`** rather than re-worded; the checks with no shell
   counterpart word their own.
+  - **One exception, deliberate:** the shadowed-config remedy exists in both languages
+    (`repoconfig.ShadowedRemedy` and `mkit_config_ignored_remedy`), worded to match. `mkit init`
+    must refuse a shadowed path *before* it has located a payload, and a remedy that is
+    unavailable exactly when the payload is missing is not a remedy. Both are covered by tests
+    over the same rule shapes so the two cannot drift apart silently.
   - It does **not** restore everything the hook did: it cannot run unprompted at session start and
     cannot report that `mkit` itself is absent. Both remain accepted losses.
   - The allowlist check distinguishes `permissions.additionalDirectories` from
