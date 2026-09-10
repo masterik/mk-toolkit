@@ -27,13 +27,13 @@ They ship with the plugin — no `PATH`, no build, no install — and they exist
 more than for tokens: prose re-executed every run kept getting one invariant of three wrong. **Judgement stays in Markdown; a mechanical invariant
 belongs in a script.** Prerequisites: [`prerequisites.md`](prerequisites.md).
 
-One script is not called by a skill at all — the `SessionStart` hook
-(`scripts/hooks/session-bootstrap.sh`), registered by `hooks/hooks.json` at the plugin root. It
-names, once per tool, any prerequisite the scripts need and this machine lacks: a gap that
-otherwise surfaces as a thinner fact block or a `gate_cache=no-jq` annotation, far from its
-cause. It installs nothing, and produces zero bytes on every session after it has said its
-piece. `install.sh --uninstall` silences it for good, leaving a tombstone — absent files carry
-no provenance, so a dismissal that is only an absence gets re-asserted next session.
+**Every script in the payload is now called by a skill.** A `SessionStart` hook once named a
+missing prerequisite before any skill ran; it and `install.sh` were removed in 0.15.0, because
+that report belongs to the binary (`mkit doctor`, M7) rather than to a second implementation in
+shell. The cost is real and accepted: a missing tool now surfaces as a thinner fact block or a
+`gate_cache=no-hash` annotation, far from its cause, until a human runs `doctor`. A binary
+cannot report its own absence and cannot speak at session start, so this is not a like-for-like
+replacement — it is a deliberate trade of unprompted coverage for one implementation.
 
 **Claude-only for now.** Other agents (Codex, opencode, …) are a later concern — the skills
 are plain Markdown, so support for another agent is a thin packaging step, not a rewrite.
@@ -166,8 +166,7 @@ the five skills link into via `../_shared/references/…`:
 ## Architecture
 ```
  Claude Code
-   │   loads plugin skills (via .claude-plugin/plugin.json)
-   │   loads plugin hooks (via hooks/hooks.json — auto-discovered)
+   │   loads plugin skills (via .claude-plugin/plugin.json) — no hooks, deliberately
    ▼
  brainstorm · spec · implement · commit · review · pr · finish   ← SKILL.md (when & how)
  cleanup                                    (the seven steps, plus repo-wide gardening)
@@ -184,9 +183,6 @@ the five skills link into via `../_shared/references/…`:
    gate-run.sh             run a gate step: log it, bound it, stop at the first failure
    findings.mjs            reconcile · group · report over a review's findings (JSONL)
    branch-scan.sh          classify every local branch/worktree for `cleanup` · one gh call
-   +
- scripts/hooks/            the one thing no skill calls
-   session-bootstrap.sh    SessionStart: name a missing prerequisite once, then stay silent
    +
  mkit (Go)                 the same mechanical steps, being ported off shell one at a time
    --json everywhere       the skill-facing contract · no TUI off a TTY · flags reach everything
@@ -258,12 +254,13 @@ every worktree in the repo rather than just the current one.
 mkit facilitates the workflow at three levels, and they are deliberately different in kind. The
 rule across all three: **mkit computes and reports; the human or the agent decides.**
 
-**The machine** — is the toolchain here at all. The `SessionStart` hook names a missing tool once
-and then goes quiet forever, and `facts.sh` reports the prerequisite-adjacent facts a skill needs
-at its first call. Neither installs anything, and neither is a place to *ask*: a human-run
-diagnostic is a separate surface, which `mkit doctor` becomes in M7
-([ADR 0003](adr/0003-two-distribution-channels.md) withdrew M3 and deleted `install.sh`, so
-between now and M7 there is deliberately no loud version of this).
+**The machine** — is the toolchain here at all. `facts.sh` reports the prerequisite-adjacent
+facts a skill needs at its first call, and that is now the whole of it: the `SessionStart` hook
+that named a missing tool once, and `install.sh --status`, are both gone. Neither installed
+anything, and neither was a place to *ask* — a human-run diagnostic is a separate surface, which
+`mkit doctor` becomes in M7. Between now and then there is deliberately no version of this at
+all, loud or quiet ([ADR 0003](adr/0003-two-distribution-channels.md) withdrew M3 and made
+installation manual).
 
 **The repo** — what this project can't tell you by inspection. `mkit repo profile --json` reports
 the gate commands, the spec store, commit scopes, reviewers and merge style, marking each as
@@ -303,10 +300,6 @@ internal/
 plugin/                 # the payload, shipped from the GitHub marketplace (never the cask)
   .claude-plugin/
     plugin.json          # plugin manifest (name, skills discovered from skills/)
-  hooks/
-    hooks.json           # SessionStart registration, and nothing else — plugin root, not
-                         #   .claude-plugin/; auto-discovered, so the manifest carries no
-                         #   `hooks` key
   skills/
     commit/SKILL.md
     pr/SKILL.md
@@ -316,11 +309,9 @@ plugin/                 # the payload, shipped from the GitHub marketplace (neve
     _shared/             # shared references (README + references/*.md) — no SKILL.md
   scripts/
     lib/common.sh        # sourced helpers: plugin root, refs path, mkit dir, rg-or-grep, wt
-                         #   binary, the prereq table, one-time state, jq-free JSON escape
-    hooks/session-bootstrap.sh  # the SessionStart hook — names a missing prerequisite, once
+                         #   binary, tree fingerprint, gate ledger path
     run-open.sh  facts.sh  gate-detect.sh  gate-run.sh  findings.mjs  branch-scan.sh
-  install.sh             # --status / --uninstall. Installs nothing: there is no setup step.
-                         #   --uninstall is the only way to silence the hook for good.
+                         # no hooks/ and no install.sh — see "no hook, and no setup step"
 docs/
   concept.md             # this file
   backlog.md             # ordered work list

@@ -96,18 +96,19 @@ Neither of these is a port, and neither waits on a milestone. Both follow from
 [ADR 0002](adr/0002-state-locations-under-a-sandbox.md) landing and
 [ADR 0003](adr/0003-two-distribution-channels.md) being taken.
 
-- **Delete `plugin/install.sh`.** Its own commit, because the name is load-bearing in more places
-  than the file: `facts.sh`'s `notes:` text and three script headers name it as the thing that
-  writes the tombstone, `prerequisites.md` documents both flags, and `tests/bats/install.bats`
-  is 25 tests that go with it. Two things it currently owns need somewhere to land first:
-  - **Writing the tombstone.** Becomes manual — a documented one-liner creating
-    `~/.mkit/bootstrap.disabled`. The hook's side is unchanged; it already treats the file as the
-    signal and never cared who wrote it.
-  - **Being the loud diagnostic.** `--status` is the only surface that *reports* an unwritable
-    user directory, because the hook is silent there by design. `facts.sh` still emits
-    `user_dir_writable=` as a starting fact, so no skill loses the information — only the
-    human-run surface goes, and M7's `doctor` is where it comes back. Say so in the removal
-    commit rather than discovering it later.
+- ~~**Delete `plugin/install.sh`.**~~ **Done (0.15.0)**, together with the `SessionStart` hook —
+  `hooks/hooks.json`, `scripts/hooks/session-bootstrap.sh`, both `.bats` suites, and the
+  `mkit_prereq_rows` / `mkit_state_*` / `mkit_json_escape` helpers in `lib/common.sh`. Prerequisite
+  reporting moves to the binary rather than being reimplemented in shell.
+  - **The tombstone is gone, not manual.** With no hook to silence, `~/.mkit/bootstrap.disabled`
+    signals nothing; `prerequisites.md` says to delete a leftover one.
+  - **Unprompted prerequisite detection is accepted as lost until M7.** A missing tool now
+    surfaces only as a thinner `facts.sh` block or a `gate_cache=no-hash` annotation. `doctor`
+    restores the human-run report but cannot restore the unprompted one, and cannot report a
+    missing `mkit` at all — see the note under "Staying in bash, permanently" below. Do not
+    re-add a shell reporter in the meantime.
+  - **`facts.sh`'s `user_dir_writable=` survives**, so no skill lost information. `~/.mkit/` is
+    empty but still the declared home for user-scoped state.
 
 ## Milestones
 
@@ -154,8 +155,8 @@ What became of its three jobs:
 - **`install`** — nothing to do. Adding the marketplace and enabling the plugin is manual, and
   `~/.claude/settings.json` is sandbox-denied besides.
 - **`status`** — folded into M7's `mkit doctor`, which was already specified to overlap it.
-- **`uninstall`** — the tombstone is a file; creating it is manual. See "Delete
-  `plugin/install.sh`" above.
+- **`uninstall`** — nothing to undo. The tombstone existed only to silence the hook, and both
+  are gone (0.15.0).
 
 Re-specified later if the binary turns out to need either verb (see Later). Do not resurrect
 this entry as written — it is scoped against a distribution model the project no longer has.
@@ -222,10 +223,13 @@ is mkit's or the harness's.
   (invariants 2 and 3). Writes nothing outside the repo.
 - `mkit doctor` — prerequisites, permission-allowlist gaps against what the skills invoke, hook
   registration, plugin enablement, and the **sandbox writable set**. Reports; fixes nothing.
-  **It is the diagnostic surface, not an addition to one** — `install.sh --status` is deleted
-  before this lands, so between the two the only report of an unwritable user directory is
-  `facts.sh`'s `user_dir_writable=` starting fact. Restoring the human-run surface is part of
-  this milestone's value, not a nice-to-have.
+  **It is the diagnostic surface, not an addition to one** — `install.sh --status` and the
+  `SessionStart` hook are both already deleted (0.15.0), so until this lands the only report of an
+  unwritable user directory is `facts.sh`'s `user_dir_writable=` starting fact, and there is no
+  report of a missing tool at all. Restoring the human-run surface is this milestone's value, not
+  a nice-to-have. **It cannot restore all of it**: `doctor` cannot run unprompted at session
+  start, and cannot report that `mkit` itself is absent. Both were the hook's job; both are
+  accepted losses.
 - The degradation sentences keep exactly one producer. That is `lib/common.sh` until M5 ports
   `facts.sh`; `doctor` must call it rather than re-word a remedy.
 **Done when:** the committed config path is decided and recorded, `mkit doctor` names an unwritable
@@ -275,10 +279,14 @@ no conversation context, working from the artifact and the worklog alone.
   Linuxbrew needs a *formula*, Windows a Scoop manifest (GoReleaser emits one).
 
 ## Staying in bash, permanently
-- `scripts/hooks/session-bootstrap.sh` — it cannot depend on a binary whose presence it may
-  have to report as missing, and its whole job is reporting a missing tool. Already reduced to
-  that one job; there is nothing left to port out of it.
-- Any hook that must run before setup completes.
+- Any hook that must run before setup completes — it cannot depend on a binary whose presence it
+  may have to report as missing.
+
+  This entry used to name `scripts/hooks/session-bootstrap.sh`, which was exactly that case. It
+  was **removed rather than kept** in 0.15.0: the reasoning still holds — `mkit doctor` genuinely
+  cannot report a missing `mkit` — but one implementation with a known gap was preferred over two
+  implementations of one invariant. Reintroducing a bash hook here is a real option if the gap
+  proves expensive; do it deliberately, not by reflex.
 
 ## Porting rules
 - Each shell script's `.bats` file is a ready-made spec — port it to `go test` alongside the

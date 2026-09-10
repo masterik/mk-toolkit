@@ -1,7 +1,7 @@
 ---
 title: "Transcript digest — replace the journal's writer with a reader"
 date_created: 2026-09-04
-last_updated: 2026-09-04
+last_updated: 2026-09-10
 description: >
   Researched against Claude Code 2.1.260. Flips journal.sh from a writer the
   agent must be nudged into calling, into a reader that mines the session
@@ -9,6 +9,11 @@ description: >
 ---
 
 # Transcript digest — replace the journal's writer with a reader
+
+> **Stale reference (2026-09-10).** The cost table below names
+> `scripts/hooks/session-bootstrap.sh`; that hook, and every hook in the payload, was removed in
+> 0.15.0. The idea is unaffected — it never depended on the hook — but its "Deletes" column
+> overstates what is left to delete.
 
 **Status:** researched 2026-09-04, Claude Code 2.1.260. Not scheduled.
 

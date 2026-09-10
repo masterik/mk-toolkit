@@ -100,12 +100,14 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
   `.claude-plugin/` — not nested under `plugin/` — because `/plugin marketplace add owner/repo`
   always looks for `.claude-plugin/marketplace.json` at the repository root; there is no
   subdirectory syntax for the GitHub-shorthand or git-URL forms.
-- `plugin/hooks/hooks.json` — hook registration, at the **plugin root** (not `.claude-plugin/`):
-  `SessionStart` → `scripts/hooks/session-bootstrap.sh`, and nothing else. Auto-discovered, so the
-  manifest carries **no `hooks` key** — don't add one. No `matcher`: a mistyped matcher is a hook
-  that silently never runs. **No `Stop` / `SubagentStop` hook, deliberately** — see
+- **The plugin ships no hooks.** `hooks/hooks.json` and its one `SessionStart` script were
+  removed in 0.15.0 — prerequisite reporting belongs to the binary (M7's `doctor`), and a hook
+  that could not depend on the binary was the only reason it stayed in bash. Don't add a `hooks`
+  key to the manifest either. **No `Stop` / `SubagentStop` hook, deliberately** — see
   `concept.md`'s "considered and dropped": that event's `additionalContext` is rendered verbatim
-  in the transcript every turn and cannot be suppressed.
+  in the transcript every turn and cannot be suppressed. If a hook is ever reintroduced, it goes
+  at the **plugin root** in `hooks/hooks.json` (not `.claude-plugin/`), is auto-discovered, and
+  takes no `matcher` — a mistyped matcher is a hook that silently never runs.
 - `plugin/skills/<name>/SKILL.md` — the triggerable skills. The workflow is **seven steps**
   (`brainstorm` → `spec` → `implement` → `commit` → `review` → `pr`/`finish`) plus `cleanup`
   (repo-wide branch/worktree gardening, outside the line). **Five exist today** — `commit`,
@@ -142,30 +144,12 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
   - `lib/common.sh` — sourced helpers, including `mkit_tree_fingerprint`, the staging- and
     commit-invariant hash of the content a gate command reads — what makes a `pr` → `finish`
     cache hit possible at all.
-- `plugin/scripts/hooks/session-bootstrap.sh` — `SessionStart`: names, **once per tool**, any
-  prerequisite this machine lacks, then emits **zero bytes** on every later session. Installs
-  nothing and writes nothing but `bootstrap.state`. Gated (absolute user dir, no
-  `bootstrap.disabled` tombstone, an unsaid message), **always exits 0**, never to stderr.
-  **Stamp before emit is enforced, not just documented**: a message whose stamp could not be
-  written is dropped and the hook stays silent. It used to be `|| true`, which on an unwritable
-  state directory turned a once-per-tool sentence into a permanent greeting. Absence is the right
-  failure mode here — a `SessionStart` hook cannot be a diagnostic surface, which is why one
-  exists separately (`install.sh --status` today, `mkit doctor` from M7). Never
-  parses its stdin — that would need `jq`, the very tool it must be able to report as missing
-  (hence `mkit_json_escape`). Never touches a repo or calls git. **Stays in bash permanently** —
-  it cannot depend on a binary whose absence it may have to report.
-- `plugin/install.sh` — **installs nothing; there is no setup step.** Two jobs a hook cannot do:
-  `--status` (the diagnostic surface — prerequisites, state locations and whether the user-scoped
-  one is writable, hook state, gate ledger — which exists precisely so the hook never has to be one)
-  and `--uninstall [--purge]` (writes the tombstone that silences the hook for good; says so, with
-  the remedy, when it cannot). No arguments does what `--status` does, and **its exit status is the
-  prerequisite verdict alone** — the writability row is reported, never folded into it. Sources
-  `lib/common.sh` so the degradation sentences have exactly one producer. Never edits a shell rc,
-  never touches a repo. **Slated for deletion, not for porting** — installation is manual in this
-  phase ([ADR 0003](docs/adr/0003-two-distribution-channels.md)). When it goes, writing the
-  tombstone becomes a documented one-liner and `--status`'s job falls to `facts.sh`'s
-  `user_dir_writable=` until M7's `doctor`. See "Near-term" in `backlog.md`; the name is
-  referenced from `facts.sh`'s `notes:` text and three script headers, so it is its own commit.
+- **No prerequisite reporting in the payload.** `session-bootstrap.sh` and `install.sh` are both
+  gone (0.15.0), and with them `mkit_prereq_rows`, `mkit_state_*` and `mkit_json_escape` from
+  `lib/common.sh`. Nothing now tells a user unprompted that `jq` or `gh` is missing — it surfaces
+  as a thinner `facts.sh` block or a `gate_cache=no-hash` annotation until M7's `mkit doctor`
+  lands. That gap is **accepted, not overlooked**: don't re-add a shell reporter for it. What
+  survives is `facts.sh`'s `user_dir_writable=` starting fact, so no skill lost information.
 - `<toplevel>/.mkit/` — the scripts' scratch root: per-run directories plus `gate.jsonl` (the gate
   ledger, append-only, rotated back to the newest 200 records once it passes 400). **Inside the
   working directory, not `<git-dir>/mkit`** ([ADR 0002](docs/adr/0002-state-locations-under-a-sandbox.md)):
@@ -177,13 +161,13 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
   sees a directory that changes while the gate runs. `facts.sh` reports `run_ignored=` because an
   isolated session cannot write that file. `--prune` only removes `<skill>-*` **directories**, which
   keeps `gate.jsonl` out of its range.
-- `~/.mkit/` — the only state outside a repo, overridable with `MKIT_HOME` (the bats suite sets it
-  so a developer's real state cannot affect a run). **Not `~/.claude/mkit/`**: that region is
-  sandbox-*protected*, where an allowlist entry is inert, so it was a path no remedy could point at;
-  here, one `permissions.additionalDirectories` entry works. Holds `bootstrap.disabled` (the
-  tombstone that makes the hook's silencing outlive the session) and `bootstrap.state` (one key
-  per line: which one-time messages have been said — self-heals, a `prereq/` key drops once the
-  tool is back so a later removal warns again).
+- `~/.mkit/` — the declared home for state outside a repo, overridable with `MKIT_HOME` (the bats
+  suite sets it so a developer's real state cannot affect a run). **Empty today**: its two files,
+  `bootstrap.state` and `bootstrap.disabled`, went with the hook in 0.15.0. It keeps its definition
+  because it is where the binary's user-scoped state will land, and `facts.sh` still probes it so an
+  unwritable one is a starting fact rather than a later surprise. **Not `~/.claude/mkit/`**: that
+  region is sandbox-*protected*, where an allowlist entry is inert, so it was a path no remedy could
+  point at; here, one `permissions.additionalDirectories` entry works.
 - `$TMPDIR`, with an explicit `mktemp` template, for anything that dies with the command. The
   division is by lifetime, not by caller. The bare and `-t` forms are banned: on macOS they resolve
   the Darwin per-user temp directory and ignore `$TMPDIR`, so under the sandbox they fail outright —
