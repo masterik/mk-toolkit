@@ -35,7 +35,7 @@ mkit_teardown_repo() {
 # whole PATH directories takes out more than intended, since macOS keeps jq beside
 # dirname and sed. Doubles as an executable inventory of the scripts' external surface.
 #
-#   mkit_fake_path jq node    -> prints a PATH with everything but jq and node
+#   mkit_fake_path jq shasum  -> prints a PATH with everything but jq and shasum
 mkit_fake_path() {
 	local excluded=" $* " dir tool path
 	dir="$MKIT_TMP/fakebin"
@@ -44,7 +44,7 @@ mkit_fake_path() {
 	# `bash` and `sh` are here because `env PATH=<fake> bash -c ...` resolves the
 	# interpreter itself on the new PATH — omit them and every such run exits 127 with an
 	# empty output, which reads exactly like the hook staying silent.
-	for tool in bash sh mkdir mv mktemp chmod grep awk rm cut head dirname sed cat git jq node shasum; do
+	for tool in bash sh mkdir mv mktemp chmod grep awk rm cut head dirname sed cat git jq shasum; do
 		case "$excluded" in *" $tool "*) continue ;; esac
 		path="$(command -v "$tool" 2>/dev/null)" || continue
 		ln -sf "$path" "$dir/$tool"

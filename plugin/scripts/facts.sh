@@ -193,6 +193,20 @@ case "$git_bin" in
 esac
 printf 'git_bin=%s\n' "$git_bin"
 
+# --- the mkit binary, reported not compared ---------------------------------------
+# Two raw facts: where the binary is, and what it says its version is. No comparison,
+# no declared minimum on either side — a skill that needs a subcommand asks for that
+# subcommand and reads the answer, which is the only check that stays true as the
+# binary absorbs more of this script layer. `mkit=none` is not a degradation to work
+# around: it is a starting fact, and the skill that needs the binary says so and stops.
+mkit_bin="$(command -v mkit 2>/dev/null || true)"
+if [ -n "$mkit_bin" ]; then
+	mkit_version="$("$mkit_bin" version 2>/dev/null | awk 'NR==1{print $2}')"
+	printf 'mkit_bin=%s\nmkit=%s\n' "$mkit_bin" "${mkit_version:-unknown}"
+else
+	printf 'mkit_bin=none\nmkit=none\n'
+fi
+
 # --- worktree origin: the lookup table from worktree.md, run here ------------------
 wt_config=none
 for c in "$toplevel/.config/wt.toml" "${XDG_CONFIG_HOME:-$HOME/.config}/worktrunk/config.toml"; do

@@ -211,7 +211,6 @@ var tools = []tool{
 	{"bash", "prerequisites", Fail, "the whole payload", ""},
 	{"gh", "prerequisites", Warn, "pr, finish, and cleanup's PR column", "brew install gh, then `gh auth login`"},
 	{"jq", "prerequisites", Warn, "facts.sh's PR lookup, the gate ledger, branch-scan", "brew install jq"},
-	{"node", "prerequisites", Warn, "review's findings.mjs", "brew install node"},
 	{"shasum", "prerequisites", Warn, "the gate cache fingerprint (reports gate_cache=no-hash without it)", ""},
 	{"rg", "optional", Warn, "faster searching; grep -E is used otherwise", "brew install ripgrep"},
 	{"wt", "optional", Warn, "worktrunk-managed worktree teardown in finish/cleanup", "brew install worktrunk"},

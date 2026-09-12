@@ -90,7 +90,7 @@ twenty-line return budget, and a plan that compresses it is a plan you have to r
 | judgement about what is true or worth doing — reviewing, verifying, materiality | the strongest available (Opus) |
 | mechanical text work, answer already in the input — merging, deduping, formatting | a cheaper tier (Sonnet) |
 | a bounded search or file sweep | a cheaper tier (Sonnet), precise brief |
-| arithmetic over a stage's output — dedupe, counts, grouping, merging verdicts | **no subagent**: `findings.mjs` |
+| arithmetic over a stage's output — dedupe, counts, grouping, merging verdicts | **no subagent**: `mkit findings` |
 
 ## When a Workflow is appropriate
 

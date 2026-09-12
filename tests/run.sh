@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 #
-# Run the whole test suite: node --test over findings.mjs, bats over the shell scripts.
+# Run the shell layer's test suite: bats over the scripts in plugin/scripts/.
+#
+# The binary's tests are Go's, beside their packages: `go test ./...`.
 #
 #   usage: tests/run.sh
 #
@@ -11,10 +13,6 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 overall=0
 
-echo "== node --test (findings.mjs) =="
-node --test tests/findings.test.mjs || overall=1
-
-echo
 echo "== bats (shell scripts) =="
 if ! command -v bats >/dev/null 2>&1; then
 	echo "bats-core not found — install it to run the shell-script suite:" >&2

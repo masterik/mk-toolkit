@@ -56,11 +56,11 @@ established facts — range, shortstat, file list, goal, mode — so the subagen
 | --- | --- | --- | --- |
 | 1 scope | this session — **one** `facts.sh` call | — | run dir, refs path, branch, stat, file list |
 | 2 find | 2 (quick) or 3 (full) subagents, parallel | Opus | one ≤10-line reply per subagent: path written + counts by tag + lenses not covered |
-| 3 reconcile | this session — `findings.mjs reconcile` | — | counts, merges, drops, undecided pairs |
-| 4 verify | 1 subagent per group from `findings.mjs group`, parallel | Opus | one line per finding: id + verdict (+ corrected fields) |
+| 3 reconcile | this session — `mkit findings reconcile --json` | — | counts, merges, drops, undecided pairs |
+| 4 verify | 1 subagent per group from `mkit findings group --json`, parallel | Opus | one line per finding: id + verdict (+ corrected fields) |
 | 5 fix | this session, bodies read from disk on demand | — | the findings being acted on, in full |
 | 5a sweep | this session when the shape greps; 1 subagent per shape when it does not | Sonnet | the occurrence list |
-| 6 report | this session — `findings.mjs report`, then prose | — | the summary itself |
+| 6 report | this session — `mkit findings report --json`, then prose | — | the summary itself |
 
 **Never read a diff into this session.** Subagents read the diff; this session reads what `facts.sh` returned.
 Never paste a reference into a brief either — hand over its path under `refs=` and have the subagent read it.
@@ -68,6 +68,28 @@ Never paste a reference into a brief either — hand over its path under `refs=`
 **One writer per file, throughout.** Every fanned-out stage writes one file per subagent —
 `findings-<source>.jsonl` per reviewer, `verdicts-<group>.jsonl` per group — and the scripts aggregate after
 they return.
+
+## 0. Check `mkit` is there
+
+```bash
+command -v mkit >/dev/null && mkit findings schema --json >/dev/null
+```
+
+Both halves matter. The first says the binary is installed; the second says *this* binary knows
+`findings` — a subcommand that does not exist is what "too old" looks like, and asking for it here
+surfaces it before a reviewer has run rather than at step 3 with a full run behind it. Nothing is
+compared against a declared range: any `mkit` that answers is current enough, and neither side
+declares a minimum.
+
+If either half fails, **stop** — do not start the reviewers. Say:
+
+> `review` needs the `mkit` binary for the findings arithmetic at steps 3, 4 and 6, and it is either
+> not installed or too old to know `mkit findings`. Install it with `brew install masterik/tap/mkit`
+> (or upgrade with `brew upgrade mkit`), then run the review again.
+
+This is the one place `review` is deliberately not entry-capable. Without the arithmetic there is no
+reconcile, no groups, and no ids for verdicts to reference; doing it by hand would put back into
+judgement exactly what this stage exists to remove.
 
 ## 1. Establish the review scope
 
@@ -140,7 +162,7 @@ Each reviewer **writes `<run-dir>/findings-<source>.jsonl`, one JSON object per 
 ```
 
 `surface`, `severity`, `file`, `title` required; `class` is `finding` (default), `open_question` or
-`pre_existing`. Full shape: `node ${CLAUDE_PLUGIN_ROOT}/scripts/findings.mjs schema`. Cap it: **at most 15 findings, body
+`pre_existing`. Full shape: `mkit findings schema` (`--json` for the machine-readable form). Cap it: **at most 15 findings, body
 under 80 words**; a reviewer at the cap says so and keeps the worst. JSONL because step 3 is a script — a
 reviewer that writes prose costs a re-spawn, so the brief says "one JSON object per line, nothing else".
 
@@ -184,7 +206,7 @@ that it was dropped and which lenses went uncovered.
 ## 3. Reconcile the lists
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/findings.mjs reconcile <run-dir> --sources-expected <N>
+mkit findings reconcile <run-dir> --sources-expected <N> --json
 ```
 
 `N` is the number of reviewers you **launched**, not the number that answered — it is what switches the
@@ -192,20 +214,30 @@ weak-singleton drop rule off when a source is missing. That follows the mode rec
 quick (CodeRabbit + Codex), **3** for full. **Never create an empty `findings-<source>.jsonl` to
 make the count line up**: the script reads a present file as that source reporting zero, which re-arms the drop
 rule and silently deletes exactly the single-source findings the missing reviewer would have corroborated. A
-source that never wrote a file is missing; lower `N` and say so. Then read `triage-reconcile.md` and check the two
-things the script deliberately leaves open: `LOW-SIM` merges and `review_pairs`. No subagent: the merge is
-arithmetic, and forming an opinion here contaminates the set the verifier is handed.
+source that never wrote a file is missing; lower `N` and say so. Then read `triage-reconcile.md` and settle the two things the
+binary deliberately leaves open, because both are judgement and it owns mechanical invariants only:
 
-If a reviewer wrote prose instead of JSONL, `validate` names the lines; convert it here rather than re-spawning.
+- **`low_sim`** — a merge whose two members barely share wording. They were merged on location, not text.
+  Read both titles (the merged-away one rides along in `also`) and check it really is one problem; split it
+  in `reconciled.jsonl` if it is two.
+- **`review_pairs`** — same file, similar wording, different lines. One shape at two sites, or two findings?
+  Your call, and the binary does not make it.
+
+No subagent: the merge is arithmetic, and forming an opinion here contaminates the set the verifier is handed.
+
+If a reviewer wrote prose instead of JSONL, `mkit findings validate <run-dir>` names the lines; convert it
+here rather than re-spawning.
 
 ## 4. Verify the survivors
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/findings.mjs group <run-dir>
+mkit findings group <run-dir> --json
 ```
 
 It groups by directory, folds groups too small to be worth a round trip, writes `verify-<group>.jsonl`, and
-suggests inline vs fan-out. On fan-out, spawn **one subagent per group in a single message**; each gets only
+reports `suggest`. `suggest` is the documented threshold applied, not a decision: `inline` means a handful of
+findings in one group — verify them here and write `verdicts-all.jsonl`, since a lone subagent buys
+independence you already have; `fanout` means one verifier per group. Either way the call is yours. On fan-out, spawn **one subagent per group in a single message**; each gets only
 its own group file — a verifier seeing the whole set anchors on it — plus `scope.md` and the path to
 `triage-verify.md`.
 
@@ -256,13 +288,13 @@ conclusions they should re-derive.
 ## 6. Summarize (the deliverable)
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/findings.mjs report <run-dir>
+mkit findings report <run-dir> --json
 ```
 
 It merges the verdicts onto the findings (applying `refined` corrections), writes `final.jsonl`, and returns
-the counts, the reportable set, the gating count, and — the one that matters — `UNVERIFIED` ids and orphan
-verdicts. **Never write the summary while `UNVERIFIED` is non-empty**: a lost verdict reads exactly like a
-finding nobody raised.
+the counts, the reportable set, the gating count, and — the ones that matter — `unverified` ids and
+`orphans`. **Never write the summary while `unverified` is non-empty**: a lost verdict reads exactly like a
+finding nobody raised. Go back and verify those ids, or say in the summary that they went unverified.
 
 Then the prose, in this order. It is a **decision brief, not a record** — the record is the run directory, so
 name that path once and let it hold the detail.

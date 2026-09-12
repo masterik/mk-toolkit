@@ -226,6 +226,25 @@ field() { printf '%s\n' "$output" | tr ' ' '\n' | sed -n "s/^$1=//p" | head -1; 
 	[ -x "$bin" ]
 }
 
+@test "mkit is reported, never compared" {
+	run "$SCRIPTS/facts.sh" commit --no-run
+	[ "$status" -eq 0 ]
+	# Both keys are always present: a skill reads a starting fact, not a lookup that
+	# may be missing. Values are raw — no minimum is declared on either side, so there
+	# is nothing here that says "too old".
+	[ -n "$(field mkit_bin)" ]
+	[ -n "$(field mkit)" ]
+	# One token, no spaces: several key=value lines pack more than one pair.
+	[ "$(field mkit | wc -w | tr -d ' ')" = 1 ]
+}
+
+@test "mkit off PATH is a starting fact, not a failure" {
+	PATH="$(mkit_fake_path mkit)" run "$SCRIPTS/facts.sh" commit --no-run
+	[ "$status" -eq 0 ]
+	[ "$(field mkit_bin)" = none ]
+	[ "$(field mkit)" = none ]
+}
+
 # --- mkit's own scratch is not the user's work ------------------------------------------
 #
 # The run directory moved *inside* the working directory (ADR 0002), which put mkit's logs

@@ -15,7 +15,7 @@ test:
 lint:
 	golangci-lint run
 
-# node --test + bats over the shell layer (tests/run.sh)
+# bats over the shell layer (tests/run.sh)
 shtest:
 	tests/run.sh
 

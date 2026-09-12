@@ -28,7 +28,8 @@ live in [`ideas/`](ideas/README.md).
   rework, no version-pinned Caskroom path to register, and no write to
   `~/.claude/settings.json`, which is inside the sandbox's protected region *and* explicitly
   denied, so no allowlist entry could ever have lifted it. The cost is that the two artifacts
-  version independently — see M4 and Open questions
+  version independently — see M4, which settled what that costs: presence only, no declared
+  range on either side
   ([ADR 0003](adr/0003-two-distribution-channels.md)).
 - **Installation is manual in this phase.** No `mkit install`, and no `install.sh`. Adding a
   marketplace and enabling a plugin are two lines a human runs once; a command that wraps them
@@ -115,7 +116,7 @@ Neither of these is a port, and neither waits on a milestone. Both follow from
 ## Milestones
 
 **Order.** `mkit init` was the priority, so **M7 went first**, ahead of the remaining ports; it is
-done. **M4 is next**, then M5, M6, M8 as written. M3 is withdrawn. The M-numbers are stable
+done, and **M4 followed**. **M5 is next**, then M6, M8 as written. M3 is withdrawn. The M-numbers are stable
 identities referenced from `concept.md` and `AGENTS.md`, so nothing is renumbered when the order
 changes.
 
@@ -164,28 +165,49 @@ What became of its three jobs:
 Re-specified later if the binary turns out to need either verb (see Later). Do not resurrect
 this entry as written — it is scoped against a distribution model the project no longer has.
 
-### M4 — `mkit findings`
-Port `scripts/findings.mjs` (507 lines). Pure data transformation, so parity is testable.
+### M4 — `mkit findings` — done
+Ported `scripts/findings.mjs` (507 lines) to `internal/core/findings/` + `internal/cli/findings.go`.
+Pure data transformation, so parity was testable: all 21 cases of `tests/findings.test.mjs` are now
+`go test` beside the package, plus the JS→Go parity hazards the port introduced —
+`Number(x.toFixed(2))` rounds half away from zero where Go's `FormatFloat` rounds half to even
+(`sim` is compared against `--sim` and `--band`, so 0.125 decides a merge), `sort.SliceStable`
+everywhere because ES2019's sort is stable and ids come from a sort with ties, `||=` rather than
+`??=` on `source`, and an order-preserving record type so an unknown field a reviewer added
+round-trips into `final.jsonl` instead of being dropped by a struct.
 
-**Carries the version-skew guard, because it is the milestone that creates the problem.** Today
-nothing in the payload invokes `mkit` — it is bash plus one dependency-free `.mjs` — so the two
-distribution channels are genuinely decoupled and there is nothing to guard. This port is the
-first one that makes a *skill* call the binary, and from that moment a plugin from GitHub can
-meet a binary from Homebrew that is too old for it, with no shared release to keep them in step.
-Build the guard here, not earlier and not later: the payload declares the minimum binary version
-it needs, `facts.sh` reports the binary and its version as starting facts (the project's own
-"detect at the first call, turn it into a starting fact" rule), and an absent-or-too-old binary
-is named once by the `SessionStart` hook the way a missing `jq` already is. A skill discovering
-this by parsing a confusing failure mid-run is the outcome the guard exists to prevent.
+**The version-skew guard, and why it points nowhere.** This is the milestone that created the
+problem: it is the first port that makes a *skill* call the binary, so a plugin from GitHub can
+now meet a binary from Homebrew too old for it, with no shared release to keep them in step. The
+answer is that **neither side declares a range**. No comparable tool does — worktrunk ships CLI
+and plugin from one repo and states compatibility in free-text frontmatter; coderabbit, the exact
+analogue, checks `coderabbit --version || echo NOT_INSTALLED` in Markdown at step 1 of its skill
+and carries its one per-feature minimum as untested prose; codegraph declares capability and names
+a fallback. So `facts.sh` reports `mkit=` and `mkit_bin=` as raw starting facts and compares
+nothing, and the check is **presence only**: `review` runs `command -v mkit && mkit findings schema
+--json` at step 0, where a subcommand that does not exist *is* the too-old signal. Absent or too
+old → **stop**, with `brew install masterik/tap/mkit` / `brew upgrade mkit`. That costs invariant 8
+for `review` specifically, deliberately: without the arithmetic there is no reconcile, no groups
+and no ids for verdicts to reference, and the alternative puts back into judgement exactly what
+this stage exists to remove.
 
-**Done when:** `node` is gone from [`prerequisites.md`](prerequisites.md), and a deliberately
-stale binary makes the skills say so up front rather than fail partway.
+**The probe lives in the skill, not in `facts.sh`.** The guard's original home here — "named once
+by the `SessionStart` hook the way a missing `jq` already is" — stopped existing in 0.15.0 when the
+hook and all payload prerequisite reporting were deleted. M5 closes the other door: it folds
+`facts.sh` into the binary, after which the call that would report `mkit=<version>` *is* `mkit` and
+cannot report its own absence. A probe in the skill's own Markdown survives both.
+
+**Done:** `node` is gone from [`prerequisites.md`](prerequisites.md) and `tests/run.sh`; `review`
+consumes `mkit findings … --json` at steps 3, 4 and 6 with the merge and verdict judgement prose in
+Markdown; with `mkit` off `PATH`, `review` says so at step 0 with a remedy that works instead of
+failing at step 3.
 
 ### M5 — the `jq` consumers
 Port `branch-scan.sh`, `gate-run.sh`, `facts.sh` and `gate-detect.sh`. Deletes a whole family
 of degradation branches — `pr=jq-missing`, `gate_cache=no-jq`, `no-hash` — because a binary is
-never half-capable. The last milestone in the port: the shell payload after it is
-`run-open.sh` and the `SessionStart` hook.
+never half-capable. The last milestone in the port: the shell payload after it is `run-open.sh`
+alone. **It also removes the last place a shell script could report the binary's absence** — after
+this, `facts.sh` *is* `mkit` — which is why M4 put `review`'s presence probe in the skill's own
+Markdown rather than here.
 Drop the fast tier in the same port. Since the tier was removed from `commit` and `review`, no
 skill consumes `fast=` or `fast_cache=`, yet `gate-detect.sh` still derives both for every
 ecosystem and the ledger still classifies them. Dead output is not a compatibility surface: the
@@ -308,23 +330,27 @@ no conversation context, working from the artifact and the worklog alone.
 
 ## Porting rules
 - Each shell script's `.bats` file is a ready-made spec — port it to `go test` alongside the
-  code, do not re-derive the behavior.
+  code, do not re-derive the behavior. (M4's spec was `tests/findings.test.mjs`, same rule.)
 - One script per milestone, merged green. No big-bang rewrite: the bash is commented,
   tested and load-bearing, and a mass rewrite is pure regression risk.
 - Delete the shell script in the same commit that lands its replacement. Two implementations
   of one invariant is the failure mode the script layer exists to prevent.
 
 ## Open questions
-- **Which way the version-skew guard points.** Deferred to M4 by decision, not by neglect — see
-  that milestone. What is still genuinely open is the *direction*: does the payload declare the
-  minimum binary it needs (the payload updates more often, so it knows), or does the binary
-  declare the payload range it serves (one place to look, but the binary is the artifact that
-  lags)? Answer it when M4 makes the first skill call `mkit`, with the shape of that call in
-  hand. Both channels are now permanently independent
-  ([ADR 0003](adr/0003-two-distribution-channels.md)), so skew is a standing condition to
-  report, never a state to eliminate.
+
+None open.
 
 Resolved:
+- **Which way the version-skew guard points** — **dissolved** at M4, not decided. The question
+  assumed one side must declare a machine-comparable range; no comparable tool does (worktrunk,
+  coderabbit and codegraph all checked), and neither does mkit. `facts.sh` reports `mkit=` and
+  `mkit_bin=` without comparing them, the payload declares no minimum and the binary declares no
+  payload range, and the check is **presence only**: the skill asks for the subcommand it needs
+  (`mkit findings schema --json`) and a subcommand that does not exist is what "too old" looks
+  like. The probe lives in the skill's Markdown, at step 0 — the only place that survives M5,
+  since after it `facts.sh` *is* the binary and a binary cannot report its own absence. Skew
+  stays a standing condition to report ([ADR 0003](adr/0003-two-distribution-channels.md)),
+  never a state to eliminate.
 - **Whether repo config belongs to mkit or to the harness** — neither, as posed. It is the
   *repo's* agent configuration and mkit is one consumer, and it lives at
   `<toplevel>/.mkit/config.toml`, committed, with `.mkit/*` + `!.mkit/config.toml` as the ignore

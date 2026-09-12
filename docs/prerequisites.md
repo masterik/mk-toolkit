@@ -8,17 +8,21 @@ Per **repo** there is now one optional step, `mkit init`, which writes `.mkit/co
 ([ADR 0001](adr/0001-per-repo-config-and-init.md)). It pins what inspection cannot establish and
 is never a precondition: every command and every skill runs with no config present.
 
-The `mkit` **binary** is a separate, optional install (`brew install masterik/tap/mkit`), and
-nothing below requires it. It is [taking over the script layer](backlog.md) one milestone at a
-time, and each script it replaces deletes a row from this page: `node` goes with `findings.mjs`
-(M4), `jq` and `shasum` with the gate port (M5).
+The `mkit` **binary** is a separate install (`brew install masterik/tap/mkit`). It is
+[taking over the script layer](backlog.md) one milestone at a time, and each script it replaces
+deletes a row from this page — `node` left with `findings.mjs` (M4); `jq` and `shasum` go with the
+gate port (M5). One skill now **requires** it: `review` does its findings arithmetic with
+`mkit findings` and stops at step 0 if the binary is absent or too old to know that subcommand.
+Everything else still runs without it.
 
 > **`mkit doctor` reports on this page's tooling**, plus the sandbox writable set, the plugin
 > payload and the allowlist gaps below — on demand, reporting only. It checks *presence on
 > `PATH`*, not versions, `gh` authentication or cache state, so a too-old tool still reads as
 > healthy here and fails later. Two things it cannot tell
 > you, both deliberate: it does not run unprompted at session start, and it cannot report that
-> `mkit` itself is missing.
+> `mkit` itself is missing — a binary cannot report its own absence. That second gap is why
+> `review` probes for `mkit findings` itself, at step 0, and why `facts.sh` reports `mkit=` and
+> `mkit_bin=` as raw starting facts without comparing them to anything.
 
 **macOS is the supported platform — for the scripts and for the binary.** Nothing detects an OS or
 branches on one; the scripts are simply written to what macOS provides, which is the narrower
@@ -32,15 +36,11 @@ macOS-only in any case.
 | --- | --- | --- |
 | `git` ≥ 2.30 | everything | `--absolute-git-dir`, `worktree list --porcelain`, `diff --shortstat` |
 | `bash` ≥ 3.2 | every `.sh` — five helpers plus the sourced `lib/common.sh` | macOS ships `/bin/bash` 3.2 (frozen there over GPLv3) and `/bin/zsh` 5.9. The scripts run under bash via `#!/usr/bin/env bash`, so **your interactive shell being zsh is irrelevant** — nothing here needs 4.x, and no Homebrew bash is required |
-| `node` ≥ 18 | `findings.mjs` | ESM, `node:fs`. No npm install, no dependencies |
 | `jq` ≥ 1.6 | `gate-detect.sh`, `gate-run.sh`, `facts.sh`, `branch-scan.sh` | reads `package.json`, `wt list --format=json`, `gh`'s JSON, and the gate ledger's JSONL |
 
 ```bash
-brew install git jq node
+brew install git jq
 ```
-
-Claude Code now ships as a native binary, so **it no longer guarantees a `node` on the
-machine** — install one even if Claude Code runs fine without it.
 
 ## Recommended
 
@@ -62,7 +62,7 @@ Contributors need more than users do; none of this is required to *use* the plug
 
 ```bash
 brew install bats-core go golangci-lint    # bats for the shell suites, Go for the binary
-./tests/run.sh                             # node --test findings.mjs, then bats tests/bats/
+./tests/run.sh                             # bats tests/bats/
 go build ./... && go vet ./... && go test ./...   # the binary — what CI runs
 golangci-lint run                          # CI pins v2.12
 ```
@@ -108,10 +108,10 @@ it if you have one.
 ## Verify
 
 ```bash
-for t in git bash node jq rg gh wt coderabbit codex mkit; do
+for t in git bash jq rg gh wt coderabbit codex mkit; do
 	printf '%-12s %s\n' "$t" "$(command -v "$t" || echo '— not found')"
 done
-git --version; node --version; jq --version
+git --version; jq --version; mkit version
 ```
 
 Then check the plugin itself, from any repo:
@@ -119,7 +119,7 @@ Then check the plugin itself, from any repo:
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh" commit --no-run   # prints a fact block
 "${CLAUDE_PLUGIN_ROOT}/scripts/gate-detect.sh"             # prints fast= and full=
-node "${CLAUDE_PLUGIN_ROOT}/scripts/findings.mjs" schema    # prints the JSONL shape
+mkit findings schema                                       # prints the JSONL shape
 ```
 
 Empty `${CLAUDE_PLUGIN_ROOT}` fails as `/scripts/facts.sh: not found`. That is intended:
@@ -139,7 +139,7 @@ Each new script is a new Bash pattern, so the first run of each asks. Allow them
       "Bash(*/mkit/scripts/gate-run.sh:*)",
       "Bash(*/mkit/scripts/run-open.sh:*)",
       "Bash(*/mkit/scripts/branch-scan.sh:*)",
-      "Bash(node */mkit/scripts/findings.mjs:*)"
+      "Bash(mkit findings:*)"
     ]
   }
 }

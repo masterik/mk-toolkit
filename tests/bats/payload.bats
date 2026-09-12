@@ -339,37 +339,12 @@ $f: $hits"
 	}
 }
 
-@test "the one non-shell payload file writes only inside the run directory" {
-	# The scanner above reads shell. `findings.mjs` is the payload's other half, and the
-	# same invariant has to hold for it: every write goes through one `writeJsonl`, and
-	# every path handed to it is `join(runDir, …)`.
-	mjs="$PAYLOAD/scripts/findings.mjs"
-	[ -f "$mjs" ]
-	# Exactly one writer, so there is one place to check.
-	[ "$(grep -cE '\b(writeFileSync|appendFileSync|createWriteStream|mkdirSync|rmSync|unlinkSync)\(' "$mjs")" -eq 1 ]
-	grep -qE 'writeFileSync\(path,' "$mjs"
-	# And every call site roots its path in runDir.
-	targets="$(grep -oE 'writeJsonl\([^,]+,' "$mjs" | sed -E 's/writeJsonl\(//; s/,$//')"
-	[ -n "$targets" ]
-	while IFS= read -r t; do
-		[ -n "$t" ] || continue
-		case "$t" in
-		'join(runDir' | out) continue ;;
-		esac
-		printf 'findings.mjs writes to an unreviewed target: %s\n' "$t"
+@test "the payload is shell only" {
+	# `findings.mjs` was the payload's one non-shell file and left with M4. The write
+	# scanner above reads shell, so anything else here is unscanned surface.
+	strays="$(find "$PAYLOAD" -type f ! -name '*.sh' ! -name '*.md' ! -name '*.json' -print)"
+	[ -z "$strays" ] || {
+		printf 'unscanned non-shell file in the payload:\n%s\n' "$strays"
 		return 1
-	done <<-EOF
-		$targets
-	EOF
-	# `out` is only ever assigned from join(runDir, …) — assert that rather than trusting
-	# the name.
-	while IFS= read -r line; do
-		case "$line" in
-		*'join(runDir,'*) continue ;;
-		esac
-		printf 'findings.mjs assigns out from something other than runDir: %s\n' "$line"
-		return 1
-	done <<-EOF
-		$(grep -E '^\s*const out = ' "$mjs" | grep -v 'const out = \[\]')
-	EOF
+	}
 }

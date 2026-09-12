@@ -50,9 +50,9 @@ sweeps every local branch and worktree, not just the one the other four just tou
   each set: `bugs`/`impl`/`adversarial` to Codex, `architecture`/`quality`/`tests`/`docs`/`comments` to the
   Claude subagent. Split so a reviewer loads only its own lenses.
 - `triage-reconcile.md`, `triage-verify.md`, `fix-checks.md` — what happens after the reviewers return, one
-  file per stage and per consumer: reconcile (`findings.mjs reconcile` does the arithmetic; the main session
+  file per stage and per consumer: reconcile (`mkit findings reconcile` does the arithmetic; the main session
   judges what it leaves open), verify (five verdicts + the materiality test, one subagent per group from
-  `findings.mjs group`), and the three checks on every fix plus what gates (the main session).
+  `mkit findings group`), and the three checks on every fix plus what gates (the main session).
 - `agent-delegation.md` — running heavy work without paying for it in context: the run directory as transport,
   subagent return budgets, resolved reference paths, one-writer-per-file, model-per-stage.
 - `output-discipline.md` — the one call that starts a run (`scripts/facts.sh`, which opens the run directory
