@@ -2,7 +2,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/masterik/mk-toolkit/internal/cli"
@@ -10,7 +9,6 @@ import (
 
 func main() {
 	if err := cli.NewRoot().Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "mkit:", err)
-		os.Exit(1)
+		os.Exit(cli.Fail(os.Stderr, err))
 	}
 }

@@ -13,7 +13,12 @@ no new git logic.
 (`mkit storage prune`) done; **M3 withdrawn** ([ADR 0003](docs/adr/0003-two-distribution-channels.md));
 **M7 (`mkit repo profile`/`init`/`doctor`) done** — repo config is `<toplevel>/.mkit/config.toml`,
 committed ([ADR 0001's config-path amendment](docs/adr/0001-per-repo-config-and-init.md#amendment-the-config-path)).
-**M4 (`mkit findings`) is next.** Milestones and the full invariant list:
+**M4 (`mkit findings`) done** — `internal/core/findings/` + `internal/cli/findings.go`, and
+`review` now calls the binary. That makes `mkit` a **hard requirement for `review`** and only for
+`review`: the skill probes `command -v mkit && mkit findings schema --json` at step 0 and stops
+with a `brew` remedy if either half fails. Presence only, no declared minimum on either side — a
+subcommand that does not exist *is* the too-old signal ([backlog](docs/backlog.md), Resolved).
+**M5 (the `jq` consumers) is next.** Milestones and the full invariant list:
 [`backlog.md`](docs/backlog.md). Direction and rationale: [`concept.md`](docs/concept.md) — the
 place for *why*, so this file can stay operative.
 
@@ -40,7 +45,7 @@ just lint                        # golangci-lint run (CI pins v2.12, brew instal
 just run version --json          # exercise the front-end contract
 just run doctor                  # prerequisites, sandbox writability, plugin state
 just run repo profile --json     # how this repo works: discovered|pinned|unavailable
-just shtest                      # shell layer: node --test + bats (brew install bats-core)
+just shtest                      # shell layer: bats (brew install bats-core)
 ```
 
 Release is tag-driven: push `vX.Y.Z` → GoReleaser builds darwin × amd64/arm64 and commits
@@ -106,6 +111,15 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
     tree is a wrong answer that looks right.
     `CommonFunc` is how the binary calls a `lib/common.sh` helper instead of re-wording it.
   - `doctor/` (M7): the checks. Reports; fixes nothing; exit status stays 0 with findings.
+  - `findings/` (M4): the review-run arithmetic — validate, similarity, reconcile, group, report.
+    Records are an **order-preserving `Record`**, not a struct: `reconciled.jsonl` and `final.jsonl`
+    re-serialize wholesale, and a struct would silently drop `fix`, `also` or anything a reviewer
+    added. Numbers stay `json.Number` so `line: 42.5` is still not an integer. `toFixed2` rounds
+    half **away from zero** on the exact binary value, matching JS — Go's own `FormatFloat` rounds
+    half to even, and `sim` is compared against `--sim`/`--band`, so 0.125 decides whether a merge
+    is flagged as thin or an unmerged pair comes back for review — location decides the merge
+    itself. Every order-bearing sort is `sort.SliceStable`; ids come from a sort with ties. Writes the run
+    directory's artefacts, prints nothing.
 - `internal/tui/` — Bubble Tea rendering over `core`, one subpackage per command.
   `internal/tui/storageprune/` (M2): the size-sorted tick-list `storage prune --apply` opens on a
   TTY. `internal/tui/repoinit/` (M7): the `mkit init` form. Neither `Update` holds command logic —
@@ -161,8 +175,6 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
     proposes with `fast_cache=` / `full_cache=` / `gate_fingerprint=`, or one
     `gate_cache=off|empty|no-hash|no-jq` cause. Neither ever skips a step — the skill owns that
     trade-off and must label a skipped step `cached`. Escape hatches: `--no-ledger` / `--no-cache`.
-  - `findings.mjs` — reconcile/group/report over a review's findings. M4 port target; `node`
-    leaves `prerequisites.md` with it.
   - `branch-scan.sh` — `cleanup`'s classifier: every local branch's merge/upstream/PR state and
     every worktree's origin/cleanliness. One batched `gh` call, cached, never a per-branch round
     trip. The cache is **not** load-bearing: a cache it cannot create is `gh=no-cache`, one row per
@@ -220,10 +232,10 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
   unscheduled, one file per idea — evidence parked so a later decision doesn't re-derive it;
   nothing in it is on the milestone line). Doc-only; nothing here ships in the cask.
 - `tests/` — dev-only, deliberately kept at repo root rather than under `plugin/` so `plugin/`
-  stays exactly the payload and nothing else. `tests/run.sh` runs both `node --test
-  tests/findings.test.mjs` and `bats tests/bats/` (one `.bats` per shell script, each against a
-  throwaway git repo, plus `payload.bats` — static assertions over the shipped shell, for the two
-  invariants with no behavioral seam). `helpers.bash` sandboxes `MKIT_HOME` for every suite, which
+  stays exactly the payload and nothing else. `tests/run.sh` runs `bats tests/bats/` (one `.bats`
+  per shell script, each against a throwaway git repo, plus `payload.bats` — static assertions over
+  the shipped shell, for the invariants with no behavioral seam). The binary's tests are Go's,
+  beside their packages. `helpers.bash` sandboxes `MKIT_HOME` for every suite, which
   is the whole containment story now that nothing writes outside it — no suite touches `HOME`.
   `mkit_fake_path <tool>…` builds a PATH missing only the named tools — **it must
   include `bash`**, or `env PATH=… bash -c` exits 127 with empty output, which reads exactly like
@@ -239,7 +251,7 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
   requirement today (`backlog.md`, Later). Still prefer `path/filepath` and stdlib over shelling
   out — for testability, not portability. Every script carries `#!/usr/bin/env bash` — the user's
   interactive zsh is irrelevant.
-- Payload runtime stays bash plus one dependency-free `.mjs`. **New mechanical work goes in Go**,
+- Payload runtime is bash only, since M4 took the last `.mjs`. **New mechanical work goes in Go**,
   and the payload shrinks as milestones land.
 - Add a script or a command only for a mechanical invariant, never for a decision. Where the line
   is unclear, report candidates and let the skill choose. Hooks are held one step further out:

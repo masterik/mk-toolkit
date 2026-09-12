@@ -45,8 +45,8 @@ are plain Markdown, so support for another agent is a thin packaging step, not a
   compiled binary on the grounds that the glue is ~4 ms of a ~10 s agent turn, so a faster
   language would optimize nothing and cost a release pipeline. **That reasoning still holds, and
   the port is not about speed.** It buys three things shell cannot: prerequisites disappear
-  (`node`, `jq` and `shasum` leave [`prerequisites.md`](prerequisites.md) as their consumers
-  land), whole families of degradation branch go with them (`jq-missing`, `no-hash`,
+  (`node` left with M4; `jq` and `shasum` leave [`prerequisites.md`](prerequisites.md) as their
+  consumers land), whole families of degradation branch go with them (`jq-missing`, `no-hash`,
   `gate_cache=no-jq` — a binary is never half-capable), and a real TUI becomes possible for the
   steps where a human wants to tick a list before anything runs. Homebrew ships the **binary
   only**; the plugin payload ships from the GitHub marketplace, and the two version independently
@@ -182,12 +182,11 @@ the five skills link into via `../_shared/references/…`:
    facts.sh                run dir + refs path + branch/status/worktree/stats, in one call
    gate-detect.sh          what this repo's fast + full checks are · what the ledger proved
    gate-run.sh             run a gate step: log it, bound it, stop at the first failure
-   findings.mjs            reconcile · group · report over a review's findings (JSONL)
    branch-scan.sh          classify every local branch/worktree for `cleanup` · one gh call
    +
  mkit (Go)                 the same mechanical steps, being ported off shell one at a time
    --json everywhere       the skill-facing contract · no TUI off a TTY · flags reach everything
-   M2 storage prune (done) · M7 profile/init/doctor (next) · M4 findings · M5 the jq consumers
+   M2 storage prune · M7 profile/init/doctor · M4 findings (all done) · M5 the jq consumers (next)
    work                    the per-branch worklog: what ran, over what content, concluding what
    plan                    task-graph arithmetic: frontier · blocked · cycles · edge validation
    repo profile            what this repo told us, and what a human pinned — reported apart
@@ -311,7 +310,7 @@ plugin/                 # the payload, shipped from the GitHub marketplace (neve
   scripts/
     lib/common.sh        # sourced helpers: plugin root, refs path, mkit dir, rg-or-grep, wt
                          #   binary, tree fingerprint, gate ledger path
-    run-open.sh  facts.sh  gate-detect.sh  gate-run.sh  findings.mjs  branch-scan.sh
+    run-open.sh  facts.sh  gate-detect.sh  gate-run.sh  branch-scan.sh
                          # no hooks/ and no install.sh — see "no hook, and no setup step"
 docs/
   concept.md             # this file

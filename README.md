@@ -21,9 +21,10 @@ other agents (Codex, opencode, …) are a later, thin packaging step.
 
 `_shared/` is the shared **references** bundle (git safety, Conventional Commits, quality
 gate, worktree detection, branching) that the five skills link into — not a triggerable skill.
-`scripts/` holds six helpers the skills call for the mechanical steps: opening a run directory,
-gathering the starting facts, detecting and running the quality gate, the arithmetic over a
-review's findings, and classifying every local branch/worktree for `cleanup`.
+`scripts/` holds five shell helpers the skills call for the mechanical steps: opening a run
+directory, gathering the starting facts, detecting and running the quality gate, and classifying
+every local branch/worktree for `cleanup`. The arithmetic over a review's findings left the
+payload with M4 — that is `mkit findings` now, which is why `review` needs the binary.
 
 ## Install
 
@@ -43,9 +44,10 @@ brew install masterik/tap/mkit
 Nothing to build either way, and **both steps are meant to stay** — the marketplace ships the
 skills, Homebrew ships the binary, and the two version independently
 ([ADR 0003](docs/adr/0003-two-distribution-channels.md)). The binary answers `mkit version` today
-and is [absorbing the script layer](docs/backlog.md) one milestone at a time; the payload calls it
-for nothing yet, so the plugin works with no binary installed at all. The scripts need `git`,
-`bash`, `node` and `jq`; `rg`, `gh` and `wt` are recommended — see
+and is [absorbing the script layer](docs/backlog.md) one milestone at a time. As of M4 the `review`
+skill calls `mkit findings` for its findings arithmetic and stops if the binary is absent; every
+other skill still runs with no binary installed. The scripts need `git`,
+`bash` and `jq`; `rg`, `gh` and `wt` are recommended — see
 [Prerequisites](docs/prerequisites.md).
 
 ## Not re-proving the same tree (the gate ledger)
@@ -65,8 +67,7 @@ and `--no-ledger` to stop writing it. Details:
 ## Testing
 
 `go build ./... && go vet ./... && go test ./...` covers the binary — that is what CI runs.
-`tests/run.sh` covers the script layer: `node --test` over `findings.mjs`, then `bats` over the
-shell-script suites. Dev-only — see
+`tests/run.sh` covers the script layer: `bats` over the shell-script suites. Dev-only — see
 [Prerequisites](docs/prerequisites.md#dev-only--running-tests).
 
 ## Docs

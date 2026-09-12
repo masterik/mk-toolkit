@@ -12,6 +12,65 @@ nothing — `brew install masterik/tap/mkit` delivers whatever the newest tag bu
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project
 predates any semver commitment and is pre-1.0, so minor bumps carry breaking changes.
 
+## [0.17.0] — 2026-09-12
+
+M4: the review-run arithmetic moves into the binary, and `review` becomes the first skill that
+needs it.
+
+### Added
+- **`mkit findings schema | validate | reconcile | group | report`** — the port of
+  `plugin/scripts/findings.mjs`. Human text by default, `--json` for the skill-facing path; flags
+  `--sources-expected --sim --band --window --max-groups --min-per-group`, each strict: absent is
+  the default, present-with-no-value exits 2. Exit codes unchanged — 0 ok, 1 malformed input,
+  2 bad usage.
+- **`facts.sh` reports `mkit=` and `mkit_bin=`** — raw starting facts, `none` when the binary is
+  off `PATH`. Nothing is compared: neither the payload nor the binary declares a version range.
+- **A presence probe at `review` step 0** — `command -v mkit && mkit findings schema --json`. A
+  subcommand that does not exist *is* the too-old signal, surfaced before a reviewer runs rather
+  than at step 3 with a full run behind it.
+
+### Changed
+- **`review` requires the `mkit` binary** and stops at step 0 without it, naming
+  `brew install masterik/tap/mkit` / `brew upgrade mkit`. This is the one place a skill is
+  deliberately not entry-capable: without the arithmetic there is no reconcile, no groups and no
+  ids for verdicts to reference. Every other skill still runs with no binary installed.
+- **The binary's judgement sentences moved to Markdown.** `--json` carries structured facts only
+  (`low_sim`, `review_pairs`, `suggest`, `unverified`); the sentences that told an agent what to
+  make of them now live in `triage-reconcile.md` and `review/SKILL.md`. The binary owns mechanical
+  invariants; judgement stays in Markdown.
+- `tests/run.sh` is the shell suite only. The binary's tests are Go's, beside their packages — all
+  21 cases of the node suite ported, plus the JS→Go parity hazards the port introduced.
+
+### Fixed
+- **A failing `mkit version` no longer ends `facts.sh`.** Under `set -o pipefail` the probe's
+  nonzero exit failed the assignment and `set -e` took every later fact with it — an optional tool
+  that merely would not answer, killing the run. It reports `mkit=unknown` now.
+- **Caller mistakes exit 2, not 1.** An unknown subcommand, an unknown flag or an extra argument
+  came back through cobra as a plain error and landed on 1, the status reserved for input that is
+  present but malformed. Non-finite tunables (`--sim NaN`, `--window Inf`) are rejected the way the
+  script's `num()` rejected them: NaN makes every comparison false, silently disabling merging,
+  LOW-SIM flagging and the drop rule.
+- **Trailing content is rejected the way `JSON.parse` rejected it.** The decoder's `More()` does
+  not see a stray `]` or `}`, so a reviewer file that lost its enclosing array parsed clean and was
+  half-read.
+
+### Removed
+- **`plugin/scripts/findings.mjs` and `tests/findings.test.mjs`**, in the commit that lands the
+  replacement. The payload is bash only again.
+- **`node` as a prerequisite** — gone from `prerequisites.md`, `tests/run.sh`, `mkit doctor`'s
+  table and the bats fake-PATH set. The allowlist entry
+  `Bash(node */mkit/scripts/findings.mjs:*)` becomes `Bash(mkit findings:*)`.
+
+### Notes
+- **The version-skew question dissolved rather than resolved.** No comparable tool declares a
+  machine-comparable range on either side — worktrunk states compatibility in free-text
+  frontmatter, coderabbit checks `--version || echo NOT_INSTALLED` in Markdown and carries its one
+  per-feature minimum as untested prose, codegraph declares capability and names a fallback. So
+  neither side declares one here either, and the check is presence only.
+- **The probe lives in the skill, not in `facts.sh`.** The guard's original home, the `SessionStart`
+  hook, was deleted in 0.15.0, and M5 folds `facts.sh` into the binary — after which the call that
+  would report `mkit=<version>` *is* `mkit`, and a binary cannot report its own absence.
+
 ## [0.16.0] — 2026-09-10
 
 M7: the configuration surface, and the diagnostic surface 0.15.0 removed.
