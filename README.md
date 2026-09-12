@@ -21,9 +21,10 @@ other agents (Codex, opencode, …) are a later, thin packaging step.
 
 `_shared/` is the shared **references** bundle (git safety, Conventional Commits, quality
 gate, worktree detection, branching) that the five skills link into — not a triggerable skill.
-`scripts/` holds six helpers the skills call for the mechanical steps: opening a run directory,
-gathering the starting facts, detecting and running the quality gate, the arithmetic over a
-review's findings, and classifying every local branch/worktree for `cleanup`.
+`scripts/` holds five shell helpers the skills call for the mechanical steps: opening a run
+directory, gathering the starting facts, detecting and running the quality gate, and classifying
+every local branch/worktree for `cleanup`. The arithmetic over a review's findings left the
+payload with M4 — that is `mkit findings` now, which is why `review` needs the binary.
 
 ## Install
 

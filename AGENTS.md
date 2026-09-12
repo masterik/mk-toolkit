@@ -116,8 +116,9 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
     re-serialize wholesale, and a struct would silently drop `fix`, `also` or anything a reviewer
     added. Numbers stay `json.Number` so `line: 42.5` is still not an integer. `toFixed2` rounds
     half **away from zero** on the exact binary value, matching JS — Go's own `FormatFloat` rounds
-    half to even, and `sim` is compared against `--sim`/`--band`, so 0.125 decides a merge. Every
-    order-bearing sort is `sort.SliceStable`; ids come from a sort with ties. Writes the run
+    half to even, and `sim` is compared against `--sim`/`--band`, so 0.125 decides whether a merge
+    is flagged as thin or an unmerged pair comes back for review — location decides the merge
+    itself. Every order-bearing sort is `sort.SliceStable`; ids come from a sort with ties. Writes the run
     directory's artefacts, prints nothing.
 - `internal/tui/` — Bubble Tea rendering over `core`, one subpackage per command.
   `internal/tui/storageprune/` (M2): the size-sorted tick-list `storage prune --apply` opens on a

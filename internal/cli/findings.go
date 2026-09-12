@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/masterik/mk-toolkit/internal/core/findings"
 )
@@ -59,6 +61,22 @@ func numericFlagErr(err error) error {
 	return &ExitError{Code: 2, Msg: msg}
 }
 
+// finite rejects NaN and the infinities the way the script's `num()` did. A
+// non-finite tunable makes every comparison false, silently disabling merging,
+// LOW-SIM flagging and the drop rule — a different run than the caller asked for.
+func finite(flags *pflag.FlagSet, names ...string) error {
+	for _, name := range names {
+		v, err := flags.GetFloat64(name)
+		if err != nil {
+			continue
+		}
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return usageErr("--%s needs a numeric value (got %s)", name, flags.Lookup(name).Value.String())
+		}
+	}
+	return nil
+}
+
 // runDirArg is the one positional every subcommand but `schema` takes.
 func runDirArg(args []string, use string) (string, error) {
 	if len(args) != 1 || args[0] == "" {
@@ -97,7 +115,12 @@ func newFindingsSchemaCmd() *cobra.Command {
 		Long: "Print the contract each reviewer and verifier writes against.\n\n" +
 			"It is also the presence probe: a `mkit` too old to know `findings` fails here,\n" +
 			"at the start of a run, rather than halfway through one.",
-		Args:          cobra.NoArgs,
+		Args: func(_ *cobra.Command, args []string) error {
+			if len(args) > 0 {
+				return usageErr("usage: mkit findings schema")
+			}
+			return nil
+		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -199,6 +222,9 @@ func newFindingsReconcileCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if err := finite(cmd.Flags(), "sources-expected", "sim", "band", "window"); err != nil {
+				return err
+			}
 			res, err := findings.Reconcile(dir, opts)
 			if err != nil {
 				var invalid *findings.InvalidError
@@ -298,6 +324,9 @@ func newFindingsGroupCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir, err := runDirArg(args, "group <run-dir>")
 			if err != nil {
+				return err
+			}
+			if err := finite(cmd.Flags(), "max-groups", "min-per-group"); err != nil {
 				return err
 			}
 			res, err := findings.GroupRun(dir, opts)

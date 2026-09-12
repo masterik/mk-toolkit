@@ -245,6 +245,25 @@ field() { printf '%s\n' "$output" | tr ' ' '\n' | sed -n "s/^$1=//p" | head -1; 
 	[ "$(field mkit)" = none ]
 }
 
+@test "an mkit whose version probe fails is unknown, not a dead run" {
+	# The probe pipes `mkit version` into awk. Under `set -o pipefail` a binary that
+	# exits nonzero fails the whole assignment, and `set -e` would end facts.sh there —
+	# every later fact lost to an optional tool that merely would not answer.
+	bin="$BATS_TEST_TMPDIR/failing-bin"
+	mkdir -p "$bin"
+	cat >"$bin/mkit" <<-'EOS'
+		#!/usr/bin/env bash
+		exit 1
+	EOS
+	chmod +x "$bin/mkit"
+	PATH="$bin:$PATH" run "$SCRIPTS/facts.sh" commit --no-run
+	[ "$status" -eq 0 ]
+	[ "$(field mkit)" = unknown ]
+	[ "$(field mkit_bin)" = "$bin/mkit" ]
+	# The facts after the probe still arrive — that is what set -e would have taken.
+	[ -n "$(field branch)" ]
+}
+
 # --- mkit's own scratch is not the user's work ------------------------------------------
 #
 # The run directory moved *inside* the working directory (ADR 0002), which put mkit's logs

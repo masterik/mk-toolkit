@@ -11,7 +11,9 @@ package findings
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -197,7 +199,9 @@ func parseJSON(data []byte) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if dec.More() {
+	// More() is false at a stray `]` or `}`, so it alone lets `{"a":1}]` through;
+	// JSON.parse rejects it. Require the stream to actually be finished.
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("unexpected trailing content")
 	}
 	return v, nil

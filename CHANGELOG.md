@@ -41,6 +41,19 @@ needs it.
 - `tests/run.sh` is the shell suite only. The binary's tests are Go's, beside their packages — all
   21 cases of the node suite ported, plus the JS→Go parity hazards the port introduced.
 
+### Fixed
+- **A failing `mkit version` no longer ends `facts.sh`.** Under `set -o pipefail` the probe's
+  nonzero exit failed the assignment and `set -e` took every later fact with it — an optional tool
+  that merely would not answer, killing the run. It reports `mkit=unknown` now.
+- **Caller mistakes exit 2, not 1.** An unknown subcommand, an unknown flag or an extra argument
+  came back through cobra as a plain error and landed on 1, the status reserved for input that is
+  present but malformed. Non-finite tunables (`--sim NaN`, `--window Inf`) are rejected the way the
+  script's `num()` rejected them: NaN makes every comparison false, silently disabling merging,
+  LOW-SIM flagging and the drop rule.
+- **Trailing content is rejected the way `JSON.parse` rejected it.** The decoder's `More()` does
+  not see a stray `]` or `}`, so a reviewer file that lost its enclosing array parsed clean and was
+  half-read.
+
 ### Removed
 - **`plugin/scripts/findings.mjs` and `tests/findings.test.mjs`**, in the commit that lands the
   replacement. The payload is bash only again.

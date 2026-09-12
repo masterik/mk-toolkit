@@ -1,8 +1,8 @@
 # Prerequisites
 
-mkit's plugin payload is Markdown plus six helpers — five shell scripts and one dependency-free
-Node file. No hooks (removed in 0.15.0), nothing to build, and no *machine* setup step: installing
-the plugin is a clone. What follows is what those scripts call.
+mkit's plugin payload is Markdown plus five shell helpers — bash only since M4 took the last
+Node file with it. No hooks (removed in 0.15.0), nothing to build, and no *machine* setup step:
+installing the plugin is a clone. What follows is what those scripts call.
 
 Per **repo** there is now one optional step, `mkit init`, which writes `.mkit/config.toml`
 ([ADR 0001](adr/0001-per-repo-config-and-init.md)). It pins what inspection cannot establish and

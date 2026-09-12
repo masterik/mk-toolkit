@@ -560,3 +560,47 @@ func anyStrings(v any) []string {
 	}
 	return out
 }
+
+// ---------------------------------------------------------------- exit status
+//
+// The script had one word for every caller mistake — `die`, which exits 2. Cobra
+// reports its own as plain errors, which would land on 1, the status reserved for
+// input that is present but malformed. These pin the difference.
+
+func TestCallerMistakesExitTwo(t *testing.T) {
+	dir := runDir(t)
+	write(t, dir, "findings-a.jsonl", finding(nil))
+
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{"unknown subcommand", []string{"findings", "nosuchthing"}},
+		{"unknown flag", []string{"findings", "reconcile", dir, "--nosuchflag"}},
+		{"extra argument to schema", []string{"findings", "schema", "extra"}},
+		{"no run directory", []string{"findings", "reconcile"}},
+		// Non-finite tunables: NaN makes every comparison false, which silently
+		// disables merging, LOW-SIM flagging and the drop rule.
+		{"NaN threshold", []string{"findings", "reconcile", dir, "--sim", "NaN"}},
+		{"infinite window", []string{"findings", "reconcile", dir, "--window", "Inf"}},
+		{"NaN group size", []string{"findings", "group", dir, "--min-per-group", "NaN"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mustCode(t, run(t, tc.args...), 2)
+		})
+	}
+}
+
+// A malformed line is input, not a caller mistake: status 1, and the run
+// directory keeps whatever it had.
+func TestMalformedInputExitsOne(t *testing.T) {
+	dir := runDir(t)
+	if err := os.WriteFile(filepath.Join(dir, "findings-a.jsonl"), []byte("{\"surface\":\"code\"}]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mustCode(t, run(t, "findings", "reconcile", dir), 1)
+	if _, err := os.Stat(filepath.Join(dir, "reconciled.jsonl")); err == nil {
+		t.Fatal("reconciled.jsonl written from malformed input")
+	}
+}

@@ -201,7 +201,11 @@ printf 'git_bin=%s\n' "$git_bin"
 # around: it is a starting fact, and the skill that needs the binary says so and stops.
 mkit_bin="$(command -v mkit 2>/dev/null || true)"
 if [ -n "$mkit_bin" ]; then
-	mkit_version="$("$mkit_bin" version 2>/dev/null | awk 'NR==1{print $2}')"
+	# `|| true`, not decoration: under `set -o pipefail` a binary that exits
+	# nonzero (a too-old `version`, a broken install) fails the assignment and
+	# `set -e` takes the whole fact-gathering run down with it. A version that
+	# will not answer is `unknown`, which is a starting fact like any other.
+	mkit_version="$("$mkit_bin" version 2>/dev/null | awk 'NR==1{print $2}' || true)"
 	printf 'mkit_bin=%s\nmkit=%s\n' "$mkit_bin" "${mkit_version:-unknown}"
 else
 	printf 'mkit_bin=none\nmkit=none\n'

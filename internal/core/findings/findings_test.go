@@ -109,3 +109,19 @@ func TestTemplateInterpolationMatchesJS(t *testing.T) {
 		t.Fatalf("tmpl: %q", got)
 	}
 }
+
+// JSON.parse rejects anything after the value; the decoder's More() does not see
+// a stray closing delimiter, so `{"a":1}]` used to parse clean. A reviewer file
+// that lost its enclosing array must be reported, not half-read.
+func TestTrailingContentIsRejectedLikeJSONParse(t *testing.T) {
+	for _, bad := range []string{`{"a":1}]`, `{"a":1}}`, `[1,2]]`, `{"a":1} {"b":2}`} {
+		if _, err := parseJSON([]byte(bad)); err == nil {
+			t.Fatalf("accepted trailing content: %s", bad)
+		}
+	}
+	for _, ok := range []string{`{"a":1}`, `[1,2]`, `null`, `42`, ` {"a":1} `} {
+		if _, err := parseJSON([]byte(ok)); err != nil {
+			t.Fatalf("rejected valid JSON %s: %v", ok, err)
+		}
+	}
+}

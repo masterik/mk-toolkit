@@ -294,7 +294,9 @@ mkit findings report <run-dir> --json
 It merges the verdicts onto the findings (applying `refined` corrections), writes `final.jsonl`, and returns
 the counts, the reportable set, the gating count, and — the ones that matter — `unverified` ids and
 `orphans`. **Never write the summary while `unverified` is non-empty**: a lost verdict reads exactly like a
-finding nobody raised. Go back and verify those ids, or say in the summary that they went unverified.
+finding nobody raised. Go back and verify those ids — inline is fine, it is a handful by definition — and
+re-run `report`. Only an id whose verifier cannot be re-run at all is reported unverified, named individually
+and above the counts, never folded into them.
 
 Then the prose, in this order. It is a **decision brief, not a record** — the record is the run directory, so
 name that path once and let it hold the detail.

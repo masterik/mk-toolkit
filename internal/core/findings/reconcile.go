@@ -176,6 +176,11 @@ func Reconcile(runDir string, opts ReconcileOptions) (*Reconciled, error) {
 	clusterOf := map[*Record]*cluster{}
 	for _, r := range defects {
 		placed := false
+		// Against the cluster HEAD, not every member — the window measures from the
+		// first report of a defect, so a cluster can never creep down a file one line
+		// at a time. Ported as-is from the script: this decides ids, and the two
+		// implementations had to agree while both existed. `triage-reconcile.md` tells
+		// the reader the set is head-relative rather than exhaustive.
 		for _, c := range clusters {
 			if !samePath(c.head.Str("file"), r.Str("file")) {
 				continue
@@ -539,7 +544,7 @@ func tally(rs []*Record) []Count {
 	for k, n := range counts {
 		out = append(out, Count{Surface: k.surface, Severity: k.severity, N: n})
 	}
-	sort.Slice(out, func(i, j int) bool {
+	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].Surface != out[j].Surface {
 			return out[i].Surface < out[j].Surface
 		}
