@@ -36,7 +36,7 @@ macOS-only in any case.
 | --- | --- | --- |
 | `git` ≥ 2.30 | everything | `--absolute-git-dir`, `worktree list --porcelain`, `diff --shortstat` |
 | `bash` ≥ 3.2 | every `.sh` — five helpers plus the sourced `lib/common.sh` | macOS ships `/bin/bash` 3.2 (frozen there over GPLv3) and `/bin/zsh` 5.9. The scripts run under bash via `#!/usr/bin/env bash`, so **your interactive shell being zsh is irrelevant** — nothing here needs 4.x, and no Homebrew bash is required |
-| `jq` ≥ 1.6 | `gate-detect.sh`, `gate-run.sh`, `facts.sh`, `branch-scan.sh` | reads `package.json`, `wt list --format=json`, `gh`'s JSON, and the gate ledger's JSONL |
+| `jq` ≥ 1.6 | `gate-detect.sh`, `facts.sh`, `branch-scan.sh` | reads `package.json`, `wt list --format=json`, `gh`'s JSON, and the gate ledger's JSONL |
 
 ```bash
 brew install git jq
@@ -46,7 +46,7 @@ brew install git jq
 
 | Tool | Used by | Degrades to |
 | --- | --- | --- |
-| `rg` (ripgrep) | `gate-run.sh` failure digest, `gate-detect.sh` doc scan, the `fix-checks` sweep | `grep -E` (same output, slower) |
+| `rg` (ripgrep) | `gate-detect.sh` doc scan, the `fix-checks` sweep | `grep -E` (same output, slower) |
 | `shasum` | the gate ledger's content fingerprint | `gate_cache=no-hash` — the gate runs every step, exactly as before. Never a hard requirement: a latency optimization may not add a prerequisite. macOS ships it, but it is a Perl script, so a stripped environment can lack it |
 | `gh` | `pr`, `facts.sh --gh`, and `branch-scan.sh` (`cleanup`) | `pr` cannot open a PR at all; `facts.sh` prints `pr=gh-missing`; `branch-scan.sh` falls back to git-only classification and reports `gh=gh-missing` |
 | `wt` ([worktrunk](https://worktrunk.dev)) | `finish` cleanup, `facts.sh` worktree classification | plain `git worktree remove` |
@@ -136,10 +136,10 @@ Each new script is a new Bash pattern, so the first run of each asks. Allow them
     "allow": [
       "Bash(*/mkit/scripts/facts.sh:*)",
       "Bash(*/mkit/scripts/gate-detect.sh:*)",
-      "Bash(*/mkit/scripts/gate-run.sh:*)",
       "Bash(*/mkit/scripts/run-open.sh:*)",
       "Bash(*/mkit/scripts/branch-scan.sh:*)",
-      "Bash(mkit findings:*)"
+      "Bash(mkit findings:*)",
+      "Bash(mkit gate run:*)"
     ]
   }
 }
@@ -147,7 +147,7 @@ Each new script is a new Bash pattern, so the first run of each asks. Allow them
 
 Adjust the path fragment to wherever the plugin is installed — under
 `~/.claude/plugins/cache/<marketplace>/mkit/<version>/` for a marketplace install, or your
-checkout for a local one. `gate-run.sh` runs the repo's own lint/test/build, so allowlisting
+checkout for a local one. `mkit gate run` runs the repo's own lint/test/build, so allowlisting
 it delegates that trust; leave it out if you would rather approve each gate.
 
 ## Running under the OS sandbox

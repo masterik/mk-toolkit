@@ -181,7 +181,6 @@ the five skills link into via `../_shared/references/…`:
    run-open.sh             open a run directory · --prune old ones
    facts.sh                run dir + refs path + branch/status/worktree/stats, in one call
    gate-detect.sh          what this repo's fast + full checks are · what the ledger proved
-   gate-run.sh             run a gate step: log it, bound it, stop at the first failure
    branch-scan.sh          classify every local branch/worktree for `cleanup` · one gh call
    +
  mkit (Go)                 the same mechanical steps, being ported off shell one at a time
@@ -198,7 +197,7 @@ the five skills link into via `../_shared/references/…`:
 ```
 
 The scripts never act: no staging, no merging, no `wt merge`, no edits. They report facts and
-run commands the skill named. One of them also *remembers*: `gate-run.sh` records that a command
+run commands the skill named. One of them also *remembers*: `mkit gate run` records that a command
 exited 0 over a fingerprint of the content it read — `<toplevel>/.mkit/gate.jsonl`, beside the run
 directories, never committed, and a linked worktree gets its own. It adds no script: the ledger
 is a side effect of a gate that was running anyway, read back by the detector that already prints
@@ -310,7 +309,7 @@ plugin/                 # the payload, shipped from the GitHub marketplace (neve
   scripts/
     lib/common.sh        # sourced helpers: plugin root, refs path, mkit dir, rg-or-grep, wt
                          #   binary, tree fingerprint, gate ledger path
-    run-open.sh  facts.sh  gate-detect.sh  gate-run.sh  branch-scan.sh
+    run-open.sh  facts.sh  gate-detect.sh  branch-scan.sh
                          # no hooks/ and no install.sh — see "no hook, and no setup step"
 docs/
   concept.md             # this file

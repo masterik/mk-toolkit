@@ -49,10 +49,10 @@ order, stopping at the first failure. `commit` and `review` used to consume the 
 no longer gate at all.
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/gate-run.sh <run-dir> --chain 'lint=bun run lint' 'test=bun run test' 'build=bun run build'
+mkit gate run <run-dir> --chain 'lint=bun run lint' 'test=bun run test' 'build=bun run build'
 ```
 
-`gate-run.sh` logs each step in full, stops at the first failure, and returns a verdict plus a
+`mkit gate run` logs each step in full, stops at the first failure, and returns a verdict plus a
 bounded excerpt; its exit status is the failing step's (`output-discipline.md`).
 
 ## When a step fails
@@ -70,13 +70,13 @@ sentence or two, caused-by-this-change or pre-existing, a concrete suggested fix
 
 ## The gate ledger — what was already proven
 
-`gate-run.sh` records every step it finishes into `<toplevel>/.mkit/gate.jsonl`:
+`mkit gate run` records every step it finishes into `<toplevel>/.mkit/gate.jsonl`:
 `(step, command, exit code, seconds, fingerprint of the content it ran over)`.
 `gate-detect.sh` compares each command it proposes against the newest record for that
 **exact command string** and annotates it. The `*_cache=` keys above are that annotation.
 
 **What this saves is wall-clock, not tokens.** There are no token savings here by
-construction — `gate-run.sh` already sends full output to a log so it never reaches
+construction — `mkit gate run` already sends full output to a log so it never reaches
 context. What it saves is a re-execution of a 90-second suite over a tree that stopped
 changing — e.g. `pr` gates a step, then `finish` gates the same content again later.
 
@@ -162,13 +162,13 @@ One key, one cause — the same discipline as `scripts_state`:
 Each degrades to today's behavior exactly: detect, then run everything.
 
 The two escape hatches: `gate-detect.sh --no-cache` ignores the ledger for one call
-(`gate_cache=off`), and `gate-run.sh --no-ledger` stops writing to it. Neither is needed in
+(`gate_cache=off`), and `mkit gate run --no-ledger` stops writing to it. Neither is needed in
 normal use; reach for `--no-cache` when a `fresh` verdict looks wrong and you want the
 question off the table.
 
 ## Rules
 
-- Open the run directory before the first step — `facts.sh` did it; `gate-run.sh` refuses a
+- Open the run directory before the first step — `facts.sh` did it; `mkit gate run` refuses a
   path that does not exist rather than writing a log to `/`.
 - Run the gate from the repo root of the current worktree.
 - Report exactly which step failed and its exit code. Never silently continue past a failure.

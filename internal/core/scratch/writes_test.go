@@ -22,6 +22,7 @@ import (
 var reviewed = map[string]string{
 	"internal/core/scratch/scratch.go":       "the scratch root itself, plus the one named exception: the common dir's info/exclude",
 	"internal/core/gate/ledger.go":           "<toplevel>/.mkit/gate.jsonl and its trim lock — inside the scratch root",
+	"internal/core/gate/run.go":              "one gate-<step>.log per step, inside the run directory it was handed",
 	"internal/core/findings/record.go":       "a review run's artefacts, inside the run directory it was handed",
 	"internal/core/repoconfig/repoconfig.go": "<toplevel>/.mkit/config.toml — the one committed file in the scratch root",
 	"internal/core/doctor/doctor.go":         "probes writability by creating and removing a temp file in each declared location",

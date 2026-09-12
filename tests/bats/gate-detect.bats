@@ -145,10 +145,11 @@ field() { printf '%s\n' "$output" | sed -n "s/^$1=//p" | head -1; }
 
 # --- the gate ledger ---------------------------------------------------------------
 #
-# gate-detect.sh annotates the commands it just proposed with what `gate-run.sh` already
+# gate-detect.sh annotates the commands it just proposed with what `mkit gate run` already
 # proved over the current content. The two halves must agree on one key — the exact
 # command string — so wherever a test only needs a record to exist, it gets one by
-# actually running gate-run.sh rather than by writing the file.
+# actually running the writer rather than by writing the file. That the shell reader and
+# the Go writer agree on the key is what every `fresh` below now also asserts.
 
 # The throwaway repo has no package.json, so every proposal is `none`. This gives the
 # reader something to look up: fast=`npm run lint`, full=`npm run lint|npm run test|npm
@@ -171,14 +172,14 @@ ledger() { printf '%s\n' "$MKIT_TMP/.mkit/gate.jsonl"; }
 # `fresh` below asserts.
 fingerprint_now() { (. "$SCRIPTS/lib/common.sh" && mkit_tree_fingerprint); }
 
-# Open a run dir and run one gate step through the real writer.
+# Open a run dir and run one gate step through the real writer, which is the binary.
 gate_run() {
 	local rd
 	rd="$("$SCRIPTS/run-open.sh" gate)"
-	"$SCRIPTS/gate-run.sh" "$rd" "$@"
+	"${MKIT_BIN:?tests/run.sh builds this}" gate run "$rd" "$@"
 }
 
-# Append one hand-written record. Only for the fields gate-run.sh will never write: a
+# Append one hand-written record. Only for the fields `mkit gate run` will never write: a
 # head that no longer resolves, a proof from another tree, an epoch hours in the past.
 #   forge <cmd> [exit] [epoch] [fingerprint] [head]
 forge() {
@@ -244,7 +245,7 @@ forge() {
 	[ "$(field scripts_state)" = ok ]
 }
 
-@test "gate ledger: a step just run through gate-run.sh comes back fresh with its exit and age" {
+@test "gate ledger: a step just run through the writer comes back fresh with its exit and age" {
 	node_repo
 	gate_run lint -- npm run lint
 	run "$SCRIPTS/gate-detect.sh"

@@ -71,7 +71,7 @@ Same inside a worktree — just confirm `git branch --show-current` is the featu
 
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/gate-detect.sh
-   ${CLAUDE_PLUGIN_ROOT}/scripts/gate-run.sh <run-dir> --chain 'lint=<cmd>' 'test=<cmd>' 'build=<cmd>'
+   mkit gate run <run-dir> --chain 'lint=<cmd>' 'test=<cmd>' 'build=<cmd>'
    ```
 
    One line per passing step; on failure the step, the exit code, the grepped failures and the tail — never

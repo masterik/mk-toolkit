@@ -203,7 +203,7 @@ fast_out="${fast:-none}"
 full_out="${full:-${fast:-none}}"
 
 # --- the gate ledger: annotate the proposals above -----------------------------------
-# `gate-run.sh` records (cmd, exit, fingerprint, ts) for every step it finishes. Here we
+# `mkit gate run` records (cmd, exit, fingerprint, ts) for every step it finishes. Here we
 # compare each proposed command against the newest record for that exact command string.
 #
 # Why here and not in a new script: this file is already "everything you need to know
@@ -212,7 +212,7 @@ full_out="${full:-${fast:-none}}"
 # all this script ever does. Nothing below skips anything.
 #
 # The command strings emitted above are the normalized form by construction (this script
-# never shell-quotes), so they compare directly against what `gate-run.sh` records.
+# never shell-quotes), so they compare directly against what `mkit gate run` records.
 GATE_MAX_AGE_MIN=60
 
 gate_cause=""

@@ -74,14 +74,14 @@ Two facts to act on before you stage anything:
 ### Carry the path, not a variable
 
 **There is no `$RUN_DIR`.** Each Bash call is a fresh shell — cwd persists, environment does not. Read
-`run=` once and pass that literal: as `gate-run.sh`'s first argument, as `mkit findings`'s run directory, and into every
+`run=` once and pass that literal: as `mkit gate run`'s first argument, as `mkit findings`'s run directory, and into every
 brief. Bind it inside a single call when one command needs it twice. Never re-run `facts.sh` to get it
 back (a second directory, run scattered), never park it in a fixed pointer file (concurrent runs
 overwrite it).
 
 ## Quality gates
 
-`scripts/gate-run.sh <run-dir> --chain '<step>=<cmd>' …` runs them. Full output to
+`mkit gate run <run-dir> --chain '<step>=<cmd>' …` runs them. Full output to
 `<run-dir>/gate-<step>.log`, exit code captured before anything can clobber it, chain stopped at the
 first failure, verdict on stdout:
 

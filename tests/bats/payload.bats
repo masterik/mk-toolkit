@@ -271,9 +271,10 @@ $(payload_write_targets "$f" || true)"
 	EOF
 	printf '%s\n' "$all" | grep -q 'tmp_p'     # the fingerprint's ephemeral files
 	printf '%s\n' "$all" | grep -q 'pr_cache'  # the branch classifier's PR cache
-	printf '%s\n' "$all" | grep -q 'ledger'    # gate.jsonl
 	printf '%s\n' "$all" | grep -q 'exclude'   # the ignore rule
 	printf '%s\n' "$all" | grep -q 'mkit_dir'  # the run root
+	# gate.jsonl is no longer written from the payload — `mkit gate run` writes it, and
+	# TestWriteSitesAreOnTheReviewedAllowlist is what asserts the same rule one layer in.
 }
 
 @test "every write target in the payload is a parameter, not a literal path" {

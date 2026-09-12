@@ -111,6 +111,19 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
     tree is a wrong answer that looks right.
     `CommonFunc` is how the binary calls a `lib/common.sh` helper instead of re-wording it.
   - `doctor/` (M7): the checks. Reports; fixes nothing; exit status stays 0 with findings.
+  - `scratch/` (M5): `<toplevel>/.mkit/` — the scratch root, and the **only** package that
+    writes inside a user's work tree. `EnsureIgnored` puts the `.mkit/*` + `!.mkit/config.toml`
+    pair in the common dir's `info/exclude` before the first create; `Ignored` probes **two**
+    paths, because an unrelated `*.jsonl` rule hides the ledger while leaving every run
+    directory untracked. `TestWriteSitesAreOnTheReviewedAllowlist` is the Go half of what
+    `payload.bats` asserted over the shell: three write locations, chosen by lifetime, asserted
+    by shape against a list a human reviewed.
+  - `gate/` (M5): `Fingerprint` (the staging- and commit-invariant content hash — symlinks
+    hashed as their target path, a tracked file replaced by a directory leaving the mapping,
+    `.mkit` dropped from the HEAD mapping as well as the overlays), `Ledger` (append, classify,
+    rotate) and `Run` (step execution, full log, bounded excerpt). The two `gate run` call forms
+    execute the same string but **normalize the ledger key differently**, and that seam is what
+    makes a `review` → `finish` cache hit possible at all.
   - `findings/` (M4): the review-run arithmetic — validate, similarity, reconcile, group, report.
     Records are an **order-preserving `Record`**, not a struct: `reconciled.jsonl` and `final.jsonl`
     re-serialize wholesale, and a struct would silently drop `fix`, `also` or anything a reviewer
@@ -170,8 +183,8 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
     that reads exactly like the tree). A cause needing a sentence goes in the trailing `notes:`
     block, never on a `key=value` line, since several of those pack more than one pair.
     `run-open.sh` — the directory alone, plus `--prune`.
-  - `gate-detect.sh` / `gate-run.sh` — the quality gate. `gate-run.sh` **writes** the ledger (one
-    record per finished step); `gate-detect.sh` **reads** it back, annotating the commands it
+  - `gate-detect.sh` — the read half of the quality gate. `mkit gate run` (M5) **writes** the
+    ledger, one record per finished step; this **reads** it back, annotating the commands it
     proposes with `fast_cache=` / `full_cache=` / `gate_fingerprint=`, or one
     `gate_cache=off|empty|no-hash|no-jq` cause. Neither ever skips a step — the skill owns that
     trade-off and must label a skipped step `cached`. Escape hatches: `--no-ledger` / `--no-cache`.
