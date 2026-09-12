@@ -31,11 +31,19 @@ References, read the ones a step calls for: `../_shared/references/worktree.md`,
 **One call**, which also opens this run's directory (`../_shared/references/output-discipline.md`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh finish --base <base> --gh
+mkit facts finish --base <base> --gh
 ```
 
+`mkit facts` **is** this skill's dependency check. If it fails with `command not found`, **stop** and say:
+
+> This skill runs on the `mkit` binary. Install it with `brew install masterik/tap/mkit` (or upgrade
+> with `brew upgrade mkit`), then run it again.
+
+Presence only, no declared minimum on either side — a subcommand that does not exist *is* the too-old
+signal.
+
 Keep the `run=` literal; this file writes it as `<run-dir>`. There is no `$RUN_DIR` — a shell variable does
-not survive to the next Bash call — and re-running the script opens a second directory instead of returning
+not survive to the next Bash call — and re-running `mkit facts` opens a second directory instead of returning
 the first. Check four things in what it printed:
 
 1. **Current branch** — `branch=` must be a feature/bugfix branch, not `default_branch=`. On `main`/`master`:
@@ -215,10 +223,10 @@ merge onto current base.
 ### 5. Verify the cleanup
 
 **`$toplevel` is stale here whenever step 4 removed a worktree — and so may the shell's cwd be**, if it was
-inside that worktree when `git worktree remove` ran. `$toplevel` is the root `facts.sh` resolved at step
+inside that worktree when `git worktree remove` ran. `$toplevel` is the root `mkit facts` resolved at step
 1 — the *feature* worktree on any linked path — and that directory no longer exists, so a call pinned to it,
 or one run from a cwd still inside it, fails instead of verifying anything. Resolve `<surviving-root>` once
-(`primary=` from `facts.sh`, or re-resolve the root) and put every command below against it — `cd
+(`primary=` from `mkit facts`, or re-resolve the root) and put every command below against it — `cd
 "<surviving-root>"` first, since `pwd` and `git branch --show-current` have no `-C` equivalent, and pass
 `-C "<surviving-root>"` explicitly to the rest, including the pinned log check. On `linked=no` there was
 nothing to remove and `$toplevel`/the cwd are still correct.
@@ -233,7 +241,7 @@ nothing to remove and `$toplevel`/the cwd are still correct.
 
 ## Deliverable
 
-Prune with `${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh --prune` on the way out, folded into step 5's
+Prune with `mkit run prune` on the way out, folded into step 5's
 verification call.
 
 - Which path ran — local merge, or GitHub PR merge (name the PR URL and method used).

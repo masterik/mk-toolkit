@@ -37,10 +37,10 @@ sweeps every local branch and worktree, not just the one the other four just tou
 - `git-safety.md` — the non-negotiable git safety protocol: no force-push, no config edits, no AI attribution,
   don't skip hooks, confirm before irreversible steps.
 - `conventional-commits.md` — message format, type table, scope detection.
-- `quality-gate.md` — detecting the repo's fast check and full lint/test/build gate with
-  `mkit gate detect` (never hardcoded), running them through `mkit gate run`, and when a failure
-  still needs a delegated diagnosis.
-- `worktree.md` — the `cleanup_path` `facts.sh` reports (`exit-worktree` / `wt` / `git-worktree` / `none`) and
+- `quality-gate.md` — detecting the repo's lint/test/build gate with `mkit gate detect` (never
+  hardcoded), running it through `mkit gate run`, and when a failure still needs a delegated
+  diagnosis.
+- `worktree.md` — the `cleanup_path` `mkit facts` reports (`exit-worktree` / `wt` / `git-worktree` / `none`) and
   the teardown each one takes.
 - `branching.md` — the branch model to assume when a repo documents none.
 - `review-severity.md` — the severity bar (`critical`/`major`/`minor`, prose is minor), the
@@ -55,7 +55,7 @@ sweeps every local branch and worktree, not just the one the other four just tou
   `mkit findings group`), and the three checks on every fix plus what gates (the main session).
 - `agent-delegation.md` — running heavy work without paying for it in context: the run directory as transport,
   subagent return budgets, resolved reference paths, one-writer-per-file, model-per-stage.
-- `output-discipline.md` — the one call that starts a run (`scripts/facts.sh`, which opens the run directory
+- `output-discipline.md` — the one call that starts a run (`mkit facts`, which opens the run directory
   and returns every starting fact), the gate runner (`mkit gate run`), and bounding command output:
   `--stat` before any diff, never a full branch diff to write prose — plus what must never be capped (a staged
   diff you are approving, a body the user acts on).
@@ -74,7 +74,7 @@ sweeps every local branch and worktree, not just the one the other four just tou
   subagents and hand back a summary; diffs, transcripts and finding bodies live in a per-run directory under
   `<toplevel>/.mkit/` — ignored, one per worktree — opened before anything logs, and command output is
   bounded before it arrives (`output-discipline.md`).
-- **A script for a mechanical invariant, never for a decision** — `scripts/` owns the steps that are the same
+- **A command for a mechanical invariant, never for a decision** — `mkit` owns the steps that are the same
   every run and fail silently when hand-rolled (opening the run directory, logging a gate step, classifying a
   worktree, confidence arithmetic). Judgement stays in Markdown; see [`concept.md`](../../../docs/concept.md).
 

@@ -6,15 +6,15 @@ clean up the right way for the one they are in.
 
 `cleanup` is the one consumer that looks at every worktree in the repo rather than just the one it
 is running in — `mkit branch scan` reports `origin=primary|claude-code|linked` per worktree,
-the same three-way split as `facts.sh`'s `cleanup_path`, but as a table instead of a single answer.
+the same three-way split as `mkit facts`'s `cleanup_path`, but as a table instead of a single answer.
 The teardown below still applies row by row: never remove an `origin=claude-code` worktree with
 plain `git worktree remove` if this session happens to be the one running inside it — hand it back
 with **ExitWorktree** instead — and treat any other `claude-code` row (some other session's
 worktree) as a reason to ask before touching it, not a reason to skip it silently.
 
-## Ask the script, not the layout
+## Ask `mkit facts`, not the layout
 
-`facts.sh` already answered this (`output-discipline.md`):
+`mkit facts` already answered this (`output-discipline.md`):
 
 ```
 linked=yes            git_dir != common_dir — this is not the primary checkout
@@ -51,7 +51,7 @@ differently from the author's depends on it.
   isolated in the worktree …; edit the worktree copy of this file instead of the shared-checkout
   path"* — and the run directory is the first thing any skill opens.
 - **`run_ignored=` is the one thing you cannot fix from here.** The ignore rule lives in the *common
-  dir's* `info/exclude`, which is in the main checkout. `run-open.sh` writes it when it can; from an
+  dir's* `info/exclude`, which is in the main checkout. `mkit run open` writes it when it can; from an
   isolated session it cannot. While `run_ignored=no`, mkit's scratch shows up in
   `git status --porcelain`, `git worktree remove` refuses without `--force`, and `git add -A` would
   commit run artefacts — so **do not stage, and do not tear a worktree down with `--force` to get
@@ -73,7 +73,7 @@ Prefer worktrunk's own commands — they respect the user's hooks and config.
 ## Merge back with plain git
 
 `git checkout <base>` fails inside a worktree when the base is checked out in the primary one.
-Two safe options, and `facts.sh` already gave you `primary=`:
+Two safe options, and `mkit facts` already gave you `primary=`:
 
 - **Merge from the primary worktree** (preferred):
   ```bash
@@ -100,6 +100,6 @@ git worktree prune                  # tidy stale metadata
 - Determine the **base branch** before finishing — the branch the feature was cut from (often
   `default_branch`). Confirm with the user if ambiguous.
 - Never remove a worktree or delete a branch with **uncommitted changes** or **unmerged commits**
-  without an explicit request. `facts.sh` reports `clean=` and `commits_ahead_of_base=`.
+  without an explicit request. `mkit facts` reports `clean=` and `commits_ahead_of_base=`.
 - After removal verify: `git worktree list` no longer shows it, `git branch` no longer lists it.
 - Respect `git-safety.md` throughout.

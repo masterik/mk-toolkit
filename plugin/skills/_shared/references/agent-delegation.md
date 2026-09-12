@@ -9,11 +9,11 @@ transcripts, file contents, finding bodies — lives on disk, read back only for
 
 ## The run directory as transport
 
-Give every multi-stage run one directory. **`scripts/facts.sh <skill>` opens it** and prints it as `run=`
+Give every multi-stage run one directory. **`mkit facts <skill>` opens it** and prints it as `run=`
 (`output-discipline.md` owns where it lives and why); this section is only about using it between stages.
 
 - Hand every subagent that **`run=` literal**. Never `$RUN_DIR` (it inherits no shell) and never the
-  `${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh` command (no plugin root, and it must not open its own directory).
+  `mkit facts` command (a subagent must not open its own run directory).
 - **One writer per file.** A fanned-out stage gets one file per branch (`findings-<source>.jsonl`,
   `verdicts-<group>.jsonl`); the caller aggregates after they return. Concurrent writers to one path interleave
   or clobber, and a lost verdict reads exactly like a finding nobody raised.
@@ -36,7 +36,7 @@ adversarial all covered`. Ten lines is generous; a hundred means the brief had n
 ## Writing a brief
 
 - **Use the resolved paths you were given.** A subagent does not have the calling skill loaded, so
-  `${CLAUDE_PLUGIN_ROOT}` and `../_shared/references/…` mean nothing to it — `facts.sh` printed the bundle's
+  `${CLAUDE_PLUGIN_ROOT}` and `../_shared/references/…` mean nothing to it — `mkit facts` printed the bundle's
   real location as `refs=`, so a brief says `<refs>/lenses-craft.md` and tells the subagent to **read the file
   itself**. Pasting a reference into three briefs costs three copies.
 - **State the return budget, the output path, and the prohibitions**, not just the task.
@@ -62,7 +62,7 @@ case that has bitten.
   proposed group, and every file the plan calls mixed carries a hunk assignment. Omitting a path is a rule
   violation, not a judgement call, so a subagent that cannot place one says so instead of dropping it.
 - **The caller verifies by arithmetic, not by re-reading.** Compare the plan's path list against the
-  `*_file_list` blocks `facts.sh` already returned: same set, no path twice, nothing invented. That is a
+  `*_file_list` blocks `mkit facts` already returned: same set, no path twice, nothing invented. That is a
   set comparison over lines you already hold — it costs nothing and it is the whole check.
 - **On a gap, send the gap back to the same subagent** — name the missing paths and ask only where they go.
   Its context still holds the diff, so the answer is cheap. Re-reading the diff in the main session pays for

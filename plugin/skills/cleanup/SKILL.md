@@ -40,14 +40,22 @@ References, read the ones a step calls for: `../_shared/references/worktree.md`,
 (`../_shared/references/output-discipline.md`); the second needs that branch name, so it runs after:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh cleanup
-mkit branch scan --default <default_branch from facts.sh>
+mkit facts cleanup
+mkit branch scan --default <default_branch from mkit facts>
 ```
+
+`mkit facts` **is** this skill's dependency check. If it fails with `command not found`, **stop** and say:
+
+> This skill runs on the `mkit` binary. Install it with `brew install masterik/tap/mkit` (or upgrade
+> with `brew upgrade mkit`), then run it again.
+
+Presence only, no declared minimum on either side — a subcommand that does not exist *is* the too-old
+signal.
 
 Keep the `run=` literal; this file writes it as `<run-dir>`. There is no `$RUN_DIR` — a shell variable does
 not survive to the next Bash call.
 
-From `facts.sh`: `branch=` (current branch — cannot be deleted while checked out), `clean=` (is the *current*
+From `mkit facts`: `branch=` (current branch — cannot be deleted while checked out), `clean=` (is the *current*
 worktree dirty right now), `cleanup_path=` (only relevant if this session's own worktree turns out to be one
 of the ones in play — see step 3).
 
@@ -90,7 +98,7 @@ of the two kept branches. For everything else, sort into:
 **The `current` row needs one extra step, not a skip.** `mkit branch scan` reports `current` in the `class`
 column *instead of* what the branch would otherwise classify as — the branch you happen to be standing on is
 never exempt from cleanup just because you started there. Before deciding it is out of scope, derive its real
-disposition from its own `upstream` and `merged_into` columns, using the same priority order the script's own
+disposition from its own `upstream` and `merged_into` columns, using the same priority order the command's own
 header documents (`merged` > `merged-pr` > `open-pr`/`closed-pr` > `gone` > `unpushed` > `tracking` — `pr`'s
 column tells you which of the PR-based ones apply). Sort that derived class into auto-delete/ask exactly like
 any other row, but flag it separately as **"current — switch away first"**: step 3 has to leave it before it
@@ -134,7 +142,7 @@ Do this **before** anything else in this section. If step 1 flagged the branch y
 once you aren't standing on it anymore. If it was never in scope, skip this and stay put; you'll land somewhere
 in step 5 either way.
 
-`git switch` refuses when the target is already checked out in another worktree (relevant if `facts.sh`'s own
+`git switch` refuses when the target is already checked out in another worktree (relevant if `mkit facts`'s own
 `cleanup_path=` said this session is itself inside a linked or `.claude/worktrees/` checkout, and the default
 branch is checked out in the primary one). Try `develop` instead if it exists and isn't taken either; if both
 protected branches are unavailable, stop and say so rather than forcing anything — this is the one place in
@@ -212,7 +220,7 @@ handed you.
 
 ## Final report (always)
 
-Prune with `${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh --prune` folded into step 6's verification call.
+Prune with `mkit run prune` folded into step 6's verification call.
 
 ```
 Cleanup done — <n> local branch(es) removed, only <protected list> remain.

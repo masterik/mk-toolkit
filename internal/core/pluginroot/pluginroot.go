@@ -1,11 +1,10 @@
-// Package pluginroot locates the plugin payload and calls into its shell helpers.
+// Package pluginroot locates the plugin payload.
 //
-// Why the binary calls shell at all: mkit ships over two deliberately independent
-// channels (ADR 0003) — the binary via Homebrew, the payload via the GitHub
-// marketplace — and until M5 ports facts.sh, `lib/common.sh` is the single producer
-// of every degradation sentence. `mkit doctor` calling that producer is the whole
-// reason it stays a function; a second wording of a remedy is exactly the
-// two-implementations failure the porting rules exist to prevent.
+// mkit ships over two deliberately independent channels (ADR 0003) — the binary
+// via Homebrew, the payload via the GitHub marketplace — so the binary has to find
+// the payload rather than assume it. Since M5 the payload is skills and references
+// only: nothing in it is executed, and `mkit facts` reports where it is so a skill
+// can link into `_shared/references/…`.
 //
 // The payload is not on any stable path (a cask has no opt/ symlink and Caskroom is
 // version-pinned), so finding it is a search with named fallbacks and an honest
@@ -16,9 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 )
 
 // ErrNotFound means no payload checkout could be located. Callers report it as a
@@ -100,31 +97,6 @@ func Remedy() string {
 		"channels (ADR 0003), so Homebrew does not install it"
 }
 
-// CommonFunc sources lib/common.sh and runs one function, returning its stdout.
-//
-// This is how the binary consumes a degradation sentence instead of re-wording it.
-// Invoked through bash by absolute path, with no arguments and no shell
-// interpolation of caller data — the function name is a compile-time constant at
-// every call site.
-func (r *Root) CommonFunc(fn string) (string, error) {
-	script := ". " + shellQuote(filepath.Join(r.Dir, "scripts", "lib", "common.sh")) + "; " + fn
-	out, err := exec.Command("bash", "-c", script).Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimRight(string(out), "\n"), nil
-}
-
-// Script runs a payload script with arguments and returns its stdout. Used for the
-// surfaces the binary has not ported yet — gate discovery is the only one today,
-// and it leaves with gate-detect.sh in M5.
-func (r *Root) Script(dir string, name string, args ...string) (string, error) {
-	cmd := exec.Command(filepath.Join(r.Dir, "scripts", name), args...)
-	cmd.Dir = dir
-	out, err := cmd.Output()
-	return strings.TrimRight(string(out), "\n"), err
-}
-
 // Version reads the payload manifest's version. Empty when unreadable — the two
 // channels version independently by design (ADR 0003), so a missing answer is a
 // fact to report, not a failure.
@@ -201,8 +173,4 @@ func isPayload(dir string) bool {
 		}
 	}
 	return true
-}
-
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

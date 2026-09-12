@@ -39,11 +39,19 @@ Commits that are easy to review and safe to ship:
 (`../_shared/references/output-discipline.md`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh commit
+mkit facts commit
 ```
 
+`mkit facts` **is** this skill's dependency check. If it fails with `command not found`, **stop** and say:
+
+> This skill runs on the `mkit` binary. Install it with `brew install masterik/tap/mkit` (or upgrade
+> with `brew upgrade mkit`), then run it again.
+
+Presence only, no declared minimum on either side — a subcommand that does not exist *is* the too-old
+signal.
+
 Keep the `run=` and `refs=` literals it prints; this file writes the first as `<run-dir>`. There is no
-`$RUN_DIR` — a shell variable does not survive to the next Bash call — and re-running the script opens a
+`$RUN_DIR` — a shell variable does not survive to the next Bash call — and re-running `mkit facts` opens a
 second directory instead of returning the first.
 
 1. **Inspect before staging** — the call above returned all of it.
@@ -105,7 +113,7 @@ because a program assembled at runtime cannot be shown not to be git
 (`../_shared/references/git-safety.md`). Improvising a splitter into the user's working tree is how a
 helper script nearly got committed into someone else's project.
 
-Four steps per mixed file. `<tmp>` is the `tmp=` from `facts.sh`.
+Four steps per mixed file. `<tmp>` is the `tmp=` from `mkit facts`.
 
 **Allocate the patch file; never name it after the source file.** `<tmp>` is one directory shared by
 every session on this machine — two `commit` runs over the same path would otherwise pick the same
@@ -143,7 +151,7 @@ mktemp "<tmp>/mkit-patch.XXXXXX"
 
 ## Final report (always)
 
-Prune with `${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh --prune` on the way out, folded into another call.
+Prune with `mkit run prune` on the way out, folded into another call.
 After the last commit run `"$git_bin" -C "$toplevel" log --oneline -n <N>` (N = commits made this run) to
 confirm hashes, then report every commit — never skip this, even for one:
 

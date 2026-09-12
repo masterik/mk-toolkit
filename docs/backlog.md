@@ -106,17 +106,17 @@ Neither of these is a port, and neither waits on a milestone. Both follow from
   - **The tombstone is gone, not manual.** With no hook to silence, `~/.mkit/bootstrap.disabled`
     signals nothing; `prerequisites.md` says to delete a leftover one.
   - **Unprompted prerequisite detection stays lost after M7.** A missing tool surfaces only as a
-    thinner `facts.sh` block or a `gate_cache=no-hash` annotation until someone runs `doctor`.
+    thinner `mkit facts` block or a `pr=gh-missing` annotation until someone runs `doctor`.
     `doctor` restored the human-run report and cannot restore the unprompted one, and cannot
     report a missing `mkit` at all — see the note under "Staying in bash, permanently" below. Do
     not re-add a shell reporter for either gap.
-  - **`facts.sh`'s `user_dir_writable=` survives**, so no skill lost information. `~/.mkit/` is
+  - **`mkit facts`' `user_dir_writable=` survives**, so no skill lost information. `~/.mkit/` is
     empty but still the declared home for user-scoped state.
 
 ## Milestones
 
 **Order.** `mkit init` was the priority, so **M7 went first**, ahead of the remaining ports; it is
-done, and **M4 followed**. **M5 is next**, then M6, M8 as written. M3 is withdrawn. The M-numbers are stable
+done; **M4 followed**, then **M5**, which finished the port. **M6 is next**, then M8. M3 is withdrawn. The M-numbers are stable
 identities referenced from `concept.md` and `AGENTS.md`, so nothing is renumbered when the order
 changes.
 
@@ -182,8 +182,9 @@ answer is that **neither side declares a range**. No comparable tool does — wo
 and plugin from one repo and states compatibility in free-text frontmatter; coderabbit, the exact
 analogue, checks `coderabbit --version || echo NOT_INSTALLED` in Markdown at step 1 of its skill
 and carries its one per-feature minimum as untested prose; codegraph declares capability and names
-a fallback. So `facts.sh` reports `mkit=` and `mkit_bin=` as raw starting facts and compares
-nothing, and the check is **presence only**: `review` runs `command -v mkit && mkit findings schema
+a fallback. So nothing compares versions at all — M5 deleted even the raw `mkit=`/`mkit_bin=`
+facts, since a binary reporting its own presence is not a fact — and the check is **presence
+only**: `review` runs `command -v mkit && mkit findings schema
 --json` at step 0, where a subcommand that does not exist *is* the too-old signal. Absent or too
 old → **stop**, with `brew install masterik/tap/mkit` / `brew upgrade mkit`. That costs invariant 8
 for `review` specifically, deliberately: without the arithmetic there is no reconcile, no groups
@@ -192,7 +193,7 @@ this stage exists to remove.
 
 **The probe lives in the skill, not in `facts.sh`.** The guard's original home here — "named once
 by the `SessionStart` hook the way a missing `jq` already is" — stopped existing in 0.15.0 when the
-hook and all payload prerequisite reporting were deleted. M5 closes the other door: it folds
+hook and all payload prerequisite reporting were deleted. M5 closed the other door: it folded
 `facts.sh` into the binary, after which the call that would report `mkit=<version>` *is* `mkit` and
 cannot report its own absence. A probe in the skill's own Markdown survives both.
 
@@ -201,18 +202,50 @@ consumes `mkit findings … --json` at steps 3, 4 and 6 with the merge and verdi
 Markdown; with `mkit` off `PATH`, `review` says so at step 0 with a remedy that works instead of
 failing at step 3.
 
-### M5 — the `jq` consumers
-Port `branch-scan.sh`, `gate-run.sh`, `facts.sh` and `gate-detect.sh`. Deletes a whole family
-of degradation branches — `pr=jq-missing`, `gate_cache=no-jq`, `no-hash` — because a binary is
-never half-capable. The last milestone in the port: the shell payload after it is `run-open.sh`
-alone. **It also removes the last place a shell script could report the binary's absence** — after
-this, `facts.sh` *is* `mkit` — which is why M4 put `review`'s presence probe in the skill's own
-Markdown rather than here.
-Drop the fast tier in the same port. Since the tier was removed from `commit` and `review`, no
-skill consumes `fast=` or `fast_cache=`, yet `gate-detect.sh` still derives both for every
-ecosystem and the ledger still classifies them. Dead output is not a compatibility surface: the
-Go command proposes the full tier only.
-**Done when:** `jq` and `shasum` are gone from [`prerequisites.md`](prerequisites.md).
+### M5 — the `jq` consumers — done
+Ported `gate-run.sh`, `gate-detect.sh`, `branch-scan.sh`, `facts.sh` and `run-open.sh` to
+`mkit gate run`, `mkit gate detect`, `mkit branch scan`, `mkit facts` and `mkit run open|prune`.
+**Five scripts, not four**: `facts.sh` opened the run directory by calling `run-open.sh`, and a Go
+`facts` reaching back into the payload for a core operation is exactly the dependency this
+milestone existed to remove — so Go needed a run-directory implementation either way, and keeping
+the script would have been a second one. `lib/common.sh` and the whole `tests/` tree went with
+them. **The payload is Markdown**: `plugin/` ships no executable code at all.
+
+Deleted a whole family of degradation branches, because a binary is never half-capable:
+`pr=jq-missing`, `gate_cache=no-jq`, `gate_cache=no-hash`, `scripts_state=no-jq`, `gh=jq-missing`
+and `gh=no-cache`. `gate_cache=no-fingerprint` survives but narrows — with sha256 in process it can
+no longer mean an unwritable `$TMPDIR`, only "no work tree, or git plumbing failed", which is a
+cause with no remedy to offer rather than a missing tool. It also removed the last place a shell
+script could report the binary's absence — `facts.sh` *is* `mkit` now — which is why M4 put
+`review`'s presence probe in the skill's own Markdown rather than here, and why every other skill
+treats `command not found` from its own first call as its stop condition.
+
+**The fast tier was deleted, not pinned.** No skill has consumed `fast=` or `fast_cache=` since the
+tier was removed from `commit` and `review`, and this milestone's spec proposed keeping it as a
+pinned `[gate] fast = "…"`. That was rejected in implementation: it would have meant a new config
+key, a new `init` field and a new template block to keep an output alive that nothing reads, and
+the config pins only what inspection cannot establish. `alt_fast=` went with it.
+
+What the fast tier also carried was a repo's own documented `check:` target, and that did not die
+with it. When nothing is discovered the documented target **is** the chain
+(`full_source=documented`) — which is exactly what `${full:-${fast:-none}}` did before; when a
+chain was discovered it is reported beside it as `documented=` and never replaces it, because a
+`check:` that only lints would silently drop the repo's tests and build.
+
+**The `gate.commands` merge now exists once.** `mkit gate detect` reads `repoconfig` itself and
+tags every step `discovered` / `pinned` / `documented`, printed as `full_source=`, pipe-parallel
+with `full=`. `profile.buildGate` consumes that tagged result instead of running the script and
+merging a second time, and gate discovery no longer needs the payload at all.
+
+**`payload.bats` asserted two things with no behavioral seam** — the three-write-locations rule and
+the explicit-`mktemp`-template rule — and neither died with it. The second is moot in Go, and the
+first got a real seam for the first time: `internal/core/scratch`'s
+`TestWriteSitesAreOnTheReviewedAllowlist` scans `internal/` and `cmd/` for write calls and fails
+any file that is not on a list a human reviewed. That is the same trick `payload.bats` played, one
+layer in.
+
+**Done:** `jq`, `shasum` and `bats-core` are gone from [`prerequisites.md`](prerequisites.md);
+`just shtest` and `tests/` are gone; every skill's first call is `mkit facts <skill>`.
 
 ### M6 — `mkit work` + the workflow contract
 The substrate the seven steps stand on, landed before any of the new skills, so the back half
@@ -244,10 +277,9 @@ because git cannot re-include a file whose parent directory is excluded.
   tagged `discovered` or `pinned` (or `unavailable`, with a cause — an empty value is never
   presented as an answer). Discovery reads `docs/agents/issue-tracker.md` where present; scopes
   come from history, reviewers from CODEOWNERS, the spec ref from the remote.
-  **Gate discovery is delegated to `gate-detect.sh`, not reimplemented** — that script is the
-  single implementation of the invariant until M5 ports it, and a second one in Go is the failure
-  the porting rules name. `internal/core/pluginroot` is what locates it, and the same mechanism
-  fetches the remedy sentences below.
+  **Gate discovery was delegated to `gate-detect.sh`, not reimplemented** — that script was the
+  single implementation of the invariant until M5 ported it. Since M5 it is `gate.Detect`, which
+  also owns the pinned-over-discovered merge, and `profile` consumes its tagged result.
 - `mkit init` — writes the pinned remainder, committed. Interactive TUI on a TTY, flags otherwise
   (invariants 2 and 3). Writes nothing outside the repo. Refuses on a shadowed path rather than
   writing a config that never travels.
@@ -256,14 +288,15 @@ because git cannot re-include a file whose parent directory is excluded.
   report that answered is a report that succeeded.
   **It is the diagnostic surface, not an addition to one** — `install.sh --status` and the
   `SessionStart` hook were both deleted in 0.15.0, so between then and this the only report of an
-  unwritable user directory was `facts.sh`'s `user_dir_writable=` starting fact, and there was no
+  unwritable user directory was `mkit facts`' `user_dir_writable=` starting fact, and there was no
   report of a missing tool at all. **It does not restore all of it**: `doctor` cannot run
   unprompted at session start, and cannot report that `mkit` itself is absent. Both were the
   hook's job; both remain accepted losses.
-- The degradation sentences keep exactly one producer. That is `lib/common.sh` until M5 ports
-  `facts.sh`, and `doctor` **calls** it — `mkit_user_dir_writable` for the probe and
-  `mkit_user_dir_remedy` for the sentence, through `pluginroot.CommonFunc`. Where the payload
-  cannot be found, the affected checks report `unknown` and say why, rather than wording their own.
+- The degradation sentences keep exactly one producer. That was `lib/common.sh`, fetched through
+  `pluginroot.CommonFunc`, until M5 deleted the shell; the producer is now the Go package that owns
+  the surface — `scratch.UserDirWritable`/`UserDirRemedy` for the user directory,
+  `repoconfig.ShadowedRemedy` for a shadowed config. `doctor` and `facts` both read them; neither
+  words its own.
 **Done — all four met:** the committed config path is decided and recorded; `mkit doctor` names an
 unwritable `~/.mkit/` without failing, with a remedy naming **both** halves (create, then grant —
 the grant alone cannot create it); `mkit repo profile --json` distinguishes discovered from pinned
@@ -290,11 +323,12 @@ support and can land whenever.
   **Sequential in place is the default**, not a worktree per slice: `wt` is sandbox-fragile
   (observed failing to `mktemp`), and parallel editors over one tree is the collision `review`
   already avoids. Parallel worktrees stay an opt-in for a graph with genuinely independent slices.
-- **Interaction with M5, settle it there or here:** M5 drops the fast tier because no skill consumes
-  `fast=`. `implement` is exactly the consumer that wants one — a per-slice cheap check with the
-  full gate held for the end. Either M5 keeps the fast tier for this milestone's sake, or
-  `implement` runs the full gate every slice and leans on the ledger for the cache. Decide before
-  M5 deletes it, because resurrecting it afterwards costs more than keeping it.
+- **Settled in M5: there is no fast tier.** M5 deleted it outright rather than keeping it as a
+  pinned config key, because nothing read it and the config pins only what inspection cannot
+  establish. `implement` therefore runs the **full** gate between slices and leans on the ledger
+  for the cache — a slice that changed nothing a step reads classifies `fresh` and can be labelled
+  `cached`, which is the same saving the fast tier would have bought, from evidence rather than
+  from a guess about which check is cheap.
 **Done when:** a spec written by `spec` can be implemented by `implement` on a fresh session with
 no conversation context, working from the artifact and the worklog alone.
 
@@ -311,7 +345,7 @@ no conversation context, working from the artifact and the worklog alone.
   The recipe works and is the right thing to ship first; a command earns its place by removing the
   `@@`-block editing an agent currently does by hand, not by unbreaking anything. Separate from
   invariant 6, since which hunks go in which commit stays a judgement in the skill.
-- `mkit cleanup` TUI — multi-select over `branch-scan.sh`'s classification.
+- `mkit cleanup` TUI — multi-select over `mkit branch scan`'s classification.
 - `mkit review` TUI — live parallel reviewer progress.
 - Codex installer target (`~/.codex/`).
 - Other platforms. Deliberately out (see Decision). Reversing it means adding the `goos` entry,
@@ -328,13 +362,17 @@ no conversation context, working from the artifact and the worklog alone.
   implementations of one invariant. Reintroducing a bash hook here is a real option if the gap
   proves expensive; do it deliberately, not by reflex.
 
-## Porting rules
-- Each shell script's `.bats` file is a ready-made spec — port it to `go test` alongside the
-  code, do not re-derive the behavior. (M4's spec was `tests/findings.test.mjs`, same rule.)
-- One script per milestone, merged green. No big-bang rewrite: the bash is commented,
-  tested and load-bearing, and a mass rewrite is pure regression risk.
-- Delete the shell script in the same commit that lands its replacement. Two implementations
-  of one invariant is the failure mode the script layer exists to prevent.
+## Porting rules — kept, though the port is finished
+The shell layer went with M5. These stay because M6 and M8 add mechanical surface of their own,
+and because they explain why the ported code reads as it does.
+- Each shell script's `.bats` file was a ready-made spec — the `go test` beside each package is a
+  port of it, not a re-derivation. (M4's spec was `tests/findings.test.mjs`, same rule.) Do not
+  "simplify" an assertion whose comment names a measured failure.
+- One script per milestone, merged green. No big-bang rewrite: the bash was commented, tested and
+  load-bearing, and a mass rewrite would have been pure regression risk.
+- Each shell script was deleted in the commit that landed its replacement. Two implementations
+  of one invariant is the failure mode that rule exists to prevent — it now applies to degradation
+  sentences and to the pinned-over-discovered merge, which each have exactly one producer.
 
 ## Open questions
 
@@ -343,12 +381,12 @@ None open.
 Resolved:
 - **Which way the version-skew guard points** — **dissolved** at M4, not decided. The question
   assumed one side must declare a machine-comparable range; no comparable tool does (worktrunk,
-  coderabbit and codegraph all checked), and neither does mkit. `facts.sh` reports `mkit=` and
-  `mkit_bin=` without comparing them, the payload declares no minimum and the binary declares no
-  payload range, and the check is **presence only**: the skill asks for the subcommand it needs
-  (`mkit findings schema --json`) and a subcommand that does not exist is what "too old" looks
-  like. The probe lives in the skill's Markdown, at step 0 — the only place that survives M5,
-  since after it `facts.sh` *is* the binary and a binary cannot report its own absence. Skew
+  coderabbit and codegraph all checked), and neither does mkit. The payload declares no minimum
+  and the binary declares no payload range, and the check is **presence only**: the skill asks for
+  the subcommand it needs (`mkit findings schema --json`) and a subcommand that does not exist is
+  what "too old" looks like. The probe lives in the skill's Markdown, at step 0 — the only place
+  that survived M5, since `facts.sh` *is* the binary now and a binary cannot report its own
+  absence; M5 deleted `mkit_bin=`/`mkit=` for the same reason. Skew
   stays a standing condition to report ([ADR 0003](adr/0003-two-distribution-channels.md)),
   never a state to eliminate.
 - **Whether repo config belongs to mkit or to the harness** — neither, as posed. It is the

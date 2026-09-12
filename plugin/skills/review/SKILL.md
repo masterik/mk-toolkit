@@ -54,7 +54,7 @@ established facts — range, shortstat, file list, goal, mode — so the subagen
 
 | stage | who runs it | model | enters this session |
 | --- | --- | --- | --- |
-| 1 scope | this session — **one** `facts.sh` call | — | run dir, refs path, branch, stat, file list |
+| 1 scope | this session — **one** `mkit facts` call | — | run dir, refs path, branch, stat, file list |
 | 2 find | 2 (quick) or 3 (full) subagents, parallel | Opus | one ≤10-line reply per subagent: path written + counts by tag + lenses not covered |
 | 3 reconcile | this session — `mkit findings reconcile --json` | — | counts, merges, drops, undecided pairs |
 | 4 verify | 1 subagent per group from `mkit findings group --json`, parallel | Opus | one line per finding: id + verdict (+ corrected fields) |
@@ -62,7 +62,7 @@ established facts — range, shortstat, file list, goal, mode — so the subagen
 | 5a sweep | this session when the shape greps; 1 subagent per shape when it does not | Sonnet | the occurrence list |
 | 6 report | this session — `mkit findings report --json`, then prose | — | the summary itself |
 
-**Never read a diff into this session.** Subagents read the diff; this session reads what `facts.sh` returned.
+**Never read a diff into this session.** Subagents read the diff; this session reads what `mkit facts` returned.
 Never paste a reference into a brief either — hand over its path under `refs=` and have the subagent read it.
 
 **One writer per file, throughout.** Every fanned-out stage writes one file per subagent —
@@ -75,11 +75,11 @@ they return.
 command -v mkit >/dev/null && mkit findings schema --json >/dev/null
 ```
 
-Both halves matter. The first says the binary is installed; the second says *this* binary knows
-`findings` — a subcommand that does not exist is what "too old" looks like, and asking for it here
-surfaces it before a reviewer has run rather than at step 3 with a full run behind it. Nothing is
-compared against a declared range: any `mkit` that answers is current enough, and neither side
-declares a minimum.
+Both halves matter. The first says the binary is installed — which step 1's `mkit facts` needs too,
+and every other skill now needs at its own first call; the second says *this* binary knows `findings`
+— a subcommand that does not exist is what "too old" looks like, and asking for it here surfaces it
+before a reviewer has run rather than at step 3 with a full run behind it. Nothing is compared against
+a declared range: any `mkit` that answers is current enough, and neither side declares a minimum.
 
 If either half fails, **stop** — do not start the reviewers. Say:
 
@@ -109,10 +109,10 @@ described.
 Then one call, which also opens the run directory:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh review --range <range>     # omit --range for a dirty tree
+mkit facts review --range <range>     # omit --range for a dirty tree
 ```
 
-Keep the `run=` and `refs=` literals; every later step and every brief needs them, and re-running the script
+Keep the `run=` and `refs=` literals; every later step and every brief needs them, and re-running `mkit facts`
 opens a second directory (`output-discipline.md`).
 
 **Also capture the goal** — what the change is trying to achieve, one or two lines, from the user, branch name,
@@ -140,7 +140,7 @@ already tells it not to run the tests, build or linter, and not to report anythi
 | reviewer | how to invoke | lenses |
 | --- | --- | --- |
 | **CodeRabbit** | the CodeRabbit review skill (`coderabbit:code-review`) or the `coderabbit:code-reviewer` agent | full: not steerable — takes its own broad pass; map its findings onto lenses afterwards. quick: brief also asks for `bugs`/`impl` only, best-effort — it may still return broader findings |
-| **Codex** | the Codex review path (`codex:rescue` skill / `codex:codex-rescue` agent), prompted for a review pass — always with `--wait` appended, see the async caveat below | full: `bugs`, `impl`, `adversarial`. quick: `bugs`, `impl` only — the brief says so explicitly |
+| **Codex** | the Codex review path (`codex:rescue` skill / `codex:codex-rescue` agent), prompted for a review pass — always with `--wait --write` appended, and dispatched from inside the reviewed tree; see the two caveats below | full: `bugs`, `impl`, `adversarial`. quick: `bugs`, `impl` only — the brief says so explicitly |
 | **Claude** (full only) | a subagent over the same diff — or the built-in `code-review` skill at a high effort level | `architecture`, `quality`, `tests`, `docs`, `comments` |
 
 Each brief carries: `<run-dir>/scope.md`, the paths of `review-severity.md` and of **its own lens file** under
@@ -184,11 +184,29 @@ says.
 telling it to "keep waiting" cannot override that, because the agent's own rules take precedence over
 instructions passed into its prompt. Left to its own routing heuristic, it treats a full review as
 "complicated" and backgrounds the job, forwards it, and ends its turn immediately — reporting itself idle
-while Codex is still working. **Always append `--wait` to the task text forwarded to `codex:codex-rescue`**:
-per `codex-cli-runtime`, `--wait`/`--background` are recognized as execution-control tokens, and `--wait`
-forces the underlying call to block until Codex actually finishes, so the agent's turn cannot end early. Its
-brief must still add: if it dies, say so with the error rather than reconstructing findings; and **never write
-a placeholder before it returns**, because an empty file claims a zero-finding review that did not happen.
+while Codex is still working. **Always append `--wait --write` to the task text forwarded to
+`codex:codex-rescue`**: per `codex-cli-runtime`, `--wait`/`--background` are recognized as execution-control
+tokens, and `--wait` forces the underlying call to block until Codex actually finishes, so the agent's turn
+cannot end early. Its brief must still add: if it dies, say so with the error rather than reconstructing
+findings; and **never write a placeholder before it returns**, because an empty file claims a zero-finding
+review that did not happen.
+
+**Codex's sandbox is set by the invocation, not by the brief.** `codex:codex-rescue` runs the companion under
+Codex's *own* sandbox, and two invocation details — neither expressible in prose inside the brief — decide
+whether it can write `findings-codex.jsonl` at all:
+
+- **`--write`, or the whole run is read-only.** Without that token the companion starts Codex in `read-only`
+  mode, and the findings write fails with *"session filesystem policy prohibits writes"* — a review that
+  completed, found things, and reported none of them, which step 3 reads as a missing source.
+  `codex-cli-runtime` defaults to *dropping* `--write` for review, diagnosis and research, so a review brief
+  lands squarely in that exclusion; appending it explicitly is what overrides the default. It is not a licence
+  to edit — "Read-only, every reviewer run" above still holds and the brief must keep saying so; the
+  findings file is the one thing it may write.
+- **The writable root is the launching working directory, not the path named in the brief.** Codex's
+  `workspace-write` covers the git toplevel of the directory the companion was started in, plus `$TMPDIR`.
+  Telling it in prose to "work in worktree X" moves nothing. Dispatch the Codex brief with the working
+  directory already inside the same tree as `<run-dir>` — reviewing a sibling worktree from elsewhere
+  burns a full review and then dies with `EPERM` on the findings file.
 
 **Availability & fallback.** A missing or erroring tool: redistribute its lenses to an available reviewer and
 **note both facts in the summary**. Claude only: run **two** subagents with different lens splits, so
@@ -212,7 +230,7 @@ mkit findings reconcile <run-dir> --sources-expected <N> --json
 `N` is the number of reviewers you **launched**, not the number that answered — it is what switches the
 weak-singleton drop rule off when a source is missing. That follows the mode recorded in `scope.md`: **2** for
 quick (CodeRabbit + Codex), **3** for full. **Never create an empty `findings-<source>.jsonl` to
-make the count line up**: the script reads a present file as that source reporting zero, which re-arms the drop
+make the count line up**: `mkit findings` reads a present file as that source reporting zero, which re-arms the drop
 rule and silently deletes exactly the single-source findings the missing reviewer would have corroborated. A
 source that never wrote a file is missing; lower `N` and say so. Then read `triage-reconcile.md` and settle the two things the
 binary deliberately leaves open, because both are judgement and it owns mechanical invariants only:
@@ -322,7 +340,7 @@ their full body, the one-line sections stay one line. End on the decision the us
 without an ask is the middle of the job, not the end.
 
 Do not commit unless asked — leave fixes in the working tree for the user to commit (or chain into `commit`).
-Fold `${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh --prune` into step 6's call rather than spending a turn on it.
+Fold `mkit run prune` into step 6's call rather than spending a turn on it.
 
 ## Git safety
 

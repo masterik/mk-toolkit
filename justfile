@@ -1,7 +1,7 @@
 # Run `just` for the list, `just <recipe>` to run one.
 
-# build, vet, test, lint, shell suite — what CI runs, in one shot
-ci: build vet test lint shtest
+# build, vet, test, lint — what CI runs, in one shot
+ci: build vet test lint
 
 build:
 	go build ./...
@@ -15,9 +15,6 @@ test:
 lint:
 	golangci-lint run
 
-# bats over the shell layer (tests/run.sh)
-shtest:
-	tests/run.sh
 
 # exercise the front-end contract, e.g. `just run version --json`
 run *ARGS:

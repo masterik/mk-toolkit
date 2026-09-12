@@ -10,9 +10,10 @@
 // cannot report on itself. Both were the hook's job and both are accepted losses
 // (docs/backlog.md, "Staying in bash, permanently").
 //
-// Every remedy sentence with a shell counterpart is *fetched* from
-// `lib/common.sh`, never re-worded here. One producer per sentence is a project
-// rule until M5 ports facts.sh.
+// Every degradation sentence has exactly one producer. Until M5 the shell was it
+// and this fetched from `lib/common.sh`; since the payload's last script went,
+// the producer is the Go package that owns the surface — `scratch` for the
+// user-scoped directory, `repoconfig` for a shadowed config.
 //
 // Layering: returns data, never prints, never assumes a terminal.
 package doctor
@@ -29,6 +30,7 @@ import (
 	"github.com/masterik/mk-toolkit/internal/core/gitrepo"
 	"github.com/masterik/mk-toolkit/internal/core/pluginroot"
 	"github.com/masterik/mk-toolkit/internal/core/repoconfig"
+	"github.com/masterik/mk-toolkit/internal/core/scratch"
 )
 
 // Status is a check's verdict.
@@ -104,7 +106,7 @@ func Run(opts Options) *Report {
 	r.binary()
 	r.payload(root, rootErr, toplevel)
 	r.prerequisites()
-	r.userDir(root)
+	r.userDir()
 	if opts.Repo != nil {
 		r.repo(opts.Repo)
 	} else {
@@ -210,7 +212,6 @@ var tools = []tool{
 	{"git", "prerequisites", Fail, "every skill", ""},
 	{"bash", "prerequisites", Fail, "the whole payload", ""},
 	{"gh", "prerequisites", Warn, "pr, finish, and cleanup's PR column", "brew install gh, then `gh auth login`"},
-	{"jq", "prerequisites", Warn, "facts.sh's PR lookup", "brew install jq"},
 	{"rg", "optional", Warn, "faster searching; grep -E is used otherwise", "brew install ripgrep"},
 	{"wt", "optional", Warn, "worktrunk-managed worktree teardown in finish/cleanup", "brew install worktrunk"},
 	{"codex", "optional", Warn, "review's Codex reviewer", ""},
@@ -229,37 +230,26 @@ func (r *Report) prerequisites() {
 	}
 }
 
-// userDir asks the payload rather than probing itself, for both halves: the probe
-// (`mkit_user_dir_writable`, which is net-zero by construction) and the sentence
-// (`mkit_user_dir_remedy`, which must name creating the directory *and* granting
-// it). Re-implementing either here would be the second implementation the porting
-// rules forbid, and re-wording the sentence is how the original one-grant mistake
-// survived three files.
 // userDirCheck is a constant because a check's name is its identity: a report
 // whose rows rename themselves by branch cannot be diffed or matched against.
 const userDirCheck = "user state dir"
 
-func (r *Report) userDir(root *pluginroot.Root) {
-	if root == nil {
-		r.add(Check{Group: "sandbox", Name: userDirCheck, Status: Unknown,
-			Detail: "cannot probe it: the writability check and its remedy both live in " +
-				"the payload's lib/common.sh, which was not found"})
-		return
-	}
-	dir, _ := root.CommonFunc("mkit_user_dir")
-	if _, err := root.CommonFunc("mkit_user_dir_writable"); err == nil {
+// userDir reports both halves from `internal/core/scratch`: the probe (net-zero
+// by construction) and the sentence (which must name creating the directory *and*
+// granting it). One producer for each — until M5 both were fetched from the
+// payload's lib/common.sh, and re-wording the sentence is how the original
+// one-grant mistake survived three files.
+func (r *Report) userDir() {
+	dir := scratch.UserDir()
+	if scratch.UserDirWritable() {
 		r.add(Check{Group: "sandbox", Name: userDirCheck, Status: OK, Detail: dir + " is writable"})
 		return
-	}
-	remedy, err := root.CommonFunc("mkit_user_dir_remedy")
-	if err != nil {
-		remedy = ""
 	}
 	// Warn, not Fail: the directory is empty today — its two files went with the
 	// hook — so nothing is failing yet. A later user-scoped write would.
 	r.add(Check{Group: "sandbox", Name: userDirCheck, Status: Warn,
 		Detail: dir + " is not writable; nothing needs it today, a later user-scoped write would",
-		Remedy: remedy})
+		Remedy: scratch.UserDirRemedy()})
 }
 
 func (r *Report) repo(repo *gitrepo.Repo) {

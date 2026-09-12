@@ -105,7 +105,7 @@ gate=ok (1 step cached)
 ```
 
 A run that prints `gate=ok` having executed nothing is worse than any amount of
-re-running: it reports a safety net that was never deployed. Hence the script never
+re-running: it reports a safety net that was never deployed. Hence `mkit gate run` never
 skips, and you must label.
 
 ### Classification
@@ -177,7 +177,7 @@ question off the table.
 
 ## Rules
 
-- Open the run directory before the first step — `facts.sh` did it; `mkit gate run` refuses a
+- Open the run directory before the first step — `mkit facts` did it; `mkit gate run` refuses a
   path that does not exist rather than writing a log to `/`.
 - Run the gate from the repo root of the current worktree.
 - Report exactly which step failed and its exit code. Never silently continue past a failure.

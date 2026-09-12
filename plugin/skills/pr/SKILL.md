@@ -42,13 +42,21 @@ this skill needs (`../_shared/references/output-discipline.md`). The same output
 step 4's context and the final report, and none change when step 3 pushes:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh pr --base <base> --gh
+mkit facts pr --base <base> --gh
 ```
+
+`mkit facts` **is** this skill's dependency check. If it fails with `command not found`, **stop** and say:
+
+> This skill runs on the `mkit` binary. Install it with `brew install masterik/tap/mkit` (or upgrade
+> with `brew upgrade mkit`), then run it again.
+
+Presence only, no declared minimum on either side — a subcommand that does not exist *is* the too-old
+signal.
 
 That covers the branch, the status, `commits:` for `<base>..HEAD`, the stat, `codeowners=` for step 6, and
 `pr=` — whether this branch already has one, which is the check that otherwise gets skipped. Keep the `run=`
 literal; this file writes it as `<run-dir>`. There is no `$RUN_DIR` (a shell variable does not survive to the
-next Bash call), and re-running the script opens a second directory instead of returning the first.
+next Bash call), and re-running `mkit facts` opens a second directory instead of returning the first.
 
 ### 1. Commit remaining work
 
@@ -207,7 +215,7 @@ Commits (<base>..HEAD):
 ```
 
 The commit list is step 0's `commits:` block — already in context, and cheap precisely because the diff never
-was. Never just "N commits pushed." Prune with `${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh --prune` on the way out.
+was. Never just "N commits pushed." Prune with `mkit run prune` on the way out.
 
 ## Common failure scenarios
 

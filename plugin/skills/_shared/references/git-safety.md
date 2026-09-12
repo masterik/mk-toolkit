@@ -19,7 +19,7 @@ Shared by every mkit skill. "The git safety protocol" means this file.
 
 ## Pin the git calls whose output you parse or judge
 
-`facts.sh` reports **`git_bin=`** — the absolute path of the real git binary. Any git call whose output
+`mkit facts` reports **`git_bin=`** — the absolute path of the real git binary. Any git call whose output
 a skill *parses or judges* uses it, with the repository root spelled out:
 
 ```
@@ -31,7 +31,7 @@ a skill *parses or judges* uses it, with the repository root spelled out:
 **Keep the quotes when you substitute.** These are recipes an agent fills in and runs literally, and
 both values are arbitrary paths: a checkout under `~/My Projects/thing` splits `-C` across two operands,
 and git then fails with `cannot change to '/Users/you/My'` or — worse — succeeds against the wrong root.
-Same for every `<path>` and every scratch file. `facts.sh` emits one pair per line precisely so a value
+Same for every `<path>` and every scratch file. `mkit facts` emits one pair per line precisely so a value
 containing a space survives being read; dropping the quotes here throws that away at the point of use.
 
 Both sides of this are measured, and both bite.

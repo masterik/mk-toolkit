@@ -15,6 +15,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
+	"time"
 
 	"github.com/masterik/mk-toolkit/internal/core/gitrepo"
 )
@@ -101,4 +104,120 @@ func EnsureIgnored(repo *gitrepo.Repo) bool {
 		return false
 	}
 	return Ignored(repo)
+}
+
+// RunDir opens a fresh run directory under <toplevel>/.mkit/ and returns its
+// absolute path.
+//
+// Four invariants, all mechanical, all of which fail silently or destructively
+// when they are hand-rolled at the start of a skill:
+//
+//   - a unique directory, never a plain MkdirAll: the timestamp is
+//     second-resolution, so two runs in one checkout can pick the same name, and
+//     MkdirAll would merge them and let each clobber the other's logs.
+//   - absolute, from --show-toplevel: the path is handed to subagents and reused
+//     across shells, where a relative .mkit/… would resolve somewhere else. A
+//     linked worktree gets its own, so no write of a worktree-isolated session
+//     targets the shared checkout.
+//   - ignored *before* the first write, or the first thing that walks the tree —
+//     `git worktree remove`, `git add -A`, the gate fingerprint — sees run
+//     artefacts. Best effort: the write lands in the main checkout's exclude
+//     file, which a worktree-isolated session cannot reach, so the answer is
+//     reported (`run_ignored=`) rather than enforced. Opening the run directory
+//     is every skill's first call and may not fail over an ignore rule.
+func RunDir(repo *gitrepo.Repo, skill string) (string, error) {
+	if err := CheckSlug(skill); err != nil {
+		return "", err
+	}
+	EnsureIgnored(repo)
+
+	dir := Dir(repo)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	prefix := fmt.Sprintf("%s-%s-", skill, time.Now().UTC().Format("20060102T150405Z"))
+	return os.MkdirTemp(dir, prefix)
+}
+
+// prunedSkills is the set `Prune` walks. One pass per skill, so a busy `review`
+// never evicts the only `pr` run.
+var prunedSkills = []string{"commit", "review", "finish", "pr", "cleanup"}
+
+// liveWindow is how recently a run directory must have been touched to be treated
+// as still in use. Age-ranked eviction alone cannot see a run still being written:
+// a long review holding an older directory would be removed underneath itself.
+const liveWindow = 60 * time.Minute
+
+// PruneResult is what one prune did.
+type PruneResult struct {
+	Removed int
+	Kept    int
+	// Live counts directories skipped because something may still be writing them.
+	Live int
+}
+
+// Prune removes all but the newest keep run directories per skill.
+//
+// Only `<skill>-*` **directories** are in range, which is what keeps `gate.jsonl`
+// out of it.
+func Prune(repo *gitrepo.Repo, keep int) (*PruneResult, error) {
+	// `0` is a perfectly good number and would evict every run directory —
+	// including the live one belonging to the caller doing the pruning.
+	if keep < 1 {
+		return nil, fmt.Errorf("--keep must keep at least 1 run directory")
+	}
+	res := &PruneResult{}
+	dir := Dir(repo)
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return res, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	for _, skill := range prunedSkills {
+		var names []string
+		for _, e := range entries {
+			if e.IsDir() && strings.HasPrefix(e.Name(), skill+"-") {
+				names = append(names, e.Name())
+			}
+		}
+		// Newest first: the name's UTC timestamp sorts lexicographically.
+		sort.Sort(sort.Reverse(sort.StringSlice(names)))
+		for i, name := range names {
+			path := filepath.Join(dir, name)
+			switch {
+			case i < keep:
+				res.Kept++
+			case recentlyTouched(path):
+				res.Live++
+			default:
+				if os.RemoveAll(path) == nil {
+					res.Removed++
+				}
+			}
+		}
+	}
+	return res, nil
+}
+
+func recentlyTouched(path string) bool {
+	fi, err := os.Stat(path)
+	return err == nil && time.Since(fi.ModTime()) < liveWindow
+}
+
+// CheckSlug rejects a path component that could traverse or glob.
+func CheckSlug(name string) error {
+	if name == "" {
+		return fmt.Errorf("empty name where a name is required")
+	}
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_', r == '-':
+		default:
+			return fmt.Errorf("name may only contain [a-zA-Z0-9_-], got: %s", name)
+		}
+	}
+	return nil
 }

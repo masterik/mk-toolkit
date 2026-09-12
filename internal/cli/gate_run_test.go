@@ -35,7 +35,13 @@ func gateGit(t *testing.T, dir string, args ...string) string {
 // repo a developer is working in.
 func gateRepo(t *testing.T) (repo, rd string) {
 	t.Helper()
-	repo = t.TempDir()
+	// Canonicalized: $TMPDIR is a symlink on macOS (/tmp -> /private/tmp) and git
+	// reports --show-toplevel resolved, so a raw t.TempDir() path never matches
+	// what every fact is reported against.
+	repo, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	gateGit(t, repo, "init", "-q", "-b", "main")
 	if err := os.WriteFile(filepath.Join(repo, "a.txt"), []byte("a\n"), 0o644); err != nil {
 		t.Fatal(err)

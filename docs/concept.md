@@ -15,19 +15,19 @@ Nothing installs into the repo's own toolchain. The plugin is essentially
 **knowledge + procedure**: each skill tells Claude *when* it applies and *how* to drive the
 underlying tools, with the safety rules that keep destructive steps from firing by accident.
 The agent is the interface; the skills are the muscle memory. The `mkit` binary is not a second
-interface onto that — it is the mechanical layer the skills call, and it is progressively
-replacing the shell scripts below. Milestones: [`backlog.md`](backlog.md).
+interface onto that — it is the mechanical layer the skills call. Since M5 it is **the whole of
+it**: the payload's shell layer is gone, and `plugin/` is Markdown. Milestones:
+[`backlog.md`](backlog.md).
 
-Alongside the Markdown sits a thin layer of **helper scripts** (`scripts/`, six of them) for
-the steps that are identical every run and fail silently when hand-rolled: opening the run
-directory, gathering the starting facts, detecting and running the quality gate, the
-arithmetic over a review's findings, and classifying every local branch/worktree a `cleanup`
-run has to decide about.
-They ship with the plugin — no `PATH`, no build, no install — and they exist for reliability
-more than for tokens: prose re-executed every run kept getting one invariant of three wrong. **Judgement stays in Markdown; a mechanical invariant
-belongs in a script.** Prerequisites: [`prerequisites.md`](prerequisites.md).
+What the binary owns is the steps that are identical every run and fail silently when
+hand-rolled: opening the run directory, gathering the starting facts, detecting and running the
+quality gate, the arithmetic over a review's findings, and classifying every local
+branch/worktree a `cleanup` run has to decide about. They exist for reliability more than for
+tokens — prose re-executed every run kept getting one invariant of three wrong. **Judgement
+stays in Markdown; a mechanical invariant belongs in the binary.** Prerequisites:
+[`prerequisites.md`](prerequisites.md).
 
-**Every script in the payload is now called by a skill.** A `SessionStart` hook once named a
+**A `SessionStart` hook once named a
 missing prerequisite before any skill ran; it and `install.sh` were removed in 0.15.0, because
 that report belongs to the binary (`mkit doctor`, M7) rather than to a second implementation in
 shell. The cost is real and accepted: a missing tool now surfaces as a thinner fact block or a
@@ -45,22 +45,21 @@ are plain Markdown, so support for another agent is a thin packaging step, not a
   compiled binary on the grounds that the glue is ~4 ms of a ~10 s agent turn, so a faster
   language would optimize nothing and cost a release pipeline. **That reasoning still holds, and
   the port is not about speed.** It buys three things shell cannot: prerequisites disappear
-  (`node` left with M4, `shasum` with M5's gate commands; `jq` leaves
-  [`prerequisites.md`](prerequisites.md) as its last consumers land), whole families of
-  degradation branch go with them (`jq-missing`, `no-hash`,
-  `gate_cache=no-jq` — a binary is never half-capable), and a real TUI becomes possible for the
+  (`node` left with M4; `shasum` and `jq` with M5, which took the last script), whole families of
+  degradation branch went with them (`jq-missing`, `no-hash`, `gate_cache=no-jq`, `gh=no-cache` —
+  a binary is never half-capable), and a real TUI becomes possible for the
   steps where a human wants to tick a list before anything runs. Homebrew ships the **binary
   only**; the plugin payload ships from the GitHub marketplace, and the two version independently
   ([ADR 0003](adr/0003-two-distribution-channels.md)). Ordered milestones and the invariants the
   port must hold: [`backlog.md`](backlog.md).
-- **A script for a mechanical invariant, never for a decision:** `scripts/` may open a
+- **A command for a mechanical invariant, never for a decision:** `mkit` may open a
   directory, run a logged command, classify a worktree or do confidence arithmetic. It may not
   choose commit boundaries, assign severity, judge materiality, or decide that a fix is safe.
-  Where the line is genuinely unclear the script reports candidates and the skill picks —
+  Where the line is genuinely unclear the command reports candidates and the skill picks —
   `mkit gate detect` proposing `full=` beside `docs_candidates:` is the shape to copy.
 - **A recorded fact is an input, never a permission:** mkit accumulates state between runs —
   gate results, hook arithmetic — and every one of them is evidence handed to the agent, never a
-  decision taken on its behalf. This *extends* the rule above rather than restating it: a script
+  decision taken on its behalf. This *extends* the rule above rather than restating it: a command
   only ever ran because a skill called it, so "report candidates, the skill picks" was enough.
   State outlives the skill that wrote it, and a hook fires with no skill in the loop at all, so
   the line has to be drawn again. Two instances of the one rule:
@@ -99,12 +98,12 @@ are plain Markdown, so support for another agent is a thin packaging step, not a
   instead of each restating the same safety and convention rules.
 - **Portable across repos, deliberately not across platforms:** nothing project-specific
   is hardcoded — quality-gate commands, commit scopes, and reviewers are all *discovered* from
-  the target repo. Platform portability is the opposite call for the shell layer: **macOS is the
-  supported OS**, and no script detects or branches on one. What that buys is a single narrow
-  target rather than a matrix — bash 3.2, BSD userland, no `flock` — so the discipline shows up
-  as constructs avoided (`mktemp`+`mv` instead of `sed -i`, a stored `epoch` instead of parsing
-  dates, `mkdir` as the lock primitive) rather than as conditionals to keep in sync. The binary
-  does **not** widen that: `.goreleaser.yaml` builds `darwin` only. Go would cross-compile for
+  the target repo. Platform portability is the opposite call: **macOS is the supported OS**, and
+  nothing detects or branches on one. What that bought the shell layer was a single narrow target
+  rather than a matrix — bash 3.2, BSD userland, no `flock` — and the constructs it forced survive
+  the port where they were the better design anyway: a stored `epoch` beside an ISO timestamp
+  instead of parsing dates, a directory as the lock primitive, an atomic rename instead of an
+  in-place edit. The binary does **not** widen the target: `.goreleaser.yaml` builds `darwin` only. Go would cross-compile for
   free, and the temptation is to take it — but an untested OS in the release matrix is a support
   claim nobody verifies, and the Homebrew **cask** the tap publishes cannot install on Linux
   anyway. amd64 + arm64 is the whole matrix. Other platforms stay out until someone needs one.
@@ -178,13 +177,11 @@ the five skills link into via `../_shared/references/…`:
                             severity bar · lenses · finding triage
                             agent delegation · output discipline)
    +
- scripts/                  the mechanical steps, one call each
-   run-open.sh             open a run directory · --prune old ones
-   facts.sh                run dir + refs path + branch/status/worktree/stats, in one call
-   +
- mkit (Go)                 the same mechanical steps, being ported off shell one at a time
+ mkit (Go)                 every mechanical step, one call each
    --json everywhere       the skill-facing contract · no TUI off a TTY · flags reach everything
-   M2 storage prune · M7 profile/init/doctor · M4 findings · M5 the jq consumers (in progress)
+   M2 storage prune · M7 profile/init/doctor · M4 findings · M5 the jq consumers (all done)
+   facts                   run dir + refs path + branch/status/worktree/stats, in one call
+   run open|prune          open a run directory · prune old ones
    gate detect             what this repo's checks are · what the ledger already proved
    gate run                run a gate step: log it, bound it, stop at the first failure
    branch scan             classify every local branch/worktree for `cleanup` · one gh call
@@ -195,19 +192,17 @@ the five skills link into via `../_shared/references/…`:
    doctor                  the agent's environment: prereqs · permissions · hooks · sandbox
    │   drive
    ▼
- git   +   gh (GitHub CLI)   +   wt (Worktrunk)   +   rg   +   jq
+ git   +   gh (GitHub CLI)   +   wt (Worktrunk)
 ```
 
-The scripts never act: no staging, no merging, no `wt merge`, no edits. They report facts and
+The commands never act: no staging, no merging, no `wt merge`, no edits. They report facts and
 run commands the skill named. One of them also *remembers*: `mkit gate run` records that a command
 exited 0 over a fingerprint of the content it read — `<toplevel>/.mkit/gate.jsonl`, beside the run
-directories, never committed, and a linked worktree gets its own. It adds no script: the ledger
+directories, never committed, and a linked worktree gets its own. It adds no command: the ledger
 is a side effect of a gate that was running anyway, read back by the detector that already prints
-the commands. The hook is the only piece that runs without a skill asking, and it is held to the
-same line — it names a missing tool and never installs one, always exits 0, and says each thing
-at most once. `rtk` is deliberately not among any of
-them — it reshapes output for an agent to read, which is exactly what a parser must not
-tolerate; it stays on the agent's own direct commands.
+the commands. `rtk` is deliberately not among any of them — it reshapes output for an agent to
+read, which is exactly what a parser must not tolerate; it stays on the agent's own direct
+commands.
 
 The skills are the single source of truth for the *workflow*; the underlying tools remain
 the source of truth for the *operations*. The plugin never re-encodes git logic.
@@ -255,7 +250,7 @@ every worktree in the repo rather than just the current one.
 mkit facilitates the workflow at three levels, and they are deliberately different in kind. The
 rule across all three: **mkit computes and reports; the human or the agent decides.**
 
-**The machine** — is the toolchain here at all. `facts.sh` reports the prerequisite-adjacent
+**The machine** — is the toolchain here at all. `mkit facts` reports the prerequisite-adjacent
 facts a skill needs at its first call, and that is now the whole of it: the `SessionStart` hook
 that named a missing tool once, and `install.sh --status`, are both gone. Neither installed
 anything, and neither was a place to *ask* — a human-run diagnostic is a separate surface, and
@@ -308,17 +303,12 @@ plugin/                 # the payload, shipped from the GitHub marketplace (neve
     finish/SKILL.md
     cleanup/SKILL.md
     _shared/             # shared references (README + references/*.md) — no SKILL.md
-  scripts/
-    lib/common.sh        # sourced helpers: plugin root, refs path, mkit dir, rg-or-grep, wt
-                         #   binary, tree fingerprint, gate ledger path
-    run-open.sh  facts.sh
-                         # no hooks/ and no install.sh — see "no hook, and no setup step"
+                         # Markdown only since M5: no scripts/, no hooks/, no install.sh
 docs/
   concept.md             # this file
   backlog.md             # ordered work list
   prerequisites.md       # required + recommended tooling, setup, permission allowlist
-tests/                   # dev-only: the script layer's own suite (tests/run.sh); Go tests
-                         #   live beside their package
+                         # tests live beside their Go package; there is no separate suite
 ```
 
 Install the plugin with:
@@ -353,15 +343,16 @@ skills of the same name.
   covering the repo and agent levels described above. `doctor` is the one with no predecessor:
   every other command reports something a script already computed, while the agent's own
   environment — permissions, hooks, sandbox — has never been reported at all.
-- **Now — the Go port.** `mkit`, a single binary with a subcommand tree, taking over the
-  mechanical layer script by script so that prerequisites and degradation branches go away and a
-  TUI becomes possible. M1 (scaffold, release chain, Homebrew cask) shipped in `v0.12.0`; M2
-  (`mkit storage prune`, `internal/core/storage/` + `internal/tui/storageprune/`) is done; M3 was
-  **withdrawn** when the distribution model changed ([ADR 0003](adr/0003-two-distribution-channels.md)),
-  so **M7 (`repo profile`/`init`/`doctor`) is next** — `mkit init` per project is the priority and no
-  port blocks it. Each script's `.bats` file is the spec for its port, and the
-  script is deleted in the same commit that replaces it — two implementations of one invariant is
-  the failure the script layer exists to prevent. Ordered list: [`backlog.md`](backlog.md).
+- **Done — the Go port's shell half.** `mkit`, a single binary with a subcommand tree, took over
+  the mechanical layer script by script so that prerequisites and degradation branches went away
+  and a TUI became possible. M1 (scaffold, release chain, Homebrew cask) shipped in `v0.12.0`; M2
+  (`mkit storage prune`), M7 (`repo profile`/`init`/`doctor`) and M4 (`mkit findings`) followed;
+  M3 was **withdrawn** when the distribution model changed
+  ([ADR 0003](adr/0003-two-distribution-channels.md)); **M5 took the last five scripts**, so the
+  payload is Markdown. Each script's `.bats` file was the spec for its port, and each script was
+  deleted in the same commit that replaced it — two implementations of one invariant is the
+  failure that rule exists to prevent. What is left is M6 and M8, which add rather than replace.
+  Ordered list: [`backlog.md`](backlog.md).
 - **Considered and dropped — recorded intent.** A commit journal once had a `Stop` /
   `SubagentStop` hook nudge the agent to record *why* each unit of work existed, for `commit` to
   spend instead of re-deriving intent from the diff. It was removed: a `Stop` hook's

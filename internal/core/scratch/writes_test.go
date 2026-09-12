@@ -21,6 +21,7 @@ import (
 // is the entire mechanism.
 var reviewed = map[string]string{
 	"internal/core/scratch/scratch.go":       "the scratch root itself, plus the one named exception: the common dir's info/exclude",
+	"internal/core/scratch/userdir.go":       "~/.mkit (MKIT_HOME) — the writability probe, net-zero by construction",
 	"internal/core/gate/ledger.go":           "<toplevel>/.mkit/gate.jsonl and its trim lock — inside the scratch root",
 	"internal/core/gate/run.go":              "one gate-<step>.log per step, inside the run directory it was handed",
 	"internal/core/findings/record.go":       "a review run's artefacts, inside the run directory it was handed",
