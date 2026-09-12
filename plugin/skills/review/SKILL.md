@@ -27,6 +27,7 @@ steps name them by bare filename:
 | --- | --- | --- |
 | `review-severity.md` | every reviewer | handed over in step 2 |
 | `lenses-correctness.md` / `lenses-craft.md` | Codex / the Claude reviewer | handed over in step 2 |
+| `workflow-contract.md` | **this session** | read at step 1 |
 | `triage-reconcile.md` | **this session** | read at step 3 |
 | `triage-verify.md` | each verifier subagent — or **this session**, on a handful | handed over in step 4, or read there |
 | `fix-checks.md` | **this session** | read at step 5, before the first fix |
@@ -115,9 +116,31 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh review --range <range>     # omit --range
 Keep the `run=` and `refs=` literals; every later step and every brief needs them, and re-running the script
 opens a second directory (`output-discipline.md`).
 
-**Also capture the goal** — what the change is trying to achieve, one or two lines, from the user, branch name,
-commit messages or ticket. The `impl` lens is judged against it; with no goal, say so and expect lower
-confidence rather than inventing one.
+Then read what already ran on this branch:
+
+```bash
+mkit work show --json --limit 20
+```
+
+Step 0 already established that `mkit` answers, so this call is about whether the *log* has anything in it.
+A branch nothing has run on is zero records and exit 0 — being first is the normal case, not a problem to
+report. Unlike step 0's probe, nothing here is load-bearing: the worklog makes this step cheaper and better
+informed, and never decides whether it may run (`workflow-contract.md`, rule 4).
+
+**Also capture the goal** — what the change is trying to achieve, one or two lines. In this order:
+
+1. a worklog gist whose `fingerprint` matches the tree being reviewed — a `spec` or `implement` record is
+   the goal stated by whoever set it, not one inferred from the outside
+2. the user
+3. the branch name
+4. the commit messages
+5. the ticket
+
+A gist whose fingerprint **no longer matches** is still the best answer available — use it, and name the
+downgrade in step 6 ("goal from the worklog, recorded before the last N files changed"). The `impl` lens is
+judged against the goal; with no goal at all, say so and expect lower confidence rather than inventing one.
+Whichever source it came from, say which — that is the contract's third rule, and it is the same degrade
+this step already performs when there is no spec.
 
 Write `<run-dir>/scope.md`: the range, the command producing the diff, the stat, the file list, the goal, and
 **the mode**. Later stages read that file instead of being told again — step 2's roster and step 3's
@@ -320,6 +343,17 @@ name that path once and let it hold the detail.
 A body appears in full where the reader acts on it, and nowhere twice: findings the user must decide on carry
 their full body, the one-line sections stay one line. End on the decision the user has to make — findings
 without an ask is the middle of the job, not the end.
+
+Then record the run:
+
+```bash
+mkit work append --step review --gist '<one line: what this review concluded>' \
+  --artifact '<run-dir>' [--assume '<what this run derived rather than found>']...
+```
+
+After the summary is produced, and it never changes the summary: a failed append is one line of note, not a
+failed run. The `--assume` list is where a derived goal goes, so the next step inherits the caveat instead of
+re-deriving it. Nothing is recorded for a run that found nothing to review.
 
 Do not commit unless asked — leave fixes in the working tree for the user to commit (or chain into `commit`).
 Fold `${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh --prune` into step 6's call rather than spending a turn on it.

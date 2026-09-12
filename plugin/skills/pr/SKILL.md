@@ -15,7 +15,7 @@ with no review use `finish`.
 References: `../_shared/references/conventional-commits.md`, `../_shared/references/quality-gate.md`,
 `../_shared/references/worktree.md`, `../_shared/references/git-safety.md`,
 `../_shared/references/branching.md`, `../_shared/references/output-discipline.md`,
-`../_shared/references/agent-delegation.md`.
+`../_shared/references/agent-delegation.md`, `../_shared/references/workflow-contract.md`.
 
 ## Goal
 
@@ -44,6 +44,22 @@ step 4's context and the final report, and none change when step 3 pushes:
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh pr --base <base> --gh
 ```
+
+Then one more, when that call reported a `mkit_bin=`:
+
+```bash
+mkit work show --json --limit 20      # skip it when step 0 reported mkit=none
+```
+
+What ran on this branch before, and what each step concluded. `facts.sh` reports `mkit_bin=` and
+`mkit=` and compares nothing, so an absent, older or failing `mkit` here is **one fewer input, never
+a stop** — the worklog makes a step cheaper and better informed, and never decides whether it may run
+(`../_shared/references/workflow-contract.md`, rule 4). That is what separates this call from
+`review`'s step-0 probe: without the findings arithmetic there is no review, and without the worklog
+there is a slightly less informed one.
+
+Step 4 drafts the "why" from those gists where they exist, rather than re-deriving intent from the commit
+subjects alone.
 
 That covers the branch, the status, `commits:` for `<base>..HEAD`, the stat, `codeowners=` for step 6, and
 `pr=` — whether this branch already has one, which is the check that otherwise gets skipped. Keep the `run=`
@@ -208,6 +224,17 @@ Commits (<base>..HEAD):
 
 The commit list is step 0's `commits:` block — already in context, and cheap precisely because the diff never
 was. Never just "N commits pushed." Prune with `${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh --prune` on the way out.
+
+Then record the run:
+
+```bash
+mkit work append --step pr --gist '<one line: what this run concluded>' \
+  --artifact '<pr-url>' [--assume '<what this run derived rather than found>']...
+```
+
+After the report is produced, and it never changes the report: a failed append is one line of note, not a
+failed run. Nothing is recorded for a run that did nothing — an empty result is a completed run, but it is
+not a fact a later step benefits from.
 
 ## Common failure scenarios
 

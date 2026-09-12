@@ -18,7 +18,7 @@ merges locally, no remote round trip. Either way this skill never *opens* a PR f
 References, read the ones a step calls for: `../_shared/references/worktree.md`,
 `../_shared/references/quality-gate.md`, `../_shared/references/conventional-commits.md`,
 `../_shared/references/git-safety.md`, `../_shared/references/branching.md`,
-`../_shared/references/output-discipline.md`.
+`../_shared/references/output-discipline.md`, `../_shared/references/workflow-contract.md`.
 
 ## When NOT to use this
 
@@ -33,6 +33,23 @@ References, read the ones a step calls for: `../_shared/references/worktree.md`,
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh finish --base <base> --gh
 ```
+
+Then one more, when that call reported a `mkit_bin=`:
+
+```bash
+mkit work show --json --limit 20      # skip it when the call above reported mkit=none
+```
+
+What ran on this branch before, and what each step concluded. `facts.sh` reports `mkit_bin=` and
+`mkit=` and compares nothing, so an absent, older or failing `mkit` here is **one fewer input, never
+a stop** — the worklog makes a step cheaper and better informed, and never decides whether it may run
+(`../_shared/references/workflow-contract.md`, rule 4). That is what separates this call from
+`review`'s step-0 probe: without the findings arithmetic there is no review, and without the worklog
+there is a slightly less informed one.
+
+A `review` record whose `fingerprint` matches the tree in front of you says a review already ran over this
+exact content — worth naming in the deliverable. It does not gate the merge, and it never substitutes for
+the quality gate, which has its own ledger.
 
 Keep the `run=` literal; this file writes it as `<run-dir>`. There is no `$RUN_DIR` — a shell variable does
 not survive to the next Bash call — and re-running the script opens a second directory instead of returning
@@ -241,6 +258,21 @@ verification call.
 - What merged into what, the resulting base HEAD, and that branch + worktree were removed.
 - Anything left in place on purpose (unmerged commits, dirty tree, a delete the user declined) — say so
   explicitly.
+
+Then record the run — from wherever this session ends up, and **only if that is still a work tree with
+this branch's log in it**. `finish` is the one step that usually destroys its own log: the worklog lives in
+the worktree it removes, and the branch it is keyed on is deleted a moment later. So the append is worth
+doing where the run stopped short — a declined merge, a failed gate, a PR not ready — and worth skipping
+where the cleanup actually ran. Skipping it is not a degradation to report:
+
+```bash
+mkit work append --step finish --gist '<one line: what this run concluded>' \
+  --artifact '<merge-sha>' [--assume '<what this run derived rather than found>']...
+```
+
+After the report is produced, and it never changes the report: a failed append is one line of note, not a
+failed run. Nothing is recorded for a run that did nothing — an empty result is a completed run, but it is
+not a fact a later step benefits from.
 
 ## Git safety
 

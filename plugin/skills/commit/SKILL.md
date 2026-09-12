@@ -11,7 +11,8 @@ model: sonnet
 
 Part of the **mkit** bundle (`commit` · `finish` · `pr` · `review`); shared references
 live in `../_shared/references/`. This skill only commits — merge-and-cleanup is `finish`, a PR is
-`pr`.
+`pr`. How the steps compose — and why this one runs alone, in any order, with the rest skipped — is
+`../_shared/references/workflow-contract.md`.
 
 Keep output bounded throughout. For this skill that is two rules, restated below where they apply:
 **`--stat` before any diff**, **never truncate a staged diff you are about to approve**.
@@ -41,6 +42,22 @@ Commits that are easy to review and safe to ship:
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh commit
 ```
+
+Then one more, when that call reported a `mkit_bin=`:
+
+```bash
+mkit work show --json --limit 20      # skip it when step 0 reported mkit=none
+```
+
+What ran on this branch before, and what each step concluded. `facts.sh` reports `mkit_bin=` and
+`mkit=` and compares nothing, so an absent, older or failing `mkit` here is **one fewer input, never
+a stop** — the worklog makes a step cheaper and better informed, and never decides whether it may run
+(`../_shared/references/workflow-contract.md`, rule 4). That is what separates this call from
+`review`'s step-0 probe: without the findings arithmetic there is no review, and without the worklog
+there is a slightly less informed one.
+
+A `spec` or `implement` gist is the scope hint step 2 splits against — it says what this branch was
+*for*, which the diff alone never does.
 
 Keep the `run=` and `refs=` literals it prints; this file writes the first as `<run-dir>`. There is no
 `$RUN_DIR` — a shell variable does not survive to the next Bash call — and re-running the script opens a
@@ -153,6 +170,17 @@ confirm hashes, then report every commit — never skip this, even for one:
 ```
 
 One block per commit, in order. Say so if staged changes were deliberately left out.
+
+Then record the run:
+
+```bash
+mkit work append --step commit --gist '<one line: what this run concluded>' \
+  --artifact '<first-sha>..<last-sha>' [--assume '<what this run derived rather than found>']...
+```
+
+After the report is produced, and it never changes the report: a failed append is one line of note, not a
+failed run. Nothing is recorded for a run that did nothing — an empty result is a completed run, but it is
+not a fact a later step benefits from.
 
 ## Conventional Commit format
 
