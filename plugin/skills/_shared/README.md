@@ -38,7 +38,7 @@ sweeps every local branch and worktree, not just the one the other four just tou
   don't skip hooks, confirm before irreversible steps.
 - `conventional-commits.md` — message format, type table, scope detection.
 - `quality-gate.md` — detecting the repo's fast check and full lint/test/build gate with
-  `scripts/gate-detect.sh` (never hardcoded), running them through `mkit gate run`, and when a failure
+  `mkit gate detect` (never hardcoded), running them through `mkit gate run`, and when a failure
   still needs a delegated diagnosis.
 - `worktree.md` — the `cleanup_path` `facts.sh` reports (`exit-worktree` / `wt` / `git-worktree` / `none`) and
   the teardown each one takes.

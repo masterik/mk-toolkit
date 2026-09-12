@@ -160,10 +160,9 @@ func TestReviewersComeFromCodeowners(t *testing.T) {
 	}
 }
 
-// Gate discovery is delegated to the payload's gate-detect.sh until M5 ports it.
-// Without a payload the discovered half reports its cause — and the pinned half
-// still answers, because the two are independent.
-func TestGateReportsItsCauseWithoutAPayloadAndStillHonoursPins(t *testing.T) {
+// Discovery no longer needs the payload — a reachable payload changes nothing
+// about the gate, and the pinned half answers either way.
+func TestGateHonoursPinsWithoutAPayload(t *testing.T) {
 	repo := newRepo(t)
 	if err := repoconfig.Write(repo.Toplevel, &repoconfig.Config{
 		Gate: repoconfig.Gate{Commands: map[string]string{"test": "go test ./..."}},
@@ -175,35 +174,11 @@ func TestGateReportsItsCauseWithoutAPayloadAndStillHonoursPins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Payload.Found {
-		t.Skip("a payload is reachable in this environment")
-	}
-	if p.Gate.Cause == "" {
-		t.Error("want a cause naming why gate discovery produced nothing")
+	if p.Gate.Cause != "" {
+		t.Errorf("cause = %q, want none — discovery ran", p.Gate.Cause)
 	}
 	if len(p.Gate.Steps) != 1 || p.Gate.Steps[0].Source != Pinned {
 		t.Fatalf("steps = %+v, want the one pinned step", p.Gate.Steps)
-	}
-	if p.Payload.Remedy == "" {
-		t.Error("a missing payload must carry a remedy")
-	}
-}
-
-func TestStepName(t *testing.T) {
-	for _, tc := range []struct{ cmd, want string }{
-		{"go vet ./...", "vet"},
-		{"go test ./...", "test"},
-		{"go build ./...", "build"},
-		{"golangci-lint run", "step1"}, // no bare token matches; positional, not wrong
-		{"npm run typecheck", "typecheck"},
-	} {
-		if got := stepName(tc.cmd, 0); got != tc.want {
-			t.Errorf("stepName(%q) = %q, want %q", tc.cmd, got, tc.want)
-		}
-	}
-	// Positional names must not run off the end of the digits.
-	if got := stepName("mystery", 11); got != "step12" {
-		t.Errorf("stepName(_, 11) = %q, want step12", got)
 	}
 }
 

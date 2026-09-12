@@ -70,7 +70,7 @@ Same inside a worktree — just confirm `git branch --show-current` is the featu
 4. **Full quality gate** (`../_shared/references/quality-gate.md`), in order, stopping at the first failure:
 
    ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/gate-detect.sh
+   mkit gate detect
    mkit gate run <run-dir> --chain 'lint=<cmd>' 'test=<cmd>' 'build=<cmd>'
    ```
 
@@ -78,7 +78,7 @@ Same inside a worktree — just confirm `git branch --show-current` is the featu
    the log. The user may proceed anyway for a draft. Delegate the diagnosis only when that verdict is not
    enough ("when a step fails") — choosing between fixing and opening a draft needs a cause, not a transcript.
 
-   `full_cache=` (from `gate-detect.sh`, pipe-parallel with `full=`) may be consumed **per step**: a draft PR
+   `full_cache=` (from `mkit gate detect`, pipe-parallel with `full=`) may be consumed **per step**: a draft PR
    is the recoverable case and CI runs remotely anyway. Each step served that way is `cached (Nm ago)` on its
    own line — never a pass. Never cache a whole chain in one go.
 

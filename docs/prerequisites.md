@@ -36,7 +36,7 @@ macOS-only in any case.
 | --- | --- | --- |
 | `git` ≥ 2.30 | everything | `--absolute-git-dir`, `worktree list --porcelain`, `diff --shortstat` |
 | `bash` ≥ 3.2 | every `.sh` — five helpers plus the sourced `lib/common.sh` | macOS ships `/bin/bash` 3.2 (frozen there over GPLv3) and `/bin/zsh` 5.9. The scripts run under bash via `#!/usr/bin/env bash`, so **your interactive shell being zsh is irrelevant** — nothing here needs 4.x, and no Homebrew bash is required |
-| `jq` ≥ 1.6 | `gate-detect.sh`, `facts.sh`, `branch-scan.sh` | reads `package.json`, `wt list --format=json`, `gh`'s JSON, and the gate ledger's JSONL |
+| `jq` ≥ 1.6 | `facts.sh`, `branch-scan.sh` | reads `wt list --format=json` and `gh`'s JSON |
 
 ```bash
 brew install git jq
@@ -46,8 +46,7 @@ brew install git jq
 
 | Tool | Used by | Degrades to |
 | --- | --- | --- |
-| `rg` (ripgrep) | `gate-detect.sh` doc scan, the `fix-checks` sweep | `grep -E` (same output, slower) |
-| `shasum` | the gate ledger's content fingerprint | `gate_cache=no-hash` — the gate runs every step, exactly as before. Never a hard requirement: a latency optimization may not add a prerequisite. macOS ships it, but it is a Perl script, so a stripped environment can lack it |
+| `rg` (ripgrep) | the `fix-checks` sweep | `grep -E` (same output, slower) |
 | `gh` | `pr`, `facts.sh --gh`, and `branch-scan.sh` (`cleanup`) | `pr` cannot open a PR at all; `facts.sh` prints `pr=gh-missing`; `branch-scan.sh` falls back to git-only classification and reports `gh=gh-missing` |
 | `wt` ([worktrunk](https://worktrunk.dev)) | `finish` cleanup, `facts.sh` worktree classification | plain `git worktree remove` |
 
@@ -96,7 +95,7 @@ The plugin ships **no hooks** and no installer. Both existed once: a `SessionSta
 prerequisite report belongs to the binary, and `mkit doctor` (M7) owns it now.
 
 **The gap that leaves, stated plainly:** nothing tells you unprompted that a tool from the table
-above is missing. It surfaces later — a thinner `facts.sh` block, a `gate_cache=no-hash`
+above is missing. It surfaces later — a thinner `facts.sh` block, a `pr=gh-missing`
 annotation on a gate report — which is exactly the debugging cost the hook existed to avoid.
 `mkit doctor` is the check, and it is human-run: you have to think to run it. It does not fully
 replace the hook and never will — a binary cannot report its own absence, and cannot speak at
@@ -118,7 +117,7 @@ Then check the plugin itself, from any repo:
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh" commit --no-run   # prints a fact block
-"${CLAUDE_PLUGIN_ROOT}/scripts/gate-detect.sh"             # prints fast= and full=
+mkit gate detect                                           # prints full= and its sources
 mkit findings schema                                       # prints the JSONL shape
 ```
 
@@ -135,10 +134,10 @@ Each new script is a new Bash pattern, so the first run of each asks. Allow them
   "permissions": {
     "allow": [
       "Bash(*/mkit/scripts/facts.sh:*)",
-      "Bash(*/mkit/scripts/gate-detect.sh:*)",
       "Bash(*/mkit/scripts/run-open.sh:*)",
       "Bash(*/mkit/scripts/branch-scan.sh:*)",
       "Bash(mkit findings:*)",
+      "Bash(mkit gate detect:*)",
       "Bash(mkit gate run:*)"
     ]
   }

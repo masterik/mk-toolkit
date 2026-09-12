@@ -149,28 +149,11 @@ var fixtures = []struct {
 	}},
 }
 
-// The port must agree with `mkit_tree_fingerprint` byte for byte. Not for
-// cross-version ledger compatibility — a mismatch degrades safely to `drifted`,
-// i.e. "run the gate" — but because it is the cheapest possible proof the port is
-// right. Deleted with the script it compares against; TestFingerprintGolden is
-// what survives.
-func TestFingerprintParityWithShell(t *testing.T) {
-	common := commonSh(t)
-	for _, f := range fixtures {
-		t.Run(f.name, func(t *testing.T) {
-			dir := f.base(t)
-			if f.setup != nil {
-				f.setup(t, dir)
-			}
-			want := shellFingerprint(t, common, dir)
-			if got := fingerprintOf(t, dir); got != want {
-				t.Errorf("fingerprint = %q, shell says %q", got, want)
-			}
-		})
-	}
-}
-
-// Known-good hashes over the same fixtures, so the matrix outlives the shell.
+// Known-good hashes over the fixture matrix.
+//
+// These were produced by running `mkit_tree_fingerprint` and the port over the same
+// fixtures and comparing, which is how the port was verified; the shell function
+// is gone now and these are what the matrix outlives it as.
 // A change here is a change to the ledger's key: every existing record in every
 // repo reclassifies as `drifted` and every gate re-runs once. That is safe, and
 // it is never accidental — update these only alongside a deliberate change to
@@ -252,30 +235,4 @@ func TestFingerprintNotARepo(t *testing.T) {
 	if _, err := gitrepo.Open(t.TempDir()); err == nil {
 		t.Fatal("expected a plain directory not to open as a repo")
 	}
-}
-
-// commonSh locates the shell library this package is replacing.
-func commonSh(t *testing.T) string {
-	t.Helper()
-	p, err := filepath.Abs("../../../plugin/scripts/lib/common.sh")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(p); err != nil {
-		t.Skipf("shell layer gone: %v", err)
-	}
-	return p
-}
-
-func shellFingerprint(t *testing.T, common, dir string) string {
-	t.Helper()
-	cmd := exec.Command("bash", "-c", `. "$1" && cd "$2" && mkit_tree_fingerprint`, "bash", common, dir)
-	cmd.Env = append(os.Environ(),
-		"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null",
-	)
-	out, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("mkit_tree_fingerprint: %v", err)
-	}
-	return strings.TrimRight(string(out), "\n")
 }

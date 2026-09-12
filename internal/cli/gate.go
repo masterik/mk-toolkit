@@ -7,6 +7,7 @@ func newGateCmd() *cobra.Command {
 		Use:   "gate",
 		Short: "The quality gate: what to run, and running it",
 	}
+	cmd.AddCommand(newGateDetectCmd())
 	cmd.AddCommand(newGateRunCmd())
 	return cmd
 }

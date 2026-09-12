@@ -6,18 +6,17 @@ directly on the diff. **Nothing is hardcoded** — the commands are detected fro
 ## Detect, then choose
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/gate-detect.sh
+mkit gate detect
 # pm=bun
 # ecosystem=node
-# fast=bun run lint
-# fast_cache=fresh exit=0 age=6m
 # full=bun run lint|bun run test|bun run build
+# full_source=discovered|pinned|discovered
 # full_cache=fresh|failed|none
 # full_cache_exit=0|1|-
 # full_cache_age=6m|6m|-
 # gate_fingerprint=7c998da01a8a9aa8
 # gate_max_age_min=60
-# alt_fast=bun run test:unit,bun run test
+# documented=just check
 # scripts=build,dev,format,lint,test,test:e2e,test:unit
 # scripts_state=ok
 # workspaces=yes
@@ -29,24 +28,35 @@ It reads the lockfile, `package.json` scripts, `Cargo.toml`, `go.mod`, `pyprojec
 `Makefile`/`justfile` `check` target and the repo's own docs — which keeps a 25-script
 `package.json` (~700 tokens) out of context.
 
-**`fast` and `full` are proposals; `docs_candidates` is why.** What a repo calls its canonical
-check is a claim in its own prose, not something a lockfile settles — so when `docs_candidates`
-names a command the tiers missed, prefer it and say which you used. Anything reported absent
+**`full` is a proposal; `documented` and `docs_candidates` are why.** What a repo calls its
+canonical check is a claim in its own prose, not something a lockfile settles — so when either
+names a command the chain missed, prefer it and say which you used. Anything reported absent
 stays absent: never invent a step.
 
-**Check `scripts_state` before believing `scripts=none`.** `ok` means the list is real; `no-jq`
-or `unreadable` means detection was blind, not that the repo declares nothing — a node repo can
-report `ecosystem=node fast=none` for want of `jq`. On a blind read, say the gate was undetected
-rather than absent, and never report a skipped gate as a pass. `n-a` is the honest no-package.json
-case: a repo with no declared check (this plugin is one) has no gate to run, and saying so beats
-substituting a command the repo never named.
+**`full_source=` says where each step came from**, pipe-parallel with `full=`:
+
+| value | meaning |
+| --- | --- |
+| `discovered` | inferred from a manifest this run; cannot go stale |
+| `pinned` | `[gate.commands]` in the repo config — a human said this one is right |
+| `documented` | the repo's own `check:` target, used because nothing was discovered |
+
+`documented=` appears on its own line when a `check:` target exists *and* a chain was
+discovered anyway. It never replaces that chain — a `check:` that only lints would silently
+drop the repo's tests and build — so it is evidence for an override, not an override.
+
+**Check `scripts_state` before believing `scripts=none`.** `ok` means the list is real;
+`unreadable` means detection was blind, not that the repo declares nothing. On a blind read, say
+the gate was undetected rather than absent, and never report a skipped gate as a pass. `n-a` is
+the honest no-package.json case: a repo with no declared check (this plugin is one) has no gate
+to run, and saying so beats substituting a command the repo never named.
 
 ## One tier, two consumers
 
-`gate-detect.sh` still proposes both `fast=` and `full=`, but only the full tier is used now —
-**by `finish` and `pr`, once each, before merge/PR**: the complete pre-integration sequence, in
-order, stopping at the first failure. `commit` and `review` used to consume the fast tier; they
-no longer gate at all.
+There is one tier — `full=` — used **by `finish` and `pr`, once each, before merge/PR**: the
+complete pre-integration sequence, in order, stopping at the first failure. `commit` and
+`review` used to consume a `fast=` tier; they no longer gate at all, and the tier went with
+them.
 
 ```bash
 mkit gate run <run-dir> --chain 'lint=bun run lint' 'test=bun run test' 'build=bun run build'
@@ -72,7 +82,7 @@ sentence or two, caused-by-this-change or pre-existing, a concrete suggested fix
 
 `mkit gate run` records every step it finishes into `<toplevel>/.mkit/gate.jsonl`:
 `(step, command, exit code, seconds, fingerprint of the content it ran over)`.
-`gate-detect.sh` compares each command it proposes against the newest record for that
+`mkit gate detect` compares each command it proposes against the newest record for that
 **exact command string** and annotates it. The `*_cache=` keys above are that annotation.
 
 **What this saves is wall-clock, not tokens.** There are no token savings here by
@@ -110,7 +120,7 @@ skips, and you must label.
 | `none` | no record for this exact command | run |
 
 A step *name* is not identity — the command is. `bun run test` and
-`bun run test --coverage` are different checks. A command you overrode (from `alt_fast`,
+`bun run test --coverage` are different checks. A command you overrode (from `documented`
 or `docs_candidates`) therefore classifies `none` and simply runs, which is the correct
 default for anything unrecognized.
 
@@ -150,18 +160,17 @@ Deliberately unequal — `pr` and `finish` do not carry the same risk.
 One key, one cause — the same discipline as `scripts_state`:
 
 - `gate_cache=off` — `--no-cache` was passed. This is the answer to "I don't trust it".
-- `gate_cache=empty` — nothing to compare against: no ledger yet, or one with no records.
-- `gate_cache=no-hash` — no `shasum` on the machine, so no fingerprint is possible.
-- `gate_cache=no-fingerprint` — a hash tool *is* present but the fingerprint could not be
-  computed anyway: no work tree, an unwritable `$TMPDIR`, or a hash batch that refused to answer.
-  A distinct cause on purpose: "install `shasum`" is the wrong advice for someone who already has
-  it. It used to fire on every sandboxed run, from a temp-file denial rather than anything about
-  this repo — fixed at the source, so it now means what it says.
-- `gate_cache=no-jq` — no `jq`.
+- `gate_cache=empty` — nothing to compare against: no ledger yet, one with no records, or one
+  that could not be read cleanly. A ledger with a malformed line has nothing to say; a
+  confident wrong class is the one answer it may not give.
+- `gate_cache=no-fingerprint` — the content hash could not be computed: no work tree, or git
+  plumbing failed. **Not a missing tool** — the hash is computed in process, so there is
+  nothing to install and no remedy to offer.
 
-Each degrades to today's behavior exactly: detect, then run everything.
+`no-hash` and `no-jq` are gone with the forks that needed them: a binary is never
+half-capable. Each surviving cause degrades to the same behavior: detect, then run everything.
 
-The two escape hatches: `gate-detect.sh --no-cache` ignores the ledger for one call
+The two escape hatches: `mkit gate detect --no-cache` ignores the ledger for one call
 (`gate_cache=off`), and `mkit gate run --no-ledger` stops writing to it. Neither is needed in
 normal use; reach for `--no-cache` when a `fresh` verdict looks wrong and you want the
 question off the table.

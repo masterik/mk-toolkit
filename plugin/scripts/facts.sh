@@ -92,7 +92,7 @@ printf 'plugin=%s\nrefs=%s\n' "$plugin_root" "$(mkit_refs_dir)"
 
 toplevel="$(git rev-parse --show-toplevel)"
 git_dir="$(git rev-parse --absolute-git-dir)"
-# Run repo-wide from here on, as gate-detect.sh does and quality-gate.md requires. Called
+# Run repo-wide from here on, as `mkit gate detect` does and quality-gate.md requires. Called
 # from a subdirectory, the pathspec'd file lists below covered only that subdirectory while
 # the --shortstat beside them stayed repo-wide, so the two keys contradicted each other and
 # a skill deciding commit boundaries from the list silently lost files.

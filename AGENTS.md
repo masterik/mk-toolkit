@@ -99,8 +99,9 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
     **deliberate second producer** of a degradation sentence (`mkit_config_ignored_remedy` is the
     other): `init` must refuse before it has located a payload. `TestRemedyParityWithShell`
     compares the two byte for byte over every rule shape — keep it that way, or delete one.
-  - `profile/` (M7): merges discovered with pinned, tagging every value. Gate discovery is
-    **delegated to `gate-detect.sh`**, never reimplemented, until M5 ports it.
+  - `profile/` (M7): merges discovered with pinned, tagging every value. Gate discovery —
+    and the pinned-over-discovered merge — belong to `gate.Detect` since M5; the profile
+    consumes the tagged result rather than redoing it.
   - `pluginroot/` (M7): locates the payload — `CLAUDE_PLUGIN_ROOT`, `MKIT_PLUGIN_ROOT`, a
     `plugin/` beside the work tree, then the marketplace checkout. Every *searched* candidate is
     identified by the **manifest's own name**, never by path: the checkout is named after the
@@ -183,11 +184,6 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
     that reads exactly like the tree). A cause needing a sentence goes in the trailing `notes:`
     block, never on a `key=value` line, since several of those pack more than one pair.
     `run-open.sh` — the directory alone, plus `--prune`.
-  - `gate-detect.sh` — the read half of the quality gate. `mkit gate run` (M5) **writes** the
-    ledger, one record per finished step; this **reads** it back, annotating the commands it
-    proposes with `fast_cache=` / `full_cache=` / `gate_fingerprint=`, or one
-    `gate_cache=off|empty|no-hash|no-jq` cause. Neither ever skips a step — the skill owns that
-    trade-off and must label a skipped step `cached`. Escape hatches: `--no-ledger` / `--no-cache`.
   - `branch-scan.sh` — `cleanup`'s classifier: every local branch's merge/upstream/PR state and
     every worktree's origin/cleanliness. One batched `gh` call, cached, never a per-branch round
     trip. The cache is **not** load-bearing: a cache it cannot create is `gh=no-cache`, one row per

@@ -30,7 +30,7 @@ payload_shell() {
 
 @test "the payload ships at least the files these assertions are about" {
 	n="$(payload_shell | grep -c .)"
-	[ "$n" -ge 5 ]
+	[ "$n" -ge 3 ]
 	payload_shell | grep -q '/scripts/lib/common.sh$'
 	payload_shell | grep -q '/scripts/facts.sh$'
 }
@@ -269,12 +269,12 @@ $(payload_write_targets "$f" || true)"
 	done <<-EOF
 		$(payload_shell)
 	EOF
-	printf '%s\n' "$all" | grep -q 'tmp_p'     # the fingerprint's ephemeral files
 	printf '%s\n' "$all" | grep -q 'pr_cache'  # the branch classifier's PR cache
 	printf '%s\n' "$all" | grep -q 'exclude'   # the ignore rule
 	printf '%s\n' "$all" | grep -q 'mkit_dir'  # the run root
-	# gate.jsonl is no longer written from the payload — `mkit gate run` writes it, and
-	# TestWriteSitesAreOnTheReviewedAllowlist is what asserts the same rule one layer in.
+	# gate.jsonl and the fingerprint's ephemeral files are no longer written from the
+	# payload — the binary writes them, and TestWriteSitesAreOnTheReviewedAllowlist is
+	# what asserts the same rule one layer in.
 }
 
 @test "every write target in the payload is a parameter, not a literal path" {

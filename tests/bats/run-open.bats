@@ -261,13 +261,5 @@ teardown() { mkit_teardown_repo; }
 	[ ! -d "$MKIT_TMP/wt-b" ]
 }
 
-@test "a run directory does not change the tree fingerprint" {
-	# shellcheck source=../../plugin/scripts/lib/common.sh
-	. "$SCRIPTS/lib/common.sh"
-	before="$(mkit_tree_fingerprint)"
-	[ -n "$before" ]
-	run_dir="$("$SCRIPTS/run-open.sh" review)"
-	printf 'a gate running writes here\n' >"$run_dir/step.log"
-	after="$(mkit_tree_fingerprint)"
-	[ "$before" = "$after" ]
-}
+# The fingerprint half of this — that a run directory's contents never enter the gate's
+# content hash — moved to Go with the hash itself: TestFingerprintExcludesScratch.

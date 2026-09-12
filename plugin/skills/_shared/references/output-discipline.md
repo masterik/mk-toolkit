@@ -99,7 +99,7 @@ gate=FAILED step=test exit=1
 - `--tail N` / `--grep N` widen the excerpt; `--keep-going` runs past a failure when you deliberately
   want the whole picture.
 - Never re-run a gate to see output you discarded. That is what the log is for. Which commands to run:
-  `gate-detect.sh` (`quality-gate.md`).
+  `mkit gate detect` (`quality-gate.md`).
 
 ## Diffs
 

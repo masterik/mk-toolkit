@@ -43,7 +43,7 @@
 #              as `no`: an unreadable worktree is not a proven-clean one)
 #
 # `class` is a fact, not a verdict — this script does not decide what counts as "safe to
-# delete", the same restraint `gate-detect.sh` takes with `fast=`/`full=`. As a guide to
+# delete", the same restraint `mkit gate detect` takes with `full=`. As a guide to
 # what each class usually means for a cleanup skill:
 #
 #   protected / current    never a candidate

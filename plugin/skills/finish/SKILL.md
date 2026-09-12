@@ -69,7 +69,7 @@ equivalent, stop on first failure. A local merge skips review, so this gate is t
 failure; do not merge past it without an explicit user OK.
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/gate-detect.sh
+mkit gate detect
 mkit gate run <run-dir> --chain 'lint=<cmd>' 'test=<cmd>' 'build=<cmd>'
 ```
 
@@ -77,7 +77,7 @@ One line per passing step; on failure the step, the exit code, the grepped failu
 (`../_shared/references/output-discipline.md`). A failing suite is thousands of lines, none of which change
 the decision ("fix it or get an explicit OK").
 
-`gate-detect.sh` also reports what the gate ledger already proved (`full_cache=`, pipe-parallel with
+`mkit gate detect` also reports what the gate ledger already proved (`full_cache=`, pipe-parallel with
 `full=`). **This is the strictest consumer in the bundle**, because a local merge skips review and this gate
 is the only safety net: consume a step only on an exact command match, a matching fingerprint and an age
 inside the bound — per step, never a whole chain at once — and print `cached (Nm ago, exit=0)` on that

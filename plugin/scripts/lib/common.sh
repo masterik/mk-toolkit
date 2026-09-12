@@ -337,7 +337,7 @@ mkit_config_ignored_remedy() {
 #     keeps any worktree holding changed or untracked files.
 #   - **`git add -A`**, which would commit run artefacts into the user's project. Already
 #     happened once, with an improvised helper script.
-#   - **the gate cache.** `mkit_tree_fingerprint` enumerates with `git ls-files --others
+#   - **the gate cache.** The tree fingerprint enumerates with `git ls-files --others
 #     --exclude-standard`, so an unignored scratch directory enters the fingerprint and
 #     then changes while the gate runs — a run invalidating its own cache entry.
 #
@@ -379,17 +379,6 @@ mkit_check_slug() {
 	esac
 }
 
-# ripgrep when present, grep -E otherwise. rg is preferred (faster, and its -m
-# cap bounds output at the source), but the scripts must not hard-require it.
-#   mkit_search <max-count> <pattern> <file>
-mkit_search() {
-	local max="$1" pat="$2" file="$3"
-	if command -v rg >/dev/null 2>&1; then
-		rg --no-heading --line-number --color never --max-count "$max" -e "$pat" -- "$file" 2>/dev/null
-	else
-		grep -n -E -m "$max" -e "$pat" -- "$file" 2>/dev/null
-	fi
-}
 
 # Never call `rtk` from a script. It reshapes output for an agent to read (it
 # strips the leading space from `git diff --stat`, for one), which is exactly
@@ -425,194 +414,7 @@ mkit_wt_items() {
 		jq -c 'if type=="array" then . else (.items // []) end' 2>/dev/null
 }
 
-# --- the gate ledger ------------------------------------------------------------------
-#
-# Absolute path of the gate ledger: one JSONL record per quality-gate step, keyed by a
-# fingerprint of the content that step ran over. Lives in the repo's mkit directory, so a
-# linked worktree gets its own — a worktree's gate results are its own.
-# Never dies: the writer runs inside a gate whose verdict must not depend on whether
-# the ledger is reachable. Returns 1 and prints nothing when there is no work tree.
-mkit_gate_ledger_path() {
-	local toplevel
-	toplevel="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
-	[ -n "$toplevel" ] || return 1
-	printf '%s/.mkit/gate.jsonl\n' "$toplevel"
-}
 
-# sha256 of stdin, via macOS's `shasum`. Its absence is not an error — the ledger simply
-# reports no-hash and the gate behaves exactly as before. Never add a hard prerequisite
-# for a latency optimization.
-#
-# Still guarded rather than called bare: `shasum` is a Perl script, so a stripped or
-# containerized environment can lack it even on macOS. The GNU `sha256sum` fallback is
-# gone with the rest of the non-macOS accommodations.
-mkit_sha256() {
-	command -v shasum >/dev/null 2>&1 || return 1
-	shasum -a 256
-}
 
-mkit_have_hash() {
-	command -v shasum >/dev/null 2>&1
-}
 
-# Short hash identifying *the content a quality-gate command would read*, printed on
-# stdout. Empty output and exit 1 mean "no fingerprint" — callers degrade, never fail.
-#
-# The load-bearing property is that it is **invariant under staging and committing**.
-# The flagship flow is `pr` (gate before opening) → `finish` (gate again before merge).
-# A key built from HEAD plus the dirty set would classify as drifted the instant the
-# commit lands, even though not one byte the gate reads changed — and the whole feature
-# would save exactly nothing. So the key is the canonical `path → blob` mapping the
-# commands actually see:
-#
-#   1. `git ls-tree -r HEAD`                       the committed mapping
-#   2. overlay every path that differs from HEAD   with its *worktree* blob sha
-#   3. drop paths deleted in the worktree          (a deletion must leave the mapping,
-#                                                   not carry its committed blob)
-#   4. add untracked-but-not-ignored paths         same overlay, same batch
-#   5. sort, sha256, keep 16 hex characters
-#
-# Staging is invisible because staging does not change a worktree blob, and the dirty
-# pre-commit tree and the clean post-commit tree yield the same mapping.
-#
-# Two mechanical requirements, both learned the hard way:
-#
-#   - **Batched hashing.** Every worktree path is hashed in ONE `git hash-object
-#     --stdin-paths`. A per-path loop forks once per file and is ~55x slower at 1000
-#     dirty files (14.8s vs 0.27s). Batching is part of the spec, not an optimization.
-#   - **`--no-renames` and `ls-files --others`**, rather than parsing `git status
-#     --porcelain`. Porcelain pairs a rename with a second NUL record that a reader must
-#     consume or desynchronize from, and reports an untracked *directory* as one entry
-#     whose contents are then invisible. These two plumbing commands have neither trap.
-#
-# What it cannot see, by construction: file mode (`chmod +x` does not change a blob sha
-# — a documented gap), dependency installs, tool versions, env vars, and anything
-# ignored. A match therefore means "the tracked content is identical", not "the
-# environment is identical" — which is why the ledger also carries an age bound.
-#
-# Cost: ~0.09s on a clean 2000-file repo, ~0.26s with 1000 dirty files. Entirely inside
-# a script, so it costs zero context tokens.
-mkit_tree_fingerprint() {
-	(
-		# Sourced into scripts that run under `set -e`/`pipefail`: a missing HEAD or an
-		# absent hash tool must return 1, never kill the gate around us.
-		set +e
-		set +o pipefail
-		local root tmp_p tmp_d tmp_s tmp_h p out
-		mkit_have_hash || exit 1
-		root="$(git rev-parse --show-toplevel 2>/dev/null)"
-		[ -n "$root" ] || exit 1
-		cd "$root" || exit 1
 
-		# `$TMPDIR` with an explicit template, via mkit_tmpfile — never the run directory.
-		# These four files die with the call, and rooting them in the run directory would
-		# recreate the original failure one layer down: the fingerprint is called from gate
-		# detection, in sessions where the run directory may itself be unreachable.
-		#
-		# Trap goes up front, before the first allocation: if tmp_d/tmp_s/tmp_h fails after
-		# tmp_p already exists, tmp_p must still be removed. `rm -f ""` on a not-yet-assigned
-		# one is a no-op, so installing the trap before any of them are set is safe.
-		tmp_p="" tmp_d="" tmp_s="" tmp_h=""
-		trap 'rm -f "$tmp_p" "$tmp_d" "$tmp_s" "$tmp_h"' EXIT
-		tmp_p="$(mkit_tmpfile mkitfp)" || exit 1
-		tmp_d="$(mkit_tmpfile mkitfp)" || exit 1
-		tmp_s="$(mkit_tmpfile mkitfp)" || exit 1
-		tmp_h="$(mkit_tmpfile mkitfp)" || exit 1
-
-		# Everything that differs from HEAD, plus everything untracked and not ignored,
-		# sorted into the four things a path can be. The enumeration is the point: one
-		# unhashable path used to abort the whole batch below.
-		#
-		# `:(exclude).mkit` on both sides, belt to the exclude file's braces: mkit's own
-		# scratch root must never enter its own fingerprint, or a run invalidates its own
-		# cache entry mid-gate. `mkit_ensure_run_ignored` normally keeps it out of
-		# `--others` already; this holds even in the session where that write was refused.
-		{
-			git diff --name-only -z --no-renames HEAD -- . ':(exclude).mkit' 2>/dev/null
-			git ls-files --others --exclude-standard -z -- . ':(exclude).mkit' 2>/dev/null
-		} | tr '\0' '\n' | LC_ALL=C sort -u | while IFS= read -r p; do
-			[ -n "$p" ] || continue
-			if [ -L "$p" ]; then
-				# Checked before -f, which follows the link. git stores a symlink as a
-				# blob of its *target path*, but `hash-object` follows it and would hash
-				# the target's content — so a repo with any tracked symlink would read
-				# `drifted` forever. One fork each instead; symlinks in a dirty set are rare.
-				printf '%s\t%s\n' \
-					"$(printf '%s' "$(readlink "$p")" | git hash-object --stdin 2>/dev/null)" \
-					"$p" >>"$tmp_s"
-			elif [ -f "$p" ]; then
-				printf '%s\n' "$p" >>"$tmp_p"
-			else
-				# Gone — or no longer a regular file. A tracked file replaced by a
-				# DIRECTORY is the real case (splitting a module into a package), and it
-				# must never reach the batch: `git hash-object --stdin-paths` aborts on
-				# the first path it cannot hash, and `paste` would then pair every
-				# alphabetically-later path with the WRONG sha. Two different trees
-				# hashing alike is the one failure a gate ledger may not have.
-				printf '%s\n' "$p" >>"$tmp_d"
-			fi
-		done
-
-		# Hashed here rather than inside the pipeline below, so a short batch can fail the
-		# whole function. Inside a command substitution an early exit would still let the
-		# downstream sha256 produce a confident, wrong answer.
-		if [ -s "$tmp_p" ]; then
-			git hash-object --stdin-paths <"$tmp_p" >"$tmp_h" 2>/dev/null
-			# The backstop for the same abort, and for anything else that shortens the
-			# batch: one answer per path, or no fingerprint at all. Degrading to "run the
-			# gate" is free; a wrong hash is not.
-			[ "$(wc -l <"$tmp_h" | tr -d ' ')" = "$(wc -l <"$tmp_p" | tr -d ' ')" ] || exit 1
-		fi
-
-		out="$(
-			{
-				# `-z` so paths are never quoted; the tab before the path is what makes
-				# `awk -F'\t'` safe for paths containing spaces.
-				#
-				# The reserved root is dropped here in awk, not as a pathspec: `ls-tree`
-				# refuses pathspec magic outright (`fatal: pathspec magic not supported by
-				# this command: 'exclude'`). Without the guard the exclusion above was
-				# half-applied — the overlays dropped a tracked `.mkit/` path while this
-				# mapping still contributed its HEAD blob, so committing an otherwise
-				# identical worktree changed the fingerprint and broke the commit-
-				# invariance the whole ledger rests on. Only reachable in a repo that
-				# tracked `.mkit/` before upgrading: .gitignore and the exclude file stop
-				# it being tracked from here on, but neither untracks what already is.
-				git ls-tree -r -z HEAD 2>/dev/null | tr '\0' '\n' |
-					awk -F'\t' 'NF > 1 && $2 != ".mkit" && $2 !~ /^\.mkit\// {
-						split($1, a, " "); print "B\t" a[3] "\t" $2
-					}'
-				[ -s "$tmp_p" ] && paste -d'\t' "$tmp_h" "$tmp_p" |
-					awk -F'\t' 'NF > 1 { print "B\t" $1 "\t" $2 }'
-				[ -s "$tmp_s" ] && awk -F'\t' 'NF > 1 { print "B\t" $1 "\t" $2 }' "$tmp_s"
-				[ -s "$tmp_d" ] && awk '{ print "D\t\t" $0 }' "$tmp_d"
-				true
-			} | awk -F'\t' '
-				$1 == "D" { del[$3] = 1; next }
-				$1 == "B" { blob[$3] = $2; next }
-				END { for (p in blob) if (!(p in del)) printf "%s\t%s\n", p, blob[p] }
-			' | LC_ALL=C sort | mkit_sha256 | cut -c1-16
-		)"
-		# A truncated pipeline can still print something; only 16 hex characters count.
-		case "$out" in
-		'' | *[!0-9a-f]*) exit 1 ;;
-		esac
-		printf '%s\n' "$out"
-	)
-}
-
-# "6m" / "2h" / "3d" from a count of seconds. Ages are reported on every ledger class so
-# a human can always see how old a proof is.
-mkit_age_human() {
-	local s="$1"
-	case "$s" in '' | *[!0-9]*) printf '?' && return 0 ;; esac
-	if [ "$s" -lt 60 ]; then
-		printf '%ds' "$s"
-	elif [ "$s" -lt 3600 ]; then
-		printf '%dm' "$((s / 60))"
-	elif [ "$s" -lt 86400 ]; then
-		printf '%dh' "$((s / 3600))"
-	else
-		printf '%dd' "$((s / 86400))"
-	fi
-}
