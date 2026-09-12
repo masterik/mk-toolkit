@@ -11,10 +11,13 @@ mkit findings reconcile <run-dir> --sources-expected 3 --json
 ```
 
 It writes `<run-dir>/reconciled.jsonl` and returns the counts, every merge, every drop and every
-pair it refused to decide — *measured against each cluster's first member*, which is the one thing
-here that is not exhaustive: a finding already folded into a cluster is not compared again, so a
-third report of the same defect a few lines further out comes back as its own finding rather than
-as a pair. Reading the set with that in mind is part of this stage. That is the whole stage — **no subagent, and no reading the code**:
+pair it refused to decide. Both comparisons are *head-relative* — every candidate is measured
+against each cluster's first member, never against the ones already folded into it. A third report
+of the same defect, too far out to merge, stays its own finding and comes back in `review_pairs`
+when its text resembles that head; when it resembles a later member instead, nothing flags it and
+only reading the set will find it.
+
+That is the whole stage — **no subagent, and no reading the code**:
 which findings are the same issue and which singletons are too weak are answerable from the
 text, and an opinion formed here contaminates the set the verifier is handed.
 

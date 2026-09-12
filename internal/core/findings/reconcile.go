@@ -179,8 +179,10 @@ func Reconcile(runDir string, opts ReconcileOptions) (*Reconciled, error) {
 		// Against the cluster HEAD, not every member — the window measures from the
 		// first report of a defect, so a cluster can never creep down a file one line
 		// at a time. Ported as-is from the script: this decides ids, and the two
-		// implementations had to agree while both existed. `triage-reconcile.md` tells
-		// the reader the set is head-relative rather than exhaustive.
+		// implementations had to agree while both existed. Both comparisons are
+		// head-relative: an out-of-window candidate still reaches `review_pairs` when
+		// it resembles the head, but nothing flags it against a later member.
+		// `triage-reconcile.md` tells the reader to read the set with that in mind.
 		for _, c := range clusters {
 			if !samePath(c.head.Str("file"), r.Str("file")) {
 				continue
