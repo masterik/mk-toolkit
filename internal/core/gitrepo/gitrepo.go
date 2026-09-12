@@ -152,3 +152,55 @@ func run(dir string, args ...string) (string, error) {
 	out, err := cmd.Output()
 	return strings.TrimRight(string(out), "\n"), err
 }
+
+// Branch returns the current branch name, or "" on a detached HEAD. Detachment is
+// a normal state — the caller names the log file after the head instead — so it is
+// reported as an empty answer rather than an error.
+func (r *Repo) Branch() string {
+	out, err := run(r.Toplevel, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil || out == "HEAD" {
+		return ""
+	}
+	return out
+}
+
+// Head returns the commit HEAD resolves to, or "" on an unborn branch.
+func (r *Repo) Head() string {
+	out, _ := run(r.Toplevel, "rev-parse", "HEAD")
+	return out
+}
+
+// AliveCommits reports, for each of heads, whether it still resolves to a commit.
+//
+// One `cat-file --batch-check` for the whole set, not one call per head: this runs
+// on the rotation path, where paying a fork per record would make the bookkeeping
+// the expensive part of the command it hangs off. Unknown input lines come back as
+// `<input> missing`, which is the answer, not an error — so a batch that fails
+// outright reports every head alive, and rotation then drops nothing rather than
+// dropping everything.
+func (r *Repo) AliveCommits(heads []string) map[string]bool {
+	alive := make(map[string]bool, len(heads))
+	if len(heads) == 0 {
+		return alive
+	}
+	var in strings.Builder
+	for _, h := range heads {
+		in.WriteString(h + "^{commit}\n")
+	}
+	out, err := runStdin(r.Toplevel, in.String(), "cat-file", "--batch-check")
+	if err != nil && out == "" {
+		for _, h := range heads {
+			alive[h] = true
+		}
+		return alive
+	}
+	for i, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+		if i >= len(heads) {
+			break
+		}
+		if !strings.HasSuffix(line, " missing") {
+			alive[heads[i]] = true
+		}
+	}
+	return alive
+}
