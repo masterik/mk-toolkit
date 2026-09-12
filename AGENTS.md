@@ -119,6 +119,12 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
     directory untracked. `TestWriteSitesAreOnTheReviewedAllowlist` is the Go half of what
     `payload.bats` asserted over the shell: three write locations, chosen by lifetime, asserted
     by shape against a list a human reviewed.
+  - `branchscan/` (M5): `cleanup`'s classifier — every local branch's merge/upstream/PR
+    state and every worktree's origin/cleanliness. One batched `gh` call, never a per-branch
+    round trip. `--default` is never re-derived, `$default`/`$develop` are tested directly
+    rather than by splitting a joined string (a branch name may contain a comma), and a
+    `merged` PR match is refused when its `headRefOid` is not the branch tip or an ancestor.
+    A worktree whose `git status` fails is `clean=error`, never collapsed into `yes`.
   - `gate/` (M5): `Fingerprint` (the staging- and commit-invariant content hash — symlinks
     hashed as their target path, a tracked file replaced by a directory leaving the mapping,
     `.mkit` dropped from the HEAD mapping as well as the overlays), `Ledger` (append, classify,
@@ -184,12 +190,6 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
     that reads exactly like the tree). A cause needing a sentence goes in the trailing `notes:`
     block, never on a `key=value` line, since several of those pack more than one pair.
     `run-open.sh` — the directory alone, plus `--prune`.
-  - `branch-scan.sh` — `cleanup`'s classifier: every local branch's merge/upstream/PR state and
-    every worktree's origin/cleanliness. One batched `gh` call, cached, never a per-branch round
-    trip. The cache is **not** load-bearing: a cache it cannot create is `gh=no-cache`, one row per
-    branch and per worktree still emitted, the PR column reporting its own absence. That asymmetry
-    with the run directory is deliberate — the classifier's contract is met without its cache, no
-    skill's contract is met without its run directory.
   - `lib/common.sh` — sourced helpers, including `mkit_tree_fingerprint`, the staging- and
     commit-invariant hash of the content a gate command reads — what makes a `pr` → `finish`
     cache hit possible at all.

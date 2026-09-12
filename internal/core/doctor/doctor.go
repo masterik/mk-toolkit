@@ -210,7 +210,7 @@ var tools = []tool{
 	{"git", "prerequisites", Fail, "every skill", ""},
 	{"bash", "prerequisites", Fail, "the whole payload", ""},
 	{"gh", "prerequisites", Warn, "pr, finish, and cleanup's PR column", "brew install gh, then `gh auth login`"},
-	{"jq", "prerequisites", Warn, "facts.sh's PR lookup, branch-scan", "brew install jq"},
+	{"jq", "prerequisites", Warn, "facts.sh's PR lookup", "brew install jq"},
 	{"rg", "optional", Warn, "faster searching; grep -E is used otherwise", "brew install ripgrep"},
 	{"wt", "optional", Warn, "worktrunk-managed worktree teardown in finish/cleanup", "brew install worktrunk"},
 	{"codex", "optional", Warn, "review's Codex reviewer", ""},

@@ -36,7 +36,7 @@ macOS-only in any case.
 | --- | --- | --- |
 | `git` ≥ 2.30 | everything | `--absolute-git-dir`, `worktree list --porcelain`, `diff --shortstat` |
 | `bash` ≥ 3.2 | every `.sh` — five helpers plus the sourced `lib/common.sh` | macOS ships `/bin/bash` 3.2 (frozen there over GPLv3) and `/bin/zsh` 5.9. The scripts run under bash via `#!/usr/bin/env bash`, so **your interactive shell being zsh is irrelevant** — nothing here needs 4.x, and no Homebrew bash is required |
-| `jq` ≥ 1.6 | `facts.sh`, `branch-scan.sh` | reads `wt list --format=json` and `gh`'s JSON |
+| `jq` ≥ 1.6 | `facts.sh` | reads `wt list --format=json` and `gh`'s JSON |
 
 ```bash
 brew install git jq
@@ -47,7 +47,7 @@ brew install git jq
 | Tool | Used by | Degrades to |
 | --- | --- | --- |
 | `rg` (ripgrep) | the `fix-checks` sweep | `grep -E` (same output, slower) |
-| `gh` | `pr`, `facts.sh --gh`, and `branch-scan.sh` (`cleanup`) | `pr` cannot open a PR at all; `facts.sh` prints `pr=gh-missing`; `branch-scan.sh` falls back to git-only classification and reports `gh=gh-missing` |
+| `gh` | `pr`, `facts.sh --gh`, and `mkit branch scan` (`cleanup`) | `pr` cannot open a PR at all; `facts.sh` prints `pr=gh-missing`; `mkit branch scan` falls back to git-only classification and reports `gh=gh-missing` |
 | `wt` ([worktrunk](https://worktrunk.dev)) | `finish` cleanup, `facts.sh` worktree classification | plain `git worktree remove` |
 
 ```bash
@@ -135,8 +135,8 @@ Each new script is a new Bash pattern, so the first run of each asks. Allow them
     "allow": [
       "Bash(*/mkit/scripts/facts.sh:*)",
       "Bash(*/mkit/scripts/run-open.sh:*)",
-      "Bash(*/mkit/scripts/branch-scan.sh:*)",
       "Bash(mkit findings:*)",
+      "Bash(mkit branch scan:*)",
       "Bash(mkit gate detect:*)",
       "Bash(mkit gate run:*)"
     ]
@@ -229,11 +229,11 @@ payload itself reaches for:
 
 | skill / script | host | for |
 | --- | --- | --- |
-| `pr`, `facts.sh --gh`, `branch-scan.sh` | `api.github.com`, `github.com` | `gh pr view`, `gh pr list`, `gh pr create` |
+| `pr`, `facts.sh --gh`, `mkit branch scan` | `api.github.com`, `github.com` | `gh pr view`, `gh pr list`, `gh pr create` |
 | `pr`, `finish`, `cleanup` | your remote's host (`git remote -v`) | `fetch`, `push` |
 | `review`'s external reviewers | whatever the `codex` / `coderabbit` CLI calls | those are their own tools; check their docs for the hosts |
 
-`cleanup` and `branch-scan.sh` degrade rather than fail when GitHub is unreachable: `fetch=failed`
+`cleanup` and `mkit branch scan` degrade rather than fail when GitHub is unreachable: `fetch=failed`
 and `gh=gh-error`, with every branch still classified from git alone. `pr` cannot open a PR without
 `api.github.com` — there is no local substitute for that one.
 

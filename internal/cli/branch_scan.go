@@ -1,0 +1,132 @@
+package cli
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"strings"
+
+	"github.com/spf13/cobra"
+
+	"github.com/masterik/mk-toolkit/internal/core/branchscan"
+	"github.com/masterik/mk-toolkit/internal/core/gitrepo"
+)
+
+func newBranchScanCmd() *cobra.Command {
+	var def string
+	var noFetch, noGH bool
+
+	cmd := &cobra.Command{
+		Use:   "scan --default <branch>",
+		Short: "Classify every local branch and worktree for a repo-wide cleanup",
+		Long: "Classify every local branch and worktree: which are merged (locally, or via a PR\n" +
+			"git's own merge-base cannot see because of a squash merge), which still have an\n" +
+			"open PR, which were never pushed, and which worktree each one owns.\n\n" +
+			"Reports candidates. It never deletes a branch, removes a worktree, or touches a\n" +
+			"remote — `git fetch --prune` is the one mutation, and it only ever updates this\n" +
+			"repo's own remote-tracking refs.\n\n" +
+			"`--default` is the branch facts.sh already resolved; this command does not\n" +
+			"re-derive it, so there is exactly one place that logic lives.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if def == "" {
+				return usageErr("usage: mkit branch scan --default <branch> [--no-fetch] [--no-gh]")
+			}
+			repo, err := gitrepo.Open("")
+			if err != nil {
+				return err
+			}
+			s, err := branchscan.Run(repo, branchscan.Options{
+				Default: def, NoFetch: noFetch, NoGH: noGH,
+			})
+			if err != nil {
+				return &ExitError{Code: 2, Msg: err.Error()}
+			}
+			if FromContext(cmd).JSON {
+				return writeBranchScanJSON(cmd.OutOrStdout(), s)
+			}
+			renderBranchScan(cmd.OutOrStdout(), s)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&def, "default", "", "the default branch, already resolved")
+	cmd.Flags().BoolVar(&noFetch, "no-fetch", false, "skip `git fetch --prune`; upstream=gone then reflects a stale local view")
+	cmd.Flags().BoolVar(&noGH, "no-gh", false, "skip the GitHub lookup even when gh is present and authenticated")
+	return cmd
+}
+
+func renderBranchScan(out io.Writer, s *branchscan.Scan) {
+	_, _ = fmt.Fprintf(out, "default=%s\n", s.Default)
+	_, _ = fmt.Fprintf(out, "develop=%s\n", s.Develop)
+	_, _ = fmt.Fprintf(out, "protected=%s\n", strings.Join(s.Protected, ","))
+	_, _ = fmt.Fprintf(out, "remote=%s\n", orNone(s.Remote))
+	_, _ = fmt.Fprintf(out, "fetch=%s\n", s.Fetch)
+	_, _ = fmt.Fprintf(out, "gh=%s\n", s.GH)
+
+	_, _ = fmt.Fprintln(out, "branches:")
+	for _, b := range s.Branches {
+		_, _ = fmt.Fprintf(out, "%s\t%s\t%s\t%s\t%s\n",
+			b.Name, b.Class, b.Upstream, dashIfEmpty(strings.Join(b.MergedInto, ",")), dashIfEmpty(b.PR))
+	}
+	_, _ = fmt.Fprintln(out, "worktrees:")
+	for _, w := range s.Worktrees {
+		_, _ = fmt.Fprintf(out, "%s\t%s\t%s\t%s\n", w.Branch, w.Path, w.Origin, w.Clean)
+	}
+}
+
+func dashIfEmpty(s string) string {
+	if s == "" {
+		return "-"
+	}
+	return s
+}
+
+type branchScanJSON struct {
+	Default   string             `json:"default"`
+	Develop   string             `json:"develop"`
+	Protected []string           `json:"protected"`
+	Remote    string             `json:"remote"`
+	Fetch     string             `json:"fetch"`
+	GH        string             `json:"gh"`
+	Branches  []branchJSON       `json:"branches"`
+	Worktrees []worktreeScanJSON `json:"worktrees"`
+}
+
+type branchJSON struct {
+	Name       string   `json:"name"`
+	Class      string   `json:"class"`
+	Upstream   string   `json:"upstream"`
+	MergedInto []string `json:"merged_into"`
+	PR         string   `json:"pr,omitempty"`
+}
+
+type worktreeScanJSON struct {
+	Branch string `json:"branch"`
+	Path   string `json:"path"`
+	Origin string `json:"origin"`
+	Clean  string `json:"clean"`
+}
+
+func writeBranchScanJSON(out io.Writer, s *branchscan.Scan) error {
+	j := branchScanJSON{
+		Default: s.Default, Develop: s.Develop, Protected: s.Protected,
+		Remote: s.Remote, Fetch: s.Fetch, GH: s.GH,
+		Branches:  make([]branchJSON, 0, len(s.Branches)),
+		Worktrees: make([]worktreeScanJSON, 0, len(s.Worktrees)),
+	}
+	for _, b := range s.Branches {
+		j.Branches = append(j.Branches, branchJSON{
+			Name: b.Name, Class: string(b.Class), Upstream: b.Upstream,
+			MergedInto: nonNil(b.MergedInto), PR: b.PR,
+		})
+	}
+	for _, w := range s.Worktrees {
+		j.Worktrees = append(j.Worktrees, worktreeScanJSON{
+			Branch: w.Branch, Path: w.Path, Origin: w.Origin, Clean: w.Clean,
+		})
+	}
+	enc := json.NewEncoder(out)
+	enc.SetIndent("", "  ")
+	return enc.Encode(j)
+}

@@ -31,7 +31,7 @@ References, read the ones a step calls for: `../_shared/references/worktree.md`,
   exists **as a local branch**, the first of `develop`/`development`/`dev`. A `develop` that exists only as
   `origin/develop` and was never checked out locally is not kept — nothing here creates a local branch, only
   removes them.
-- Ends by switching to one of the kept branches and pulling it up to date with the remote `branch-scan.sh`
+- Ends by switching to one of the kept branches and pulling it up to date with the remote `mkit branch scan`
   discovers (never assumed to be named `origin`).
 
 ## Preconditions
@@ -41,7 +41,7 @@ References, read the ones a step calls for: `../_shared/references/worktree.md`,
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh cleanup
-${CLAUDE_PLUGIN_ROOT}/scripts/branch-scan.sh --default <default_branch from facts.sh>
+mkit branch scan --default <default_branch from facts.sh>
 ```
 
 Keep the `run=` literal; this file writes it as `<run-dir>`. There is no `$RUN_DIR` — a shell variable does
@@ -51,11 +51,11 @@ From `facts.sh`: `branch=` (current branch — cannot be deleted while checked o
 worktree dirty right now), `cleanup_path=` (only relevant if this session's own worktree turns out to be one
 of the ones in play — see step 3).
 
-From `branch-scan.sh`: `protected=`, `develop=`, `remote=`, `fetch=` (say if it came back `failed` — classify
-on what you have and note it), `gh=` (say if it is anything but `ok` — some classes below then rest on git
-alone; `no-cache` means the batched PR lookup had nowhere to write, so the PR column is empty while every
-branch and worktree row is still complete), the `branches:` table and the `worktrees:` table. Full column
-meaning is in the script's own header comment; the short version:
+From `mkit branch scan`: `protected=`, `develop=`, `remote=`, `fetch=` (say if it came back `failed` — classify
+on what you have and note it), `gh=` (`ok | skipped | no-remote | gh-missing | gh-unauthenticated | gh-error`;
+say if it is anything but `ok` — some classes below then rest on git alone, while every branch and worktree
+row is still complete), the `branches:` table and the `worktrees:` table. Full column meaning is in
+`mkit branch scan --help`; the short version:
 
 | `class` | means | default handling |
 | --- | --- | --- |
@@ -87,7 +87,7 @@ of the two kept branches. For everything else, sort into:
   with `clean=missing` (the worktree's directory is already gone; `git worktree prune` is the fix, not a
   removal) is noted but never a delete target.
 
-**The `current` row needs one extra step, not a skip.** `branch-scan.sh` reports `current` in the `class`
+**The `current` row needs one extra step, not a skip.** `mkit branch scan` reports `current` in the `class`
 column *instead of* what the branch would otherwise classify as — the branch you happen to be standing on is
 never exempt from cleanup just because you started there. Before deciding it is out of scope, derive its real
 disposition from its own `upstream` and `merged_into` columns, using the same priority order the script's own
@@ -154,7 +154,7 @@ For every branch approved in step 1, step 2, or just vacated in step 3, in this 
    error, not a real failure worth reporting as one.
 
    **A plain `git worktree remove` that refuses on a worktree reported `clean=yes` is mkit's own scratch,
-   not the user's work.** `branch-scan.sh` excludes `.mkit/` from its cleanliness check, but git does not:
+   not the user's work.** `mkit branch scan` excludes `.mkit/` from its cleanliness check, but git does not:
    where `run_ignored=no` — an isolated session, which cannot write the exclude file — an unignored
    `.mkit/` is enough for git to call the worktree dirty and refuse. Check **both**
    `git -C <path> ls-files -- .mkit` and `git -C <path> ls-tree -r --name-only HEAD -- .mkit` **first** — if
@@ -173,7 +173,7 @@ For every branch approved in step 1, step 2, or just vacated in step 3, in this 
    that's what makes it `merged-pr` instead of `merged`). State which proof licenses the `-D` as you run it:
    - `merged` → "verified: an ancestor of `<merged_into>`" (the column already named it — cite the actual
      target, not just the label).
-   - `merged-pr` → "verified: GitHub PR `#<n>` merged" (`branch-scan.sh` already checked the PR's head commit
+   - `merged-pr` → "verified: GitHub PR `#<n>` merged" (`mkit branch scan` already checked the PR's head commit
      against this branch's own content before reporting the class, so there is no separate check to redo here).
    - anything from the **ask** bucket → cite the user's approval itself as the reason, same as before.
 
@@ -183,7 +183,7 @@ force-delete anything you merely suspect is fine.
 
 ### 5. Switch and pull
 
-Bring both kept branches up to date with the **discovered** remote — the one `branch-scan.sh` reported as
+Bring both kept branches up to date with the **discovered** remote — the one `mkit branch scan` reported as
 `remote=`, never a hardcoded name, since nothing here is safe to assume about a repo you didn't set up:
 
 ```bash

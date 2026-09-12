@@ -53,6 +53,7 @@ func NewRoot() *cobra.Command {
 	root.AddCommand(newDoctorCmd())
 	root.AddCommand(newFindingsCmd())
 	root.AddCommand(newGateCmd())
+	root.AddCommand(newBranchCmd())
 
 	return root
 }

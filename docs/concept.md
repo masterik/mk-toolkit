@@ -181,13 +181,13 @@ the five skills link into via `../_shared/references/…`:
  scripts/                  the mechanical steps, one call each
    run-open.sh             open a run directory · --prune old ones
    facts.sh                run dir + refs path + branch/status/worktree/stats, in one call
-   branch-scan.sh          classify every local branch/worktree for `cleanup` · one gh call
    +
  mkit (Go)                 the same mechanical steps, being ported off shell one at a time
    --json everywhere       the skill-facing contract · no TUI off a TTY · flags reach everything
    M2 storage prune · M7 profile/init/doctor · M4 findings · M5 the jq consumers (in progress)
    gate detect             what this repo's checks are · what the ledger already proved
    gate run                run a gate step: log it, bound it, stop at the first failure
+   branch scan             classify every local branch/worktree for `cleanup` · one gh call
    work                    the per-branch worklog: what ran, over what content, concluding what
    plan                    task-graph arithmetic: frontier · blocked · cycles · edge validation
    repo profile            what this repo told us, and what a human pinned — reported apart
@@ -311,7 +311,7 @@ plugin/                 # the payload, shipped from the GitHub marketplace (neve
   scripts/
     lib/common.sh        # sourced helpers: plugin root, refs path, mkit dir, rg-or-grep, wt
                          #   binary, tree fingerprint, gate ledger path
-    run-open.sh  facts.sh  branch-scan.sh
+    run-open.sh  facts.sh
                          # no hooks/ and no install.sh — see "no hook, and no setup step"
 docs/
   concept.md             # this file

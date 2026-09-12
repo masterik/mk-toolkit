@@ -192,7 +192,7 @@ mkit_require_repo() {
 
 # Absolute path of the primary worktree. `git worktree list` always lists it first,
 # regardless of which worktree the caller runs from. Shared by `facts.sh` (reports on the
-# one worktree it is running in) and `branch-scan.sh` (reports on every worktree in the
+# one worktree it is running in) and `mkit branch scan` (reports on every worktree in the
 # repo) — both need this exact lookup, and it is short enough that duplicating it bought
 # nothing but a second place to get the offset wrong.
 mkit_primary_worktree() {
