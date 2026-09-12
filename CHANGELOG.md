@@ -12,6 +12,42 @@ nothing — `brew install masterik/tap/mkit` delivers whatever the newest tag bu
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project
 predates any semver commitment and is pre-1.0, so minor bumps carry breaking changes.
 
+## [0.18.0] — 2026-09-12
+
+M6: the per-branch worklog, and the four existing skills start recording into it.
+
+### Added
+- **`mkit work show | append`** — `<toplevel>/.mkit/work/<branch>.jsonl`, append-only, one record
+  per finished step, never committed, per-worktree. A record carries step, timestamp, content
+  fingerprint, head, artifact pointer, a one-line gist and the assumptions the step made.
+  `--json` on both; no TUI, because there is nothing here to render interactively.
+- **The worklog in all four skills** — a `mkit work show --json --limit 20` beside each skill's
+  `facts.sh` call, and one `mkit work append` in its final-report step. `workflow-contract.md`,
+  which already shipped, is now linked from every one of them.
+- **A goal order in `review` step 1**: worklog gist (matching fingerprint) → user → branch name →
+  commit messages → ticket. A gist whose fingerprint no longer matches is still used, and the
+  downgrade is named in step 6.
+
+### Changed
+- **Rotation matches the gate ledger exactly** — `Keep = 200`, trim only past `Keep*2`, dead heads
+  dropped first (one batched `cat-file`), mkdir lock with the 60-minute staleness break, and its
+  hardest rule: a rotation that cannot read the file cleanly does not rotate.
+- **`work append` errors on a failed write**, unlike the ledger's best-effort appends: it is a
+  command someone invoked. The skills are where it is best-effort — they append after their report
+  is produced and treat a failure as one line of note.
+
+### Notes
+- **The fingerprint is delegated, not ported.** `mkit_tree_fingerprint` stays the single producer,
+  reached through `pluginroot.CommonFunc`, until M5 ports it. An unavailable one is `""` plus a
+  named cause, never a failed append.
+- **These calls are optional, unlike M4's probe.** `review` stops without `mkit findings`; nothing
+  stops without the worklog. A log the binary cannot answer for costs a step one input — a recorded
+  fact is an input, never a permission.
+- **`finish` usually does not record.** It removes the worktree its log lives in and deletes the
+  branch the log is keyed on, so it appends only where the run stopped short of the cleanup.
+- **No ignore rule was added.** `.mkit/*` already covers `work/`; a second rule would be a second
+  thing to keep true.
+
 ## [0.17.0] — 2026-09-12
 
 M4: the review-run arithmetic moves into the binary, and `review` becomes the first skill that

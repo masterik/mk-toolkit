@@ -37,7 +37,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh finish --base <base> --gh
 Then one more, when that call reported a `mkit_bin=`:
 
 ```bash
-mkit work show --json --limit 20      # skip it when the call above reported mkit=none
+mkit work show --json --limit 20
 ```
 
 What ran on this branch before, and what each step concluded. `facts.sh` reports `mkit_bin=` and

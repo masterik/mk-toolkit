@@ -139,7 +139,8 @@ Each new script is a new Bash pattern, so the first run of each asks. Allow them
       "Bash(*/mkit/scripts/gate-run.sh:*)",
       "Bash(*/mkit/scripts/run-open.sh:*)",
       "Bash(*/mkit/scripts/branch-scan.sh:*)",
-      "Bash(mkit findings:*)"
+      "Bash(mkit findings:*)",
+      "Bash(mkit work:*)"
     ]
   }
 }
