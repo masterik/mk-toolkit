@@ -34,7 +34,8 @@ References, read the ones a step calls for: `../_shared/references/worktree.md`,
 ${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh finish --base <base> --gh
 ```
 
-Then one more, when that call reported a `mkit_bin=`:
+Then one more, but **only when that call reported `mkit_bin=<path>`** — on `mkit_bin=none` skip it
+and carry on:
 
 ```bash
 mkit work show --json --limit 20
@@ -48,8 +49,9 @@ a stop** — the worklog makes a step cheaper and better informed, and never dec
 there is a slightly less informed one.
 
 A `review` record whose `fingerprint` matches the tree in front of you says a review already ran over this
-exact content — worth naming in the deliverable. It does not gate the merge, and it never substitutes for
-the quality gate, which has its own ledger.
+exact content — worth naming in the deliverable. **Read its `assumptions` before believing it**: a review
+that applied fixes records a fingerprint the reviewers never saw and says so there. It does not gate the
+merge, and it never substitutes for the quality gate, which has its own ledger.
 
 Keep the `run=` literal; this file writes it as `<run-dir>`. There is no `$RUN_DIR` — a shell variable does
 not survive to the next Bash call — and re-running the script opens a second directory instead of returning
@@ -267,12 +269,15 @@ where the cleanup actually ran. Skipping it is not a degradation to report:
 
 ```bash
 mkit work append --step finish --gist '<one line: what this run concluded>' \
-  --artifact '<merge-sha>' [--assume '<what this run derived rather than found>']...
+  [--artifact '<merge-sha>'] [--assume '<what this run derived rather than found>']...
 ```
 
+`--artifact` only where a merge happened; a run that stopped short has no sha to name, and the gist is
+where the reason goes.
+
 After the report is produced, and it never changes the report: a failed append is one line of note, not a
-failed run. Nothing is recorded for a run that did nothing — an empty result is a completed run, but it is
-not a fact a later step benefits from.
+failed run. A run that merged nothing still records where the log survives — the reason is exactly what the
+next `finish` wants to know.
 
 ## Git safety
 

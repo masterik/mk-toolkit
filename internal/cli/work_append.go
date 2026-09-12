@@ -35,7 +35,7 @@ func newWorkAppendCmd() *cobra.Command {
 			if !worklog.ValidStep(step) {
 				return usageErr("unknown --step %q (one of: %s)", step, strings.Join(worklog.Steps, ", "))
 			}
-			if gist == "" {
+			if strings.TrimSpace(gist) == "" {
 				return usageErr("--gist is required: a record with no gist is one no later step can read")
 			}
 

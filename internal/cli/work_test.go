@@ -50,9 +50,10 @@ func TestWorkShowJSONShape(t *testing.T) {
 		t.Fatalf("show exited %d", code)
 	}
 	var got struct {
-		Branch  string `json:"branch"`
-		Path    string `json:"path"`
-		Records []struct {
+		Branch      string `json:"branch"`
+		Path        string `json:"path"`
+		Fingerprint string `json:"fingerprint"`
+		Records     []struct {
 			Step        string   `json:"step"`
 			TS          string   `json:"ts"`
 			Fingerprint string   `json:"fingerprint"`
@@ -74,6 +75,11 @@ func TestWorkShowJSONShape(t *testing.T) {
 	// fingerprint" from "a field I do not know about".
 	if !strings.Contains(out, `"fingerprint"`) || !strings.Contains(out, `"assumptions": []`) {
 		t.Errorf("a degraded field was omitted rather than reported:\n%s", out)
+	}
+	// The envelope carries the *current* tree's fingerprint, which is what makes a
+	// record's own fingerprint answerable: "does this gist still describe the tree?"
+	if !strings.Contains(out, `"cause"`) {
+		t.Errorf("no current fingerprint and no cause for its absence:\n%s", out)
 	}
 	if got.Records[0].Schema != 1 || got.Records[0].TS == "" {
 		t.Errorf("binary-set fields: %+v", got.Records[0])
@@ -125,6 +131,7 @@ func TestWorkUsageErrorsExitTwo(t *testing.T) {
 		{"unknown step", []string{"work", "append", "--step", "reviw", "--gist", "x"}},
 		{"missing gist", []string{"work", "append", "--step", "review"}},
 		{"empty gist", []string{"work", "append", "--step", "review", "--gist", ""}},
+		{"whitespace gist", []string{"work", "append", "--step", "review", "--gist", "   "}},
 	} {
 		if _, code := runIn(t, dir, tc.args...); code != 2 {
 			t.Errorf("%s exited %d, want 2", tc.name, code)

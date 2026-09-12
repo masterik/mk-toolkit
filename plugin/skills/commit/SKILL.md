@@ -43,7 +43,8 @@ Commits that are easy to review and safe to ship:
 ${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh commit
 ```
 
-Then one more, when that call reported a `mkit_bin=`:
+Then one more, but **only when that call reported `mkit_bin=<path>`** — on `mkit_bin=none` skip it
+and carry on:
 
 ```bash
 mkit work show --json --limit 20
@@ -175,12 +176,16 @@ Then record the run:
 
 ```bash
 mkit work append --step commit --gist '<one line: what this run concluded>' \
-  --artifact '<first-sha>..<last-sha>' [--assume '<what this run derived rather than found>']...
+  [--artifact '<first-sha>^..<last-sha>'] [--assume '<what this run derived rather than found>']...
 ```
 
+The range is inclusive of the first commit — `<first-sha>..<last-sha>` excludes it, and names nothing at
+all on a one-commit run. For a single commit pass the sha itself.
+
 After the report is produced, and it never changes the report: a failed append is one line of note, not a
-failed run. Nothing is recorded for a run that did nothing — an empty result is a completed run, but it is
-not a fact a later step benefits from.
+failed run. **A run that made no commits still records** — `--gist 'working tree clean; nothing to
+commit'`, no `--artifact`. One record per finished step, and a checked no-op is a fact: it tells the next
+step the tree was looked at, which is not what an absent record says.
 
 ## Conventional Commit format
 

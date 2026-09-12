@@ -249,7 +249,9 @@ it. What was missing was the link from the four skills, and the command itself.
   the log for a goal before deriving one. `review`'s step 1 goal derivation is the model — it
   already degrades correctly, so this generalises an existing behaviour rather than inventing one.
 **Done when:** a branch that ran `commit` then `review` shows both in `mkit work show --json`, and
-`review` invoked cold on that branch takes its goal from the log instead of the branch name.
+`review` invoked cold on that branch takes its goal from the log instead of the branch name. `show`
+reports the **current** tree's fingerprint in the same envelope — a record's fingerprint answers
+nothing on its own.
 `finish` is the exception worth naming: it destroys the log it would write to, so it records only
 where the run stopped short of the cleanup.
 

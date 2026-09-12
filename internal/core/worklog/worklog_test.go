@@ -133,6 +133,45 @@ func TestFileNameEscapesEveryHazard(t *testing.T) {
 	if strings.ContainsRune(FileName("feature/x"), '/') {
 		t.Error("a slash survived, so the log would be a directory")
 	}
+	// macOS is case-insensitive, so these would be one file without the digest.
+	if strings.EqualFold(FileName("JIRA-123"), FileName("jira-123")) {
+		t.Error("two branches differing only by case map to one file on a case-insensitive filesystem")
+	}
+	if FileName("JIRA-123") == FileName("Jira-123") {
+		t.Error("two uppercase variants map to one file")
+	}
+	if !strings.HasPrefix(FileName("JIRA-123"), "JIRA-123-") {
+		t.Errorf("the readable name did not survive: %s", FileName("JIRA-123"))
+	}
+	// A detached log lives in a namespace no branch name can reach: `~` is
+	// forbidden in a ref, and escaping makes a literal one distinct anyway.
+	// `~` is forbidden in a ref name, and a caller passing one literally escapes
+	// it — so nothing a branch can be called reaches a detached log's file.
+	if FileName(detachedPrefix+"abc") != "detached%7Eabc.jsonl" {
+		t.Errorf("detached log file = %s", FileName(detachedPrefix+"abc"))
+	}
+	if FileName("detached-abc") == FileName(detachedPrefix+"abc") {
+		t.Error("a branch could collide with a detached log")
+	}
+}
+
+// A record written against another branch must carry that branch's tip, not
+// whatever happens to be checked out.
+func TestAppendAgainstAnotherBranchRecordsThatBranchesHead(t *testing.T) {
+	repo := newRepo(t)
+	git(t, repo.Toplevel, "branch", "other")
+	git(t, repo.Toplevel, "commit", "-q", "--allow-empty", "-m", "second")
+	mainHead := git(t, repo.Toplevel, "rev-parse", "HEAD")
+	otherHead := git(t, repo.Toplevel, "rev-parse", "other")
+
+	log := Open(repo, "other")
+	if err := log.Append(Record{Step: "spec", Gist: "written from main"}); err != nil {
+		t.Fatal(err)
+	}
+	recs, _ := log.Show(Query{})
+	if recs[0].Head != otherHead {
+		t.Errorf("head = %s, want other's tip %s (current HEAD is %s)", recs[0].Head, otherHead, mainHead)
+	}
 }
 
 func TestPathIsPerWorkTree(t *testing.T) {
@@ -150,7 +189,7 @@ func TestDetachedHeadGetsItsOwnLog(t *testing.T) {
 	repo := newRepo(t)
 	git(t, repo.Toplevel, "checkout", "-q", "--detach")
 	log := Open(repo, "")
-	if !strings.HasPrefix(log.Branch(), "detached-") {
+	if !strings.HasPrefix(log.Branch(), detachedPrefix) {
 		t.Fatalf("detached HEAD named its log %q", log.Branch())
 	}
 	if err := log.Append(Record{Step: "review", Gist: "detached"}); err != nil {

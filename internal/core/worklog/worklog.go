@@ -15,6 +15,7 @@ package worklog
 
 import (
 	"bufio"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -45,10 +46,13 @@ func Open(repo *gitrepo.Repo, branch string) *Log {
 	if branch == "" {
 		branch = repo.Branch()
 		if branch == "" {
+			// `~` is forbidden in a ref name and escapes to %7E below, so a
+			// detached log can never share a file with a branch that merely
+			// spells itself "detached-<sha>".
 			if head := repo.Head(); len(head) >= 12 {
-				branch = "detached-" + head[:12]
+				branch = detachedPrefix + head[:12]
 			} else {
-				branch = "detached"
+				branch = detachedPrefix + "unborn"
 			}
 		}
 	}
@@ -64,6 +68,10 @@ func Dir(toplevel string) string { return filepath.Join(toplevel, ".mkit", "work
 // Path is the absolute path of this log.
 func (l *Log) Path() string { return filepath.Join(Dir(l.repo.Toplevel), FileName(l.branch)) }
 
+// detachedPrefix names a log with no branch behind it. `~` cannot appear in a ref
+// name, so nothing a branch is called can collide with one of these.
+const detachedPrefix = "detached~"
+
 // FileName maps a branch name to its log file.
 //
 // One exported function, used by both verbs, because a mapping that show and append
@@ -75,10 +83,22 @@ func (l *Log) Path() string { return filepath.Join(Dir(l.repo.Toplevel), FileNam
 // [A-Za-z0-9._-] becomes %XX, which is reversible and, more importantly, injective —
 // two branches never share a file. A leading dot is escaped too, so a log never
 // hides from `ls`.
+//
+// **Case is the one place the escaping is not enough.** macOS is the supported
+// platform and its filesystem is case-insensitive by default, so `JIRA-123` and
+// `jira-123` would open the same file and interleave two branches' histories. Case
+// is kept rather than escaped — `%4AIRA-123` is unreadable, and ticket-style names
+// are common — and a name carrying any uppercase letter gets a short digest of the
+// exact branch appended instead. The digest is what separates the variants; the
+// readable name is what a human finds in `ls`.
 func FileName(branch string) string {
 	var b strings.Builder
+	upper := false
 	for i := 0; i < len(branch); i++ {
 		c := branch[i]
+		if c >= 'A' && c <= 'Z' {
+			upper = true
+		}
 		safe := (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
 			c == '_' || c == '-' || (c == '.' && i > 0)
 		if safe {
@@ -86,6 +106,10 @@ func FileName(branch string) string {
 			continue
 		}
 		fmt.Fprintf(&b, "%%%02X", c)
+	}
+	if upper {
+		sum := sha256.Sum256([]byte(branch))
+		fmt.Fprintf(&b, "-%x", sum[:4])
 	}
 	return b.String() + ".jsonl"
 }
@@ -112,7 +136,7 @@ func (l *Log) Append(rec Record) error {
 	rec.TS = now()
 	rec.Schema = Schema
 	if rec.Head == "" {
-		rec.Head = l.repo.Head()
+		rec.Head = l.head()
 	}
 	if rec.Assumptions == nil {
 		rec.Assumptions = []string{}
@@ -142,6 +166,17 @@ func (l *Log) Append(rec Record) error {
 	// is not this command's failure.
 	_ = l.rotate()
 	return nil
+}
+
+// head is the commit this record describes: HEAD for the branch actually checked
+// out, and the named branch's own tip for a `--branch other` append. Recording the
+// current HEAD in another branch's log would hand rotation and every later reader a
+// commit that has nothing to do with the work the record is about.
+func (l *Log) head() string {
+	if l.branch == l.repo.Branch() || strings.HasPrefix(l.branch, detachedPrefix) {
+		return l.repo.Head()
+	}
+	return l.repo.Rev(l.branch)
 }
 
 // Query narrows what Show returns.

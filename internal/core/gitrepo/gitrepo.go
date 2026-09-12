@@ -154,19 +154,36 @@ func run(dir string, args ...string) (string, error) {
 }
 
 // Branch returns the current branch name, or "" on a detached HEAD. Detachment is
-// a normal state — the caller names the log file after the head instead — so it is
+// a normal state — the caller names its log after the head instead — so it is
 // reported as an empty answer rather than an error.
+//
+// `symbolic-ref`, not `rev-parse --abbrev-ref HEAD`: before the first commit the
+// latter fails and prints the literal `HEAD`, which would make a repository's own
+// branch look detached and give it a different worklog before and after its first
+// commit. `symbolic-ref` answers from the ref, which exists from `git init`, and
+// fails only when HEAD really is detached.
 func (r *Repo) Branch() string {
-	out, err := run(r.Toplevel, "rev-parse", "--abbrev-ref", "HEAD")
-	if err != nil || out == "HEAD" {
+	out, err := run(r.Toplevel, "symbolic-ref", "--short", "-q", "HEAD")
+	if err != nil {
 		return ""
 	}
 	return out
 }
 
 // Head returns the commit HEAD resolves to, or "" on an unborn branch.
-func (r *Repo) Head() string {
-	out, _ := run(r.Toplevel, "rev-parse", "HEAD")
+//
+// The error is checked, not discarded: on an unborn branch `rev-parse HEAD` exits
+// nonzero *and* prints the literal `HEAD`, so ignoring the status records that
+// string as a commit — and rotation, finding no such object, would treat every
+// record written before the first commit as dead.
+func (r *Repo) Head() string { return r.Rev("HEAD") }
+
+// Rev resolves a revision to a commit id, or "" when it does not resolve.
+func (r *Repo) Rev(rev string) string {
+	out, err := run(r.Toplevel, "rev-parse", "--verify", "-q", rev+"^{commit}")
+	if err != nil {
+		return ""
+	}
 	return out
 }
 

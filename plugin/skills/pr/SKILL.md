@@ -45,7 +45,8 @@ step 4's context and the final report, and none change when step 3 pushes:
 ${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh pr --base <base> --gh
 ```
 
-Then one more, when that call reported a `mkit_bin=`:
+Then one more, but **only when that call reported `mkit_bin=<path>`** — on `mkit_bin=none` skip it
+and carry on:
 
 ```bash
 mkit work show --json --limit 20
@@ -58,7 +59,7 @@ a stop** — the worklog makes a step cheaper and better informed, and never dec
 `review`'s step-0 probe: without the findings arithmetic there is no review, and without the worklog
 there is a slightly less informed one.
 
-Step 4 drafts the "why" from those gists where they exist, rather than re-deriving intent from the commit
+Step 5 drafts the "why" from those gists where they exist, rather than re-deriving intent from the commit
 subjects alone.
 
 That covers the branch, the status, `commits:` for `<base>..HEAD`, the stat, `codeowners=` for step 6, and
@@ -229,12 +230,13 @@ Then record the run:
 
 ```bash
 mkit work append --step pr --gist '<one line: what this run concluded>' \
-  --artifact '<pr-url>' [--assume '<what this run derived rather than found>']...
+  [--artifact '<pr-url>'] [--assume '<what this run derived rather than found>']...
 ```
 
 After the report is produced, and it never changes the report: a failed append is one line of note, not a
-failed run. Nothing is recorded for a run that did nothing — an empty result is a completed run, but it is
-not a fact a later step benefits from.
+failed run. **A run that opened no PR still records** — a branch that already had one, or a run that
+stopped at the pre-flight — with the reason as the gist and no `--artifact`. One record per finished step;
+a completed no-op is a fact, and is not what an absent record says.
 
 ## Common failure scenarios
 

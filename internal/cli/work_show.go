@@ -35,16 +35,24 @@ func newWorkShowCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// The tree as it is right now, so a reader can tell which records still
+			// describe it. Without it the fingerprint on a record is a value with
+			// nothing to compare against, and "is this gist still true?" is not a
+			// question the log can answer.
+			fp, cause := worklog.Fingerprint(repo.Toplevel)
 			if opts.JSON {
 				enc := json.NewEncoder(cmd.OutOrStdout())
 				enc.SetIndent("", "  ")
 				return enc.Encode(struct {
-					Branch  string           `json:"branch"`
-					Path    string           `json:"path"`
-					Records []worklog.Record `json:"records"`
-				}{log.Branch(), log.Path(), recs})
+					Branch string `json:"branch"`
+					Path   string `json:"path"`
+					// Fingerprint is the *current* tree's, not any record's.
+					Fingerprint string           `json:"fingerprint"`
+					Cause       string           `json:"cause,omitempty"`
+					Records     []worklog.Record `json:"records"`
+				}{log.Branch(), log.Path(), fp, cause, recs})
 			}
-			renderWorklog(cmd.OutOrStdout(), log, recs)
+			renderWorklog(cmd.OutOrStdout(), log, fp, recs)
 			return nil
 		},
 	}
@@ -55,14 +63,22 @@ func newWorkShowCmd() *cobra.Command {
 	return cmd
 }
 
-func renderWorklog(out io.Writer, log *worklog.Log, recs []worklog.Record) {
-	_, _ = fmt.Fprintf(out, "%s — %d record(s)\n", log.Branch(), len(recs))
+func renderWorklog(out io.Writer, log *worklog.Log, current string, recs []worklog.Record) {
+	if current == "" {
+		current = "-"
+	}
+	_, _ = fmt.Fprintf(out, "%s — %d record(s), tree now fp:%s\n", log.Branch(), len(recs), current)
 	for _, r := range recs {
 		fp := r.Fingerprint
-		if fp == "" {
+		switch fp {
+		case "":
 			fp = "-"
+		case current:
+			fp += " (current)"
+		default:
+			fp += " (stale)"
 		}
-		_, _ = fmt.Fprintf(out, "  %s  %-10s fp:%-16s %s\n", r.TS, r.Step, fp, r.Gist)
+		_, _ = fmt.Fprintf(out, "  %s  %-10s fp:%-26s %s\n", r.TS, r.Step, fp, r.Gist)
 		if r.Artifact != "" {
 			_, _ = fmt.Fprintf(out, "  %*s  %s\n", len(r.TS), "", r.Artifact)
 		}

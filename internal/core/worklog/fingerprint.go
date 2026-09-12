@@ -24,7 +24,11 @@ func Fingerprint(toplevel string) (fp string, cause string) {
 	}
 	out, err := root.CommonFuncIn(toplevel, "mkit_tree_fingerprint")
 	if err != nil || out == "" {
-		return "", "no fingerprint: mkit_tree_fingerprint found no HEAD or no hash tool"
+		// Deliberately unspecific. `mkit_tree_fingerprint` exits 1 for an absent
+		// hash tool, an unresolvable HEAD *and* a temp directory it cannot write,
+		// and it prints nothing either way — so naming one of them here would be a
+		// guess reported as a diagnosis.
+		return "", "no fingerprint: mkit_tree_fingerprint did not produce one"
 	}
 	return out, ""
 }

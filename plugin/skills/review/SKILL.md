@@ -122,10 +122,14 @@ Then read what already ran on this branch:
 mkit work show --json --limit 20
 ```
 
-Step 0 already established that `mkit` answers, so this call is about whether the *log* has anything in it.
-A branch nothing has run on is zero records and exit 0 — being first is the normal case, not a problem to
-report. Unlike step 0's probe, nothing here is load-bearing: the worklog makes this step cheaper and better
-informed, and never decides whether it may run (`workflow-contract.md`, rule 4).
+Step 0 established that this binary knows `findings`; it did not establish that it knows `work`, and a
+binary from before the worklog landed answers one and not the other. **A nonzero exit here is that skew, and
+it is not a stop** — carry on without the log and say so in step 6. A branch nothing has run on is different
+again: zero records and exit 0, because being first is the normal case, not a problem to report. Unlike
+step 0's probe, nothing here is load-bearing (`workflow-contract.md`, rule 4).
+
+The envelope's own `fingerprint` is the tree as it is right now; each record carries the tree it ran over.
+Comparing the two is what the goal order below means by "matching".
 
 **Also capture the goal** — what the change is trying to achieve, one or two lines. In this order:
 
@@ -352,8 +356,15 @@ mkit work append --step review --gist '<one line: what this review concluded>' \
 ```
 
 After the summary is produced, and it never changes the summary: a failed append is one line of note, not a
-failed run. The `--assume` list is where a derived goal goes, so the next step inherits the caveat instead of
-re-deriving it. Nothing is recorded for a run that found nothing to review.
+failed run. A run that found nothing still records — "no findings" is the most useful gist this step
+produces. The `--assume` list is where a derived goal goes, so the next step inherits the caveat instead of
+re-deriving it.
+
+**If step 5 applied fixes, say so in an `--assume`.** The fingerprint on this record is the tree *after*
+those fixes, but the reviewers ran before them — so a later step matching that fingerprint would read
+"reviewed" over content no reviewer saw. `--assume 'fixes applied after the reviewers ran; the fixed tree is
+unverified here'` is what keeps the record honest, and it is the same thing item 10 of the summary already
+says out loud.
 
 Do not commit unless asked — leave fixes in the working tree for the user to commit (or chain into `commit`).
 Fold `${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh --prune` into step 6's call rather than spending a turn on it.

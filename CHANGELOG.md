@@ -45,6 +45,11 @@ M6: the per-branch worklog, and the four existing skills start recording into it
   fact is an input, never a permission.
 - **`finish` usually does not record.** It removes the worktree its log lives in and deletes the
   branch the log is keyed on, so it appends only where the run stopped short of the cleanup.
+- **A completed no-op records too** — `commit` on a clean tree, `pr` on a branch that already has
+  one. One record per finished step, and "I looked and there was nothing to do" is not what an
+  absent record says.
+- **`work show --json` carries the current tree's fingerprint** alongside the records, since a
+  record's own fingerprint is unanswerable without something to compare it against.
 - **No ignore rule was added.** `.mkit/*` already covers `work/`; a second rule would be a second
   thing to keep true.
 

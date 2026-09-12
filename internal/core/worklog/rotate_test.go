@@ -50,7 +50,7 @@ func TestRotationOnlyPastTwiceKeep(t *testing.T) {
 
 	below := Open(repo, "below")
 	seed(t, below, Keep*2-1, head)
-	if err := below.Append(Record{Step: "commit", Gist: "the one that reaches the boundary"}); err != nil {
+	if err := below.Append(Record{Step: "commit", Head: head, Gist: "the one that reaches the boundary"}); err != nil {
 		t.Fatal(err)
 	}
 	if got := count(t, below); got != Keep*2 {
@@ -59,7 +59,7 @@ func TestRotationOnlyPastTwiceKeep(t *testing.T) {
 
 	above := Open(repo, "above")
 	seed(t, above, Keep*2, head)
-	if err := above.Append(Record{Step: "commit", Gist: "the one that crosses it"}); err != nil {
+	if err := above.Append(Record{Step: "commit", Head: head, Gist: "the one that crosses it"}); err != nil {
 		t.Fatal(err)
 	}
 	if got := count(t, above); got != Keep {
@@ -115,7 +115,7 @@ func TestRotationRefusesOnAMalformedLine(t *testing.T) {
 	_, _ = f.WriteString("{half a rec\n")
 	_ = f.Close()
 
-	if err := log.Append(Record{Step: "commit", Gist: "after the tear"}); err != nil {
+	if err := log.Append(Record{Step: "commit", Head: head, Gist: "after the tear"}); err != nil {
 		t.Fatal(err)
 	}
 	// Show skips the bad line; the file itself must still hold everything.
@@ -139,7 +139,7 @@ func TestRotationLockIsRespectedThenBroken(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := log.Append(Record{Step: "commit", Gist: "held"}); err != nil {
+	if err := log.Append(Record{Step: "commit", Head: head, Gist: "held"}); err != nil {
 		t.Fatal(err)
 	}
 	if got := count(t, log); got != Keep*2+1 {
@@ -150,7 +150,7 @@ func TestRotationLockIsRespectedThenBroken(t *testing.T) {
 	if err := os.Chtimes(log.Path()+".lock", stale, stale); err != nil {
 		t.Fatal(err)
 	}
-	if err := log.Append(Record{Step: "commit", Gist: "after the break"}); err != nil {
+	if err := log.Append(Record{Step: "commit", Head: head, Gist: "after the break"}); err != nil {
 		t.Fatal(err)
 	}
 	if got := count(t, log); got != Keep {
