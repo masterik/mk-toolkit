@@ -131,9 +131,11 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
     appends the **full** SHA-256 of the exact branch to **every** name: macOS is
     case-insensitive, so `JIRA-123` and `jira-123` would otherwise be one file; a digest added
     only to the uppercase ones is still ordinary branch text that another branch could spell; and
-    a truncated one turns "same string" into "same string, or unlucky". The **readable half** is
-    what gets cut to fit `NAME_MAX`, never the digest — git allows ref names longer than a
-    filename may be, and over the limit `open` fails with ENAMETOOLONG rather than degrading. Rotation mirrors `gate-run.sh`'s
+    a truncated one turns "same string" into "same string, or unlucky". Since git allows ref names
+    longer than a filename may be, the name is budgeted against `NAME_MAX` and the **readable
+    half** is what gets cut to fit, never the digest — injectivity was never carried by the
+    readable half, and an unbudgeted name would not degrade but fail outright, `open` returning
+    ENAMETOOLONG so the branch could not record at all. Rotation mirrors `gate-run.sh`'s
     `ledger_trim` down to the constant (`Keep = 200`, trim past `Keep*2`, dead heads first, mkdir
     lock with the 60-minute staleness break) — including its hardest rule: **a rotation that cannot
     read the file cleanly does not rotate.** The fingerprint is **delegated to
