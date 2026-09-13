@@ -27,7 +27,7 @@ const PluginName = "mkit"
 
 // Root is a located payload checkout.
 type Root struct {
-	// Dir is the payload root — the directory holding scripts/ and skills/.
+	// Dir is the payload root — the directory holding .claude-plugin/ and skills/.
 	Dir string
 	// Via names how it was found, so a report can say why it looked there.
 	Via string
@@ -159,18 +159,21 @@ func marketplaceBases() []string {
 }
 
 // isPayload is the shape test, not a name test: a directory is the payload when it
-// carries the manifest and the scripts the binary calls into.
+// carries the manifest and the skills the plugin ships.
+//
+// The markers must be things the payload still has. Until M5 this also required
+// `scripts/lib/common.sh`, and when that file went with the shell layer the test
+// rejected every correct checkout — including an explicit CLAUDE_PLUGIN_ROOT —
+// so `mkit facts` printed `plugin=none` and the search fell through to whatever
+// stale installed copy still carried a script. The payload runs nothing now;
+// only the manifest and skills/ are load-bearing.
 func isPayload(dir string) bool {
 	if dir == "" {
 		return false
 	}
-	for _, marker := range []string{
-		filepath.Join(".claude-plugin", "plugin.json"),
-		filepath.Join("scripts", "lib", "common.sh"),
-	} {
-		if _, err := os.Stat(filepath.Join(dir, marker)); err != nil {
-			return false
-		}
+	if _, err := os.Stat(filepath.Join(dir, ".claude-plugin", "plugin.json")); err != nil {
+		return false
 	}
-	return true
+	info, err := os.Stat(filepath.Join(dir, "skills"))
+	return err == nil && info.IsDir()
 }
