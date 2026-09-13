@@ -127,7 +127,10 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
   - `worklog/` (M6): the per-branch record of what each step concluded,
     `<toplevel>/.mkit/work/<branch>.jsonl`. `FileName` is the branch→file mapping **both verbs go
     through** — one that `show` and `append` derive separately is one they eventually disagree
-    about, and the symptom is an empty log rather than an error. Rotation mirrors `gate-run.sh`'s
+    about, and the symptom is an empty log rather than an error. It escapes to `%XX` and then
+    appends a digest of the exact branch to **every** name: macOS is case-insensitive, so
+    `JIRA-123` and `jira-123` would otherwise be one file, and a digest added only to the
+    uppercase ones is still ordinary branch text that another branch could spell. Rotation mirrors `gate-run.sh`'s
     `ledger_trim` down to the constant (`Keep = 200`, trim past `Keep*2`, dead heads first, mkdir
     lock with the 60-minute staleness break) — including its hardest rule: **a rotation that cannot
     read the file cleanly does not rotate.** The fingerprint is **delegated to

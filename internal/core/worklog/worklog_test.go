@@ -116,15 +116,18 @@ func TestAppendRejectsUnknownStepAndEmptyGist(t *testing.T) {
 // log into a directory; the rest is about staying injective, so two branches can
 // never land in one file.
 func TestFileNameEscapesEveryHazard(t *testing.T) {
-	for _, tc := range []struct{ branch, want string }{
-		{"main", "main.jsonl"},
-		{"feature/a/b", "feature%2Fa%2Fb.jsonl"},
-		{"fix up", "fix%20up.jsonl"},
-		{".hidden", "%2Ehidden.jsonl"},
-		{"a.b-c_d", "a.b-c_d.jsonl"},
+	// Every name ends with a digest of the exact branch, so the readable part is
+	// asserted as a prefix and the digest as the thing that makes it unique.
+	for _, tc := range []struct{ branch, readable string }{
+		{"main", "main-"},
+		{"feature/a/b", "feature%2Fa%2Fb-"},
+		{"fix up", "fix%20up-"},
+		{".hidden", "%2Ehidden-"},
+		{"a.b-c_d", "a.b-c_d-"},
 	} {
-		if got := FileName(tc.branch); got != tc.want {
-			t.Errorf("FileName(%q) = %q, want %q", tc.branch, got, tc.want)
+		got := FileName(tc.branch)
+		if !strings.HasPrefix(got, tc.readable) || !strings.HasSuffix(got, ".jsonl") {
+			t.Errorf("FileName(%q) = %q, want %q<digest>.jsonl", tc.branch, got, tc.readable)
 		}
 	}
 	if FileName("a/b") == FileName("a-b") {
@@ -143,11 +146,17 @@ func TestFileNameEscapesEveryHazard(t *testing.T) {
 	if !strings.HasPrefix(FileName("JIRA-123"), "JIRA-123-") {
 		t.Errorf("the readable name did not survive: %s", FileName("JIRA-123"))
 	}
+	// The digest is unconditional precisely so it cannot be spelled by another
+	// branch: a suffix added only to uppercase names is still ordinary branch text.
+	spelled := strings.TrimSuffix(FileName("FOO"), ".jsonl") // a legal branch name
+	if strings.EqualFold(FileName(spelled), FileName("FOO")) {
+		t.Errorf("a branch named %q collides with FOO's log", spelled)
+	}
 	// A detached log lives in a namespace no branch name can reach: `~` is
 	// forbidden in a ref, and escaping makes a literal one distinct anyway.
 	// `~` is forbidden in a ref name, and a caller passing one literally escapes
 	// it — so nothing a branch can be called reaches a detached log's file.
-	if FileName(detachedPrefix+"abc") != "detached%7Eabc.jsonl" {
+	if !strings.HasPrefix(FileName(detachedPrefix+"abc"), "detached%7Eabc-") {
 		t.Errorf("detached log file = %s", FileName(detachedPrefix+"abc"))
 	}
 	if FileName("detached-abc") == FileName(detachedPrefix+"abc") {
@@ -177,7 +186,7 @@ func TestAppendAgainstAnotherBranchRecordsThatBranchesHead(t *testing.T) {
 func TestPathIsPerWorkTree(t *testing.T) {
 	repo := newRepo(t)
 	log := Open(repo, "main")
-	want := filepath.Join(repo.Toplevel, ".mkit", "work", "main.jsonl")
+	want := filepath.Join(repo.Toplevel, ".mkit", "work", FileName("main"))
 	if log.Path() != want {
 		t.Errorf("Path() = %q, want %q", log.Path(), want)
 	}

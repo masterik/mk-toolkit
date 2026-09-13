@@ -65,7 +65,7 @@ func TestWorkShowJSONShape(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		t.Fatalf("not JSON: %v\n%s", err, out)
 	}
-	if got.Branch != "main" || !strings.HasSuffix(got.Path, filepath.Join(".mkit", "work", "main.jsonl")) {
+	if got.Branch != "main" || !strings.Contains(got.Path, filepath.Join(".mkit", "work", "main-")) {
 		t.Errorf("branch/path: %+v", got)
 	}
 	if len(got.Records) != 1 || got.Records[0].Step != "spec" || got.Records[0].Gist != "the plan" {

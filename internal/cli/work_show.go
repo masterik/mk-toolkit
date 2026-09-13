@@ -70,10 +70,14 @@ func renderWorklog(out io.Writer, log *worklog.Log, current string, recs []workl
 	_, _ = fmt.Fprintf(out, "%s — %d record(s), tree now fp:%s\n", log.Branch(), len(recs), current)
 	for _, r := range recs {
 		fp := r.Fingerprint
-		switch fp {
-		case "":
+		switch {
+		case fp == "":
 			fp = "-"
-		case current:
+		case current == "":
+			// Nothing to compare against: a record is not stale merely because
+			// this run could not fingerprint the tree.
+			fp += " (unknown)"
+		case fp == current:
 			fp += " (current)"
 		default:
 			fp += " (stale)"

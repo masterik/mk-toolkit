@@ -183,9 +183,11 @@ The range is inclusive of the first commit — `<first-sha>..<last-sha>` exclude
 all on a one-commit run. For a single commit pass the sha itself.
 
 After the report is produced, and it never changes the report: a failed append is one line of note, not a
-failed run. **A run that made no commits still records** — `--gist 'working tree clean; nothing to
-commit'`, no `--artifact`. One record per finished step, and a checked no-op is a fact: it tells the next
-step the tree was looked at, which is not what an absent record says.
+failed run. **A run that made no commits still records**, with no `--artifact` and a gist naming the state
+it actually found: `working tree clean; nothing to commit` only where that is true, and otherwise what was
+left behind and why (`changes left unstaged at the user's request`). One record per finished step, and a
+checked no-op is a fact — it tells the next step the tree was looked at, which is not what an absent record
+says. A gist that reports a clean tree over a dirty one is worse than no record at all.
 
 ## Conventional Commit format
 

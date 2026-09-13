@@ -123,8 +123,10 @@ mkit work show --json --limit 20
 ```
 
 Step 0 established that this binary knows `findings`; it did not establish that it knows `work`, and a
-binary from before the worklog landed answers one and not the other. **A nonzero exit here is that skew, and
-it is not a stop** — carry on without the log and say so in step 6. A branch nothing has run on is different
+binary from before the worklog landed answers one and not the other. **A nonzero exit here is not a stop** —
+carry on without the log and say so in step 6. Read what it printed before naming the cause: an unknown
+subcommand is that skew, while a log it found and could not read is a different fact and worth reporting as
+one. A branch nothing has run on is different
 again: zero records and exit 0, because being first is the normal case, not a problem to report. Unlike
 step 0's probe, nothing here is load-bearing (`workflow-contract.md`, rule 4).
 
@@ -362,9 +364,10 @@ re-deriving it.
 
 **If step 5 applied fixes, say so in an `--assume`.** The fingerprint on this record is the tree *after*
 those fixes, but the reviewers ran before them — so a later step matching that fingerprint would read
-"reviewed" over content no reviewer saw. `--assume 'fixes applied after the reviewers ran; the fixed tree is
-unverified here'` is what keeps the record honest, and it is the same thing item 10 of the summary already
-says out loud.
+"reviewed" over content no reviewer saw. Which sentence depends on the second round: with none,
+`--assume 'fixes applied after the reviewers ran; the fixed tree is unverified here'`; with one, name what it
+actually covered — `--assume 'fixes re-reviewed by <sources> over the fixed files only'`. Either way it is
+the same thing item 10 of the summary already says out loud.
 
 Do not commit unless asked — leave fixes in the working tree for the user to commit (or chain into `commit`).
 Fold `${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh --prune` into step 6's call rather than spending a turn on it.

@@ -88,17 +88,18 @@ const detachedPrefix = "detached~"
 // platform and its filesystem is case-insensitive by default, so `JIRA-123` and
 // `jira-123` would open the same file and interleave two branches' histories. Case
 // is kept rather than escaped — `%4AIRA-123` is unreadable, and ticket-style names
-// are common — and a name carrying any uppercase letter gets a short digest of the
-// exact branch appended instead. The digest is what separates the variants; the
-// readable name is what a human finds in `ls`.
+// are common — and every name instead ends with a short digest of the exact branch.
+//
+// The digest is on **every** name, not only the ones carrying an uppercase letter,
+// and that is the whole point: a suffix added selectively is still ordinary branch
+// text, so `FOO` → `FOO-9520437c` collides with a real branch called
+// `foo-9520437c`. Unconditional, two names collide only if their digests match,
+// which means the branches were the same string. The readable part stays in front,
+// which is what a human reads in `ls`.
 func FileName(branch string) string {
 	var b strings.Builder
-	upper := false
 	for i := 0; i < len(branch); i++ {
 		c := branch[i]
-		if c >= 'A' && c <= 'Z' {
-			upper = true
-		}
 		safe := (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
 			c == '_' || c == '-' || (c == '.' && i > 0)
 		if safe {
@@ -107,10 +108,8 @@ func FileName(branch string) string {
 		}
 		fmt.Fprintf(&b, "%%%02X", c)
 	}
-	if upper {
-		sum := sha256.Sum256([]byte(branch))
-		fmt.Fprintf(&b, "-%x", sum[:4])
-	}
+	sum := sha256.Sum256([]byte(branch))
+	fmt.Fprintf(&b, "-%x", sum[:4])
 	return b.String() + ".jsonl"
 }
 
@@ -176,7 +175,7 @@ func (l *Log) head() string {
 	if l.branch == l.repo.Branch() || strings.HasPrefix(l.branch, detachedPrefix) {
 		return l.repo.Head()
 	}
-	return l.repo.Rev(l.branch)
+	return l.repo.BranchHead(l.branch)
 }
 
 // Query narrows what Show returns.

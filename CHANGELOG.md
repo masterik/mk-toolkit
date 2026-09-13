@@ -50,6 +50,9 @@ M6: the per-branch worklog, and the four existing skills start recording into it
   absent record says.
 - **`work show --json` carries the current tree's fingerprint** alongside the records, since a
   record's own fingerprint is unanswerable without something to compare it against.
+- **Every log filename ends with a digest of its branch.** macOS is case-insensitive, so
+  `JIRA-123` and `jira-123` were one file; a digest on the uppercase names alone is still branch
+  text another branch could spell, so it goes on all of them.
 - **No ignore rule was added.** `.mkit/*` already covers `work/`; a second rule would be a second
   thing to keep true.
 

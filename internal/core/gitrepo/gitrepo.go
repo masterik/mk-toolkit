@@ -179,12 +179,24 @@ func (r *Repo) Branch() string {
 func (r *Repo) Head() string { return r.Rev("HEAD") }
 
 // Rev resolves a revision to a commit id, or "" when it does not resolve.
+//
+// `--end-of-options` so a revision that begins with a dash is read as a revision
+// rather than as a flag — the caller's string is data here, never syntax.
 func (r *Repo) Rev(rev string) string {
-	out, err := run(r.Toplevel, "rev-parse", "--verify", "-q", rev+"^{commit}")
+	out, err := run(r.Toplevel, "rev-parse", "--verify", "-q", "--end-of-options", rev+"^{commit}")
 	if err != nil {
 		return ""
 	}
 	return out
+}
+
+// BranchHead resolves a *branch* to its tip, or "" when no such branch exists.
+//
+// Not Rev: a revision string is a small language, and `@`, `HEAD` and `x@{1}` all
+// resolve to something other than the branch of that name. Asking for
+// `refs/heads/<branch>` asks the question the caller meant.
+func (r *Repo) BranchHead(branch string) string {
+	return r.Rev("refs/heads/" + branch)
 }
 
 // AliveCommits reports, for each of heads, whether it still resolves to a commit.
