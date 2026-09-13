@@ -192,13 +192,8 @@ After merge:      delete branch <feature-branch> (local + remote) + remove workt
      inside it.
    - `git-worktree`: `git worktree remove <toplevel>` then, if `git branch --list <feature-branch>` still
      shows it, `git branch -D <feature-branch>`, then `git worktree prune`.
-   - `none`: if `git branch --list <feature-branch>` still shows it, `git branch -D <feature-branch>`.
-     Then **retire the branch's worklog**, which is the one path where it outlives the branch it is keyed
-     on — there is no worktree being removed to take it along. A branch name is reusable, so leaving it
-     hands a later `review` on a recreated `feat/x` the old `feat/x`'s gists. Ask the binary for the path
-     rather than deriving the filename, which carries a digest:
-     `p=$(mkit work show --branch <feature-branch> --json | jq -r .path) && rm -f "$p"`. Skip the append
-     on this path, as above — the record would go into the file being retired.
+   - `none`: if `git branch --list <feature-branch>` still shows it, `git branch -D <feature-branch>`,
+     then retire the worklog per **Retiring the worklog** below.
 
 **Local path** (no open PR) — by `cleanup_path`
 
@@ -236,6 +231,21 @@ git branch -d <feature-branch>
 
 Update the base against the remote first (`git fetch` / `git pull --ff-only <base>`) when one exists, so you
 merge onto current base.
+
+#### Retiring the worklog
+
+**Both paths, and only where `cleanup_path=none`.** The worklog lives in the work tree, so every other
+cleanup path carries it off with the worktree it removes. `none` removes no worktree, so the log outlives
+the branch it is keyed on — and a branch name is reusable, which hands a later `review` on a recreated
+`feat/x` the *old* `feat/x`'s gists, a goal for work that no longer exists. Ask the binary for the path
+rather than deriving the filename, which carries a digest:
+
+```bash
+p=$(mkit work show --branch <feature-branch> --json | jq -r .path) && rm -f "$p"
+```
+
+Best effort, like every other `mkit work` call here: a path it cannot produce is one line of note. And skip
+the append on this path — the record would go straight into the file being retired.
 
 ### 5. Verify the cleanup
 
