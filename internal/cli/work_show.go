@@ -64,10 +64,15 @@ func newWorkShowCmd() *cobra.Command {
 }
 
 func renderWorklog(out io.Writer, log *worklog.Log, current string, recs []worklog.Record) {
-	if current == "" {
-		current = "-"
+	// `current` keeps its own value throughout: it is the comparison, and a display
+	// placeholder written over it turns "we could not fingerprint the tree" into a
+	// fingerprint that matches no record — which is how every record came out
+	// `(stale)`. Only the header substitutes.
+	header := current
+	if header == "" {
+		header = "-"
 	}
-	_, _ = fmt.Fprintf(out, "%s — %d record(s), tree now fp:%s\n", log.Branch(), len(recs), current)
+	_, _ = fmt.Fprintf(out, "%s — %d record(s), tree now fp:%s\n", log.Branch(), len(recs), header)
 	for _, r := range recs {
 		fp := r.Fingerprint
 		switch {

@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/masterik/mk-toolkit/internal/core/worklog"
 )
 
 // runIn is findings_test.go's run, with a working directory: `work` answers about
@@ -174,5 +176,42 @@ func TestShowAndAppendAgreeOnThePath(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".mkit", "work", "feature")); err == nil {
 		t.Error("a slash in the branch name became a directory")
+	}
+}
+
+// A tree this run could not fingerprint is not evidence that anything is stale.
+// The bug this pins was a display placeholder assigned over the comparison value:
+// `current` became "-", so no record could ever match it and every one of them
+// rendered `(stale)` — an assertion about the tree made from its own absence.
+func TestWorkShowUnknownWhenTreeHasNoFingerprint(t *testing.T) {
+	dir := newRepo(t)
+	if _, code := runIn(t, dir, "work", "append", "--step", "spec", "--gist", "the plan"); code != 0 {
+		t.Fatalf("append exited %d", code)
+	}
+
+	// newRepo puts no payload in reach, so the *current* fingerprint is empty.
+	// Give the record one, which is the only combination that reaches the branch.
+	path := filepath.Join(dir, ".mkit", "work", worklog.FileName("main"))
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read log: %v", err)
+	}
+	patched := strings.Replace(string(b), `"fingerprint":""`, `"fingerprint":"abc123"`, 1)
+	if patched == string(b) {
+		t.Fatalf("record carried no empty fingerprint to patch:\n%s", b)
+	}
+	if err := os.WriteFile(path, []byte(patched), 0o644); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+
+	out, code := runIn(t, dir, "work", "show")
+	if code != 0 {
+		t.Fatalf("show exited %d", code)
+	}
+	if !strings.Contains(out, "(unknown)") || strings.Contains(out, "(stale)") {
+		t.Errorf("no current fingerprint must read (unknown), not (stale):\n%s", out)
+	}
+	if !strings.Contains(out, "tree now fp:-") {
+		t.Errorf("the header still reports the absence as -:\n%s", out)
 	}
 }

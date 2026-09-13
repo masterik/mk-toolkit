@@ -253,3 +253,31 @@ func TestWorklogIsIgnoredByTheExistingRule(t *testing.T) {
 		t.Errorf("%s is not ignored — run artefacts would be committed", rel)
 	}
 }
+
+// git's own limit on a ref name is far above a filename's, and the failure is not a
+// long name — it is ENAMETOOLONG from open(2), so the branch cannot record at all.
+func TestFileNameStaysWithinNameMax(t *testing.T) {
+	long := strings.Repeat("a", 300)
+	if got := len(FileName(long)); got > nameMax {
+		t.Errorf("a 300-char branch produced a %d-byte filename, over the %d limit", got, nameMax)
+	}
+	// Escapes triple the byte cost; the cut must still land under the limit, and
+	// must never split one `%XX` into a fragment.
+	slashes := strings.Repeat("a/", 200)
+	name := FileName(slashes)
+	if len(name) > nameMax {
+		t.Errorf("escaped branch produced a %d-byte filename, over the %d limit", len(name), nameMax)
+	}
+	if i := strings.LastIndex(name, "%"); i >= 0 && !strings.HasPrefix(name[i:], "%2F") {
+		t.Errorf("a %%XX escape was split by the truncation: %s", name)
+	}
+
+	// Truncation costs readability, never identity: two branches sharing a prefix
+	// past the cut are still two files, because the digest is over the whole name.
+	if FileName(long) == FileName(long+"b") {
+		t.Error("two branches differing only past the truncation point share a file")
+	}
+	if !strings.HasPrefix(FileName(long), "aaaa") {
+		t.Errorf("the readable part did not survive the cut: %s", FileName(long))
+	}
+}

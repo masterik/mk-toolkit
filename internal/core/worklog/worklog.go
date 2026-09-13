@@ -72,6 +72,11 @@ func (l *Log) Path() string { return filepath.Join(Dir(l.repo.Toplevel), FileNam
 // name, so nothing a branch is called can collide with one of these.
 const detachedPrefix = "detached~"
 
+// nameMax is the longest filename the supported filesystems accept — 255 bytes on
+// APFS, HFS+ and every ext/XFS variant. FileName budgets against it rather than
+// letting the branch decide the length.
+const nameMax = 255
+
 // FileName maps a branch name to its log file.
 //
 // One exported function, used by both verbs, because a mapping that show and append
@@ -92,25 +97,38 @@ const detachedPrefix = "detached~"
 //
 // The digest is on **every** name, not only the ones carrying an uppercase letter,
 // and that is the whole point: a suffix added selectively is still ordinary branch
-// text, so `FOO` → `FOO-9520437c` collides with a real branch called
-// `foo-9520437c`. Unconditional, two names collide only if their digests match,
-// which means the branches were the same string. The readable part stays in front,
-// which is what a human reads in `ls`.
+// text, so `FOO` → `FOO-<digest>` collides with a real branch called
+// `foo-<digest>`. Unconditional, two names collide only if their digests match.
+// It is the **full** SHA-256, not a prefix of it: a truncated digest turns
+// "the branches were the same string" into "the branches were the same string, or
+// unlucky", and the log it silently merges is the record two steps hand each other.
+// The readable part stays in front, which is what a human reads in `ls`.
+//
+// Which is also why the readable part is what gets **truncated**, never the digest.
+// git allows branch names far longer than a filename may be, and a name over
+// NAME_MAX does not degrade — `open` fails with ENAMETOOLONG and the branch cannot
+// record at all. So the escaped text is cut at a whole-token boundary (a `%XX`
+// escape is never split) to whatever the digest leaves room for. Injectivity is
+// unaffected: it was never carried by the readable half.
 func FileName(branch string) string {
+	sum := sha256.Sum256([]byte(branch))
+	suffix := fmt.Sprintf("-%x.jsonl", sum[:])
+
 	var b strings.Builder
 	for i := 0; i < len(branch); i++ {
 		c := branch[i]
 		safe := (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
 			c == '_' || c == '-' || (c == '.' && i > 0)
-		if safe {
-			b.WriteByte(c)
-			continue
+		tok := string(c)
+		if !safe {
+			tok = fmt.Sprintf("%%%02X", c)
 		}
-		fmt.Fprintf(&b, "%%%02X", c)
+		if b.Len()+len(tok)+len(suffix) > nameMax {
+			break
+		}
+		b.WriteString(tok)
 	}
-	sum := sha256.Sum256([]byte(branch))
-	fmt.Fprintf(&b, "-%x", sum[:4])
-	return b.String() + ".jsonl"
+	return b.String() + suffix
 }
 
 // Append writes one record and then rotates.
