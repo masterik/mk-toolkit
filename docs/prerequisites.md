@@ -114,7 +114,7 @@ Then check the toolkit itself, from any repo:
 
 ```bash
 mkit facts commit --no-run   # prints a fact block, and where the payload is
-mkit gate detect             # prints full= and its sources
+mkit gate detect             # prints the full: block and each step's source
 mkit findings schema         # prints the JSONL shape
 mkit doctor                  # this page's tooling, the sandbox, the payload, the allowlist
 ```

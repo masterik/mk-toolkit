@@ -9,11 +9,10 @@ directly on the diff. **Nothing is hardcoded** — the commands are detected fro
 mkit gate detect
 # pm=bun
 # ecosystem=node
-# full=bun run lint|bun run test|bun run build
-# full_source=discovered|pinned|discovered
-# full_cache=fresh|failed|none
-# full_cache_exit=0|1|-
-# full_cache_age=6m|6m|-
+# full:
+#   1 source=discovered cache=fresh exit=0 age=6m cmd=bun run lint
+#   2 source=pinned cache=failed exit=1 age=6m cmd=pytest -q || exit 1
+#   3 source=discovered cache=none exit=- age=- cmd=bun run build
 # gate_fingerprint=7c998da01a8a9aa8
 # gate_max_age_min=60
 # documented=just check
@@ -33,13 +32,20 @@ canonical check is a claim in its own prose, not something a lockfile settles �
 names a command the chain missed, prefer it and say which you used. Anything reported absent
 stays absent: never invent a step.
 
-**`full_source=` says where each step came from**, pipe-parallel with `full=`:
+**One step per line, in order, and `cmd=` runs to the end of the line** — so a command may
+contain spaces, pipes or `||` without any escaping. Read the fields by name, never by position,
+and never split the block on `|`: `pytest -q || exit 1` is an ordinary pinned step.
+
+**`source=` says where that step came from**:
 
 | value | meaning |
 | --- | --- |
 | `discovered` | inferred from a manifest this run; cannot go stale |
 | `pinned` | `[gate.commands]` in the repo config — a human said this one is right |
 | `documented` | the repo's own `check:` target, used because nothing was discovered |
+
+`cache=`, `exit=` and `age=` are that step's ledger verdict, and are all `-` when there is no
+usable ledger — `gate_cache=` then says why, once, instead of repeating the reason per step.
 
 `documented=` appears on its own line when a `check:` target exists *and* a chain was
 discovered anyway. It never replaces that chain — a `check:` that only lints would silently
@@ -53,7 +59,7 @@ to run, and saying so beats substituting a command the repo never named.
 
 ## One tier, two consumers
 
-There is one tier — `full=` — used **by `finish` and `pr`, once each, before merge/PR**: the
+There is one tier — the `full:` block — used **by `finish` and `pr`, once each, before merge/PR**: the
 complete pre-integration sequence, in order, stopping at the first failure. `commit` and
 `review` used to consume a `fast=` tier; they no longer gate at all, and the tier went with
 them.

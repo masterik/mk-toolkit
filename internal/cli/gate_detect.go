@@ -70,28 +70,34 @@ func renderDetect(out io.Writer, d *gate.Detection) {
 	}
 	_, _ = fmt.Fprintf(out, "ecosystem=%s\n", orNone(strings.Join(d.Ecosystems, ",")))
 
-	var cmds, sources, classes, exits, ages []string
-	for _, s := range d.Steps {
-		cmds = append(cmds, s.Cmd)
-		sources = append(sources, string(s.Origin))
-		classes = append(classes, string(s.Cache.Class))
-		if s.Cache.Found {
-			exits = append(exits, fmt.Sprint(s.Cache.Exit))
-			ages = append(ages, ageHuman(s.Cache.Age))
-		} else {
-			exits = append(exits, "-")
-			ages = append(ages, "-")
+	// One block, one line per step, command last.
+	//
+	// This was five pipe-joined lines read positionally against each other. A
+	// command is arbitrary shell and `|` is legal inside one — `pytest -q || exit
+	// 1` is an ordinary pinned step — so a single `[gate.commands]` entry
+	// containing a pipe split into two fields and silently shifted every step's
+	// source and cache verdict by one. Nothing escaped it, and the misalignment
+	// is invisible in the output. Putting `cmd=` last on its own line means the
+	// command can contain anything, including the delimiter that used to break
+	// it.
+	if len(d.Steps) == 0 {
+		_, _ = fmt.Fprintln(out, "full=none")
+	} else {
+		_, _ = fmt.Fprintln(out, "full:")
+		for i, s := range d.Steps {
+			// Cache fields are `-` when there is no usable ledger; gate_cache=
+			// below says why, once, rather than on every step.
+			cache, exit, age := "-", "-", "-"
+			if d.CacheCause == "" {
+				cache = string(s.Cache.Class)
+				if s.Cache.Found {
+					exit = fmt.Sprint(s.Cache.Exit)
+					age = ageHuman(s.Cache.Age)
+				}
+			}
+			_, _ = fmt.Fprintf(out, "  %d source=%s cache=%s exit=%s age=%s cmd=%s\n",
+				i+1, s.Origin, cache, exit, age, s.Cmd)
 		}
-	}
-	_, _ = fmt.Fprintf(out, "full=%s\n", orNone(strings.Join(cmds, "|")))
-	if len(cmds) > 0 {
-		// Pipe-parallel with full=, the same idiom full_cache_exit= uses.
-		_, _ = fmt.Fprintf(out, "full_source=%s\n", strings.Join(sources, "|"))
-	}
-	if d.CacheCause == "" && len(cmds) > 0 {
-		_, _ = fmt.Fprintf(out, "full_cache=%s\n", strings.Join(classes, "|"))
-		_, _ = fmt.Fprintf(out, "full_cache_exit=%s\n", strings.Join(exits, "|"))
-		_, _ = fmt.Fprintf(out, "full_cache_age=%s\n", strings.Join(ages, "|"))
 	}
 	if d.CacheCause != "" {
 		_, _ = fmt.Fprintf(out, "gate_cache=%s\n", d.CacheCause)

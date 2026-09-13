@@ -85,8 +85,8 @@ One line per passing step; on failure the step, the exit code, the grepped failu
 (`../_shared/references/output-discipline.md`). A failing suite is thousands of lines, none of which change
 the decision ("fix it or get an explicit OK").
 
-`mkit gate detect` also reports what the gate ledger already proved (`full_cache=`, pipe-parallel with
-`full=`). **This is the strictest consumer in the bundle**, because a local merge skips review and this gate
+`mkit gate detect` also reports what the gate ledger already proved — each step's `cache=` in the
+`full:` block. **This is the strictest consumer in the bundle**, because a local merge skips review and this gate
 is the only safety net: consume a step only on an exact command match, a matching fingerprint and an age
 inside the bound — per step, never a whole chain at once — and print `cached (Nm ago, exit=0)` on that
 step's own line, with the verdict naming how many were cached. `gate=ok` for a step that did not run is not

@@ -71,7 +71,7 @@ func TestDetectNoManifest(t *testing.T) {
 	if got := field(res.stdout, "ecosystem"); got != "none" {
 		t.Errorf("ecosystem = %q", got)
 	}
-	if got := field(res.stdout, "full"); got != "none" {
+	if got := fullChain(res.stdout); got != "none" {
 		t.Errorf("full = %q", got)
 	}
 	// The fast tier is gone, not emitted as `none`: it had no consumer left, and
@@ -102,7 +102,7 @@ func TestDetectNodePackageManager(t *testing.T) {
 			if got := field(res.stdout, "ecosystem"); got != "node" {
 				t.Errorf("ecosystem = %q", got)
 			}
-			if got := field(res.stdout, "full"); got != want+" run test" {
+			if got := fullChain(res.stdout); got != want+" run test" {
 				t.Errorf("full = %q", got)
 			}
 		})
@@ -114,10 +114,10 @@ func TestDetectNodeFullChainIsLintTypecheckTestBuild(t *testing.T) {
 	nodeRepo(t, repo, "lint", "typecheck", "test", "build")
 	res := run(t, "gate", "detect")
 	want := "npm run lint|npm run typecheck|npm run test|npm run build"
-	if got := field(res.stdout, "full"); got != want {
+	if got := fullChain(res.stdout); got != want {
 		t.Errorf("full = %q, want %q", got, want)
 	}
-	if got := field(res.stdout, "full_source"); got != "discovered|discovered|discovered|discovered" {
+	if got := strings.Join(stepVals(res.stdout, "source"), "|"); got != "discovered|discovered|discovered|discovered" {
 		t.Errorf("full_source = %q", got)
 	}
 	if got := field(res.stdout, "scripts"); got != "build,lint,test,typecheck" {
@@ -198,7 +198,7 @@ func TestDetectEcosystemTable(t *testing.T) {
 			if got := field(res.stdout, "ecosystem"); got != c.eco {
 				t.Errorf("ecosystem = %q, want %q", got, c.eco)
 			}
-			if got := field(res.stdout, "full"); got != c.full {
+			if got := fullChain(res.stdout); got != c.full {
 				t.Errorf("full = %q, want %q", got, c.full)
 			}
 		})
@@ -212,7 +212,7 @@ func TestDetectPythonMypy(t *testing.T) {
 	if got := field(res.stdout, "ecosystem"); got != "python" {
 		t.Errorf("ecosystem = %q", got)
 	}
-	full := field(res.stdout, "full")
+	full := fullChain(res.stdout)
 	for _, want := range []string{"pytest -q", "mypy ."} {
 		if !strings.Contains(full, want) {
 			t.Errorf("full = %q, want it to contain %q", full, want)
@@ -234,10 +234,10 @@ func TestDetectDocumentedCheckFillsAnEmptyChain(t *testing.T) {
 	repo := detectRepo(t)
 	put(t, repo, "Makefile", "check:\n\techo ok\n")
 	res := run(t, "gate", "detect")
-	if got := field(res.stdout, "full"); got != "make check" {
+	if got := fullChain(res.stdout); got != "make check" {
 		t.Errorf("full = %q", got)
 	}
-	if got := field(res.stdout, "full_source"); got != "documented" {
+	if got := strings.Join(stepVals(res.stdout, "source"), "|"); got != "documented" {
 		t.Errorf("full_source = %q", got)
 	}
 }
@@ -251,7 +251,7 @@ func TestDetectDocumentedCheckNeverReplacesADiscoveredChain(t *testing.T) {
 	nodeRepo(t, repo, "lint", "test")
 	put(t, repo, "justfile", "check:\n\techo ok\n")
 	res := run(t, "gate", "detect")
-	if got := field(res.stdout, "full"); got != "npm run lint|npm run test" {
+	if got := fullChain(res.stdout); got != "npm run lint|npm run test" {
 		t.Errorf("full = %q", got)
 	}
 	if got := field(res.stdout, "documented"); got != "just check" {
@@ -288,7 +288,7 @@ func TestDetectDirOnlyLocatesTheRepo(t *testing.T) {
 	if got := field(res.stdout, "ecosystem"); got != "node" {
 		t.Errorf("ecosystem = %q", got)
 	}
-	if got := field(res.stdout, "full"); got != "npm run test" {
+	if got := fullChain(res.stdout); got != "npm run test" {
 		t.Errorf("full = %q, want the toplevel's manifest", got)
 	}
 }
@@ -384,10 +384,21 @@ func TestDetectWithNoLedgerReportsEmptyAndNoFingerprint(t *testing.T) {
 	}
 	// Not one class, and no age bound either: there is nothing to compare
 	// against, so reporting a bound would imply there was.
-	for _, key := range []string{"full_cache", "gate_fingerprint", "gate_max_age_min"} {
+	for _, key := range []string{"gate_fingerprint", "gate_max_age_min"} {
 		if strings.Contains(res.stdout, key+"=") {
 			t.Errorf("%s was reported with nothing to classify:\n%s", key, res.stdout)
 		}
+	}
+	// Every step's cache field is `-`, and gate_cache= carries the reason once.
+	// Asserting the absence of a `full_cache=` line would pass for free now that
+	// no such line exists in any state.
+	for i, got := range stepVals(res.stdout, "cache") {
+		if got != "-" {
+			t.Errorf("step %d cache = %q, want - with no ledger", i+1, got)
+		}
+	}
+	if len(stepCmds(res.stdout)) == 0 {
+		t.Error("no steps in the full: block, so the cache assertion proves nothing")
 	}
 }
 
@@ -398,7 +409,7 @@ func TestDetectNoCacheReportsOffAndStillReportsEveryOtherFact(t *testing.T) {
 	if got := field(res.stdout, "gate_cache"); got != "off" {
 		t.Errorf("gate_cache = %q", got)
 	}
-	if got := field(res.stdout, "full"); got != "npm run lint" {
+	if got := fullChain(res.stdout); got != "npm run lint" {
 		t.Errorf("full = %q", got)
 	}
 	if got := field(res.stdout, "ecosystem"); got != "node" {
@@ -412,10 +423,10 @@ func TestDetectAStepJustRunComesBackFresh(t *testing.T) {
 	gateRun(t, repo, "lint", "--", "npm", "run", "lint")
 
 	res := run(t, "gate", "detect")
-	if got := field(res.stdout, "full_cache"); got != "fresh" {
+	if got := strings.Join(stepVals(res.stdout, "cache"), "|"); got != "fresh" {
 		t.Errorf("full_cache = %q", got)
 	}
-	if got := field(res.stdout, "full_cache_exit"); got != "0" {
+	if got := strings.Join(stepVals(res.stdout, "exit"), "|"); got != "0" {
 		t.Errorf("full_cache_exit = %q", got)
 	}
 	if got := field(res.stdout, "gate_fingerprint"); len(got) != 16 {
@@ -434,7 +445,7 @@ func TestDetectAProofSurvivesCommittingTheTreeUnchanged(t *testing.T) {
 	gateRun(t, repo, "lint", "--", "npm", "run", "lint")
 
 	before := run(t, "gate", "detect").stdout
-	if got := field(before, "full_cache"); got != "fresh" {
+	if got := strings.Join(stepVals(before, "cache"), "|"); got != "fresh" {
 		t.Fatalf("full_cache = %q before the commit", got)
 	}
 
@@ -442,7 +453,7 @@ func TestDetectAProofSurvivesCommittingTheTreeUnchanged(t *testing.T) {
 	gateGit(t, repo, "commit", "-q", "-m", "commit exactly the content the gate ran over")
 
 	after := run(t, "gate", "detect").stdout
-	if got := field(after, "full_cache"); got != "fresh" {
+	if got := strings.Join(stepVals(after, "cache"), "|"); got != "fresh" {
 		t.Errorf("full_cache = %q after the commit", got)
 	}
 	if field(before, "gate_fingerprint") != field(after, "gate_fingerprint") {
@@ -458,7 +469,7 @@ func TestDetectClassifies(t *testing.T) {
 
 	// Drifted: the content moved after the proof.
 	put(t, repo, "a.txt", "changed after the gate ran\n")
-	if got := field(run(t, "gate", "detect").stdout, "full_cache"); got != "drifted" {
+	if got := strings.Join(stepVals(run(t, "gate", "detect").stdout, "cache"), "|"); got != "drifted" {
 		t.Errorf("full_cache = %q, want drifted", got)
 	}
 
@@ -469,10 +480,10 @@ func TestDetectClassifies(t *testing.T) {
 	}
 	forge(t, repo, "npm run lint", 1, 2*time.Hour, "", "")
 	res := run(t, "gate", "detect")
-	if got := field(res.stdout, "full_cache"); got != "failed" {
+	if got := strings.Join(stepVals(res.stdout, "cache"), "|"); got != "failed" {
 		t.Errorf("full_cache = %q, want failed", got)
 	}
-	if got := field(res.stdout, "full_cache_age"); got != "2h" {
+	if got := strings.Join(stepVals(res.stdout, "age"), "|"); got != "2h" {
 		t.Errorf("full_cache_age = %q", got)
 	}
 
@@ -481,7 +492,7 @@ func TestDetectClassifies(t *testing.T) {
 		t.Fatal(err)
 	}
 	forge(t, repo, "npm run lint", 0, 2*time.Hour, "", "")
-	if got := field(run(t, "gate", "detect").stdout, "full_cache"); got != "stale" {
+	if got := strings.Join(stepVals(run(t, "gate", "detect").stdout, "cache"), "|"); got != "stale" {
 		t.Errorf("full_cache = %q, want stale", got)
 	}
 
@@ -492,7 +503,7 @@ func TestDetectClassifies(t *testing.T) {
 		t.Fatal(err)
 	}
 	forge(t, repo, "npm run lint", 0, time.Minute, "", "0000000000000000000000000000000000000dead")
-	if got := field(run(t, "gate", "detect").stdout, "full_cache"); got != "unknown-head" {
+	if got := strings.Join(stepVals(run(t, "gate", "detect").stdout, "cache"), "|"); got != "unknown-head" {
 		t.Errorf("full_cache = %q, want unknown-head", got)
 	}
 }
@@ -513,16 +524,16 @@ func TestDetectClassesLineUpPositionallyWithFull(t *testing.T) {
 	}
 
 	res := run(t, "gate", "detect")
-	if got := field(res.stdout, "full"); got != "npm run lint|npm run test|npm run build" {
+	if got := fullChain(res.stdout); got != "npm run lint|npm run test|npm run build" {
 		t.Fatalf("full = %q", got)
 	}
-	if got := field(res.stdout, "full_cache"); got != "none|fresh|failed" {
+	if got := strings.Join(stepVals(res.stdout, "cache"), "|"); got != "none|fresh|failed" {
 		t.Errorf("full_cache = %q", got)
 	}
-	if got := field(res.stdout, "full_cache_exit"); got != "-|0|1" {
+	if got := strings.Join(stepVals(res.stdout, "exit"), "|"); got != "-|0|1" {
 		t.Errorf("full_cache_exit = %q", got)
 	}
-	if got := field(res.stdout, "full_cache_age"); !strings.HasPrefix(got, "-|") {
+	if got := strings.Join(stepVals(res.stdout, "age"), "|"); !strings.HasPrefix(got, "-|") {
 		t.Errorf("full_cache_age = %q", got)
 	}
 }
@@ -533,7 +544,7 @@ func TestDetectTheKeyIsTheExactCommandNotTheStepName(t *testing.T) {
 	nodeRepo(t, repo, "lint", "test")
 	forge(t, repo, "npm run lint", 0, time.Minute, "", "")
 	forge(t, repo, "npm run test --coverage", 0, time.Minute, "", "")
-	if got := field(run(t, "gate", "detect").stdout, "full_cache"); got != "fresh|none" {
+	if got := strings.Join(stepVals(run(t, "gate", "detect").stdout, "cache"), "|"); got != "fresh|none" {
 		t.Errorf("full_cache = %q", got)
 	}
 }
@@ -544,10 +555,10 @@ func TestDetectNewestRecordWins(t *testing.T) {
 	forge(t, repo, "npm run lint", 0, time.Minute, "", "")
 	forge(t, repo, "npm run lint", 1, time.Minute, "", "")
 	res := run(t, "gate", "detect")
-	if got := field(res.stdout, "full_cache"); got != "failed" {
+	if got := strings.Join(stepVals(res.stdout, "cache"), "|"); got != "failed" {
 		t.Errorf("full_cache = %q", got)
 	}
-	if got := field(res.stdout, "full_cache_exit"); got != "1" {
+	if got := strings.Join(stepVals(res.stdout, "exit"), "|"); got != "1" {
 		t.Errorf("full_cache_exit = %q", got)
 	}
 }
@@ -572,7 +583,7 @@ func TestDetectAMalformedLedgerDoesNotBreakDetection(t *testing.T) {
 	if res.code != 0 {
 		t.Fatalf("exit = %d", res.code)
 	}
-	if got := field(res.stdout, "full"); got != "npm run lint" {
+	if got := fullChain(res.stdout); got != "npm run lint" {
 		t.Errorf("full = %q", got)
 	}
 	if got := field(res.stdout, "ecosystem"); got != "node" {
@@ -620,10 +631,127 @@ func TestDetectPinnedCommandsWinPerStepName(t *testing.T) {
 	put(t, repo, ".mkit/config.toml", "version = 1\n\n[gate.commands]\ntest = \"npm run test -- --ci\"\nbuild = \"npm run build\"\n")
 
 	res := run(t, "gate", "detect", "--no-cache")
-	if got := field(res.stdout, "full"); got != "npm run lint|npm run test -- --ci|npm run build" {
+	if got := fullChain(res.stdout); got != "npm run lint|npm run test -- --ci|npm run build" {
 		t.Errorf("full = %q", got)
 	}
-	if got := field(res.stdout, "full_source"); got != "discovered|pinned|pinned" {
+	if got := strings.Join(stepVals(res.stdout, "source"), "|"); got != "discovered|pinned|pinned" {
 		t.Errorf("full_source = %q", got)
 	}
+}
+
+// A pinned command may contain `|` — `pytest -q || exit 1` is an ordinary step,
+// and shell has no other way to say "fail the gate if this fails". The old
+// encoding joined every command into one pipe-delimited `full=` line and read
+// `full_source=` / `full_cache=` positionally against it, so a single pinned pipe
+// split into two fields and shifted every later step's source and verdict by one
+// — silently, because the output still looked well-formed. The block gives each
+// step its own line with `cmd=` last, so the command can contain anything.
+func TestDetectAPinnedCommandMayContainThePipeCharacter(t *testing.T) {
+	repo := detectRepo(t)
+	nodeRepo(t, repo, "lint")
+	put(t, repo, ".mkit/config.toml",
+		"[gate.commands]\nlint = \"npm run lint || exit 1\"\n")
+
+	res := run(t, "gate", "detect")
+
+	cmds := stepCmds(res.stdout)
+	if len(cmds) != 1 {
+		t.Fatalf("got %d steps, want 1: %q", len(cmds), cmds)
+	}
+	if cmds[0] != "npm run lint || exit 1" {
+		t.Errorf("cmd = %q — the command lost or gained a field at the pipe", cmds[0])
+	}
+	// The alignment that used to shift: one step, one source, one cache verdict.
+	if got := stepVals(res.stdout, "source"); len(got) != 1 || got[0] != "pinned" {
+		t.Errorf("source = %q, want [pinned]", got)
+	}
+	if got := stepVals(res.stdout, "cache"); len(got) != 1 {
+		t.Errorf("got %d cache verdicts for 1 step: %q", len(got), got)
+	}
+}
+
+// Every per-step field stays aligned across a multi-step chain where one pinned
+// step carries a pipe. A count that matches for one step cannot catch a shift.
+func TestDetectStepFieldsStayAlignedAcrossAPinnedPipe(t *testing.T) {
+	repo := detectRepo(t)
+	nodeRepo(t, repo, "lint", "test", "build")
+	put(t, repo, ".mkit/config.toml",
+		"[gate.commands]\ntest = \"npm run test || exit 1\"\n")
+
+	res := run(t, "gate", "detect")
+
+	cmds := stepCmds(res.stdout)
+	if len(cmds) != 3 {
+		t.Fatalf("got %d steps, want 3: %q", len(cmds), cmds)
+	}
+	for _, key := range []string{"source", "cache", "exit", "age"} {
+		if got := stepVals(res.stdout, key); len(got) != len(cmds) {
+			t.Errorf("%s has %d values for %d steps: %q", key, len(got), len(cmds), got)
+		}
+	}
+	// The pinned step is the one carrying the pipe, and it is the one marked
+	// pinned — a shift would move that label onto a neighbour.
+	sources := stepVals(res.stdout, "source")
+	for i, c := range cmds {
+		wantPinned := strings.Contains(c, "||")
+		if (sources[i] == "pinned") != wantPinned {
+			t.Errorf("step %d cmd=%q source=%q — the label shifted", i+1, c, sources[i])
+		}
+	}
+}
+
+// stepVals reads one field from every line of the `full:` block, in order.
+// Joined with "|" it reproduces what the old pipe-parallel `full_source=` /
+// `full_cache=` lines carried — which is the point: the data did not change, only
+// the encoding that made a command containing `|` shift every field by one.
+func stepVals(out, key string) []string {
+	var vals []string
+	for _, line := range blockLines(out) {
+		for _, f := range strings.Fields(line) {
+			if v, ok := strings.CutPrefix(f, key+"="); ok {
+				vals = append(vals, v)
+				break
+			}
+		}
+	}
+	return vals
+}
+
+// stepCmds reads each step's command. `cmd=` is last on the line and runs to the
+// end of it, so a command may contain spaces, pipes, or anything else.
+func stepCmds(out string) []string {
+	var cmds []string
+	for _, line := range blockLines(out) {
+		if _, after, ok := strings.Cut(line, " cmd="); ok {
+			cmds = append(cmds, after)
+		}
+	}
+	return cmds
+}
+
+// blockLines returns the indented lines of the `full:` block.
+func blockLines(out string) []string {
+	var in bool
+	var got []string
+	for _, line := range strings.Split(out, "\n") {
+		switch {
+		case line == "full:":
+			in = true
+		case in && strings.HasPrefix(line, "  "):
+			got = append(got, strings.TrimSpace(line))
+		case in:
+			return got
+		}
+	}
+	return got
+}
+
+// fullChain is the old `full=` string, rebuilt from the block, so the assertions
+// below keep reading as the chain they are about.
+func fullChain(out string) string {
+	c := stepCmds(out)
+	if len(c) == 0 {
+		return field(out, "full")
+	}
+	return strings.Join(c, "|")
 }
