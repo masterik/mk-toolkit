@@ -25,8 +25,20 @@ func newBranchScanCmd() *cobra.Command {
 			"Reports candidates. It never deletes a branch, removes a worktree, or touches a\n" +
 			"remote — `git fetch --prune` is the one mutation, and it only ever updates this\n" +
 			"repo's own remote-tracking refs.\n\n" +
-			"`--default` is the branch facts.sh already resolved; this command does not\n" +
-			"re-derive it, so there is exactly one place that logic lives.",
+			"`--default` is the branch `mkit facts` already resolved; this command does\n" +
+			"not re-derive it, so there is exactly one place that logic lives.\n\n" +
+			"Columns, in the order they are printed:\n" +
+			"  branch       the local branch name\n" +
+			"  class        protected | current | merged | merged-pr | open-pr | closed-pr |\n" +
+			"               gone | unpushed | tracking — first match wins, in that order\n" +
+			"  upstream     the tracking ref, `none` when the branch was never pushed, or\n" +
+			"               `gone` when the remote branch was deleted\n" +
+			"  merged_into  the branch git's own merge-base says it is contained in\n" +
+			"  pr           `#<n>:<state>`, or a cause: gh-missing | gh-unauthenticated |\n" +
+			"               no-remote | none\n" +
+			"  origin       which worktree owns it, `none` when no worktree has it checked out\n" +
+			"  clean        yes | no | missing | error — `error` is a worktree whose status\n" +
+			"               failed, never collapsed into yes",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if def == "" {

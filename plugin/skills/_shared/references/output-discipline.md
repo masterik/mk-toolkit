@@ -2,7 +2,7 @@
 
 Command output is context you did not choose to load. Bounding it costs nothing and loses nothing.
 
-Used by every mkit skill. Owns the run directory and the two scripts that keep output bounded;
+Used by every mkit skill. Owns the run directory and the `mkit` commands that keep output bounded;
 `agent-delegation.md` covers using the run directory as transport between stages.
 
 Scale, on a *small* markdown-only branch: `git diff <base>` 57 KB · `--stat` 572 B · `git log --oneline`
@@ -28,7 +28,8 @@ A skill's first act is `mkit facts <skill>`. It opens this run's directory
 - **`notes:`** — the last block, present only when something needs a sentence: a cause and the remedy
   for it. Values with spaces never go on a `key=value` line, because several of those lines pack more
   than one pair.
-- Flags: `--base <branch>` (adds `base..HEAD` commits, stat, `ff_from_base`) · `--range <range>` ·
+- Flags: `--base <branch>` (adds `base..HEAD` commits, stat, `ff_from_base`) · `--range <range>`
+  (an unresolvable one prints `range_state=unresolvable` and exits 1, like `--base`) ·
   `--gh` (does a PR already exist) · `--no-run` (probe without opening a directory).
 - Nonzero exit says why: 1 outside a work tree or on an unresolvable `--base`, 2 on bad usage.
   `mkit: command not found` means the binary is missing — stop and say so (`brew install
@@ -95,7 +96,7 @@ gate=FAILED step=test exit=1
 ```
 
 - **Pass**: one line per step, then `gate=ok steps=…`. Nothing else enters context.
-- **Failure**: the step, its exit code, the grepped failures and the tail — never the log. The script's
+- **Failure**: the step, its exit code, the grepped failures and the tail — never the log. The command's
   own exit status is the failing step's, so a skill can branch on it.
 - `--tail N` / `--grep N` widen the excerpt; `--keep-going` runs past a failure when you deliberately
   want the whole picture.
@@ -107,7 +108,7 @@ gate=FAILED step=test exit=1
 - **`--stat` first**, always — `mkit facts` already returned it. "How big, and where" is what most
   decisions need.
 - **Full diff per file** (`git diff -- <path>`), never the whole tree, and only for files you must judge.
-  The script's file lists already exclude `*.lock` and `*.snap`.
+  `mkit facts`' file lists already exclude `*.lock` and `*.snap`.
 - **Never load a full branch diff to write prose.** Commit messages and `git log --oneline` are the
   source for a PR description or summary; the diff is a fallback for the one thing they do not explain.
 
@@ -125,5 +126,5 @@ Bounding must not become skipping the thing you are judging.
 ## Say what you read
 
 Say "tail of gate-test.log", not something implying you read the suite. A diff judged file by file is a
-complete review and reads as one. **Never describe a truncated read as a full one.** Where a script
+complete review and reads as one. **Never describe a truncated read as a full one.** Where a command
 capped something it says so (`... 12 more files not shown`, `log_lines=1841`) — pass that fact on.

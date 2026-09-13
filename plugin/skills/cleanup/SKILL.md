@@ -208,8 +208,8 @@ elsewhere (`../_shared/references/worktree.md`, "merge without checkout") — if
 ahead/diverged locally and needs a manual look, don't force it.
 
 Prefer switching to the **default** branch as the place to land, unless the user's request or standing habit
-points at `develop` instead — say which one you picked and why it was a judgement call, not a fact this script
-handed you.
+points at `develop` instead — say which one you picked and why it was a judgement call, not a fact the
+command handed you.
 
 ### 6. Verify
 

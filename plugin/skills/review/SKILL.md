@@ -66,8 +66,8 @@ established facts — range, shortstat, file list, goal, mode — so the subagen
 Never paste a reference into a brief either — hand over its path under `refs=` and have the subagent read it.
 
 **One writer per file, throughout.** Every fanned-out stage writes one file per subagent —
-`findings-<source>.jsonl` per reviewer, `verdicts-<group>.jsonl` per group — and the scripts aggregate after
-they return.
+`findings-<source>.jsonl` per reviewer, `verdicts-<group>.jsonl` per group — and `mkit findings` aggregates
+after they return.
 
 ## 0. Check `mkit` is there
 
@@ -163,7 +163,7 @@ Each reviewer **writes `<run-dir>/findings-<source>.jsonl`, one JSON object per 
 
 `surface`, `severity`, `file`, `title` required; `class` is `finding` (default), `open_question` or
 `pre_existing`. Full shape: `mkit findings schema` (`--json` for the machine-readable form). Cap it: **at most 15 findings, body
-under 80 words**; a reviewer at the cap says so and keeps the worst. JSONL because step 3 is a script — a
+under 80 words**; a reviewer at the cap says so and keeps the worst. JSONL because step 3 is a command — a
 reviewer that writes prose costs a re-spawn, so the brief says "one JSON object per line, nothing else".
 
 Each reviewer **returns at most ten lines**: the path it wrote, counts by `[surface, severity]`, and any lens

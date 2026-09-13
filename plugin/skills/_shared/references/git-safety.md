@@ -58,5 +58,5 @@ the same reason it refuses a wrapper — *"feeds python a program assembled at r
 cannot be shown not to be git"*. Any recipe built on a heredoc'd interpreter is dead on arrival in an
 isolated session, which is exactly the kind of session these skills are driven from.
 
-Use the payload's own scripts, plain git plumbing, or a file written to `tmp=` and then read by a named
+Use `mkit`'s own commands, plain git plumbing, or a file written to `tmp=` and then read by a named
 tool. Never improvise a helper into the target repository's working tree — see `output-discipline.md`.

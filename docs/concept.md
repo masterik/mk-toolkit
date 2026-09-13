@@ -27,7 +27,7 @@ tokens — prose re-executed every run kept getting one invariant of three wrong
 stays in Markdown; a mechanical invariant belongs in the binary.** Prerequisites:
 [`prerequisites.md`](prerequisites.md).
 
-**A `SessionStart` hook once named a
+A `SessionStart` hook once named a
 missing prerequisite before any skill ran; it and `install.sh` were removed in 0.15.0, because
 that report belongs to the binary (`mkit doctor`, M7) rather than to a second implementation in
 shell. The cost is real and accepted: a missing tool now surfaces as a thinner fact block or a
@@ -56,7 +56,7 @@ are plain Markdown, so support for another agent is a thin packaging step, not a
   directory, run a logged command, classify a worktree or do confidence arithmetic. It may not
   choose commit boundaries, assign severity, judge materiality, or decide that a fix is safe.
   Where the line is genuinely unclear the command reports candidates and the skill picks —
-  `mkit gate detect` proposing `full=` beside `docs_candidates:` is the shape to copy.
+  `mkit gate detect` proposing a `full:` chain beside `docs_candidates:` is the shape to copy.
 - **A recorded fact is an input, never a permission:** mkit accumulates state between runs —
   gate results, hook arithmetic — and every one of them is evidence handed to the agent, never a
   decision taken on its behalf. This *extends* the rule above rather than restating it: a command
