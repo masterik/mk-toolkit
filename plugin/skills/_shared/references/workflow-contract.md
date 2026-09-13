@@ -33,7 +33,10 @@ makes a skipped step safe rather than silent. A run that assumed something and r
 result has lied by omission.
 
 **4. Record for the next step; never gate on the last one.** Every step appends one worklog record
-when it finishes. A later step reads it to be **cheaper and better informed** — never to decide
+when it finishes — with one exception, and it is the shape of the rule rather than a hole in it:
+`finish` usually destroys its own log, since the worklog lives in the worktree it removes and is
+keyed on the branch it deletes. So `finish` records where it stopped short and skips where the
+cleanup ran, and that skip is not a degradation to report. A later step reads it to be **cheaper and better informed** — never to decide
 whether it is allowed to run. This is `a recorded fact is an input, never a permission`, applied to
 the workflow rather than the gate ledger.
 
@@ -68,7 +71,7 @@ finishing steps act on.
 | `spec` | decisions | reads the conversation and the repo; no re-interview | the spec artifact + task graph |
 | `implement` | a task graph | one slice covering the ask | which slices landed, gate results |
 | `commit` | a dirty tree | — | the commits made, and their scope |
-| `review` | a diff + a goal | goal from branch, commits, or worklog | findings, verdicts, fixes applied |
+| `review` | a diff + a goal | goal from a matching worklog gist, then the user, a stale gist, branch, commits, ticket | findings, verdicts, fixes applied |
 | `pr` | commits + a branch | commits first, inline | the PR URL, gate verdict |
 | `finish` | a merged-able branch | commits first, inline | the merge, the cleanup |
 

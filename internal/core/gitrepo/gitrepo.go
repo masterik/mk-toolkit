@@ -217,16 +217,18 @@ func (r *Repo) AliveCommits(heads []string) map[string]bool {
 		in.WriteString(h + "^{commit}\n")
 	}
 	out, err := runStdin(r.Toplevel, in.String(), "cat-file", "--batch-check")
-	if err != nil && out == "" {
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	// One line per head, or the batch did not answer the question asked. A git
+	// killed mid-stream leaves *partial* output, and a partial answer read as a
+	// whole one silently marks every head past the last line dead — which is the
+	// direction that loses records. Anything short of the full set fails open.
+	if err != nil || out == "" || len(lines) != len(heads) {
 		for _, h := range heads {
 			alive[h] = true
 		}
 		return alive
 	}
-	for i, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
-		if i >= len(heads) {
-			break
-		}
+	for i, line := range lines {
 		if !strings.HasSuffix(line, " missing") {
 			alive[heads[i]] = true
 		}

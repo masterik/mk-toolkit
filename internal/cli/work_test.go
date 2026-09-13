@@ -215,3 +215,39 @@ func TestWorkShowUnknownWhenTreeHasNoFingerprint(t *testing.T) {
 		t.Errorf("the header still reports the absence as -:\n%s", out)
 	}
 }
+
+// A cross-branch append must not carry this tree's fingerprint: `head()` resolves the
+// named branch's tip, so the record would pair one branch's head with another's
+// content, and a later reader on that branch compares fingerprints to decide whether
+// the gist still describes what it sees.
+func TestWorkAppendCrossBranchCarriesNoFingerprint(t *testing.T) {
+	dir := newRepo(t)
+	cmd := exec.Command("git", "branch", "other")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git branch: %v\n%s", err, out)
+	}
+
+	out, code := runIn(t, dir, "work", "append", "--step", "spec", "--gist", "x", "--branch", "other", "--json")
+	if code != 0 {
+		t.Fatalf("append exited %d: %s", code, out)
+	}
+	var got struct {
+		Branch string `json:"branch"`
+		Cause  string `json:"cause"`
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("bad json: %v\n%s", err, out)
+	}
+	if got.Branch != "other" {
+		t.Fatalf("recorded against %q, want other", got.Branch)
+	}
+	if !strings.Contains(got.Cause, "other") || !strings.Contains(got.Cause, "no fingerprint") {
+		t.Errorf("the cause does not name the cross-branch reason: %q", got.Cause)
+	}
+
+	recs, _ := runIn(t, dir, "work", "show", "--branch", "other", "--json")
+	if strings.Contains(recs, `"fingerprint":"`) && !strings.Contains(recs, `"fingerprint":""`) {
+		t.Errorf("a cross-branch record carried a fingerprint:\n%s", recs)
+	}
+}

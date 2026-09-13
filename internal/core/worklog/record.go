@@ -23,7 +23,12 @@ type Record struct {
 	// Head is the commit HEAD resolved to, so rotation can drop dead records first.
 	Head string `json:"head"`
 	// Artifact points at whatever the step produced — an issue URL, a path, a run
-	// directory, a commit range. Optional.
+	// directory, a commit range. Optional, and **best effort by nature**: the log
+	// keeps 200 records while `run-open.sh --prune` keeps the newest five run
+	// directories per skill, so a recorded run directory outlives its own contents.
+	// A dangling pointer here is expected, not a lookup failure — the gist is what a
+	// later step reads. Prefer a durable target (a sha, a range, a URL) where the
+	// step has one.
 	Artifact string `json:"artifact,omitempty"`
 	// Gist is the one line a later step reads instead of re-deriving intent.
 	// Required: a record without one is a record nothing can consume.

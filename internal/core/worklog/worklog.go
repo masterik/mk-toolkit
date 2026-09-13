@@ -164,6 +164,10 @@ func (l *Log) Append(rec Record) error {
 		return err
 	}
 	path := l.Path()
+	// Before the MkdirAll, never after — the same ordering, for the same reasons,
+	// as run-open.sh's. A standalone `mkit work append` may be the first thing ever
+	// to write under `.mkit/` in this repo.
+	ensureIgnored(l.repo.Toplevel)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("worklog directory %s: %w", filepath.Dir(path), err)
 	}

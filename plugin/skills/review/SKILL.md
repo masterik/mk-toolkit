@@ -142,8 +142,11 @@ Comparing the two is what the goal order below means by "matching".
 4. the commit messages
 5. the ticket
 
-A gist whose fingerprint **no longer matches** is still the best answer available — use it, and name the
-downgrade in step 6 ("goal from the worklog, recorded before the last N files changed"). The `impl` lens is
+A gist whose fingerprint **no longer matches** drops out of first place and sits **below the user** — it
+describes a tree that no longer exists, and a goal the user stated in this session is about the one being
+reviewed. So take it only when nothing above it in the list answers: prefer the user, then fall back to the
+stale gist ahead of the branch name, and name the downgrade in step 6 ("goal from the worklog, recorded
+before the last N files changed"). The `impl` lens is
 judged against the goal; with no goal at all, say so and expect lower confidence rather than inventing one.
 Whichever source it came from, say which — that is the contract's third rule, and it is the same degrade
 this step already performs when there is no spec.
@@ -357,17 +360,33 @@ mkit work append --step review --gist '<one line: what this review concluded>' \
   --artifact '<run-dir>' [--assume '<what this run derived rather than found>']...
 ```
 
+The run directory is the right `--artifact` here — it is what this step produced — but it is **perishable**:
+step 6 folds in `run-open.sh --prune`, which keeps the newest five per skill, so five reviews later the
+recorded path is gone. That is expected; the gist carries the conclusion. Name the reviewed range in the gist
+so the record still says what it covered once the directory is pruned.
+
 After the summary is produced, and it never changes the summary: a failed append is one line of note, not a
 failed run. A run that found nothing still records — "no findings" is the most useful gist this step
 produces. The `--assume` list is where a derived goal goes, so the next step inherits the caveat instead of
 re-deriving it.
 
-**If step 5 applied fixes, say so in an `--assume`.** The fingerprint on this record is the tree *after*
-those fixes, but the reviewers ran before them — so a later step matching that fingerprint would read
-"reviewed" over content no reviewer saw. Which sentence depends on the second round: with none,
-`--assume 'fixes applied after the reviewers ran; the fixed tree is unverified here'`; with one, name what it
-actually covered — `--assume 'fixes re-reviewed by <sources> over the fixed files only'`. Either way it is
-the same thing item 10 of the summary already says out loud.
+**Whenever the fingerprinted tree is not the content the reviewers read, say so in an `--assume`.** The
+fingerprint is always of the working tree at the moment of the append, and a later step that matches it reads
+"reviewed" — over content no reviewer necessarily saw. Two things open that gap, and the second is the easier
+one to miss:
+
+- **Step 5 applied fixes.** The fingerprint is the tree *after* them; the reviewers ran before. Which
+  sentence depends on the second round: with none, `--assume 'fixes applied after the reviewers ran; the
+  fixed tree is unverified here'`; with one, name what it actually covered — `--assume 'fixes re-reviewed by
+  <sources> over the fixed files only'`.
+- **The review was of a committed range while the tree was dirty.** The reviewers read commits; the
+  fingerprint is of a working tree carrying edits they never saw, whether or not this run touched anything.
+  Name the scope: `--assume 'reviewed <range> only; the tree also carried uncommitted changes at this
+  fingerprint'`.
+
+Both are the same failure — a fingerprint standing for more than was examined — and both are what item 10 of
+the summary already says out loud. A record that states its scope lets `finish` match the fingerprint without
+concluding more than the run proved.
 
 Do not commit unless asked — leave fixes in the working tree for the user to commit (or chain into `commit`).
 Fold `${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh --prune` into step 6's call rather than spending a turn on it.

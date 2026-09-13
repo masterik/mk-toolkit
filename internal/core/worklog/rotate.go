@@ -88,8 +88,10 @@ func (l *Log) rotate() error {
 	kept := make([]string, 0, len(recs))
 	for i, rec := range recs {
 		// A record with no head at all is dropped with the dead ones: it cannot be
-		// matched against any tree either, and it is only written on an unborn
-		// branch, where nothing downstream has a commit to compare with.
+		// matched against any tree either. Two things write one — an unborn branch,
+		// where nothing downstream has a commit to compare with, and an `--append
+		// --branch <name>` naming a branch that does not resolve (a typo, or one
+		// already deleted). Both are records no later step could have used.
 		if !alive[rec.Head] {
 			continue
 		}

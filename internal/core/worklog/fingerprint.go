@@ -32,3 +32,32 @@ func Fingerprint(toplevel string) (fp string, cause string) {
 	}
 	return out, ""
 }
+
+// ensureIgnored asks the payload to put mkit's scratch rule in place before this
+// package creates anything under `.mkit/`.
+//
+// `run-open.sh` does this before its own mkdir, and for reasons that apply verbatim
+// here: an unignored `.mkit/` makes `git worktree remove` refuse, puts the worklog in
+// reach of `git add -A`, and feeds the gate fingerprint a directory that changes while
+// the gate runs. The worklog needs no rule of its own — `.mkit/*` already covers it —
+// but `mkit work append` can be the **first** thing to write under `.mkit/` in a repo
+// where no skill has ever opened a run directory, and then nothing has established it.
+//
+// Delegated to `mkit_ensure_run_ignored`, never reimplemented: which file the rule
+// lands in, which probe answers "is it ignored", and why the probe is a concrete path
+// rather than the directory are all decided there, and a second implementation gets
+// one of them subtly wrong.
+//
+// Best effort, and deliberately returns nothing. The write lands in the main
+// checkout's `.git/info/exclude`, which a worktree-isolated session cannot reach, so
+// failure is the normal case on some machines — and contract rule 4 says a recorded
+// fact is an input, never a permission. An append that refused over an ignore rule
+// would be the worklog gating a step. `facts.sh` already reports the state as
+// `run_ignored=` for skills that need to know.
+func ensureIgnored(toplevel string) {
+	root, err := pluginroot.Find(toplevel)
+	if err != nil {
+		return
+	}
+	_, _ = root.CommonFuncIn(toplevel, "mkit_ensure_run_ignored")
+}

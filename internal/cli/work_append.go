@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -32,15 +33,23 @@ func newWorkAppendCmd() *cobra.Command {
 				// not a mistake at the command line, which is what 2 means.
 				return err
 			}
-			if !worklog.ValidStep(step) {
-				return usageErr("unknown --step %q (one of: %s)", step, strings.Join(worklog.Steps, ", "))
-			}
-			if strings.TrimSpace(gist) == "" {
-				return usageErr("--gist is required: a record with no gist is one no later step can read")
-			}
-
-			fp, cause := worklog.Fingerprint(repo.Toplevel)
 			log := worklog.Open(repo, branch)
+
+			// The fingerprint is always of the tree in front of us, and `head()`
+			// deliberately resolves the *named* branch's tip — so a cross-branch
+			// append would pair one branch's head with another branch's content.
+			// A later reader on that branch compares fingerprints to decide whether
+			// a gist still describes the tree it is looking at; an accidental match
+			// reads "this exact content was reviewed" over content nothing ran
+			// against. No fingerprint is the honest answer, reported as a cause the
+			// same way an unreachable payload is.
+			var fp, cause string
+			if log.Branch() == repo.Branch() {
+				fp, cause = worklog.Fingerprint(repo.Toplevel)
+			} else {
+				cause = "no fingerprint: --branch " + log.Branch() +
+					" is not checked out, and this tree is not its content"
+			}
 			rec := worklog.Record{
 				Step:        step,
 				Fingerprint: fp,
@@ -49,6 +58,16 @@ func newWorkAppendCmd() *cobra.Command {
 				Assumptions: assume,
 			}
 			if err := log.Append(rec); err != nil {
+				// Append owns both rules; this only re-codes them as exit 2.
+				// Checking them here as well would be two copies of one rule —
+				// the failure the layering exists to prevent — and would leave
+				// core's sentinels exported with no caller at all.
+				switch {
+				case errors.Is(err, worklog.ErrBadStep):
+					return usageErr("unknown --step %q (one of: %s)", step, strings.Join(worklog.Steps, ", "))
+				case errors.Is(err, worklog.ErrNoGist):
+					return usageErr("--gist is required: a record with no gist is one no later step can read")
+				}
 				return err
 			}
 

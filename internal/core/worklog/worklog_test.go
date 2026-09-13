@@ -281,3 +281,52 @@ func TestFileNameStaysWithinNameMax(t *testing.T) {
 		t.Errorf("the readable part did not survive the cut: %s", FileName(long))
 	}
 }
+
+// `mkit work append` can be the first thing ever to write under `.mkit/` — no skill
+// has to have opened a run directory first. Unignored, that scratch makes
+// `git worktree remove` refuse and puts the worklog in reach of `git add -A`.
+func TestAppendEstablishesTheIgnoreRule(t *testing.T) {
+	payload, err := filepath.Abs(filepath.Join("..", "..", "..", "plugin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(payload, "scripts", "lib", "common.sh")); err != nil {
+		t.Skipf("payload not in reach: %v", err)
+	}
+	t.Setenv("CLAUDE_PLUGIN_ROOT", payload)
+
+	repo := newRepo(t)
+	log := Open(repo, "")
+	if err := log.Append(Record{Step: "spec", Gist: "the plan"}); err != nil {
+		t.Fatal(err)
+	}
+
+	rel, err := filepath.Rel(repo.Toplevel, log.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("git", "check-ignore", "-q", rel)
+	cmd.Dir = repo.Toplevel
+	if err := cmd.Run(); err != nil {
+		t.Errorf("the worklog it just created is not ignored: %s", rel)
+	}
+}
+
+// ...and an append must still succeed where the rule cannot be established, which is
+// the normal case in a worktree-isolated session: the write lands in the main
+// checkout's `.git/info/exclude`, out of reach. Contract rule 4 — a recorded fact is
+// an input, never a permission — so this must never become an error.
+func TestAppendSucceedsWithNoPayloadInReach(t *testing.T) {
+	t.Setenv("CLAUDE_PLUGIN_ROOT", "")
+	t.Setenv("MKIT_PLUGIN_ROOT", "")
+	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(t.TempDir(), "no-such-config"))
+
+	log := Open(newRepo(t), "")
+	if err := log.Append(Record{Step: "spec", Gist: "the plan"}); err != nil {
+		t.Fatalf("append refused over an ignore rule it could not write: %v", err)
+	}
+	recs, err := log.Show(Query{})
+	if err != nil || len(recs) != 1 {
+		t.Fatalf("the record did not land: %d records, err %v", len(recs), err)
+	}
+}
