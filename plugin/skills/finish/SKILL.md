@@ -34,19 +34,12 @@ References, read the ones a step calls for: `../_shared/references/worktree.md`,
 ${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh finish --base <base> --gh
 ```
 
-Then one more, but **only when that call reported `mkit_bin=<path>`** — on `mkit_bin=none` skip it
-and carry on:
+Then read what ran on this branch before, and what each step concluded — gated on `mkit_bin=`, and
+never a stop: `../_shared/references/workflow-contract.md`, "Reading it".
 
 ```bash
 mkit work show --json --limit 20
 ```
-
-What ran on this branch before, and what each step concluded. `facts.sh` reports `mkit_bin=` and
-`mkit=` and compares nothing, so an absent, older or failing `mkit` here is **one fewer input, never
-a stop** — the worklog makes a step cheaper and better informed, and never decides whether it may run
-(`../_shared/references/workflow-contract.md`, rule 4). That is what separates this call from
-`review`'s step-0 probe: without the findings arithmetic there is no review, and without the worklog
-there is a slightly less informed one.
 
 A `review` record whose `fingerprint` matches the tree in front of you says a review already ran over this
 exact content — worth naming in the deliverable. **Read its `assumptions` before believing it**: a review

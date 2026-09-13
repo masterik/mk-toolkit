@@ -63,6 +63,21 @@ artifact it produced (an issue URL, a path, a run directory), a one-line gist, a
 it made. The gist is what a later step reads instead of re-deriving intent; the fingerprint is what
 tells it whether the gist still describes the tree in front of it.
 
+### Reading it
+
+**Gated on the binary, never on the log.** A step reads the worklog only when its `facts.sh` call
+reported `mkit_bin=<path>`; on `mkit_bin=none` it skips the call and carries on:
+
+```bash
+mkit work show --json --limit 20
+```
+
+`facts.sh` reports `mkit_bin=` and `mkit=` and compares nothing, so an absent, older or failing
+`mkit` is **one fewer input, never a stop** — rule 4 above, applied to the tool rather than to the
+record. That is what separates this call from `review`'s step-0 `mkit findings` probe: without the
+findings arithmetic there is no review, and without the worklog there is a slightly less informed
+one. What each step does with what it reads is the step's own business, and stays in its `SKILL.md`.
+
 **Per branch, not per invocation.** A run directory (`<skill>-<timestamp>/`) belongs to one call and
 holds its working files. The worklog spans every call on a branch, which is the unit of work the
 finishing steps act on.

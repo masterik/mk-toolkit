@@ -122,13 +122,13 @@ Then read what already ran on this branch:
 mkit work show --json --limit 20
 ```
 
-Step 0 established that this binary knows `findings`; it did not establish that it knows `work`, and a
-binary from before the worklog landed answers one and not the other. **A nonzero exit here is not a stop** —
+Gated and never a stop, as everywhere (`workflow-contract.md`, "Reading it") — but the reason it can fail
+here is this skill's own: step 0 established that this binary knows `findings`, not that it knows `work`, and
+a binary from before the worklog landed answers one and not the other. **A nonzero exit is not a stop** —
 carry on without the log and say so in step 6. Read what it printed before naming the cause: an unknown
 subcommand is that skew, while a log it found and could not read is a different fact and worth reporting as
 one. A branch nothing has run on is different
-again: zero records and exit 0, because being first is the normal case, not a problem to report. Unlike
-step 0's probe, nothing here is load-bearing (`workflow-contract.md`, rule 4).
+again: zero records and exit 0, because being first is the normal case, not a problem to report.
 
 The envelope's own `fingerprint` is the tree as it is right now; each record carries the tree it ran over.
 Comparing the two is what the goal order below means by "matching".
