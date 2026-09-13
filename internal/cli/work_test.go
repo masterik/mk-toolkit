@@ -246,8 +246,94 @@ func TestWorkAppendCrossBranchCarriesNoFingerprint(t *testing.T) {
 		t.Errorf("the cause does not name the cross-branch reason: %q", got.Cause)
 	}
 
-	recs, _ := runIn(t, dir, "work", "show", "--branch", "other", "--json")
-	if strings.Contains(recs, `"fingerprint":"`) && !strings.Contains(recs, `"fingerprint":""`) {
-		t.Errorf("a cross-branch record carried a fingerprint:\n%s", recs)
+	// The guard below is only worth anything if this tree *can* fingerprint —
+	// otherwise it passes for the wrong reason and would keep passing through a
+	// regression that recorded the current tree's hash on a cross-branch record.
+	// So put a payload in reach and prove the same-branch append gets one.
+	t.Setenv("CLAUDE_PLUGIN_ROOT", payloadDir(t))
+	mine, code := runIn(t, dir, "work", "append", "--step", "spec", "--gist", "y", "--json")
+	if code != 0 {
+		t.Fatalf("same-branch append exited %d: %s", code, mine)
 	}
+	if strings.Contains(mine, `"cause"`) {
+		t.Skipf("this machine cannot fingerprint, so the cross-branch guard proves nothing:\n%s", mine)
+	}
+
+	out2, code := runIn(t, dir, "work", "append", "--step", "spec", "--gist", "z", "--branch", "other", "--json")
+	if code != 0 {
+		t.Fatalf("append exited %d: %s", code, out2)
+	}
+	recs, _ := runIn(t, dir, "work", "show", "--branch", "other", "--json")
+	var shown struct {
+		Records []struct {
+			Fingerprint string `json:"fingerprint"`
+		} `json:"records"`
+	}
+	if err := json.Unmarshal([]byte(recs), &shown); err != nil {
+		t.Fatalf("bad json: %v\n%s", err, recs)
+	}
+	if len(shown.Records) == 0 {
+		t.Fatalf("no records on the other branch:\n%s", recs)
+	}
+	for _, r := range shown.Records {
+		if r.Fingerprint != "" {
+			t.Errorf("a cross-branch record carried this tree's fingerprint: %q", r.Fingerprint)
+		}
+	}
+}
+
+// A detached HEAD is still the tree in front of us. Its log is named
+// `detached~<sha>` while Repo.Branch() is "", so a cross-branch test comparing the two
+// resolved names would call every detached append cross-branch and throw the
+// fingerprint away.
+func TestWorkAppendOnDetachedHeadKeepsItsFingerprint(t *testing.T) {
+	dir := newRepo(t)
+	t.Setenv("CLAUDE_PLUGIN_ROOT", payloadDir(t))
+
+	cmd := exec.Command("git", "checkout", "-q", "--detach", "HEAD")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git checkout --detach: %v\n%s", err, out)
+	}
+
+	out, code := runIn(t, dir, "work", "append", "--step", "spec", "--gist", "x", "--json")
+	if code != 0 {
+		t.Fatalf("append exited %d: %s", code, out)
+	}
+	var got struct {
+		Branch string `json:"branch"`
+		Cause  string `json:"cause"`
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("bad json: %v\n%s", err, out)
+	}
+	if !strings.HasPrefix(got.Branch, "detached") {
+		t.Fatalf("detached append landed on %q", got.Branch)
+	}
+	if strings.Contains(got.Cause, "not checked out") {
+		t.Errorf("a detached HEAD was treated as a cross-branch append: %q", got.Cause)
+	}
+}
+
+// repoPayload is resolved at package load, before any test can `t.Chdir` into a
+// throwaway repo — a relative path resolved later points at the temp dir instead.
+var repoPayload = func() string {
+	wd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(wd, "..", "..", "plugin")
+}()
+
+// payloadDir is the repo's own plugin payload, so a test can exercise the paths that
+// need `lib/common.sh` — the fingerprint above all.
+func payloadDir(t *testing.T) string {
+	t.Helper()
+	if repoPayload == "" {
+		t.Skip("could not resolve the payload directory")
+	}
+	if _, err := os.Stat(filepath.Join(repoPayload, "scripts", "lib", "common.sh")); err != nil {
+		t.Skipf("payload not in reach: %v", err)
+	}
+	return repoPayload
 }

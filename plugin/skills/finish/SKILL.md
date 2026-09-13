@@ -193,6 +193,12 @@ After merge:      delete branch <feature-branch> (local + remote) + remove workt
    - `git-worktree`: `git worktree remove <toplevel>` then, if `git branch --list <feature-branch>` still
      shows it, `git branch -D <feature-branch>`, then `git worktree prune`.
    - `none`: if `git branch --list <feature-branch>` still shows it, `git branch -D <feature-branch>`.
+     Then **retire the branch's worklog**, which is the one path where it outlives the branch it is keyed
+     on — there is no worktree being removed to take it along. A branch name is reusable, so leaving it
+     hands a later `review` on a recreated `feat/x` the old `feat/x`'s gists. Ask the binary for the path
+     rather than deriving the filename, which carries a digest:
+     `p=$(mkit work show --branch <feature-branch> --json | jq -r .path) && rm -f "$p"`. Skip the append
+     on this path, as above — the record would go into the file being retired.
 
 **Local path** (no open PR) — by `cleanup_path`
 

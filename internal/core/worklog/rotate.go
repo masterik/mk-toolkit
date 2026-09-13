@@ -91,7 +91,9 @@ func (l *Log) rotate() error {
 		// matched against any tree either. Two things write one — an unborn branch,
 		// where nothing downstream has a commit to compare with, and an `--append
 		// --branch <name>` naming a branch that does not resolve (a typo, or one
-		// already deleted). Both are records no later step could have used.
+		// already deleted). Their gists are readable while they sit in the log, and
+		// a step may well have used one — what they cannot do is be matched against
+		// a tree, which is the only question this sweep is allowed to ask.
 		if !alive[rec.Head] {
 			continue
 		}

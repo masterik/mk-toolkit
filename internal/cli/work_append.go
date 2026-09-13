@@ -43,11 +43,16 @@ func newWorkAppendCmd() *cobra.Command {
 			// reads "this exact content was reviewed" over content nothing ran
 			// against. No fingerprint is the honest answer, reported as a cause the
 			// same way an unreachable payload is.
+			// Keyed on the *flag*, not on the resolved name: with no --branch,
+			// Open picks whatever this checkout is on, and on a detached HEAD that
+			// is `detached~<sha>` while Repo.Branch() is "" — comparing the two
+			// resolved names would call every detached append cross-branch and
+			// throw away a fingerprint that was perfectly good.
 			var fp, cause string
-			if log.Branch() == repo.Branch() {
+			if branch == "" || branch == repo.Branch() {
 				fp, cause = worklog.Fingerprint(repo.Toplevel)
 			} else {
-				cause = "no fingerprint: --branch " + log.Branch() +
+				cause = "no fingerprint: --branch " + branch +
 					" is not checked out, and this tree is not its content"
 			}
 			rec := worklog.Record{

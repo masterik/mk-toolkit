@@ -361,9 +361,10 @@ mkit work append --step review --gist '<one line: what this review concluded>' \
 ```
 
 The run directory is the right `--artifact` here — it is what this step produced — but it is **perishable**:
-step 6 folds in `run-open.sh --prune`, which keeps the newest five per skill, so five reviews later the
-recorded path is gone. That is expected; the gist carries the conclusion. Name the reviewed range in the gist
-so the record still says what it covered once the directory is pruned.
+step 6 folds in `run-open.sh --prune`, which keeps the newest five per skill and additionally spares anything
+touched in the last 60 minutes, so the path survives an unpredictable number of later reviews and then stops
+existing. That is expected; the gist carries the conclusion. Name the reviewed range in the gist so the record
+still says what it covered once the directory is gone.
 
 After the summary is produced, and it never changes the summary: a failed append is one line of note, not a
 failed run. A run that found nothing still records — "no findings" is the most useful gist this step
