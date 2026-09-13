@@ -257,6 +257,18 @@ func TestRunPruneTouchesNothingButRunDirectories(t *testing.T) {
 		t.Fatal(err)
 	}
 	other := stale(t, repo, "not-a-run-dir")
+	// The decoy the bats spec carried: a stale *file* whose name matches the
+	// `<skill>-*` glob exactly. Prune removes directories only, and without a
+	// file in range nothing distinguishes that guard from its absence —
+	// dropping `e.IsDir()` left the suite green.
+	decoyFile := filepath.Join(repo, ".mkit", "cleanup-20260101T000009Z-aaaaaa")
+	if err := os.WriteFile(decoyFile, []byte("not a run directory\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-72 * time.Hour)
+	if err := os.Chtimes(decoyFile, old, old); err != nil {
+		t.Fatal(err)
+	}
 
 	res := run(t, "run", "prune", "--keep", "1")
 	if res.code != 0 {
@@ -265,7 +277,7 @@ func TestRunPruneTouchesNothingButRunDirectories(t *testing.T) {
 	if !strings.Contains(res.stdout, "pruned 6") {
 		t.Errorf("stdout = %q — cleanup-* is in range like every other skill", res.stdout)
 	}
-	for _, p := range []string{ledger, config, other} {
+	for _, p := range []string{ledger, config, other, decoyFile} {
 		if _, err := os.Stat(p); err != nil {
 			t.Errorf("%s was removed: %v", p, err)
 		}

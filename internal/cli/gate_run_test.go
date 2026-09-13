@@ -420,6 +420,17 @@ func TestGateRunIgnoresTheScratchWhenItIsTheFirstToCreateIt(t *testing.T) {
 	if out := gateGit(t, repo, "status", "--porcelain"); out != "" {
 		t.Errorf("the ledger write dirtied the tree:\n%s", out)
 	}
+	// A clean tree is also what a run that wrote nothing produces, so the two
+	// halves the bats spec asserted are both load-bearing: the ledger exists,
+	// and git actively excludes it.
+	ledger := filepath.Join(repo, ".mkit", "gate.jsonl")
+	if _, err := os.Stat(ledger); err != nil {
+		t.Fatalf("no ledger was written, so the clean tree proves nothing: %v", err)
+	}
+	cmd := exec.Command("git", "-C", repo, "check-ignore", "-q", ".mkit/gate.jsonl")
+	if err := cmd.Run(); err != nil {
+		t.Errorf("the ledger is not ignored after the run: %v", err)
+	}
 }
 
 func TestGateRunJSON(t *testing.T) {

@@ -146,3 +146,34 @@ func TestDir(t *testing.T) {
 		t.Errorf("Dir = %q, want %q", got, want)
 	}
 }
+
+// CheckSlug guards a name that becomes a path segment under `.mkit/`, so the
+// inputs that matter are the ones that would escape it or name nothing at all.
+// Every caller reached it through the space case only, which is the one input
+// that cannot tell a traversal guard from its absence.
+func TestCheckSlugRejectsTraversalAndEmptyNames(t *testing.T) {
+	for _, name := range []string{
+		"",           // names nothing; the directory would be the scratch root itself
+		"..",         // the parent of the scratch root
+		"../etc",     // escapes the scratch root outright
+		"a/b",        // a separator makes it two segments, not one
+		"./a",        // still a traversal, spelled harmlessly
+		"a*",         // a glob, which prune matches against
+		"with space", // the one case the other callers already covered
+		".",          // the scratch root itself
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := scratch.CheckSlug(name); err == nil {
+				t.Errorf("scratch.CheckSlug(%q) = nil, want an error", name)
+			}
+		})
+	}
+}
+
+func TestCheckSlugAcceptsTheNamesSkillsActuallyUse(t *testing.T) {
+	for _, name := range []string{"commit", "review", "finish", "pr", "cleanup", "a_b-9"} {
+		if err := scratch.CheckSlug(name); err != nil {
+			t.Errorf("scratch.CheckSlug(%q) = %v, want nil", name, err)
+		}
+	}
+}

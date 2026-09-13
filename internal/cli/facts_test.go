@@ -395,6 +395,34 @@ func TestFactsJSON(t *testing.T) {
 	}
 }
 
+// Scratch and a real untracked file in the same tree. The case above has nothing
+// but scratch in it, so `clean=yes` there is equally what an over-broad exclusion
+// would produce; only this pairing shows `:(exclude).mkit` is surgical — mkit's
+// own directory suppressed, the user's file still reported.
+func TestFactsExcludesScratchWithoutHidingTheUsersUntrackedFiles(t *testing.T) {
+	repo := factsRepo(t)
+	put(t, repo, ".mkit/review-x/step.log", "step output\n")
+	put(t, repo, ".mkit/gate.jsonl", `{"step":"test"}`+"\n")
+	put(t, repo, "notes.txt", "a real untracked file\n")
+
+	res := run(t, "facts", "commit", "--no-run")
+	factsOnly, _, _ := strings.Cut(res.stdout, "\nnotes:")
+
+	if got := factsField(factsOnly, "clean"); got != "no" {
+		t.Errorf("clean = %q — an untracked user file is the user's work", got)
+	}
+	if !strings.Contains(factsOnly, "notes.txt") {
+		t.Errorf("the user's untracked file was hidden with mkit's scratch:\n%s", factsOnly)
+	}
+	// `.mkit` itself is not the test: it is a legitimate substring of `config=`
+	// and `user_dir=`. What must not appear is scratch *content* in a file list.
+	for _, scratchPath := range []string{"gate.jsonl", "step.log", "review-x"} {
+		if strings.Contains(factsOnly, scratchPath) {
+			t.Errorf("%s leaked into the user's work:\n%s", scratchPath, factsOnly)
+		}
+	}
+}
+
 // --range gets --base's treatment. A range that does not resolve used to print
 // `range_stat=none range_files=0` and exit 0, which is byte-identical to a range
 // with nothing in it — so a skill reviewing "the last three commits" against a
