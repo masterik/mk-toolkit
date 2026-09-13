@@ -394,3 +394,64 @@ func TestFactsJSON(t *testing.T) {
 		t.Error("both stats, always — the staged scope must be present")
 	}
 }
+
+// --range gets --base's treatment. A range that does not resolve used to print
+// `range_stat=none range_files=0` and exit 0, which is byte-identical to a range
+// with nothing in it — so a skill reviewing "the last three commits" against a
+// typo'd ref reported a clean review of nothing.
+func TestFactsAnUnresolvableRangeIsFatal(t *testing.T) {
+	factsRepo(t)
+	res := run(t, "facts", "review", "--no-run", "--range", "nonexistentA..nonexistentB")
+
+	if res.code != 1 {
+		t.Errorf("exit = %d, want 1 — an unresolvable range is fatal, like an unresolvable base", res.code)
+	}
+	if got := factsField(res.stdout, "range_state"); got != "unresolvable" {
+		t.Errorf("range_state = %q, want unresolvable", got)
+	}
+	// The fact is on stdout *and* the command fails: a skill that only reads the
+	// exit code and one that only parses the facts must both get the answer.
+	if strings.Contains(res.stdout, "range_stat=none") {
+		t.Error("a range that does not resolve reported an empty range anyway")
+	}
+}
+
+func TestFactsAResolvableRangeIsNotFatal(t *testing.T) {
+	repo := factsRepo(t)
+	put(t, repo, "b.txt", "second commit\n")
+	gateGit(t, repo, "add", "-A")
+	gateGit(t, repo, "commit", "-q", "-m", "second")
+
+	res := run(t, "facts", "review", "--no-run", "--range", "HEAD~1..HEAD")
+	if res.code != 0 {
+		t.Fatalf("exit = %d: %s%s", res.code, res.stdout, res.stderr)
+	}
+	if got := factsField(res.stdout, "range_state"); got != "ok" {
+		t.Errorf("range_state = %q, want ok", got)
+	}
+	if got := factsField(res.stdout, "range_files"); got != "1" {
+		t.Errorf("range_files = %q, want 1", got)
+	}
+}
+
+// A `git status` that fails must not read as a clean tree. The shell died here
+// under `set -euo pipefail`; discarding the error made "cannot tell" and
+// "nothing to do" the same output, and `clean=yes` is what a skill skips work on.
+func TestFactsAFailingStatusIsNotACleanTree(t *testing.T) {
+	repo := factsRepo(t)
+	put(t, repo, "dirty.txt", "uncommitted\n")
+
+	// A corrupt index is the cheap reproduction of "git cannot answer".
+	if err := os.WriteFile(filepath.Join(repo, ".git", "index"),
+		[]byte("not an index at all"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	res := run(t, "facts", "commit", "--no-run")
+	if res.code == 0 {
+		t.Errorf("exit = 0 with an unreadable index; facts reported:\n%s", res.stdout)
+	}
+	if got := factsField(res.stdout, "clean"); got == "yes" {
+		t.Error("clean=yes from a git status that failed — the tree was dirty")
+	}
+}

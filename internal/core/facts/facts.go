@@ -109,6 +109,7 @@ type Facts struct {
 	Scopes []NamedScope
 
 	BaseState          string
+	RangeState         string
 	CommitsAheadOfBase int
 	Commits            []string
 	FFFromBase         string
@@ -142,6 +143,17 @@ func (e *ErrUnresolvableBase) Error() string {
 	return "--base does not resolve to a commit: " + e.Base
 }
 
+// ErrUnresolvableRange is --base's sibling, and was the asymmetry: --base was
+// made fatal because a silent fall-through gave `finish`/`pr` a fact set they
+// could not distinguish from a real answer, while --range kept exactly that
+// behaviour — a typo'd range printed `range_stat=none range_files=0` and exited
+// 0, which reads precisely like a range with nothing in it.
+type ErrUnresolvableRange struct{ Range string }
+
+func (e *ErrUnresolvableRange) Error() string {
+	return "--range does not resolve: " + e.Range
+}
+
 // Gather collects the facts. repo is the work tree; the caller resolved it.
 func Gather(repo *gitrepo.Repo, opt Options) (*Facts, error) {
 	if err := scratch.CheckSlug(opt.Skill); err != nil {
@@ -164,6 +176,9 @@ func Gather(repo *gitrepo.Repo, opt Options) (*Facts, error) {
 		f.Refs = filepath.Join(root.Dir, "skills", "_shared", "references")
 	} else {
 		f.PluginCause = pluginroot.Remedy()
+		f.Notes = append(f.Notes, "plugin=none — the skills and their shared references\n"+
+			"  are unreachable, so any step that reads one cannot run. Remedy: "+
+			f.PluginCause+".")
 	}
 
 	if !opt.NoRun {
@@ -193,8 +208,7 @@ func Gather(repo *gitrepo.Repo, opt Options) (*Facts, error) {
 		f.Notes = append(f.Notes, fmt.Sprintf(
 			"run_ignored=no — .mkit/ is not ignored here, so a staging step would sweep run\n"+
 				"  artefacts into a commit and `git worktree remove` would refuse. Do not stage while\n"+
-				"  this says no. Remedy, from the main checkout: add `.mkit/*` and `!.mkit/config.toml`\n"+
-				"  to %s/info/exclude, or to .gitignore.", f.CommonDir))
+				"  this says no. Remedy: %s.", scratch.IgnoredRemedy(f.CommonDir)))
 	}
 
 	st := repoconfig.Stat(repo)
@@ -363,7 +377,12 @@ var excludeScratch = []string{".", ":(exclude).mkit"}
 var excludeNoise = []string{".", ":(exclude)*.lock", ":(exclude)*.snap"}
 
 func (f *Facts) setWorkingTree(repo *gitrepo.Repo, opt Options) error {
-	porcelain := lines(git(repo, append([]string{"status", "--porcelain", "--"}, excludeScratch...)...))
+	raw, err := gitErr(repo, append([]string{"status", "--porcelain", "--"}, excludeScratch...)...)
+	if err != nil {
+		return fmt.Errorf("git status failed, so no answer about the working tree "+
+			"is available (an empty one would read as a clean tree): %w", err)
+	}
+	porcelain := lines(raw)
 	f.Clean = len(porcelain) == 0
 	f.StatusTotal = len(porcelain)
 	for _, l := range porcelain {
@@ -387,15 +406,38 @@ func (f *Facts) setWorkingTree(repo *gitrepo.Repo, opt Options) error {
 
 	switch {
 	case opt.Range != "":
-		f.Scopes = append(f.Scopes, NamedScope{"range", scope(repo, opt.Range, opt.FilesMax)})
+		// `--` so a range that collides with a path name is still read as a
+		// range, and an unreadable one is reported rather than scoped.
+		if run(repo, "rev-list", "--count", opt.Range, "--") != nil {
+			f.RangeState = "unresolvable"
+			return &ErrUnresolvableRange{Range: opt.Range}
+		}
+		f.RangeState = "ok"
+		sc, err := scope(repo, opt.Range, opt.FilesMax)
+		if err != nil {
+			return err
+		}
+		f.Scopes = append(f.Scopes, NamedScope{"range", sc})
 	case !f.Clean:
 		// Both stats, always. A bare `git diff --shortstat` reports nothing when
 		// the work is fully staged, which reads exactly like a clean tree — the
 		// single most expensive misread in this bundle.
+		unstaged, err := scope(repo, "", opt.FilesMax)
+		if err != nil {
+			return err
+		}
+		staged, err := scope(repo, "--cached", opt.FilesMax)
+		if err != nil {
+			return err
+		}
+		untracked, err := untrackedScope(repo, opt.FilesMax)
+		if err != nil {
+			return err
+		}
 		f.Scopes = append(f.Scopes,
-			NamedScope{"unstaged", scope(repo, "", opt.FilesMax)},
-			NamedScope{"staged", scope(repo, "--cached", opt.FilesMax)},
-			NamedScope{"untracked", untrackedScope(repo, opt.FilesMax)})
+			NamedScope{"unstaged", unstaged},
+			NamedScope{"staged", staged},
+			NamedScope{"untracked", untracked})
 	}
 
 	if opt.Base == "" {
@@ -409,7 +451,11 @@ func (f *Facts) setWorkingTree(repo *gitrepo.Repo, opt Options) error {
 	f.CommitsAheadOfBase, _ = strconv.Atoi(git(repo, "rev-list", "--count", opt.Base+"..HEAD"))
 	if f.CommitsAheadOfBase > 0 {
 		f.Commits = lines(git(repo, "log", "--oneline", opt.Base+"..HEAD"))
-		f.Scopes = append(f.Scopes, NamedScope{"base", scope(repo, opt.Base, opt.FilesMax)})
+		sc, err := scope(repo, opt.Base, opt.FilesMax)
+		if err != nil {
+			return err
+		}
+		f.Scopes = append(f.Scopes, NamedScope{"base", sc})
 	}
 	f.FFFromBase = "no"
 	if run(repo, "merge-base", "--is-ancestor", opt.Base, "HEAD") == nil {
@@ -418,30 +464,45 @@ func (f *Facts) setWorkingTree(repo *gitrepo.Repo, opt Options) error {
 	return nil
 }
 
-func scope(repo *gitrepo.Repo, rev string, max int) Scope {
+// scope returns an error rather than an empty Scope: `stat=none files=0` is the
+// honest answer for a scope with nothing in it, so a git failure silently
+// producing it is a wrong answer that reads exactly like a right one.
+func scope(repo *gitrepo.Repo, rev string, max int) (Scope, error) {
 	statArgs := []string{"diff"}
 	listArgs := []string{"diff"}
 	if rev != "" {
 		statArgs = append(statArgs, rev)
 		listArgs = append(listArgs, rev)
 	}
-	stat := strings.TrimSpace(git(repo, append(statArgs, "--shortstat")...))
+	stat, err := gitErr(repo, append(statArgs, "--shortstat")...)
+	if err != nil {
+		return Scope{}, fmt.Errorf("git diff --shortstat %s: %w", rev, err)
+	}
+	stat = strings.TrimSpace(stat)
 	if stat == "" {
 		stat = "none"
 	}
-	list := lines(git(repo, append(append(listArgs, "--name-only", "--"), excludeNoise...)...))
-	return Scope{Stat: stat, Files: len(list), List: capList(list, max)}
+	raw, err := gitErr(repo, append(append(listArgs, "--name-only", "--"), excludeNoise...)...)
+	if err != nil {
+		return Scope{}, fmt.Errorf("git diff --name-only %s: %w", rev, err)
+	}
+	list := lines(raw)
+	return Scope{Stat: stat, Files: len(list), List: capList(list, max)}, nil
 }
 
 // untrackedScope is its own block because `git diff` never lists an untracked
 // file: a dirty tree containing new files reported `untracked=6` beside a file
 // list naming none of them — a review or commit scope that silently omits every
 // new implementation file.
-func untrackedScope(repo *gitrepo.Repo, max int) Scope {
+func untrackedScope(repo *gitrepo.Repo, max int) (Scope, error) {
 	args := append([]string{"ls-files", "--others", "--exclude-standard", "--"}, excludeNoise...)
 	args = append(args, ":(exclude).mkit")
-	list := lines(git(repo, args...))
-	return Scope{Files: len(list), List: capList(list, max)}
+	raw, err := gitErr(repo, args...)
+	if err != nil {
+		return Scope{}, fmt.Errorf("git ls-files --others: %w", err)
+	}
+	list := lines(raw)
+	return Scope{Files: len(list), List: capList(list, max)}, nil
 }
 
 // setPR names which of the four things `pr=none` used to mean actually happened;

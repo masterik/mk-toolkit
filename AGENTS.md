@@ -131,7 +131,10 @@ reads as it does:
     `unstaged_stat` and `staged_stat`, always, because a bare `git diff --shortstat` on fully-staged
     work reads exactly like a clean tree; `untracked_file_list` as its own block, because `git diff`
     never lists an untracked file; `:(exclude).mkit` on every enumeration of the user's work; and an
-    unresolvable `--base` prints `base_state=unresolvable` **and** exits 1.
+    unresolvable `--base` prints `base_state=unresolvable` **and** exits 1 — as does an
+    unresolvable `--range`, which used to print an empty range and exit 0, a result a skill
+    cannot tell from a range with nothing in it. A git query that fails is never reported as
+    an empty answer: a `git status` that cannot run is an error, not `clean=yes`.
   - `branchscan/` (M5): `cleanup`'s classifier — every local branch's merge/upstream/PR
     state and every worktree's origin/cleanliness. One batched `gh` call, never a per-branch
     round trip. `--default` is never re-derived, `$default`/`$develop` are tested directly

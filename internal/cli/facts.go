@@ -61,12 +61,20 @@ func newFactsCmd() *cobra.Command {
 			if errors.As(gerr, &bad) {
 				return &ExitError{Code: 1, Msg: bad.Error()}
 			}
+			// --range gets the same treatment, for the same reason: a range that
+			// resolves to nothing and a range that does not resolve at all are
+			// the same output otherwise.
+			var badRange *facts.ErrUnresolvableRange
+			if errors.As(gerr, &badRange) {
+				return &ExitError{Code: 1, Msg: badRange.Error()}
+			}
 			return gerr
 		},
 	}
 
 	cmd.Flags().StringVar(&opt.Base, "base", "", "compare against this branch; an unresolvable one is fatal")
-	cmd.Flags().StringVar(&opt.Range, "range", "", "an explicit git range, instead of the working-tree scopes")
+	cmd.Flags().StringVar(&opt.Range, "range", "",
+		"an explicit git range, instead of the working-tree scopes; an unresolvable one is fatal")
 	cmd.Flags().BoolVar(&opt.GH, "gh", false, "ask GitHub whether this branch already has a PR")
 	cmd.Flags().BoolVar(&opt.NoRun, "no-run", false, "do not open a run directory")
 	cmd.Flags().IntVar(&opt.StatusMax, "status-max", 60, "maximum status entries to print")
@@ -87,7 +95,7 @@ func renderFacts(out io.Writer, f *facts.Facts, opt facts.Options) {
 	p("tmp=%s\n", f.TMP)
 	p("run_ignored=%s\n", yesNo(f.RunIgnored))
 	p("config=%s\nconfig_state=%s\n", f.Config, f.ConfigState)
-	p("user_dir=%s\nuser_dir_writable=%s\n", f.UserDir, yesNo(f.UserDirOK))
+	p("user_dir=%s\nuser_dir_writable=%s\n", orNone(f.UserDir), yesNo(f.UserDirOK))
 	p("git_bin=%s\n", f.GitBin)
 	p("worktree_origin=%s\ncleanup_path=%s\nwt_lists_this=%s\nwt_config=%s\n",
 		f.WorktreeOrigin, f.CleanupPath, f.WTListsThis, f.WTConfig)
@@ -121,6 +129,9 @@ func renderFacts(out io.Writer, f *facts.Facts, opt facts.Options) {
 		renderScope(out, ns, opt.FilesMax)
 	}
 
+	if f.RangeState != "" {
+		p("range_state=%s\n", f.RangeState)
+	}
 	if f.BaseState != "" {
 		p("base_state=%s\n", f.BaseState)
 	}
@@ -213,6 +224,7 @@ type factsJSON struct {
 	StatusTotal    int                  `json:"status_total"`
 	Scopes         map[string]scopeJSON `json:"scopes"`
 	BaseState      string               `json:"base_state,omitempty"`
+	RangeState     string               `json:"range_state,omitempty"`
 	CommitsAhead   int                  `json:"commits_ahead_of_base,omitempty"`
 	Commits        []string             `json:"commits,omitempty"`
 	FFFromBase     string               `json:"ff_from_base,omitempty"`
@@ -244,7 +256,7 @@ func writeFactsJSON(out io.Writer, f *facts.Facts) error {
 		Clean: f.Clean, Staged: f.Staged, Unstaged: f.Unstaged, Untracked: f.Untracked,
 		Conflicted: f.Conflicted, Status: nonNil(f.Status), StatusTotal: f.StatusTotal,
 		Scopes:    map[string]scopeJSON{},
-		BaseState: f.BaseState, CommitsAhead: f.CommitsAheadOfBase,
+		BaseState: f.BaseState, RangeState: f.RangeState, CommitsAhead: f.CommitsAheadOfBase,
 		Commits: f.Commits, FFFromBase: f.FFFromBase,
 		CodeOwners: f.CodeOwners, PR: f.PR, PRState: f.PRState, PRDraft: f.PRDraft,
 		Notes: nonNil(f.Notes),
