@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/masterik/mk-toolkit/internal/core/gitrepo"
@@ -235,7 +236,13 @@ func exitCode(err error) int {
 		if code := ee.ExitCode(); code >= 0 {
 			return code
 		}
-		// Killed by a signal: bash's own convention.
+		// Killed by a signal. ExitCode is -1 here and the number is only in the
+		// wait status, so reporting a bare 128 threw away which signal it was —
+		// the shell recorded 143 for SIGTERM and 130 for a Ctrl-C'd step, and the
+		// ledger stores this verbatim. 128+n is bash's own convention.
+		if ws, ok := ee.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+			return 128 + int(ws.Signal())
+		}
 		return 128
 	}
 	// bash itself could not be started — the shell's answer for that is 127.
