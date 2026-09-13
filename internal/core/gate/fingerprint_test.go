@@ -236,3 +236,110 @@ func TestFingerprintNotARepo(t *testing.T) {
 		t.Fatal("expected a plain directory not to open as a repo")
 	}
 }
+
+// Committing a deletion must not move the fingerprint. The deleted path has to
+// leave the HEAD mapping at exactly the point the overlay stops naming it; a
+// mismatch here means every gate proof taken before a delete is discarded.
+func TestFingerprintInvariantUnderCommittingADeletion(t *testing.T) {
+	dir := newRepo(t)
+	write(t, dir, "doomed.txt", "goes away\n")
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "-q", "-m", "add the file we will delete")
+
+	if err := os.Remove(filepath.Join(dir, "doomed.txt")); err != nil {
+		t.Fatal(err)
+	}
+	dirty := fingerprintOf(t, dir)
+	git(t, dir, "add", "-A")
+	staged := fingerprintOf(t, dir)
+	git(t, dir, "commit", "-q", "-m", "delete it")
+	committed := fingerprintOf(t, dir)
+
+	if dirty != staged || staged != committed {
+		t.Errorf("dirty=%s staged=%s committed=%s — committing a deletion moved the hash",
+			dirty, staged, committed)
+	}
+}
+
+// A rename is a deletion and an addition at once, and `--no-renames` is what
+// keeps it readable as both. The content did not change, so the fingerprint must
+// not care which name git eventually records it under.
+func TestFingerprintInvariantUnderCommittingARename(t *testing.T) {
+	dir := newRepo(t)
+	write(t, dir, "before.txt", "unchanged content\n")
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "-q", "-m", "add the file we will rename")
+
+	if err := os.Rename(filepath.Join(dir, "before.txt"), filepath.Join(dir, "after.txt")); err != nil {
+		t.Fatal(err)
+	}
+	dirty := fingerprintOf(t, dir)
+	git(t, dir, "add", "-A")
+	staged := fingerprintOf(t, dir)
+	git(t, dir, "commit", "-q", "-m", "rename it")
+	committed := fingerprintOf(t, dir)
+
+	if dirty != staged || staged != committed {
+		t.Errorf("dirty=%s staged=%s committed=%s — committing a rename desynchronized the hash",
+			dirty, staged, committed)
+	}
+}
+
+// The filter case. A path with `text eol=lf` (or any clean filter) is stored by
+// git as the *filtered* bytes, so an overlay hashing raw worktree bytes disagreed
+// with the ls-tree layer for exactly those paths: committing moved the
+// fingerprint while the file's content did not, discarding every gate proof taken
+// before the commit. Measured at 21b49f1f41df7a09 dirty vs 8b66c706a75940f8
+// committed before `hash-object --stdin-paths` came back.
+func TestFingerprintInvariantUnderEOLNormalization(t *testing.T) {
+	dir := newRepo(t)
+	write(t, dir, ".gitattributes", "* text eol=lf\n")
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "-q", "-m", "attributes")
+
+	// CRLF on disk, LF in the object store — the whole point.
+	write(t, dir, "crlf.txt", "one\r\ntwo\r\n")
+
+	dirty := fingerprintOf(t, dir)
+	git(t, dir, "add", "-A")
+	staged := fingerprintOf(t, dir)
+	git(t, dir, "commit", "-q", "-m", "add a CRLF file")
+	committed := fingerprintOf(t, dir)
+
+	if dirty != staged || staged != committed {
+		t.Errorf("dirty=%s staged=%s committed=%s — a clean filter moved the hash",
+			dirty, staged, committed)
+	}
+
+	// The file is untouched on disk, so this really was a no-op commit.
+	raw, err := os.ReadFile(filepath.Join(dir, "crlf.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "\r\n") {
+		t.Fatal("git rewrote the worktree file, so the test proved something else")
+	}
+}
+
+// A tracked symlink has no filters to apply and is stored as a blob of its target
+// path, so it keeps the in-process hash. Pinned because the batch now routes
+// regular files elsewhere, and a symlink falling into that batch would hash the
+// target's *content* and read drifted forever.
+func TestFingerprintHandlesSymlinksAlongsideFilteredFiles(t *testing.T) {
+	dir := newRepo(t)
+	write(t, dir, ".gitattributes", "* text eol=lf\n")
+	write(t, dir, "target.txt", "content\r\n")
+	if err := os.Symlink("target.txt", filepath.Join(dir, "link.txt")); err != nil {
+		t.Fatal(err)
+	}
+
+	dirty := fingerprintOf(t, dir)
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "-q", "-m", "symlink beside a filtered file")
+	committed := fingerprintOf(t, dir)
+
+	if dirty != committed {
+		t.Errorf("dirty=%s committed=%s — a symlink beside a filtered file moved the hash",
+			dirty, committed)
+	}
+}

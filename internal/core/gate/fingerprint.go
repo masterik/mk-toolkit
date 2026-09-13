@@ -111,6 +111,7 @@ func Fingerprint(repo *gitrepo.Repo) (string, error) {
 	}
 
 	deleted := map[string]bool{}
+	var regular []string
 	for p := range paths {
 		if p == "" {
 			continue
@@ -135,18 +136,18 @@ func Fingerprint(repo *gitrepo.Repo) (string, error) {
 			}
 			blob[p] = blobHash([]byte(target))
 		case fi.Mode().IsRegular():
-			data, rerr := os.ReadFile(abs)
-			if rerr != nil {
-				// One answer per path, or no fingerprint at all. Degrading to
-				// "run the gate" is free; a wrong hash is not — two different
-				// trees hashing alike is the one failure a gate ledger may not
-				// have.
-				return "", fmt.Errorf("fingerprint: read %s: %w", p, rerr)
-			}
-			blob[p] = blobHash(data)
+			// Hashed by git, not in process: see hashRegular.
+			regular = append(regular, p)
 		default:
 			deleted[p] = true
 		}
+	}
+
+	if err := hashRegular(root, regular, blob); err != nil {
+		// One answer per path, or no fingerprint at all. Degrading to "run the
+		// gate" is free; a wrong hash is not — two different trees hashing alike
+		// is the one failure a gate ledger may not have.
+		return "", err
 	}
 
 	lines := make([]string, 0, len(blob))
@@ -167,10 +168,59 @@ func Fingerprint(repo *gitrepo.Repo) (string, error) {
 	return hex.EncodeToString(h.Sum(nil))[:16], nil
 }
 
-// blobHash is `git hash-object` for a blob: sha1 over the object header and the
-// content. Done in process rather than batched through `hash-object
-// --stdin-paths` — the batch existed because a per-path fork was ~55x slower at
-// 1000 dirty files, and a fork this does not make cannot be slow.
+// hashRegular fills blob[] for the worktree's regular files, batched through one
+// `git hash-object --stdin-paths`.
+//
+// It has to be git that hashes them, not blobHash. A path with a clean filter or
+// `text` eol normalization is stored by git as the *filtered* bytes, so hashing
+// the raw worktree bytes made the overlay disagree with the ls-tree layer for
+// exactly those paths: committing a file changed the fingerprint while its
+// content did not, and every gate proof taken before that commit was thrown
+// away. `hash-object` applies each path's own attributes, which is why the shell
+// used it and why an in-process sha1 cannot replace it.
+//
+// One fork for the whole batch keeps the cost the in-process version was reaching
+// for — a per-path fork measured ~55x slower at 1000 dirty files. Paths are
+// newline-delimited, so the rare path containing a newline is hashed on its own
+// rather than corrupting the batch.
+func hashRegular(root string, paths []string, blob map[string]string) error {
+	var batch []string
+	for _, p := range paths {
+		if strings.ContainsAny(p, "\n\r") {
+			out, err := gitOut(root, "hash-object", "--", p)
+			if err != nil {
+				return fmt.Errorf("fingerprint: hash-object %s: %w", p, err)
+			}
+			blob[p] = strings.TrimSpace(string(out))
+			continue
+		}
+		batch = append(batch, p)
+	}
+	if len(batch) == 0 {
+		return nil
+	}
+
+	out, err := gitStdin(root, strings.Join(batch, "\n")+"\n", "hash-object", "--stdin-paths")
+	if err != nil {
+		return fmt.Errorf("fingerprint: hash-object --stdin-paths: %w", err)
+	}
+	hashes := strings.Fields(string(out))
+	// One hash per path, in order. A short read means git skipped a path, and a
+	// mapping missing an entry is a different tree that would hash alike.
+	if len(hashes) != len(batch) {
+		return fmt.Errorf("fingerprint: hash-object returned %d hashes for %d paths",
+			len(hashes), len(batch))
+	}
+	for i, p := range batch {
+		blob[p] = hashes[i]
+	}
+	return nil
+}
+
+// blobHash is `git hash-object` for a blob, in process: sha1 over the object
+// header and the content. Used for symlinks only — git stores a symlink as a blob
+// of its target path, and no attribute filter applies to it, so there is nothing
+// for git to do that this does not.
 func blobHash(data []byte) string {
 	h := sha1.New() //nolint:gosec // git's own object hash
 	// hash.Hash never returns an error from Write, by contract.
