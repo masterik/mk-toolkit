@@ -29,7 +29,14 @@ func UserDir() string {
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return ".mkit"
+		// $HOME unset or empty. Returning a relative ".mkit" would move
+		// user-scoped state into whatever repo the caller happens to be standing
+		// in — a fourth write location, and a remedy naming a relative path that
+		// no permissions.additionalDirectories entry can grant. The shell failed
+		// loudly here (`${MKIT_HOME:-$HOME/.mkit}` expanded to `/.mkit`); an
+		// empty string is this package's "no user directory", and every caller
+		// reports it as a fact rather than writing to it.
+		return ""
 	}
 	return filepath.Join(home, ".mkit")
 }
@@ -116,6 +123,10 @@ func UserDirWritable() bool {
 // spelled with the `!` prefix that runs a command in the user's own shell.
 func UserDirRemedy() string {
 	dir := UserDir()
+	if dir == "" {
+		return "$HOME is unset, so there is no user-scoped directory to grant — " +
+			"set MKIT_HOME to an absolute path, or run with HOME set"
+	}
 	return fmt.Sprintf("run `! mkdir -p %s` (a sandboxed session cannot create it), "+
 		"then add %s to permissions.additionalDirectories "+
 		"(sandbox.filesystem.allowWrite grants the sandbox only)", ShellQuote(dir), dir)
@@ -141,4 +152,18 @@ func ShellQuote(s string) string {
 		return s
 	}
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// IgnoredRemedy is the one producer of the unignored-scratch sentence, the
+// counterpart to UserDirRemedy above.
+//
+// It has to name `commonDir` rather than a fixed path: under a linked worktree
+// the exclude file lives in the main checkout, which is exactly the session that
+// cannot reach it. Both callers — `mkit facts`' `run_ignored=no` note and `mkit
+// doctor`'s scratch check — read this rather than wording it again; the pair of
+// lines is the rule, and a caller that wrote only `.mkit/*` would hide repo
+// config from `git add`.
+func IgnoredRemedy(commonDir string) string {
+	return fmt.Sprintf("from the main checkout, add `.mkit/*` and `!.mkit/config.toml` "+
+		"to %s/info/exclude, or to .gitignore", commonDir)
 }

@@ -6,7 +6,7 @@
 // three-write-locations invariant statically over the shell, because the
 // boundaries that enforce it cannot be created inside a test; in Go the same
 // invariant gets a real seam for the first time — every write goes through this
-// package, and TestNoWritesOutsideScratch keeps it that way.
+// package, and TestWriteSitesAreOnTheReviewedAllowlist keeps it that way.
 //
 // Layering: returns data, never prints.
 package scratch
