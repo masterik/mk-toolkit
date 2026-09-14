@@ -11,7 +11,10 @@ It's a *workflow* toolkit, not just a git one: `review` drives CodeRabbit/Codex/
 `pr` drives GitHub, and `finish` handles worktree cleanup — the parts of the
 dev loop the agent runs, git-centric but not git-limited.
 
-Nothing installs into the repo's own toolchain. The plugin is essentially
+Nothing installs into the repo's own toolchain, but the plugin is **not standalone**: since M5
+every skill's first call is `mkit facts`, so the binary is a required companion
+(`brew install masterik/tap/mkit`) and the two ship over separate channels
+([ADR 0003](adr/0003-two-distribution-channels.md)). The plugin is essentially
 **knowledge + procedure**: each skill tells Claude *when* it applies and *how* to drive the
 underlying tools, with the safety rules that keep destructive steps from firing by accident.
 The agent is the interface; the skills are the muscle memory. The `mkit` binary is not a second
@@ -195,8 +198,10 @@ the five skills link into via `../_shared/references/…`:
  git   +   gh (GitHub CLI)   +   wt (Worktrunk)
 ```
 
-The commands never act: no staging, no merging, no `wt merge`, no edits. They report facts and
-run commands the skill named. One of them also *remembers*: `mkit gate run` records that a command
+The commands never *integrate*: no staging, no merging, no `wt merge`, no edits to the user's
+files. They report facts and run commands the skill named. They do write, within the three declared
+locations — `mkit run prune` removes its own old run directories, `mkit gate run` appends to the
+ledger, `mkit branch scan` updates remote-tracking refs with `git fetch --prune`. One of them also *remembers*: `mkit gate run` records that a command
 exited 0 over a fingerprint of the content it read — `<toplevel>/.mkit/gate.jsonl`, beside the run
 directories, never committed, and a linked worktree gets its own. It adds no command: the ledger
 is a side effect of a gate that was running anyway, read back by the detector that already prints
@@ -339,10 +344,6 @@ skills of the same name.
   the repo profile that stops every step discovering the same facts apart. Ordered as M6–M8 in
   [`backlog.md`](backlog.md), and sequenced behind the configuration surface rather than racing
   it: a workflow spanning seven steps wants one place to read the repo's answers from.
-- **Next — configuration as a surface.** `mkit init`, `mkit repo profile` and `mkit doctor`,
-  covering the repo and agent levels described above. `doctor` is the one with no predecessor:
-  every other command reports something a script already computed, while the agent's own
-  environment — permissions, hooks, sandbox — has never been reported at all.
 - **Done — the Go port's shell half.** `mkit`, a single binary with a subcommand tree, took over
   the mechanical layer script by script so that prerequisites and degradation branches went away
   and a TUI became possible. M1 (scaffold, release chain, Homebrew cask) shipped in `v0.12.0`; M2

@@ -45,7 +45,8 @@ step 4's context and the final report, and none change when step 3 pushes:
 mkit facts pr --base <base> --gh
 ```
 
-`mkit facts` **is** this skill's dependency check. If it fails with `command not found`, **stop** and say:
+`mkit facts` **is** this skill's dependency check. If it fails with `command not found` **or**
+`unknown command "facts"` — absent and too old are the same answer here — **stop** and say:
 
 > This skill runs on the `mkit` binary. Install it with `brew install masterik/tap/mkit` (or upgrade
 > with `brew upgrade mkit`), then run it again.
@@ -72,7 +73,7 @@ Same inside a worktree — just confirm `git branch --show-current` is the featu
    trust a zero: a branch whose work was all uncommitted reads 0 in the step 0 snapshot.
 3. **Existing PR** — `pr=` is a URL only when one exists. Otherwise it is a sentinel naming why
    there is none: `none` (no PR yet — the case that justifies creating one), `gh-missing`,
-   `jq-missing`, `gh-unauthenticated`, `no-remote`. Test for a URL, not for non-emptiness — every
+   `gh-unauthenticated`, `no-remote`. Test for a URL, not for non-emptiness — every
    sentinel is a non-empty string, so a "non-empty" reading always fires and shows `none` as if it
    were a PR. Only `none` means proceed; the rest are blocked states to surface, not to push past.
 4. **Full quality gate** (`../_shared/references/quality-gate.md`), in order, stopping at the first failure:
@@ -86,9 +87,11 @@ Same inside a worktree — just confirm `git branch --show-current` is the featu
    the log. The user may proceed anyway for a draft. Delegate the diagnosis only when that verdict is not
    enough ("when a step fails") — choosing between fixing and opening a draft needs a cause, not a transcript.
 
-   Each step's `cache=` (from `mkit gate detect`'s `full:` block) may be consumed **per step**: a draft PR
-   is the recoverable case and CI runs remotely anyway. Each step served that way is `cached (Nm ago)` on its
-   own line — never a pass. Never cache a whole chain in one go.
+   Each step's `cache=` (from `mkit gate detect`'s `full:` block) may be consumed **per step**, and
+   **only when it is `fresh`**: a draft PR is the recoverable case and CI runs remotely anyway. Every
+   other class means run the step — `failed` says the tree was red on this exact content, which is a
+   thing to report before starting, not a result to reuse. Each step served from the ledger is
+   `cached (Nm ago)` on its own line — never a pass. Never cache a whole chain in one go.
 
 ### 3. Push the branch
 

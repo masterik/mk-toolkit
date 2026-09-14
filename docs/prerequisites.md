@@ -45,7 +45,7 @@ brew install git masterik/tap/mkit
 | Tool | Used by | Degrades to |
 | --- | --- | --- |
 | `rg` (ripgrep) | the `fix-checks` sweep | `grep -E` (same output, slower) |
-| `gh` | `pr`, `mkit facts --gh`, and `mkit branch scan` (`cleanup`) | `pr` cannot open a PR at all; `mkit facts` prints `pr=gh-missing`; `mkit branch scan` falls back to git-only classification and reports `gh=gh-missing` |
+| `gh` | `pr`, `mkit facts <skill> --gh`, and `mkit branch scan` (`cleanup`) | `pr` cannot open a PR at all; `mkit facts` prints `pr=gh-missing`; `mkit branch scan` falls back to git-only classification and reports `gh=gh-missing` |
 | `wt` ([worktrunk](https://worktrunk.dev)) | `finish` cleanup, `mkit facts` worktree classification | plain `git worktree remove` |
 
 ```bash
@@ -70,9 +70,13 @@ go-build` and `~/go` rather than on your code — see [Running under the OS sand
 export GOCACHE="$TMPDIR/go-build" GOMODCACHE="$TMPDIR/go-mod" GOLANGCI_LINT_CACHE="$TMPDIR/golangci"
 ```
 
-Every test that touches state points `MKIT_HOME` at a throwaway directory under `$TMPDIR` and
-builds its repo there, which is both the sandbox containment story and the reason a developer's own
-state cannot make an assertion pass or fail.
+Every test that touches user-scoped state points `MKIT_HOME` at a throwaway directory and builds
+its repo under `$TMPDIR`, which is both the sandbox containment story and the reason a developer's
+own state cannot make an assertion pass or fail. Unlike the deleted bats suite, which set it once in
+`helpers.bash`, Go has no shared setup: each suite that reaches user state sets it itself
+(`internal/cli`'s `factsRepo`, `internal/core/doctor`'s `isolate`). A suite that grows a call into
+`scratch.UserDir` and forgets is writing in a real home — `UserDirWritable` creates the directory
+when it is absent — so add it to that suite's helper, never to a `TestMain`.
 
 ## Optional — extra reviewers for `review`
 
@@ -227,7 +231,9 @@ itself reaches for:
 | `review`'s external reviewers | whatever the `codex` / `coderabbit` CLI calls | those are their own tools; check their docs for the hosts |
 
 `cleanup` and `mkit branch scan` degrade rather than fail when GitHub is unreachable: `fetch=failed`
-and `gh=gh-error`, with every branch still classified from git alone. `pr` cannot open a PR without
+and `gh=gh-unauthenticated` or `gh=gh-error` — unreachable fails the auth probe first, so which of
+the two you get depends on where the request died — with every branch still classified from git
+alone. `pr` cannot open a PR without
 `api.github.com` — there is no local substitute for that one.
 
 Attempt the call and read the error rather than predicting reachability; a denied connection is

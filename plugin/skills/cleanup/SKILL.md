@@ -44,7 +44,8 @@ mkit facts cleanup
 mkit branch scan --default <default_branch from mkit facts>
 ```
 
-`mkit facts` **is** this skill's dependency check. If it fails with `command not found`, **stop** and say:
+`mkit facts` **is** this skill's dependency check. If it fails with `command not found` **or**
+`unknown command "facts"` — absent and too old are the same answer here — **stop** and say:
 
 > This skill runs on the `mkit` binary. Install it with `brew install masterik/tap/mkit` (or upgrade
 > with `brew upgrade mkit`), then run it again.

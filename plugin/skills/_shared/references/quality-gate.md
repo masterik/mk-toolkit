@@ -89,7 +89,9 @@ sentence or two, caused-by-this-change or pre-existing, a concrete suggested fix
 `mkit gate run` records every step it finishes into `<toplevel>/.mkit/gate.jsonl`:
 `(step, command, exit code, seconds, fingerprint of the content it ran over)`.
 `mkit gate detect` compares each command it proposes against the newest record for that
-**exact command string** and annotates it. The `*_cache=` keys above are that annotation.
+**exact command string** and annotates it. Each step's `cache=`, `exit=` and `age=` in the
+`full:` block are that annotation; `gate_cache=` replaces all three with a single cause when
+there is no usable ledger at all.
 
 **What this saves is wall-clock, not tokens.** There are no token savings here by
 construction — `mkit gate run` already sends full output to a log so it never reaches

@@ -16,8 +16,10 @@ committed ([ADR 0001's config-path amendment](docs/adr/0001-per-repo-config-and-
 **M5 (the `jq` consumers) done** — `mkit facts`, `mkit gate detect|run`, `mkit branch scan` and
 `mkit run open|prune` replaced the last five scripts, and **the payload is Markdown only**: no
 `plugin/scripts/`, no `lib/common.sh`, no `tests/`. That makes `mkit` a **hard requirement for
-every skill** — each one's first call is `mkit facts <skill>`, and `command not found` is its stop
-condition with a `brew` remedy. Presence only, no declared minimum on either side: a subcommand
+every skill** — each one's first call is `mkit facts <skill>` (`review` alone runs a one-line
+compatibility probe before it, because its later steps need `mkit findings` too), and a binary that
+is absent *or too old* is its stop condition with a `brew` remedy: `command not found` and
+`unknown command "facts"` are the same answer. Presence only, no declared minimum on either side: a subcommand
 that does not exist *is* the too-old signal. Milestones and the full invariant list:
 [`backlog.md`](docs/backlog.md). Direction and rationale: [`concept.md`](docs/concept.md) — the
 place for *why*, so this file can stay operative.
@@ -60,9 +62,10 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
   Bubble Tea `Update`.
 - **No TUI off a TTY.** stdout not a terminal → no ANSI, no alt-screen. Skills pipe this binary;
   a TUI on a pipe is corruption, not cosmetics.
-- **Every command reachable non-interactively**, and **`--json` on every command**. The skills
-  still parse the `key=value` human form, which is byte-for-byte what the scripts printed; `--json`
-  is the contract they migrate to, and nothing consumes it yet.
+- **Every command reachable non-interactively**, and **`--json` on every command**. Two contracts,
+  both live: the fact-reporting commands are read as `key=value` human text, which is byte-for-byte
+  what the scripts printed and what every skill still parses; `mkit findings` is read as `--json`,
+  by `review` at steps 3, 4 and 6. `--json` is where the rest migrate; nothing else reads it yet.
 - **Judgement stays in Markdown.** The binary owns mechanical invariants only.
 - **Skills stay as files** — shipped by the package, never `embed.FS`; they must stay diffable.
 
@@ -117,8 +120,10 @@ reads as it does:
     being edited is what a report is about, and an installed 0.14.0 answering for a 0.16.0 work
     tree is a wrong answer that looks right.
   - `doctor/` (M7): the checks. Reports; fixes nothing; exit status stays 0 with findings.
-  - `scratch/` (M5): `<toplevel>/.mkit/` — the scratch root, and the **only** package that
-    writes inside a user's work tree. `EnsureIgnored` puts the `.mkit/*` + `!.mkit/config.toml`
+  - `scratch/` (M5): `<toplevel>/.mkit/` — the scratch root, and the **only** package that writes
+    *runtime state* inside a user's work tree. The one other writer there is `repoconfig`, which
+    writes the committed `.mkit/config.toml`; both are on `writes_test.go`'s reviewed allowlist,
+    which counts the write sites per file so adding one to a listed file still fails the test. `EnsureIgnored` puts the `.mkit/*` + `!.mkit/config.toml`
     pair in the common dir's `info/exclude` before the first create; `Ignored` probes **two**
     paths, because an unrelated `*.jsonl` rule hides the ledger while leaving every run
     directory untracked. `TestWriteSitesAreOnTheReviewedAllowlist` is the Go half of what

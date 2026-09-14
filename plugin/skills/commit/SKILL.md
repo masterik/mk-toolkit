@@ -42,7 +42,8 @@ Commits that are easy to review and safe to ship:
 mkit facts commit
 ```
 
-`mkit facts` **is** this skill's dependency check. If it fails with `command not found`, **stop** and say:
+`mkit facts` **is** this skill's dependency check. If it fails with `command not found` **or**
+`unknown command "facts"` — absent and too old are the same answer here — **stop** and say:
 
 > This skill runs on the `mkit` binary. Install it with `brew install masterik/tap/mkit` (or upgrade
 > with `brew upgrade mkit`), then run it again.

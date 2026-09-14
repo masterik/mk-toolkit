@@ -34,7 +34,8 @@ References, read the ones a step calls for: `../_shared/references/worktree.md`,
 mkit facts finish --base <base> --gh
 ```
 
-`mkit facts` **is** this skill's dependency check. If it fails with `command not found`, **stop** and say:
+`mkit facts` **is** this skill's dependency check. If it fails with `command not found` **or**
+`unknown command "facts"` — absent and too old are the same answer here — **stop** and say:
 
 > This skill runs on the `mkit` binary. Install it with `brew install masterik/tap/mkit` (or upgrade
 > with `brew upgrade mkit`), then run it again.
@@ -55,7 +56,7 @@ the first. Check four things in what it printed:
    worktrunk present) · `git-worktree` (linked, no worktrunk) · `none` (primary checkout). It decides step 4.
    Read `../_shared/references/worktree.md` there, not now.
 4. **Existing PR** — `pr=` is a URL only when one exists, alongside `pr_state=OPEN|CLOSED|MERGED` and
-   `pr_draft=true|false`. Sentinels (`none`, `gh-missing`, `jq-missing`, `gh-unauthenticated`, `no-remote`)
+   `pr_draft=true|false`. Sentinels (`none`, `gh-missing`, `gh-unauthenticated`, `no-remote`)
    mean there is nothing to merge remotely — take the **local merge path**. `pr_state=OPEN` (and not
    draft) redirects step 4 to the **PR merge path** instead: this branch is merged on GitHub, not with a
    local `git merge`. Treat `CLOSED`/`MERGED` like no PR for routing purposes, but mention it — a merged
