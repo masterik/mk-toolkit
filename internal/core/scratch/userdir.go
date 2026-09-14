@@ -86,12 +86,22 @@ func UserDirWritable() bool {
 		}
 	}
 
+	// O_EXCL, and remove only what this call created. The old probe wrote a
+	// fixed `.writable.<pid>` with WriteFile — which follows a symlink and
+	// truncates whatever is already there, then removed it unconditionally.
 	ok := true
-	probe := filepath.Join(dir, fmt.Sprintf(".writable.%d", os.Getpid()))
-	if err := os.WriteFile(probe, []byte("probe\n"), 0o644); err != nil {
+	f, err := os.CreateTemp(dir, ".writable-*")
+	if err != nil {
 		ok = false
+	} else {
+		probe := f.Name()
+		_, werr := f.WriteString("probe\n")
+		cerr := f.Close()
+		if werr != nil || cerr != nil {
+			ok = false
+		}
+		_ = os.Remove(probe)
 	}
-	_ = os.Remove(probe)
 
 	// Unwind deepest first, with a directory-only remove, and stop at the first
 	// refusal: anything that gained content since the MkdirAll belongs to whoever

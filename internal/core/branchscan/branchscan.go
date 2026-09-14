@@ -84,6 +84,10 @@ type Scan struct {
 	Remote    string
 	// Fetch is ok, skipped, no-remote or failed.
 	Fetch string
+	// WorktreesState is ok or unreadable. `cleanup` plans teardown from these
+	// rows, so an enumeration git could not complete must not read as a repo
+	// that simply has fewer worktrees.
+	WorktreesState string
 	// GH is ok, skipped, no-remote, gh-missing, gh-unauthenticated or gh-error.
 	GH        string
 	Branches  []Branch
@@ -141,7 +145,7 @@ func Run(repo *gitrepo.Repo, opt Options) (*Scan, error) {
 	s.GH = ghState
 
 	s.Branches = classify(repo, s, current, prs)
-	s.Worktrees = worktrees(repo)
+	s.Worktrees, s.WorktreesState = worktrees(repo)
 	return s, nil
 }
 
@@ -290,11 +294,16 @@ func oidIsLocal(repo *gitrepo.Repo, branch, oid string) bool {
 	return run(repo, "git", "merge-base", "--is-ancestor", branch, oid) == nil
 }
 
-// worktrees reports one row per worktree, the primary included.
-func worktrees(repo *gitrepo.Repo) []Worktree {
+// worktrees reports one row per worktree, the primary included, and whether the
+// enumeration completed at all.
+func worktrees(repo *gitrepo.Repo) ([]Worktree, string) {
 	var out []Worktree
 	primary, path := "", ""
-	for _, line := range lines(mustGit(repo, "worktree", "list", "--porcelain")) {
+	raw, err := git(repo, "worktree", "list", "--porcelain")
+	if err != nil {
+		return nil, "unreadable"
+	}
+	for _, line := range lines(raw) {
 		switch {
 		case strings.HasPrefix(line, "worktree "):
 			path = strings.TrimPrefix(line, "worktree ")
@@ -311,7 +320,7 @@ func worktrees(repo *gitrepo.Repo) []Worktree {
 			path = ""
 		}
 	}
-	return out
+	return out, "ok"
 }
 
 func worktree(repo *gitrepo.Repo, path, ref, primary string) Worktree {

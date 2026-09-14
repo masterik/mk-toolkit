@@ -75,6 +75,9 @@ func renderBranchScan(out io.Writer, s *branchscan.Scan) {
 	_, _ = fmt.Fprintf(out, "remote=%s\n", orNone(s.Remote))
 	_, _ = fmt.Fprintf(out, "fetch=%s\n", s.Fetch)
 	_, _ = fmt.Fprintf(out, "gh=%s\n", s.GH)
+	// Reported, not inferred from a short table: a worktree list git could not
+	// read is not a repo with fewer worktrees, and `cleanup` plans from these.
+	_, _ = fmt.Fprintf(out, "worktrees_state=%s\n", s.WorktreesState)
 
 	_, _ = fmt.Fprintln(out, "branches:")
 	for _, b := range s.Branches {
@@ -95,14 +98,15 @@ func dashIfEmpty(s string) string {
 }
 
 type branchScanJSON struct {
-	Default   string             `json:"default"`
-	Develop   string             `json:"develop"`
-	Protected []string           `json:"protected"`
-	Remote    string             `json:"remote"`
-	Fetch     string             `json:"fetch"`
-	GH        string             `json:"gh"`
-	Branches  []branchJSON       `json:"branches"`
-	Worktrees []worktreeScanJSON `json:"worktrees"`
+	Default        string             `json:"default"`
+	Develop        string             `json:"develop"`
+	Protected      []string           `json:"protected"`
+	Remote         string             `json:"remote"`
+	Fetch          string             `json:"fetch"`
+	GH             string             `json:"gh"`
+	Branches       []branchJSON       `json:"branches"`
+	Worktrees      []worktreeScanJSON `json:"worktrees"`
+	WorktreesState string             `json:"worktrees_state"`
 }
 
 type branchJSON struct {
@@ -123,7 +127,7 @@ type worktreeScanJSON struct {
 func writeBranchScanJSON(out io.Writer, s *branchscan.Scan) error {
 	j := branchScanJSON{
 		Default: s.Default, Develop: s.Develop, Protected: s.Protected,
-		Remote: s.Remote, Fetch: s.Fetch, GH: s.GH,
+		Remote: s.Remote, Fetch: s.Fetch, GH: s.GH, WorktreesState: s.WorktreesState,
 		Branches:  make([]branchJSON, 0, len(s.Branches)),
 		Worktrees: make([]worktreeScanJSON, 0, len(s.Worktrees)),
 	}

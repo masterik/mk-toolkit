@@ -266,7 +266,10 @@ func (r *Report) repo(repo *gitrepo.Repo) {
 	// linked worktree the exclude lives in the main checkout.
 	common, _ := repo.CommonDir()
 
-	if ignored, _ := repo.Ignored(".mkit/gate.jsonl"); ignored {
+	// scratch.Ignored, not a single check-ignore: it probes the ledger *and* a
+	// run directory, because an unrelated `*.jsonl` rule hides the first while
+	// leaving the second untracked. facts reads the same producer.
+	if scratch.Ignored(repo) {
 		r.add(Check{Group: "repo", Name: "scratch ignored", Status: OK,
 			Detail: ".mkit/ scratch is excluded"})
 	} else {
