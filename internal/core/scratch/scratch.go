@@ -132,6 +132,9 @@ func RunDir(repo *gitrepo.Repo, skill string) (string, error) {
 	EnsureIgnored(repo)
 
 	dir := Dir(repo)
+	if err := checkNotSymlink(dir); err != nil {
+		return "", err
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
@@ -168,6 +171,9 @@ func Prune(repo *gitrepo.Repo, keep int) (*PruneResult, error) {
 	}
 	res := &PruneResult{}
 	dir := Dir(repo)
+	if err := checkNotSymlink(dir); err != nil {
+		return nil, err
+	}
 	entries, err := os.ReadDir(dir)
 	if os.IsNotExist(err) {
 		return res, nil
@@ -203,20 +209,77 @@ func Prune(repo *gitrepo.Repo, keep int) (*PruneResult, error) {
 }
 
 func recentlyTouched(path string) bool {
-	fi, err := os.Stat(path)
-	return err == nil && time.Since(fi.ModTime()) < liveWindow
+	newest, ok := newestMTime(path)
+	return ok && time.Since(newest) < liveWindow
 }
+
+// newestMTime is the most recent mtime of a run directory or anything inside it.
+//
+// The directory's own mtime is not enough: it moves when an entry is created or
+// removed, and not when an existing file is rewritten. A stage that overwrites
+// the output it already wrote — which is most of them — left an active run
+// looking idle, and prune would remove it while it was still being written.
+func newestMTime(path string) (time.Time, bool) {
+	var newest time.Time
+	var found bool
+	err := filepath.WalkDir(path, func(_ string, d os.DirEntry, err error) error {
+		if err != nil {
+			// An unreadable entry is not evidence of idleness. Treat the walk as
+			// inconclusive and let the caller keep the directory.
+			return err
+		}
+		fi, ferr := d.Info()
+		if ferr != nil {
+			return ferr
+		}
+		if m := fi.ModTime(); m.After(newest) {
+			newest = m
+		}
+		found = true
+		return nil
+	})
+	if err != nil {
+		// Inconclusive: report "touched just now" so the directory is kept.
+		return time.Now(), true
+	}
+	return newest, found
+}
+
+// checkNotSymlink refuses a scratch root that is a symlink. Following one would
+// put every create and every RemoveAll on the other side of it — outside the
+// work tree, which is the one place this package may never write.
+func checkNotSymlink(dir string) error {
+	fi, err := os.Lstat(dir)
+	if err != nil {
+		return nil // absent is fine; the caller creates it
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("%s is a symlink; mkit will not read or write scratch "+
+			"through one, because every path under it leaves the work tree", dir)
+	}
+	return nil
+}
+
+// SlugError is a rejected name — a usage mistake, which callers map to exit 2
+// rather than to the operational failures that share the same return.
+type SlugError struct {
+	Name   string
+	Reason string
+}
+
+func (e *SlugError) Error() string { return e.Reason }
 
 // CheckSlug rejects a path component that could traverse or glob.
 func CheckSlug(name string) error {
 	if name == "" {
-		return fmt.Errorf("empty name where a name is required")
+		return &SlugError{Name: name, Reason: "empty name where a name is required"}
 	}
 	for _, r := range name {
 		switch {
 		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_', r == '-':
 		default:
-			return fmt.Errorf("name may only contain [a-zA-Z0-9_-], got: %s", name)
+			return &SlugError{Name: name,
+				Reason: "name may only contain [a-zA-Z0-9_-], got: " + name}
 		}
 	}
 	return nil

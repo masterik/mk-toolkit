@@ -11,6 +11,7 @@ import (
 
 	"github.com/masterik/mk-toolkit/internal/core/facts"
 	"github.com/masterik/mk-toolkit/internal/core/gitrepo"
+	"github.com/masterik/mk-toolkit/internal/core/scratch"
 )
 
 func newFactsCmd() *cobra.Command {
@@ -41,7 +42,17 @@ func newFactsCmd() *cobra.Command {
 			}
 			f, gerr := facts.Gather(repo, opt)
 			if f == nil {
-				return &ExitError{Code: 2, Msg: gerr.Error()}
+				// 2 is "you typed it wrong" and belongs to the slug and the
+				// revision flags, which are checked before anything is done. A
+				// run directory that could not be created is an operational
+				// failure and exits 1, or the caller goes looking at its argv.
+				code := 1
+				var slug *scratch.SlugError
+				var rev *facts.RevError
+				if errors.As(gerr, &slug) || errors.As(gerr, &rev) {
+					code = 2
+				}
+				return &ExitError{Code: code, Msg: gerr.Error()}
 			}
 
 			out := cmd.OutOrStdout()
@@ -225,7 +236,7 @@ type factsJSON struct {
 	Scopes         map[string]scopeJSON `json:"scopes"`
 	BaseState      string               `json:"base_state,omitempty"`
 	RangeState     string               `json:"range_state,omitempty"`
-	CommitsAhead   int                  `json:"commits_ahead_of_base,omitempty"`
+	CommitsAhead   int                  `json:"commits_ahead_of_base"`
 	Commits        []string             `json:"commits,omitempty"`
 	FFFromBase     string               `json:"ff_from_base,omitempty"`
 	CodeOwners     string               `json:"codeowners"`

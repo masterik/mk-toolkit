@@ -154,9 +154,38 @@ func (e *ErrUnresolvableRange) Error() string {
 	return "--range does not resolve: " + e.Range
 }
 
+// checkRev refuses a caller-supplied revision that git would read as an option.
+//
+// Not cosmetic: `--base=--output=PATH` reaches `git rev-parse` as an option, and
+// git creates PATH before failing on the rest — an arbitrary file write through
+// a flag that only ever names a commit. Rejected before any git call sees it,
+// and every call that takes one of these also passes it after --end-of-options.
+func checkRev(flag, v string) error {
+	if strings.HasPrefix(v, "-") {
+		return &RevError{Flag: flag, Value: v}
+	}
+	return nil
+}
+
+// RevError is a rejected revision — a usage mistake, exit 2, like a bad slug.
+type RevError struct {
+	Flag, Value string
+}
+
+func (e *RevError) Error() string {
+	return fmt.Sprintf("%s may not begin with '-': git reads %q as an option "+
+		"rather than a revision", e.Flag, e.Value)
+}
+
 // Gather collects the facts. repo is the work tree; the caller resolved it.
 func Gather(repo *gitrepo.Repo, opt Options) (*Facts, error) {
 	if err := scratch.CheckSlug(opt.Skill); err != nil {
+		return nil, err
+	}
+	if err := checkRev("--base", opt.Base); err != nil {
+		return nil, err
+	}
+	if err := checkRev("--range", opt.Range); err != nil {
 		return nil, err
 	}
 	if opt.StatusMax <= 0 {
@@ -371,7 +400,14 @@ func (f *Facts) setBranch(repo *gitrepo.Repo) {
 // work. The run directory lives *inside* the working directory, so without it the
 // scratch mkit just created is reported back to the skill as the user's own
 // change — and `run_ignored=no` is exactly the session that hits it.
-var excludeScratch = []string{".", ":(exclude).mkit"}
+//
+// It excludes the scratch *contents* rather than the directory, because
+// `.mkit/config.toml` is committed repo config — the user's own file. Excluding
+// `.mkit` wholesale reported `clean=yes` on a tree whose config had been edited,
+// and `commit` then had nothing to stage. Run directories are `.mkit/<skill>-*/`
+// so `:(exclude,glob).mkit/*/**` covers every file inside one, and the ledger is
+// named outright.
+var excludeScratch = []string{".", ":(exclude,glob).mkit/*/**", ":(exclude).mkit/gate.jsonl"}
 
 // excludeNoise additionally drops the generated files no diff scope wants.
 var excludeNoise = []string{".", ":(exclude)*.lock", ":(exclude)*.snap"}
@@ -408,12 +444,12 @@ func (f *Facts) setWorkingTree(repo *gitrepo.Repo, opt Options) error {
 	case opt.Range != "":
 		// `--` so a range that collides with a path name is still read as a
 		// range, and an unreadable one is reported rather than scoped.
-		if run(repo, "rev-list", "--count", opt.Range, "--") != nil {
+		if run(repo, "rev-list", "--count", "--end-of-options", opt.Range, "--") != nil {
 			f.RangeState = "unresolvable"
 			return &ErrUnresolvableRange{Range: opt.Range}
 		}
 		f.RangeState = "ok"
-		sc, err := scope(repo, opt.Range, opt.FilesMax)
+		sc, err := scope(repo, nil, opt.Range, opt.FilesMax)
 		if err != nil {
 			return err
 		}
@@ -422,11 +458,11 @@ func (f *Facts) setWorkingTree(repo *gitrepo.Repo, opt Options) error {
 		// Both stats, always. A bare `git diff --shortstat` reports nothing when
 		// the work is fully staged, which reads exactly like a clean tree — the
 		// single most expensive misread in this bundle.
-		unstaged, err := scope(repo, "", opt.FilesMax)
+		unstaged, err := scope(repo, nil, "", opt.FilesMax)
 		if err != nil {
 			return err
 		}
-		staged, err := scope(repo, "--cached", opt.FilesMax)
+		staged, err := scope(repo, []string{"--cached"}, "", opt.FilesMax)
 		if err != nil {
 			return err
 		}
@@ -443,7 +479,7 @@ func (f *Facts) setWorkingTree(repo *gitrepo.Repo, opt Options) error {
 	if opt.Base == "" {
 		return nil
 	}
-	if run(repo, "rev-parse", "--verify", "--quiet", opt.Base) != nil {
+	if run(repo, "rev-parse", "--verify", "--quiet", "--end-of-options", opt.Base) != nil {
 		f.BaseState = "unresolvable"
 		return &ErrUnresolvableBase{Base: opt.Base}
 	}
@@ -451,12 +487,15 @@ func (f *Facts) setWorkingTree(repo *gitrepo.Repo, opt Options) error {
 	f.CommitsAheadOfBase, _ = strconv.Atoi(git(repo, "rev-list", "--count", opt.Base+"..HEAD"))
 	if f.CommitsAheadOfBase > 0 {
 		f.Commits = lines(git(repo, "log", "--oneline", opt.Base+"..HEAD"))
-		sc, err := scope(repo, opt.Base, opt.FilesMax)
-		if err != nil {
-			return err
-		}
-		f.Scopes = append(f.Scopes, NamedScope{"base", sc})
 	}
+	// Unconditionally: a resolved base has a diff whether or not any commit sits
+	// between it and HEAD, and `pr` reads base_stat after `commit` has run — the
+	// one moment the count can still be 0 while the work is real.
+	sc, err := scope(repo, nil, opt.Base, opt.FilesMax)
+	if err != nil {
+		return err
+	}
+	f.Scopes = append(f.Scopes, NamedScope{"base", sc})
 	f.FFFromBase = "no"
 	if run(repo, "merge-base", "--is-ancestor", opt.Base, "HEAD") == nil {
 		f.FFFromBase = "yes"
@@ -467,14 +506,22 @@ func (f *Facts) setWorkingTree(repo *gitrepo.Repo, opt Options) error {
 // scope returns an error rather than an empty Scope: `stat=none files=0` is the
 // honest answer for a scope with nothing in it, so a git failure silently
 // producing it is a wrong answer that reads exactly like a right one.
-func scope(repo *gitrepo.Repo, rev string, max int) (Scope, error) {
-	statArgs := []string{"diff"}
-	listArgs := []string{"diff"}
+// opts are git's own flags for this scope (`--cached` for the staged one); rev
+// is a caller-supplied revision, which is a different kind of argument and must
+// never be passed where a flag is expected. Keeping them apart is what lets the
+// revision go after --end-of-options: options first, then the marker, then the
+// revision, so a rev beginning with `-` can never be read as a flag. checkRev
+// refuses one anyway; this makes the call safe regardless.
+func scope(repo *gitrepo.Repo, opts []string, rev string, max int) (Scope, error) {
+	statArgs := append([]string{"diff", "--shortstat"}, opts...)
+	listArgs := append([]string{"diff", "--name-only"}, opts...)
 	if rev != "" {
-		statArgs = append(statArgs, rev)
-		listArgs = append(listArgs, rev)
+		statArgs = append(statArgs, "--end-of-options", rev)
+		listArgs = append(listArgs, "--end-of-options", rev)
 	}
-	stat, err := gitErr(repo, append(statArgs, "--shortstat")...)
+	// The same pathspec on both, or the stat counts a file the list drops and a
+	// scope reports `files=0` beside a shortstat that says otherwise.
+	stat, err := gitErr(repo, append(append(statArgs, "--"), excludeNoise...)...)
 	if err != nil {
 		return Scope{}, fmt.Errorf("git diff --shortstat %s: %w", rev, err)
 	}
@@ -482,7 +529,7 @@ func scope(repo *gitrepo.Repo, rev string, max int) (Scope, error) {
 	if stat == "" {
 		stat = "none"
 	}
-	raw, err := gitErr(repo, append(append(listArgs, "--name-only", "--"), excludeNoise...)...)
+	raw, err := gitErr(repo, append(append(listArgs, "--"), excludeNoise...)...)
 	if err != nil {
 		return Scope{}, fmt.Errorf("git diff --name-only %s: %w", rev, err)
 	}
