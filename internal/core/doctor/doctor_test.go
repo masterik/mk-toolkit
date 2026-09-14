@@ -53,6 +53,11 @@ func isolate(t *testing.T) string {
 	t.Setenv("CLAUDE_CONFIG_DIR", cfg)
 	t.Setenv("CLAUDE_PLUGIN_ROOT", "")
 	t.Setenv("MKIT_PLUGIN_ROOT", "")
+	// MKIT_HOME too, and this one is not about measurement: the user-state check
+	// calls scratch.UserDirWritable, which *creates* the directory when it is
+	// absent and removes it again. Unset, that probe ran in the developer's real
+	// home on every run of this suite.
+	t.Setenv("MKIT_HOME", filepath.Join(t.TempDir(), ".mkit"))
 	return cfg
 }
 

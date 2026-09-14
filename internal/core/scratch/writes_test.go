@@ -11,23 +11,32 @@ import (
 )
 
 // Every file in the binary that creates, writes, renames or removes something on
-// disk, and why it is allowed to.
+// disk, why it is allowed to, and how many such calls it is allowed to make.
 //
 // This is the Go half of what `tests/bats/payload.bats` asserted over the shell:
 // three write locations chosen by lifetime, and nowhere else. Neither rule has a
 // behavioral seam — the boundaries that would enforce them cannot be created
 // inside a test — so both are asserted by shape instead, against a list a human
-// reviewed. A new write site fails this test until someone adds it here, which
-// is the entire mechanism.
-var reviewed = map[string]string{
-	"internal/core/scratch/scratch.go":       "the scratch root itself, plus the one named exception: the common dir's info/exclude",
-	"internal/core/scratch/userdir.go":       "~/.mkit (MKIT_HOME) — the writability probe, net-zero by construction",
-	"internal/core/gate/ledger.go":           "<toplevel>/.mkit/gate.jsonl and its trim lock — inside the scratch root",
-	"internal/core/gate/run.go":              "one gate-<step>.log per step, inside the run directory it was handed",
-	"internal/core/findings/record.go":       "a review run's artefacts, inside the run directory it was handed",
-	"internal/core/repoconfig/repoconfig.go": "<toplevel>/.mkit/config.toml — the one committed file in the scratch root",
-	"internal/core/doctor/doctor.go":         "probes writability by creating and removing a temp file in each declared location",
-	"internal/core/storage/apply.go":         "deletes only what Scan named, home-containment guarded",
+// reviewed.
+//
+// The count is what makes that a guarantee rather than a gesture. Keyed by file
+// alone, the check only caught a write appearing in a *new* file, and a new
+// write site added to a file already on the list — `scratch.go`, which already
+// writes both the scratch root and the `info/exclude` exception — passed
+// silently. Adding one now changes the count and fails here until a human
+// updates it, which is the entire mechanism.
+var reviewed = map[string]struct {
+	sites  int
+	reason string
+}{
+	"internal/core/scratch/scratch.go":       {5, "the scratch root and the one named exception: MkdirAll+OpenFile for the common dir's info/exclude, MkdirAll+MkdirTemp for a run directory, RemoveAll for prune"},
+	"internal/core/scratch/userdir.go":       {4, "~/.mkit (MKIT_HOME): MkdirAll, then a CreateTemp probe and the two Removes that make it net-zero"},
+	"internal/core/gate/ledger.go":           {9, "<toplevel>/.mkit/gate.jsonl: MkdirAll+OpenFile to append, CreateTemp+Remove+Rename to rotate, Mkdir/RemoveAll/Mkdir for the trim lock"},
+	"internal/core/gate/run.go":              {1, "one gate-<step>.log per step, inside the run directory it was handed"},
+	"internal/core/findings/record.go":       {1, "a review run's artefacts, inside the run directory it was handed"},
+	"internal/core/repoconfig/repoconfig.go": {2, "<toplevel>/.mkit/config.toml — the one committed file in the scratch root"},
+	"internal/core/doctor/doctor.go":         {4, "probes writability by creating and removing a temp file in each declared location"},
+	"internal/core/storage/apply.go":         {3, "deletes only what Scan named, home-containment guarded"},
 }
 
 // The calls that put something on disk, or take it off.
@@ -44,6 +53,7 @@ func TestWriteSitesAreOnTheReviewedAllowlist(t *testing.T) {
 		t.Fatal(err)
 	}
 	fset := token.NewFileSet()
+	found := map[string]int{}
 
 	for _, dir := range []string{"internal", "cmd"} {
 		err := filepath.WalkDir(filepath.Join(root, dir), func(path string, d fs.DirEntry, err error) error {
@@ -71,6 +81,7 @@ func TestWriteSitesAreOnTheReviewedAllowlist(t *testing.T) {
 				if !ok || pkg.Name != "os" || !writeCalls[sel.Sel.Name] {
 					return true
 				}
+				found[rel]++
 				if _, ok := reviewed[rel]; !ok {
 					t.Errorf("%s:%d: os.%s writes to disk from a file that is not on the reviewed allowlist "+
 						"in internal/core/scratch/writes_test.go — three write locations, chosen by lifetime, and nowhere else",
@@ -82,6 +93,17 @@ func TestWriteSitesAreOnTheReviewedAllowlist(t *testing.T) {
 		})
 		if err != nil {
 			t.Fatal(err)
+		}
+	}
+
+	// The counts. A file on the list that grew a write site is the case keying by
+	// name alone could not see.
+	for rel, want := range reviewed {
+		if got := found[rel]; got != want.sites {
+			t.Errorf("%s has %d os.* write calls, the allowlist says %d (%s) — "+
+				"a write site was added or removed; re-read the file and update "+
+				"internal/core/scratch/writes_test.go deliberately",
+				rel, got, want.sites, want.reason)
 		}
 	}
 }
