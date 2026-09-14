@@ -295,7 +295,13 @@ func (l *Ledger) trim() {
 
 	kept := make([]string, 0, len(lines))
 	for i, line := range lines {
-		if alive[recHeads[i]] {
+		// An empty head is "there was no HEAD to record" — an unborn repo, where
+		// every record carries one — not "a head that no longer exists". Treating
+		// the two alike evicted every proof an unborn repo had ever written,
+		// including the record appended a moment earlier, as soon as the ledger
+		// rotated. Classification already handles an unresolvable head; rotation
+		// has no reason to be stricter.
+		if recHeads[i] == "" || alive[recHeads[i]] {
 			kept = append(kept, line)
 		}
 	}

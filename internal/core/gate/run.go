@@ -18,6 +18,31 @@ import (
 // an agent that must not be handed the log itself.
 var failPat = regexp.MustCompile(`FAIL|FAILED|Error:|error:|error\[|ERROR|✗|✖|✘|panic:|Exception|AssertionError|not ok |Traceback|\[error\]|failed with`)
 
+// shellSafe reports whether an argument survives the unquoted ledger key
+// unchanged — that is, whether writing it bare into a shell command would mean
+// the same thing it means as an argv element.
+//
+// The key identifies a command for cache purposes, so two commands that do
+// different things must never share one. Whitespace alone was the old test,
+// which let `gate run test -- echo '$FLAG'` (a literal) record the same key as a
+// `--chain` step whose shell expands $FLAG — and a `fresh` verdict proved by one
+// would be served to the other. An empty argument is unsafe for the same reason:
+// it vanishes entirely when joined.
+func shellSafe(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case r == '-', r == '_', r == '.', r == '/', r == '=', r == ':', r == '+', r == ',', r == '@', r == '%':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 // Step is one gate step: the name it is reported and logged under, the command
 // bash executes, and the command the ledger is keyed on.
 //
@@ -79,9 +104,9 @@ type Result struct {
 // `fresh` is the one direction a ledger may never be wrong in.
 func ParseSingle(name string, argv []string) Step {
 	quoted := make([]string, 0, len(argv))
-	joinable := true
+	joinable := len(argv) > 0
 	for _, arg := range argv {
-		if strings.ContainsAny(arg, " \t\n\v\f\r") {
+		if !shellSafe(arg) {
 			joinable = false
 		}
 		quoted = append(quoted, "'"+strings.ReplaceAll(arg, "'", `'\''`)+"'")

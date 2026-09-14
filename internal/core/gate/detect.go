@@ -208,8 +208,22 @@ func Detect(repo *gitrepo.Repo, cfg *repoconfig.Config, opt DetectOptions) (*Det
 		d.Documented = ""
 	}
 
+	// A newline in a pinned command would split the `full:` block's one-line-per-
+	// step contract, so `cmd=` would stop naming the command. Reported as a step
+	// whose command is refused rather than printed wrongly.
+	seen := map[string]int{}
 	for i, cmd := range full {
-		d.Steps = append(d.Steps, Proposal{Step: StepName(cmd, i), Cmd: cmd, Origin: origin})
+		name := StepName(cmd, i)
+		// A label is a log filename and a pin key, so it has to be unique. In a
+		// polyglot repo `npm run test` and `go test ./...` both want `test`:
+		// the first keeps it, the rest are suffixed.
+		if n := seen[name]; n > 0 {
+			seen[name] = n + 1
+			name = fmt.Sprintf("%s-%d", name, n+1)
+		} else {
+			seen[name] = 1
+		}
+		d.Steps = append(d.Steps, Proposal{Step: name, Cmd: cmd, Origin: origin})
 	}
 	d.mergePinned(cfg)
 	d.Docs = scanDocs(root)

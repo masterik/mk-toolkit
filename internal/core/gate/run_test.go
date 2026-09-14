@@ -22,19 +22,53 @@ func TestParseSingleNormalizesForTheLedger(t *testing.T) {
 			norm: "bun run lint",
 		},
 		{
+			// The seam that makes a review -> finish cache hit possible: this
+			// exact argv is what both call forms reduce to.
+			name: "a plain argv joins",
+			argv: []string{"go", "test", "./..."},
+			cmd:  `'go' 'test' './...'`,
+			norm: "go test ./...",
+		},
+		{
 			// The join is lossy here — `printf '%s' foo bar` would produce the
 			// same string while executing differently — so the key falls back
 			// to the unambiguous quoted form.
 			name:      "an argument with a space falls back to the quoted form",
-			argv:      []string{"printf", "[%s]", "foo bar"},
-			cmd:       `'printf' '[%s]' 'foo bar'`,
+			argv:      []string{"printf", "%s", "foo bar"},
+			cmd:       `'printf' '%s' 'foo bar'`,
 			sameAsCmd: true,
 		},
 		{
-			name: "an embedded single quote is doubled out",
-			argv: []string{"echo", "it's"},
-			cmd:  `'echo' 'it'\''s'`,
-			norm: "echo it's",
+			// A glob is not a literal once it is unquoted: `[%s]` would expand
+			// against the working directory, so it can never share a key with
+			// the argv that meant it literally.
+			name:      "a glob falls back to the quoted form",
+			argv:      []string{"printf", "[%s]", "x"},
+			cmd:       `'printf' '[%s]' 'x'`,
+			sameAsCmd: true,
+		},
+		{
+			// `echo it's` is not even valid unquoted — the key has to be the
+			// quoted form or it names a command that cannot run.
+			name:      "an embedded single quote falls back to the quoted form",
+			argv:      []string{"echo", "it's"},
+			cmd:       `'echo' 'it'\''s'`,
+			sameAsCmd: true,
+		},
+		{
+			// A shell variable is expanded once unquoted, so a literal `$FLAG`
+			// and a --chain step whose shell expands it must not share a key.
+			name:      "a shell variable falls back to the quoted form",
+			argv:      []string{"test", "$FLAG"},
+			cmd:       `'test' '$FLAG'`,
+			sameAsCmd: true,
+		},
+		{
+			// An empty argument vanishes entirely when joined.
+			name:      "an empty argument falls back to the quoted form",
+			argv:      []string{"echo", ""},
+			cmd:       `'echo' ''`,
+			sameAsCmd: true,
 		},
 	}
 	for _, c := range cases {

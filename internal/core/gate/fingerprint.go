@@ -7,7 +7,6 @@ package gate
 
 import (
 	"bytes"
-	"crypto/sha1" //nolint:gosec // git's own object hash; not a security choice
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -134,7 +133,14 @@ func Fingerprint(repo *gitrepo.Repo) (string, error) {
 				deleted[p] = true
 				continue
 			}
-			blob[p] = blobHash([]byte(target))
+			// Hashed by git, in the repository's own object format: a SHA-256
+			// repo stores a SHA-256 blob, and an in-process SHA-1 disagreed with
+			// the ls-tree layer for every symlink in one.
+			out, herr := gitStdin(root, target, "hash-object", "-t", "blob", "--stdin")
+			if herr != nil {
+				return "", fmt.Errorf("fingerprint: hash-object symlink %s: %w", p, herr)
+			}
+			blob[p] = strings.TrimSpace(string(out))
 		case fi.Mode().IsRegular():
 			// Hashed by git, not in process: see hashRegular.
 			regular = append(regular, p)
@@ -155,7 +161,7 @@ func Fingerprint(repo *gitrepo.Repo) (string, error) {
 		if deleted[p] {
 			continue
 		}
-		lines = append(lines, p+"\t"+b)
+		lines = append(lines, p+"\x00"+b)
 	}
 	// Byte order, matching `LC_ALL=C sort`; Go string comparison already is one.
 	sort.Strings(lines)
@@ -163,7 +169,7 @@ func Fingerprint(repo *gitrepo.Repo) (string, error) {
 	h := sha256.New()
 	for _, l := range lines {
 		h.Write([]byte(l))
-		h.Write([]byte{'\n'})
+		h.Write([]byte{0})
 	}
 	return hex.EncodeToString(h.Sum(nil))[:16], nil
 }
@@ -171,7 +177,8 @@ func Fingerprint(repo *gitrepo.Repo) (string, error) {
 // hashRegular fills blob[] for the worktree's regular files, batched through one
 // `git hash-object --stdin-paths`.
 //
-// It has to be git that hashes them, not blobHash. A path with a clean filter or
+// It has to be git that hashes them, not an in-process sha1. A path with a
+// clean filter or
 // `text` eol normalization is stored by git as the *filtered* bytes, so hashing
 // the raw worktree bytes made the overlay disagree with the ls-tree layer for
 // exactly those paths: committing a file changed the fingerprint while its
@@ -215,18 +222,6 @@ func hashRegular(root string, paths []string, blob map[string]string) error {
 		blob[p] = hashes[i]
 	}
 	return nil
-}
-
-// blobHash is `git hash-object` for a blob, in process: sha1 over the object
-// header and the content. Used for symlinks only — git stores a symlink as a blob
-// of its target path, and no attribute filter applies to it, so there is nothing
-// for git to do that this does not.
-func blobHash(data []byte) string {
-	h := sha1.New() //nolint:gosec // git's own object hash
-	// hash.Hash never returns an error from Write, by contract.
-	_, _ = fmt.Fprintf(h, "blob %d\x00", len(data))
-	h.Write(data)
-	return hex.EncodeToString(h.Sum(nil))
 }
 
 func splitNUL(b []byte) []string {

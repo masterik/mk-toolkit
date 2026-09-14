@@ -329,14 +329,14 @@ func TestGateRunBothCallFormsRecordTheSameCommand(t *testing.T) {
 // `fresh` is the one direction a ledger may never be wrong in.
 func TestGateRunAnArgumentWithASpaceRecordsTheQuotedForm(t *testing.T) {
 	repo, rd := gateRepo(t)
-	run(t, "gate", "run", rd, "a", "--", "printf", "[%s]", "foo bar")
-	run(t, "gate", "run", rd, "b", "--", "printf", "[%s]", "foo", "bar")
+	run(t, "gate", "run", rd, "a", "--", "printf", "%s", "foo bar")
+	run(t, "gate", "run", rd, "b", "--", "printf", "%s", "foo", "bar")
 	recs := ledgerRecords(t, repo)
 	withSpace, without := recs[0]["cmd"].(string), recs[1]["cmd"].(string)
 	if withSpace == without {
 		t.Fatalf("both recorded %q", withSpace)
 	}
-	if without != "printf [%s] foo bar" {
+	if without != "printf %s foo bar" {
 		t.Errorf("joinable argv = %q", without)
 	}
 	if !strings.Contains(withSpace, `'foo bar'`) {

@@ -95,8 +95,16 @@ func renderDetect(out io.Writer, d *gate.Detection) {
 					age = ageHuman(s.Cache.Age)
 				}
 			}
+			// `cmd=` runs to the end of the line, so the line must be a line: a
+			// command containing a newline would silently become two rows and
+			// every field on the second would be read as another step's.
+			shown := s.Cmd
+			if strings.ContainsAny(shown, "\r\n") {
+				shown = "<refused: command contains a newline, which the one-step-per-line " +
+					"form cannot carry — pin it as a script and name the script>"
+			}
 			_, _ = fmt.Fprintf(out, "  %d source=%s cache=%s exit=%s age=%s cmd=%s\n",
-				i+1, s.Origin, cache, exit, age, s.Cmd)
+				i+1, s.Origin, cache, exit, age, shown)
 		}
 	}
 	if d.CacheCause != "" {

@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -151,30 +152,71 @@ var fixtures = []struct {
 
 // Known-good hashes over the fixture matrix.
 //
-// These were produced by running `mkit_tree_fingerprint` and the port over the same
-// fixtures and comparing, which is how the port was verified; the shell function
-// is gone now and these are what the matrix outlives it as.
+// The matrix itself came from running `mkit_tree_fingerprint` and the port over
+// the same fixtures and comparing, which is how the port was verified. **The
+// values are no longer the shell's**: framing moved from `path\tblob\n` to
+// NUL-delimited fields, because a pathname may legally contain a tab and a
+// newline and the old framing let two different trees serialize identically —
+// an ambiguous key for the one thing that exists to be an unambiguous key.
+// Symlinks moved to `git hash-object` in the same change, so a SHA-256
+// repository hashes them in its own object format.
+//
+// What still holds these values honest is not their provenance but the
+// relationships between them, each asserted independently by a test below:
+// `clean`, `ignored-file-present` and `tracks-dot-mkit` must be equal (neither
+// an ignored file nor `.mkit` is content), and `staged-only` must equal
+// `unstaged-only` (staging is not content). Every other pair must differ.
+//
 // A change here is a change to the ledger's key: every existing record in every
 // repo reclassifies as `drifted` and every gate re-runs once. That is safe, and
 // it is never accidental — update these only alongside a deliberate change to
 // what the fingerprint covers.
 func TestFingerprintGolden(t *testing.T) {
 	golden := map[string]string{
-		"clean":                              "fab2136b9085eb01",
-		"unborn-head":                        "1106be50325aeb9e",
-		"staged-only":                        "530def36328952d8",
-		"unstaged-only":                      "530def36328952d8",
-		"staged-and-unstaged":                "4bf916e4ee926ff3",
-		"untracked":                          "3554cbfbcdca7a1f",
-		"untracked-directory":                "0e4b0e5de9baacbc",
-		"ignored-file-present":               "fab2136b9085eb01",
-		"tracked-symlink":                    "c65263b2fe3871ec",
-		"untracked-symlink":                  "ab98969177820d28",
-		"deleted-tracked-file":               "fb0fb030dbed4ce3",
-		"tracked-file-replaced-by-directory": "9230e934805b3948",
-		"path-with-a-space":                  "a669d03a5cec4463",
-		"tracks-dot-mkit":                    "fab2136b9085eb01",
+		"clean":                              "3c8de5690a159b9d",
+		"unborn-head":                        "13c116ee0b4b4283",
+		"staged-only":                        "252f3494d24da8f4",
+		"unstaged-only":                      "252f3494d24da8f4",
+		"staged-and-unstaged":                "c3f7d42dec0b1dd4",
+		"untracked":                          "9aeff39e8c70ed8f",
+		"untracked-directory":                "9565074263c080f1",
+		"ignored-file-present":               "3c8de5690a159b9d",
+		"tracked-symlink":                    "22451a8841e67739",
+		"untracked-symlink":                  "737b5d2ad8b278e7",
+		"deleted-tracked-file":               "6ea90853a4daae0c",
+		"tracked-file-replaced-by-directory": "c1d64b350b8b08a8",
+		"path-with-a-space":                  "ed75d4bd744a034a",
+		"tracks-dot-mkit":                    "3c8de5690a159b9d",
 	}
+	// The relationships, asserted — this is what makes the table meaningful now
+	// that the values are not the shell's. Equal where content is equal:
+	for _, pair := range [][2]string{
+		{"clean", "ignored-file-present"},
+		{"clean", "tracks-dot-mkit"},
+		{"staged-only", "unstaged-only"},
+	} {
+		if golden[pair[0]] != golden[pair[1]] {
+			t.Errorf("%s and %s must hash alike: %s vs %s",
+				pair[0], pair[1], golden[pair[0]], golden[pair[1]])
+		}
+	}
+	// ...and distinct everywhere content differs.
+	seen := map[string][]string{}
+	for name, h := range golden {
+		seen[h] = append(seen[h], name)
+	}
+	for h, names := range seen {
+		if len(names) > 1 {
+			sort.Strings(names)
+			joined := strings.Join(names, ",")
+			switch joined {
+			case "clean,ignored-file-present,tracks-dot-mkit", "staged-only,unstaged-only":
+			default:
+				t.Errorf("fixtures %s share hash %s but differ in content", joined, h)
+			}
+		}
+	}
+
 	for _, f := range fixtures {
 		t.Run(f.name, func(t *testing.T) {
 			want, ok := golden[f.name]

@@ -139,12 +139,17 @@ type gateRunJSON struct {
 }
 
 type gateStepJSON struct {
-	Step     string `json:"step"`
-	Cmd      string `json:"cmd"`
-	Exit     int    `json:"exit"`
-	Secs     int    `json:"secs"`
-	Log      string `json:"log"`
-	LogLines int    `json:"log_lines"`
+	Step string `json:"step"`
+	Cmd  string `json:"cmd"`
+	Exit int    `json:"exit"`
+	Secs int    `json:"secs"`
+	Log  string `json:"log"`
+	// Failures and Tail are the same bounded excerpt the human form prints, and
+	// for the same reason: the log itself must never reach an agent, but a
+	// verdict with no diagnosis in it is a verdict nobody can act on.
+	Failures []string `json:"failures,omitempty"`
+	Tail     []string `json:"tail,omitempty"`
+	LogLines int      `json:"log_lines"`
 }
 
 func writeGateRunJSON(out io.Writer, res *gate.Result) error {
@@ -156,7 +161,7 @@ func writeGateRunJSON(out io.Writer, res *gate.Result) error {
 	for _, s := range res.Steps {
 		j.Steps = append(j.Steps, gateStepJSON{
 			Step: s.Step, Cmd: s.Cmd, Exit: s.Exit, Secs: s.Secs,
-			Log: s.Log, LogLines: s.LogLines,
+			Log: s.Log, Failures: s.Failures, Tail: s.Tail, LogLines: s.LogLines,
 		})
 	}
 	enc := json.NewEncoder(out)
