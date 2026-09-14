@@ -42,11 +42,20 @@ this skill needs (`../_shared/references/output-discipline.md`). The same output
 step 4's context and the final report, and none change when step 3 pushes:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh pr --base <base> --gh
+mkit facts pr --base <base> --gh
 ```
 
-Then read what ran on this branch before, and what each step concluded — gated on `mkit_bin=`, and
-never a stop: `../_shared/references/workflow-contract.md`, "Reading it".
+`mkit facts` **is** this skill's dependency check. If it fails with `command not found` **or**
+`unknown command "facts"` — absent and too old are the same answer here — **stop** and say:
+
+> This skill runs on the `mkit` binary. Install it with `brew install masterik/tap/mkit` (or upgrade
+> with `brew upgrade mkit`), then run it again.
+
+Presence only, no declared minimum on either side — a subcommand that does not exist *is* the too-old
+signal.
+
+Then read what ran on this branch before, and what each step concluded — never a stop:
+`../_shared/references/workflow-contract.md`, "Reading it".
 
 ```bash
 mkit work show --json --limit 20
@@ -58,7 +67,7 @@ subjects alone.
 That covers the branch, the status, `commits:` for `<base>..HEAD`, the stat, `codeowners=` for step 6, and
 `pr=` — whether this branch already has one, which is the check that otherwise gets skipped. Keep the `run=`
 literal; this file writes it as `<run-dir>`. There is no `$RUN_DIR` (a shell variable does not survive to the
-next Bash call), and re-running the script opens a second directory instead of returning the first.
+next Bash call), and re-running `mkit facts` opens a second directory instead of returning the first.
 
 ### 1. Commit remaining work
 
@@ -74,23 +83,25 @@ Same inside a worktree — just confirm `git branch --show-current` is the featu
    trust a zero: a branch whose work was all uncommitted reads 0 in the step 0 snapshot.
 3. **Existing PR** — `pr=` is a URL only when one exists. Otherwise it is a sentinel naming why
    there is none: `none` (no PR yet — the case that justifies creating one), `gh-missing`,
-   `jq-missing`, `gh-unauthenticated`, `no-remote`. Test for a URL, not for non-emptiness — every
+   `gh-unauthenticated`, `no-remote`. Test for a URL, not for non-emptiness — every
    sentinel is a non-empty string, so a "non-empty" reading always fires and shows `none` as if it
    were a PR. Only `none` means proceed; the rest are blocked states to surface, not to push past.
 4. **Full quality gate** (`../_shared/references/quality-gate.md`), in order, stopping at the first failure:
 
    ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/gate-detect.sh
-   ${CLAUDE_PLUGIN_ROOT}/scripts/gate-run.sh <run-dir> --chain 'lint=<cmd>' 'test=<cmd>' 'build=<cmd>'
+   mkit gate detect
+   mkit gate run <run-dir> --chain 'lint=<cmd>' 'test=<cmd>' 'build=<cmd>'
    ```
 
    One line per passing step; on failure the step, the exit code, the grepped failures and the tail — never
    the log. The user may proceed anyway for a draft. Delegate the diagnosis only when that verdict is not
    enough ("when a step fails") — choosing between fixing and opening a draft needs a cause, not a transcript.
 
-   `full_cache=` (from `gate-detect.sh`, pipe-parallel with `full=`) may be consumed **per step**: a draft PR
-   is the recoverable case and CI runs remotely anyway. Each step served that way is `cached (Nm ago)` on its
-   own line — never a pass. Never cache a whole chain in one go.
+   Each step's `cache=` (from `mkit gate detect`'s `full:` block) may be consumed **per step**, and
+   **only when it is `fresh`**: a draft PR is the recoverable case and CI runs remotely anyway. Every
+   other class means run the step — `failed` says the tree was red on this exact content, which is a
+   thing to report before starting, not a result to reuse. Each step served from the ledger is
+   `cached (Nm ago)` on its own line — never a pass. Never cache a whole chain in one go.
 
 ### 3. Push the branch
 
@@ -217,7 +228,7 @@ Commits (<base>..HEAD):
 ```
 
 The commit list is step 0's `commits:` block — already in context, and cheap precisely because the diff never
-was. Never just "N commits pushed." Prune with `${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh --prune` on the way out.
+was. Never just "N commits pushed." Prune with `mkit run prune` on the way out.
 
 Then record the run:
 

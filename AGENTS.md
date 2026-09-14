@@ -5,23 +5,24 @@ This file provides guidance to agents when working with code in this repository.
 **mkit** — a **Go binary (`mkit`) plus a Claude Code plugin**, shipped together by Homebrew
 (`brew install masterik/tap/mkit`). The plugin packages the agent coding-workflow skills
 (`commit`, `review`, `finish`, `pr`, `cleanup`) plus the shared `_shared/references/`
-bundle; the binary is absorbing the plugin's shell script layer one script at a time.
-Composition over replacement: the skills orchestrate `git`, `gh`, `wt`, and code-review tools —
-no new git logic.
+bundle; the binary owns every mechanical step those skills take. Composition over replacement:
+the skills orchestrate `git`, `gh`, `wt`, and code-review tools — no new git logic.
 
 **Current phase: the Go port.** M1 (scaffold + release chain) done at `v0.12.0`; M2
 (`mkit storage prune`) done; **M3 withdrawn** ([ADR 0003](docs/adr/0003-two-distribution-channels.md));
 **M7 (`mkit repo profile`/`init`/`doctor`) done** — repo config is `<toplevel>/.mkit/config.toml`,
 committed ([ADR 0001's config-path amendment](docs/adr/0001-per-repo-config-and-init.md#amendment-the-config-path)).
-**M4 (`mkit findings`) done** — `internal/core/findings/` + `internal/cli/findings.go`, and
-`review` now calls the binary. That makes `mkit` a **hard requirement for `review`** and only for
-`review`: the skill probes `command -v mkit && mkit findings schema --json` at step 0 and stops
-with a `brew` remedy if either half fails. Presence only, no declared minimum on either side — a
-subcommand that does not exist *is* the too-old signal ([backlog](docs/backlog.md), Resolved).
-**M6 (`mkit work`) done** — the per-branch worklog, read and written by all four skills. Its calls
-are **optional**, unlike `review`'s findings probe: a worklog `mkit` cannot answer for costs a step
-one input and never stops it.
-**M5 (the `jq` consumers) is next.** Milestones and the full invariant list:
+**M4 (`mkit findings`) done** — `internal/core/findings/` + `internal/cli/findings.go`.
+**M6 (`mkit work`) done** — the per-branch worklog under `<toplevel>/.mkit/work/`, read and written
+by all four skills; what it reports is **one fewer input, never a stop**.
+**M5 (the `jq` consumers) done** — `mkit facts`, `mkit gate detect|run`, `mkit branch scan` and
+`mkit run open|prune` replaced the last five scripts, and **the payload is Markdown only**: no
+`plugin/scripts/`, no `lib/common.sh`, no `tests/`. That makes `mkit` a **hard requirement for
+every skill** — each one's first call is `mkit facts <skill>` (`review` alone runs a one-line
+compatibility probe before it, because its later steps need `mkit findings` too), and a binary that
+is absent *or too old* is its stop condition with a `brew` remedy: `command not found` and
+`unknown command "facts"` are the same answer. Presence only, no declared minimum on either side: a subcommand
+that does not exist *is* the too-old signal. Milestones and the full invariant list:
 [`backlog.md`](docs/backlog.md). Direction and rationale: [`concept.md`](docs/concept.md) — the
 place for *why*, so this file can stay operative.
 
@@ -42,14 +43,14 @@ place for *why*, so this file can stay operative.
 `just` (`brew install just`) wraps these; `just --list` shows all recipes.
 
 ```bash
-just ci                          # build, vet, test, lint, shtest — what CI runs, in one shot
+just ci                          # build, vet, test, lint — what CI runs, in one shot
 just build / vet / test          # go build|vet|test ./...
 just lint                        # golangci-lint run (CI pins v2.12, brew install golangci-lint)
 just run version --json          # exercise the front-end contract
 just run doctor                  # prerequisites, sandbox writability, plugin state
 just run work show --json        # this branch's worklog: what ran, and what it concluded
 just run repo profile --json     # how this repo works: discovered|pinned|unavailable
-just shtest                      # shell layer: bats (brew install bats-core)
+just run facts commit --no-run   # every starting fact, without opening a run dir
 ```
 
 Release is tag-driven: push `vX.Y.Z` → GoReleaser builds darwin × amd64/arm64 and commits
@@ -64,20 +65,27 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
   Bubble Tea `Update`.
 - **No TUI off a TTY.** stdout not a terminal → no ANSI, no alt-screen. Skills pipe this binary;
   a TUI on a pipe is corruption, not cosmetics.
-- **Every command reachable non-interactively**, and **`--json` on every command** — the
-  skill-facing contract replacing the shell layer's `key=value` parsing. Human text stays default.
+- **Every command reachable non-interactively**, and **`--json` on every command**. Two contracts,
+  both live: the fact-reporting commands are read as `key=value` human text, which is byte-for-byte
+  what the scripts printed and what every skill still parses; `mkit findings` is read as `--json`,
+  by `review` at steps 3, 4 and 6. `--json` is where the rest migrate; nothing else reads it yet.
 - **Judgement stays in Markdown.** The binary owns mechanical invariants only.
 - **Skills stay as files** — shipped by the package, never `embed.FS`; they must stay diffable.
 
-## Porting a script
+## The port, and what it left behind
 
-- A script's `.bats` file **is the spec** — port it to `go test` beside the code; don't re-derive
-  the behavior from the script.
-- One script per milestone, merged green. No big-bang rewrite: the bash is tested and load-bearing.
-- **Delete the shell script in the same commit that lands its replacement.** Two implementations
-  of one invariant is the failure the script layer exists to prevent.
-- Deleting degradation branches is part of the win — a binary is never half-capable, so
-  `jq-missing` / `no-hash` / `gate_cache=no-jq` die with their script.
+**The shell layer is gone** (M5). The rules that got it there are kept because they govern the
+milestones that are left (M6 `mkit work`, M8 `mkit plan`) and because they explain why the code
+reads as it does:
+
+- The deleted `.bats` file **was the spec** for each script — the `go test` beside each package is
+  a port of it, not a re-derivation from the shell. Do not "simplify" an assertion whose comment
+  names a measured failure.
+- **One implementation of one invariant.** Each script was deleted in the commit that landed its
+  replacement, and no Go package may grow a second wording of a degradation sentence.
+- Deleting degradation branches was part of the win — a binary is never half-capable, so
+  `jq-missing`, `no-hash`, `gate_cache=no-jq`, `gh=no-cache` and `scripts_state=no-jq` died with
+  the forks and temp files they existed for.
 
 ## Layout
 
@@ -100,11 +108,12 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
     directory-only `.mkit/` rule, where a written config would silently never travel.
     `Write` renders a **commented template** rather than marshalling — the file is committed and
     read in a diff, and no Go TOML marshaller preserves comments. `ShadowedRemedy` is the one
-    **deliberate second producer** of a degradation sentence (`mkit_config_ignored_remedy` is the
-    other): `init` must refuse before it has located a payload. `TestRemedyParityWithShell`
-    compares the two byte for byte over every rule shape — keep it that way, or delete one.
-  - `profile/` (M7): merges discovered with pinned, tagging every value. Gate discovery is
-    **delegated to `gate-detect.sh`**, never reimplemented, until M5 ports it.
+    **one producer** of the shadowed-config sentence, and the shell counterpart it was kept in
+    parity with went with `lib/common.sh` in M5. `mkit doctor` and `mkit facts` both read it;
+    neither re-words it.
+  - `profile/` (M7): merges discovered with pinned, tagging every value. Gate discovery —
+    and the pinned-over-discovered merge — belong to `gate.Detect` since M5; the profile
+    consumes the tagged result rather than redoing it.
   - `pluginroot/` (M7): locates the payload — `CLAUDE_PLUGIN_ROOT`, `MKIT_PLUGIN_ROOT`, a
     `plugin/` beside the work tree, then the marketplace checkout. Every *searched* candidate is
     identified by the **manifest's own name**, never by path: the checkout is named after the
@@ -113,8 +122,39 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
     given. **The work tree comes before the installed copy** — in a payload checkout the tree
     being edited is what a report is about, and an installed 0.14.0 answering for a 0.16.0 work
     tree is a wrong answer that looks right.
-    `CommonFunc` is how the binary calls a `lib/common.sh` helper instead of re-wording it.
   - `doctor/` (M7): the checks. Reports; fixes nothing; exit status stays 0 with findings.
+  - `scratch/` (M5): `<toplevel>/.mkit/` — the scratch root, and the **only** package that writes
+    *runtime state* inside a user's work tree. The one other writer there is `repoconfig`, which
+    writes the committed `.mkit/config.toml`; both are on `writes_test.go`'s reviewed allowlist,
+    which counts the write sites per file so adding one to a listed file still fails the test. `EnsureIgnored` puts the `.mkit/*` + `!.mkit/config.toml`
+    pair in the common dir's `info/exclude` before the first create; `Ignored` probes **two**
+    paths, because an unrelated `*.jsonl` rule hides the ledger while leaving every run
+    directory untracked. `TestWriteSitesAreOnTheReviewedAllowlist` is the Go half of what
+    `payload.bats` asserted over the shell: three write locations, chosen by lifetime, asserted
+    by shape against a list a human reviewed. It also owns `~/.mkit` (`MKIT_HOME`) and the one
+    remedy sentence for an unwritable one — `mkit doctor` and `mkit facts` both read that producer
+    rather than wording it twice.
+  - `facts/` (M5): every starting fact a skill reads, gathered in one call. `cd` to the toplevel
+    first, so the pathspec'd file lists and the `--shortstat` beside them cannot disagree; **both**
+    `unstaged_stat` and `staged_stat`, always, because a bare `git diff --shortstat` on fully-staged
+    work reads exactly like a clean tree; `untracked_file_list` as its own block, because `git diff`
+    never lists an untracked file; `:(exclude).mkit` on every enumeration of the user's work; and an
+    unresolvable `--base` prints `base_state=unresolvable` **and** exits 1 — as does an
+    unresolvable `--range`, which used to print an empty range and exit 0, a result a skill
+    cannot tell from a range with nothing in it. A git query that fails is never reported as
+    an empty answer: a `git status` that cannot run is an error, not `clean=yes`.
+  - `branchscan/` (M5): `cleanup`'s classifier — every local branch's merge/upstream/PR
+    state and every worktree's origin/cleanliness. One batched `gh` call, never a per-branch
+    round trip. `--default` is never re-derived, `$default`/`$develop` are tested directly
+    rather than by splitting a joined string (a branch name may contain a comma), and a
+    `merged` PR match is refused when its `headRefOid` is not the branch tip or an ancestor.
+    A worktree whose `git status` fails is `clean=error`, never collapsed into `yes`.
+  - `gate/` (M5): `Fingerprint` (the staging- and commit-invariant content hash — symlinks
+    hashed as their target path, a tracked file replaced by a directory leaving the mapping,
+    `.mkit` dropped from the HEAD mapping as well as the overlays), `Ledger` (append, classify,
+    rotate) and `Run` (step execution, full log, bounded excerpt). The two `gate run` call forms
+    execute the same string but **normalize the ledger key differently**, and that seam is what
+    makes a `review` → `finish` cache hit possible at all.
   - `findings/` (M4): the review-run arithmetic — validate, similarity, reconcile, group, report.
     Records are an **order-preserving `Record`**, not a struct: `reconciled.jsonl` and `final.jsonl`
     re-serialize wholesale, and a struct would silently drop `fix`, `also` or anything a reviewer
@@ -182,36 +222,21 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
 - `plugin/skills/_shared/` — shared references (no `SKILL.md`); skills link in via
   `../_shared/references/…`. **Keep those relative paths intact** — they're what makes the bundle
   portable.
-- `plugin/scripts/` — the mechanical steps, called as `${CLAUDE_PLUGIN_ROOT}/scripts/<name>`:
-  - `facts.sh <skill>` — opens the run directory under `<toplevel>/.mkit/` **and** returns every
-    starting fact; every skill's first call. Among them the three that say what this machine will
-    let a skill do: `run_ignored=`, `user_dir_writable=` and `git_bin=` (the absolute git path, for
-    any call whose output a skill parses — an output-reshaping hook can hand it a summarized status
-    that reads exactly like the tree). A cause needing a sentence goes in the trailing `notes:`
-    block, never on a `key=value` line, since several of those pack more than one pair.
-    `run-open.sh` — the directory alone, plus `--prune`.
-  - `gate-detect.sh` / `gate-run.sh` — the quality gate. `gate-run.sh` **writes** the ledger (one
-    record per finished step); `gate-detect.sh` **reads** it back, annotating the commands it
-    proposes with `fast_cache=` / `full_cache=` / `gate_fingerprint=`, or one
-    `gate_cache=off|empty|no-hash|no-jq` cause. Neither ever skips a step — the skill owns that
-    trade-off and must label a skipped step `cached`. Escape hatches: `--no-ledger` / `--no-cache`.
-  - `branch-scan.sh` — `cleanup`'s classifier: every local branch's merge/upstream/PR state and
-    every worktree's origin/cleanliness. One batched `gh` call, cached, never a per-branch round
-    trip. The cache is **not** load-bearing: a cache it cannot create is `gh=no-cache`, one row per
-    branch and per worktree still emitted, the PR column reporting its own absence. That asymmetry
-    with the run directory is deliberate — the classifier's contract is met without its cache, no
-    skill's contract is met without its run directory.
-  - `lib/common.sh` — sourced helpers, including `mkit_tree_fingerprint`, the staging- and
-    commit-invariant hash of the content a gate command reads — what makes a `pr` → `finish`
-    cache hit possible at all.
+- **The payload ships no executable code at all** (M5). `plugin/` is the manifest, the skills and
+  `_shared/`; there is no `scripts/`, no `lib/common.sh`, and nothing in it is run. `mkit facts
+  <skill>` is every skill's first call — it opens the run directory under `<toplevel>/.mkit/` and
+  returns every starting fact, including the three that say what this machine will let a skill do:
+  `run_ignored=`, `user_dir_writable=` and `git_bin=` (the absolute git path, for any call whose
+  output a skill parses — an output-reshaping hook can hand it a summarized status that reads
+  exactly like the tree). A cause needing a sentence goes in the trailing `notes:` block, never on
+  a `key=value` line, since several of those pack more than one pair.
 - **No prerequisite reporting in the payload.** `session-bootstrap.sh` and `install.sh` are both
-  gone (0.15.0), and with them `mkit_prereq_rows`, `mkit_state_*` and `mkit_json_escape` from
-  `lib/common.sh`. **`mkit doctor` is the report now** (M7) — human-run, on demand. What it does
+  gone (0.15.0). **`mkit doctor` is the report now** (M7) — human-run, on demand. What it does
   not restore, deliberately: it cannot run unprompted at session start, and cannot report that
   `mkit` itself is absent. Both were the hook's job and both stay accepted losses; don't re-add a
-  shell reporter for them. `facts.sh`'s `user_dir_writable=` and `config_state=` starting facts
+  reporter for them. `mkit facts`' `user_dir_writable=` and `config_state=` starting facts
   are what a *skill* reads, since `doctor` is for a human.
-- `<toplevel>/.mkit/` — the scripts' scratch root: per-run directories plus `gate.jsonl` (the gate
+- `<toplevel>/.mkit/` — the scratch root, owned by `internal/core/scratch`: per-run directories plus `gate.jsonl` (the gate
   ledger, append-only, rotated back to the newest 200 records once it passes 400) and `work/`
   (M6's worklog, one `<branch>.jsonl` per branch, same append-only shape and same rotation) — **and one
   committed file, `config.toml`**, the repo config `mkit init` writes
@@ -223,26 +248,29 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
   `.gitignore`; the remedy names whichever file git reported. **Inside the
   working directory, not `<git-dir>/mkit`** ([ADR 0002](docs/adr/0002-state-locations-under-a-sandbox.md)):
   under a shared `.git` it resolved into the main checkout, where the worktree-isolation guard
-  refuses every write, and `facts.sh` opens it as every skill's first call. `--show-toplevel`, so a
-  linked worktree still gets its own. Scratch is never committed — `run-open.sh` puts the rule in
-  the common dir's `info/exclude` **before** the first write, which is load-bearing rather than tidy: unignored,
-  `git worktree remove` refuses, `git add -A` would commit run artefacts, and the gate fingerprint
-  sees a directory that changes while the gate runs. `facts.sh` reports `run_ignored=` because an
-  isolated session cannot write that file. `--prune` only removes `<skill>-*` **directories**, which
-  keeps `gate.jsonl` and `work/` out of its range. The worklog needs **no ignore rule of its own** —
-  `.mkit/*` already covers it, and a second rule would be a second thing to keep true.
-- `~/.mkit/` — the declared home for state outside a repo, overridable with `MKIT_HOME` (the bats
-  suite sets it so a developer's real state cannot affect a run). **Empty today**: its two files,
+  refuses every write, and `mkit facts` opens it as every skill's first call. `--show-toplevel`, so a
+  linked worktree still gets its own. Scratch is never committed — `scratch.EnsureIgnored` puts the
+  rule in the common dir's `info/exclude` **before** the first write, which is load-bearing rather
+  than tidy: unignored, `git worktree remove` refuses, `git add -A` would commit run artefacts, and
+  the gate fingerprint sees a directory that changes while the gate runs. `mkit facts` reports
+  `run_ignored=` because an isolated session cannot write that file. `mkit run prune` only removes
+  `<skill>-*` **directories**, which keeps `gate.jsonl` and `work/` out of its range. The worklog
+  needs **no ignore rule of its own** — `.mkit/*` already covers it, and a second rule would be a
+  second thing to keep true.
+- `~/.mkit/` — the declared home for state outside a repo, overridable with `MKIT_HOME` (the tests
+  set it so a developer's real state cannot affect a run). **Empty today**: its two files,
   `bootstrap.state` and `bootstrap.disabled`, went with the hook in 0.15.0. It keeps its definition
-  because it is where the binary's user-scoped state will land, and `facts.sh` still probes it so an
-  unwritable one is a starting fact rather than a later surprise. **Not `~/.claude/mkit/`**: that
+  because it is where the binary's user-scoped state will land, and `mkit facts` still probes it so
+  an unwritable one is a starting fact rather than a later surprise. **Not `~/.claude/mkit/`**: that
   region is sandbox-*protected*, where an allowlist entry is inert, so it was a path no remedy could
   point at; here, one `permissions.additionalDirectories` entry works.
-- `$TMPDIR`, with an explicit `mktemp` template, for anything that dies with the command. The
-  division is by lifetime, not by caller. The bare and `-t` forms are banned: on macOS they resolve
-  the Darwin per-user temp directory and ignore `$TMPDIR`, so under the sandbox they fail outright —
-  which is what took out 49 of 190 shell tests. `tests/bats/payload.bats` asserts both this and the
-  writable set statically, since neither has a behavioral seam.
+- `$TMPDIR` for anything that dies with the command. The division is by lifetime, not by caller.
+  Go's own temp-file API honours `$TMPDIR`; the shell forms that did not (`mktemp` bare or `-t`,
+  which resolve the Darwin per-user temp directory and fail outright under the sandbox — that is
+  what took out 49 of 190 shell tests) are gone with the shell.
+  `internal/core/scratch`'s `TestWriteSitesAreOnTheReviewedAllowlist` asserts the write set
+  statically, since it has no behavioral seam: every file that writes is on a list a human
+  reviewed.
 
 ### Docs and tests
 - `docs/` — `concept.md` (direction/roadmap), `backlog.md` (ordered work list + invariants),
@@ -253,41 +281,34 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
   (researched but
   unscheduled, one file per idea — evidence parked so a later decision doesn't re-derive it;
   nothing in it is on the milestone line). Doc-only; nothing here ships in the cask.
-- `tests/` — dev-only, deliberately kept at repo root rather than under `plugin/` so `plugin/`
-  stays exactly the payload and nothing else. `tests/run.sh` runs `bats tests/bats/` (one `.bats`
-  per shell script, each against a throwaway git repo, plus `payload.bats` — static assertions over
-  the shipped shell, for the invariants with no behavioral seam). The binary's tests are Go's,
-  beside their packages. `helpers.bash` sandboxes `MKIT_HOME` for every suite, which
-  is the whole containment story now that nothing writes outside it — no suite touches `HOME`.
-  `mkit_fake_path <tool>…` builds a PATH missing only the named tools — **it must
-  include `bash`**, or `env PATH=… bash -c` exits 127 with empty output, which reads exactly like
-  a hook correctly staying silent. Go tests live beside their package.
+- **Tests are Go's, beside their packages** — `tests/` and its bats suites went with the shell in
+  M5, and each `.bats` was ported into the `_test.go` next to the code that replaced it. Every test
+  that touches state builds a throwaway repo under `$TMPDIR` and points `MKIT_HOME` inside it; no
+  test touches `HOME`, which is the whole containment story. `internal/cli`'s tests drive the real
+  cobra root — argv in, stdout, exit code out — because that is the interface the skills call.
 
 ## Conventions
 
-- **macOS-only — shell and binary alike.** Nothing detects or branches on an OS. The scripts are
-  written to what macOS provides (bash 3.2, BSD `sed`/`date`, no GNU-only flags, no `flock`); a GNU
-  fallback "for portability" is untested surface for an unsupported platform. `.goreleaser.yaml`
-  builds `darwin` only — amd64 + arm64 is the whole matrix, and a Homebrew **cask** cannot install
-  on Linux regardless. Go's cross-compilation stays available if that changes; it is not a
-  requirement today (`backlog.md`, Later). Still prefer `path/filepath` and stdlib over shelling
-  out — for testability, not portability. Every script carries `#!/usr/bin/env bash` — the user's
-  interactive zsh is irrelevant.
-- Payload runtime is bash only, since M4 took the last `.mjs`. **New mechanical work goes in Go**,
-  and the payload shrinks as milestones land.
-- Add a script or a command only for a mechanical invariant, never for a decision. Where the line
-  is unclear, report candidates and let the skill choose. Hooks are held one step further out:
-  they may compute the gap, never fill it.
-- Scripts report and run; they never stage, merge, push or edit. They parse stable machine output
+- **macOS-only.** Nothing detects or branches on an OS. `.goreleaser.yaml` builds `darwin` only —
+  amd64 + arm64 is the whole matrix, and a Homebrew **cask** cannot install on Linux regardless.
+  Go's cross-compilation stays available if that changes; it is not a requirement today
+  (`backlog.md`, Later). Prefer `path/filepath` and stdlib over shelling out — for testability, not
+  portability. The one deliberate shell dependency left is `mkit gate run`, which executes a step as
+  `bash -c '<command>'` so `-- sh -c 'a && b'` keeps meaning what it says.
+- **The payload runs nothing.** All mechanical work is in Go; `plugin/` is Markdown.
+- Add a command only for a mechanical invariant, never for a decision. Where the line is unclear,
+  report candidates and let the skill choose. Hooks are held one step further out: they may compute
+  the gap, never fill it.
+- Commands report and run; they never stage, merge, push or edit. They parse stable machine output
   (`--porcelain`, `--shortstat`/`--name-only`, `--format=json`) and never call `rtk`, which
   reshapes output for reading.
-- **Three write locations, chosen by lifetime, and nowhere else.** `$TMPDIR` (explicit `mktemp`
-  template, always) for anything that dies with the command; `<toplevel>/.mkit/` for anything a
-  later step or session reads; `~/.mkit/` for the two user-scoped files. Plus one named exception,
-  the common dir's `info/exclude`. Never the user's own files — `.mkit/`, ignored, is the only
-  thing mkit puts in a working tree — never `/tmp`, never `~/.claude`.
-  `tests/bats/payload.bats` asserts it by shape — every write target is a parameter on a reviewed
-  allowlist — because the boundaries that enforce it cannot be created inside a test.
+- **Three write locations, chosen by lifetime, and nowhere else.** `$TMPDIR` for anything that dies
+  with the command; `<toplevel>/.mkit/` for anything a later step or session reads; `~/.mkit/` for
+  user-scoped state. Plus one named exception, the common dir's `info/exclude`. Never the user's own
+  files — `.mkit/`, ignored, is the only thing mkit puts in a working tree — never `/tmp`, never
+  `~/.claude`. `internal/core/scratch`'s `TestWriteSitesAreOnTheReviewedAllowlist` asserts it by
+  shape — every file that writes is on a list a human reviewed — because the boundaries that
+  enforce it cannot be created inside a test.
 - **A degradation sentence names a remedy that works, or it says the command is human-run.** The
   sandbox's protected-path region is why: telling a user to allowlist `~/.claude/mkit` produced a
   configuration that looked right and changed nothing. Detect at the first call and turn it into a

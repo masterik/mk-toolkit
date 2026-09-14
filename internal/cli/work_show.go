@@ -14,6 +14,7 @@ import (
 
 func newWorkShowCmd() *cobra.Command {
 	var branch string
+	var pathOnly bool
 	var steps []string
 	var limit int
 
@@ -31,6 +32,14 @@ func newWorkShowCmd() *cobra.Command {
 				return err
 			}
 			log := worklog.Open(repo, branch)
+			// --path is the whole answer: one line, no decoding. `finish` needs
+			// this path to retire a log whose branch is gone, and asking for it
+			// through --json meant piping to jq — the one dependency M5 removed
+			// from the payload, which ships no executable code and no jq.
+			if pathOnly {
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), log.Path())
+				return nil
+			}
 			recs, err := log.Show(worklog.Query{Steps: steps, Limit: limit})
 			if err != nil {
 				return err
@@ -57,6 +66,7 @@ func newWorkShowCmd() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().BoolVar(&pathOnly, "path", false, "print this branch's worklog path and nothing else")
 	cmd.Flags().StringVar(&branch, "branch", "", "read another branch's log (default: the current branch)")
 	cmd.Flags().StringArrayVar(&steps, "step", nil, "keep only these steps (repeatable)")
 	cmd.Flags().IntVar(&limit, "limit", 0, "keep only the newest N records")

@@ -53,6 +53,11 @@ func isolate(t *testing.T) string {
 	t.Setenv("CLAUDE_CONFIG_DIR", cfg)
 	t.Setenv("CLAUDE_PLUGIN_ROOT", "")
 	t.Setenv("MKIT_PLUGIN_ROOT", "")
+	// MKIT_HOME too, and this one is not about measurement: the user-state check
+	// calls scratch.UserDirWritable, which *creates* the directory when it is
+	// absent and removes it again. Unset, that probe ran in the developer's real
+	// home on every run of this suite.
+	t.Setenv("MKIT_HOME", filepath.Join(t.TempDir(), ".mkit"))
 	return cfg
 }
 
@@ -123,8 +128,9 @@ func TestRunsWithoutARepo(t *testing.T) {
 	}
 }
 
-// A missing payload takes out both the skills and every remedy sentence the
-// binary reads from lib/common.sh, so it is a Fail that names how to fix it.
+// A missing payload takes out the skills, so it is a Fail that names how to fix
+// it. Since M5 it takes out nothing else — every remedy sentence has a producer
+// in the binary now, so the other checks no longer degrade with it.
 func TestMissingPayloadIsNamedWithARemedy(t *testing.T) {
 	isolate(t)
 	r := Run(Options{Repo: newRepo(t)})
@@ -136,9 +142,10 @@ func TestMissingPayloadIsNamedWithARemedy(t *testing.T) {
 	if !strings.Contains(c.Remedy, "marketplace add") {
 		t.Errorf("remedy must name the install step: %q", c.Remedy)
 	}
-	// And the checks that depend on it degrade rather than lying.
-	if u := find(t, r, "user state dir"); u.Status != Unknown {
-		t.Errorf("user dir status = %q, want unknown without the payload", u.Status)
+	// The user-dir check no longer depends on it: both the probe and its remedy
+	// live in internal/core/scratch.
+	if u := find(t, r, "user state dir"); u.Status == Unknown {
+		t.Error("the user dir check should answer without a payload")
 	}
 }
 

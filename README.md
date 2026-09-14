@@ -5,9 +5,9 @@ skills that take work from **edits → committed → reviewed → integrated**. 
 replacement: the skills orchestrate `git`, GitHub CLI (`gh`), Worktrunk (`wt`), and code-review
 tools (CodeRabbit/Codex); they don't reimplement them.
 
-The skills are the product; the binary is the mechanical layer beneath them, currently
-[replacing the shell scripts](docs/backlog.md) one milestone at a time. Claude-only for now;
-other agents (Codex, opencode, …) are a later, thin packaging step.
+The skills are the product; the binary is the mechanical layer beneath them. As of M5 it is all
+of it — [the payload's shell layer is gone](docs/backlog.md) and `plugin/` is Markdown.
+Claude-only for now; other agents (Codex, opencode, …) are a later, thin packaging step.
 
 ## Skills
 
@@ -21,14 +21,14 @@ other agents (Codex, opencode, …) are a later, thin packaging step.
 
 `_shared/` is the shared **references** bundle (git safety, Conventional Commits, quality
 gate, worktree detection, branching) that the five skills link into — not a triggerable skill.
-`scripts/` holds five shell helpers the skills call for the mechanical steps: opening a run
-directory, gathering the starting facts, detecting and running the quality gate, and classifying
-every local branch/worktree for `cleanup`. The arithmetic over a review's findings left the
-payload with M4 — that is `mkit findings` now, which is why `review` needs the binary.
+The mechanical steps are the binary's: `mkit facts` opens a run directory and returns every
+starting fact, `mkit gate detect|run` detects and runs the quality gate, `mkit branch scan`
+classifies every local branch and worktree for `cleanup`, and `mkit findings` does the arithmetic
+over a review's findings.
 
 ## Install
 
-The plugin — the five skills and the scripts they call:
+The plugin — the five skills and their shared references:
 
 ```
 /plugin marketplace add masterik/mk-toolkit
@@ -41,15 +41,14 @@ The `mkit` binary, via Homebrew:
 brew install masterik/tap/mkit
 ```
 
-Nothing to build either way, and **both steps are meant to stay** — the marketplace ships the
-skills, Homebrew ships the binary, and the two version independently
-([ADR 0003](docs/adr/0003-two-distribution-channels.md)). The binary answers `mkit version` today
-and is [absorbing the script layer](docs/backlog.md) one milestone at a time. As of M4 the `review`
-skill calls `mkit findings` for its findings arithmetic and stops if the binary is absent; every
-other skill still runs with no binary installed. As of M6 all four also read and write a per-branch
-**worklog** through `mkit work` — what ran on this branch and what it concluded — which is an
-optional input: no skill stops for a worklog it cannot reach. The scripts need `git`,
-`bash` and `jq`; `rg`, `gh` and `wt` are recommended — see
+Nothing to build either way, and **both steps are required** — the marketplace ships the skills,
+Homebrew ships the binary, and the two version independently
+([ADR 0003](docs/adr/0003-two-distribution-channels.md)). Since M5 every skill's first call is
+`mkit facts <skill>`, so a missing binary stops a skill at step 0 with a `brew` remedy rather than
+degrading. Presence only, with no declared minimum on either side. All four skills also read and
+write a per-branch **worklog** through `mkit work` (M6) — what ran on this branch and what it
+concluded — which is an optional *input*: a worklog a step cannot read costs it one input and never
+stops it. Beyond `git` and `bash`, `rg`, `gh` and `wt` are recommended — see
 [Prerequisites](docs/prerequisites.md).
 
 ## Not re-proving the same tree (the gate ledger)
@@ -60,7 +59,7 @@ so committing the gated tree does not invalidate the proof. A later run over the
 `full_cache=fresh exit=0 age=6m` and can skip a re-run of that step.
 
 **Wall-clock only — there are no token savings here.** Gate output already goes to a log rather
-than into context. Nothing is automatic and nothing is silent: the scripts never skip a step,
+than into context. Nothing is automatic and nothing is silent: `mkit gate run` never skips a step,
 the skill decides, and a step served from the ledger is reported as `cached (6m ago)`, never as
 a pass. `gate.jsonl` lives in `<toplevel>/.mkit/`, on by default, with `--no-cache` to ignore it
 and `--no-ledger` to stop writing it. Details:
@@ -68,9 +67,9 @@ and `--no-ledger` to stop writing it. Details:
 
 ## Testing
 
-`go build ./... && go vet ./... && go test ./...` covers the binary — that is what CI runs.
-`tests/run.sh` covers the script layer: `bats` over the shell-script suites. Dev-only — see
-[Prerequisites](docs/prerequisites.md#dev-only--running-tests).
+`go build ./... && go vet ./... && go test ./...` — that is what CI runs, and since M5 it is the
+whole suite: the shell layer's bats tests were ported into the Go tests beside the packages that
+replaced it. Dev-only — see [Prerequisites](docs/prerequisites.md#dev-only--running-tests).
 
 ## Docs
 

@@ -1,11 +1,10 @@
-// Package pluginroot locates the plugin payload and calls into its shell helpers.
+// Package pluginroot locates the plugin payload.
 //
-// Why the binary calls shell at all: mkit ships over two deliberately independent
-// channels (ADR 0003) — the binary via Homebrew, the payload via the GitHub
-// marketplace — and until M5 ports facts.sh, `lib/common.sh` is the single producer
-// of every degradation sentence. `mkit doctor` calling that producer is the whole
-// reason it stays a function; a second wording of a remedy is exactly the
-// two-implementations failure the porting rules exist to prevent.
+// mkit ships over two deliberately independent channels (ADR 0003) — the binary
+// via Homebrew, the payload via the GitHub marketplace — so the binary has to find
+// the payload rather than assume it. Since M5 the payload is skills and references
+// only: nothing in it is executed, and `mkit facts` reports where it is so a skill
+// can link into `_shared/references/…`.
 //
 // The payload is not on any stable path (a cask has no opt/ symlink and Caskroom is
 // version-pinned), so finding it is a search with named fallbacks and an honest
@@ -16,9 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 )
 
 // ErrNotFound means no payload checkout could be located. Callers report it as a
@@ -30,7 +27,7 @@ const PluginName = "mkit"
 
 // Root is a located payload checkout.
 type Root struct {
-	// Dir is the payload root — the directory holding scripts/ and skills/.
+	// Dir is the payload root — the directory holding .claude-plugin/ and skills/.
 	Dir string
 	// Via names how it was found, so a report can say why it looked there.
 	Via string
@@ -100,39 +97,6 @@ func Remedy() string {
 		"channels (ADR 0003), so Homebrew does not install it"
 }
 
-// CommonFunc sources lib/common.sh and runs one function, returning its stdout.
-//
-// This is how the binary consumes a degradation sentence instead of re-wording it.
-// Invoked through bash by absolute path, with no arguments and no shell
-// interpolation of caller data — the function name is a compile-time constant at
-// every call site.
-func (r *Root) CommonFunc(fn string) (string, error) { return r.CommonFuncIn("", fn) }
-
-// CommonFuncIn is CommonFunc with an explicit working directory. Several helpers
-// answer about "the repository you are standing in" — the fingerprint most of all —
-// so the caller that already knows which work tree it means says so, rather than
-// relying on the process happening to be inside it.
-func (r *Root) CommonFuncIn(dir, fn string) (string, error) {
-	script := ". " + shellQuote(filepath.Join(r.Dir, "scripts", "lib", "common.sh")) + "; " + fn
-	cmd := exec.Command("bash", "-c", script)
-	cmd.Dir = dir
-	out, err := cmd.Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimRight(string(out), "\n"), nil
-}
-
-// Script runs a payload script with arguments and returns its stdout. Used for the
-// surfaces the binary has not ported yet — gate discovery is the only one today,
-// and it leaves with gate-detect.sh in M5.
-func (r *Root) Script(dir string, name string, args ...string) (string, error) {
-	cmd := exec.Command(filepath.Join(r.Dir, "scripts", name), args...)
-	cmd.Dir = dir
-	out, err := cmd.Output()
-	return strings.TrimRight(string(out), "\n"), err
-}
-
 // Version reads the payload manifest's version. Empty when unreadable — the two
 // channels version independently by design (ADR 0003), so a missing answer is a
 // fact to report, not a failure.
@@ -195,22 +159,21 @@ func marketplaceBases() []string {
 }
 
 // isPayload is the shape test, not a name test: a directory is the payload when it
-// carries the manifest and the scripts the binary calls into.
+// carries the manifest and the skills the plugin ships.
+//
+// The markers must be things the payload still has. Until M5 this also required
+// `scripts/lib/common.sh`, and when that file went with the shell layer the test
+// rejected every correct checkout — including an explicit CLAUDE_PLUGIN_ROOT —
+// so `mkit facts` printed `plugin=none` and the search fell through to whatever
+// stale installed copy still carried a script. The payload runs nothing now;
+// only the manifest and skills/ are load-bearing.
 func isPayload(dir string) bool {
 	if dir == "" {
 		return false
 	}
-	for _, marker := range []string{
-		filepath.Join(".claude-plugin", "plugin.json"),
-		filepath.Join("scripts", "lib", "common.sh"),
-	} {
-		if _, err := os.Stat(filepath.Join(dir, marker)); err != nil {
-			return false
-		}
+	if _, err := os.Stat(filepath.Join(dir, ".claude-plugin", "plugin.json")); err != nil {
+		return false
 	}
-	return true
-}
-
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+	info, err := os.Stat(filepath.Join(dir, "skills"))
+	return err == nil && info.IsDir()
 }

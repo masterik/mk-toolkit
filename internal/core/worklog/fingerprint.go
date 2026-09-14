@@ -1,63 +1,66 @@
 package worklog
 
 import (
-	"github.com/masterik/mk-toolkit/internal/core/pluginroot"
+	"github.com/masterik/mk-toolkit/internal/core/gate"
+	"github.com/masterik/mk-toolkit/internal/core/gitrepo"
+	"github.com/masterik/mk-toolkit/internal/core/scratch"
 )
 
 // Fingerprint is the content hash a record is keyed on — the staging- and
 // commit-invariant `path → blob` mapping a quality-gate command would read.
 //
-// Delegated to the payload's `mkit_tree_fingerprint`, never reimplemented here.
-// That hash is the one thing making a `pr` → `finish` cache hit possible at all,
-// and its properties (invariant under staging and committing, batched hashing,
-// `--no-renames` rather than porcelain) are the kind that a second implementation
-// reproduces almost correctly. M5 ports it for real; this is the first call site
-// that will switch over, and until then one producer is worth a subprocess.
+// `gate.Fingerprint`, never reimplemented here. That hash is the one thing making
+// a `pr` → `finish` cache hit possible at all, and its properties (invariant under
+// staging and committing, hashed through git so a clean filter cannot desync it,
+// `--no-renames` rather than porcelain) are the kind a second implementation
+// reproduces almost correctly. This used to reach it through the payload's
+// `mkit_tree_fingerprint` over `lib/common.sh`, which was always documented as
+// temporary: M5 ported it, the shell layer is gone, and this is the call site
+// that switched over.
 //
 // An unavailable fingerprint is "" and a cause, never an error the caller has to
 // handle: a record without one is still a gist a later step can read — it just
 // cannot tell whether the gist still describes the tree in front of it.
 func Fingerprint(toplevel string) (fp string, cause string) {
-	root, err := pluginroot.Find(toplevel)
+	repo, err := gitrepo.Open(toplevel)
 	if err != nil {
-		return "", "payload not found, so no fingerprint — " + pluginroot.Remedy()
+		return "", "not a work tree, so no fingerprint"
 	}
-	out, err := root.CommonFuncIn(toplevel, "mkit_tree_fingerprint")
+	out, err := gate.Fingerprint(repo)
 	if err != nil || out == "" {
-		// Deliberately unspecific. `mkit_tree_fingerprint` exits 1 for an absent
-		// hash tool, an unresolvable HEAD *and* a temp directory it cannot write,
-		// and it prints nothing either way — so naming one of them here would be a
-		// guess reported as a diagnosis.
-		return "", "no fingerprint: mkit_tree_fingerprint did not produce one"
+		// Unspecific on purpose: an unresolvable HEAD and a path git refused to
+		// hash both land here, and naming one would be a guess reported as a
+		// diagnosis.
+		return "", "no fingerprint could be computed for this tree"
 	}
 	return out, ""
 }
 
-// ensureIgnored asks the payload to put mkit's scratch rule in place before this
-// package creates anything under `.mkit/`.
+// ensureIgnored puts mkit's scratch rule in place before this package creates
+// anything under `.mkit/`.
 //
-// `run-open.sh` does this before its own mkdir, and for reasons that apply verbatim
-// here: an unignored `.mkit/` makes `git worktree remove` refuse, puts the worklog in
-// reach of `git add -A`, and feeds the gate fingerprint a directory that changes while
-// the gate runs. The worklog needs no rule of its own — `.mkit/*` already covers it —
-// but `mkit work append` can be the **first** thing to write under `.mkit/` in a repo
-// where no skill has ever opened a run directory, and then nothing has established it.
+// The reasons are the ones `scratch.EnsureIgnored` exists for: an unignored
+// `.mkit/` makes `git worktree remove` refuse, puts the worklog in reach of
+// `git add -A`, and feeds the gate fingerprint a directory that changes while the
+// gate runs. The worklog needs no rule of its own — `.mkit/*` already covers it —
+// but `mkit work append` can be the **first** thing to write under `.mkit/` in a
+// repo where no skill has ever opened a run directory.
 //
-// Delegated to `mkit_ensure_run_ignored`, never reimplemented: which file the rule
-// lands in, which probe answers "is it ignored", and why the probe is a concrete path
-// rather than the directory are all decided there, and a second implementation gets
+// Delegated, never reimplemented: which file the rule lands in, which probe
+// answers "is it ignored", and why that probe is two concrete paths rather than
+// the directory are all decided in `scratch`, and a second implementation gets
 // one of them subtly wrong.
 //
 // Best effort, and deliberately returns nothing. The write lands in the main
-// checkout's `.git/info/exclude`, which a worktree-isolated session cannot reach, so
-// failure is the normal case on some machines — and contract rule 4 says a recorded
-// fact is an input, never a permission. An append that refused over an ignore rule
-// would be the worklog gating a step. `facts.sh` already reports the state as
-// `run_ignored=` for skills that need to know.
+// checkout's `.git/info/exclude`, which a worktree-isolated session cannot reach,
+// so failure is the normal case on some machines — and contract rule 4 says a
+// recorded fact is an input, never a permission. An append that refused over an
+// ignore rule would be the worklog gating a step. `mkit facts` already reports
+// the state as `run_ignored=` for skills that need to know.
 func ensureIgnored(toplevel string) {
-	root, err := pluginroot.Find(toplevel)
+	repo, err := gitrepo.Open(toplevel)
 	if err != nil {
 		return
 	}
-	_, _ = root.CommonFuncIn(toplevel, "mkit_ensure_run_ignored")
+	_ = scratch.EnsureIgnored(repo)
 }

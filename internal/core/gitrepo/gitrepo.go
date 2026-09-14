@@ -11,6 +11,7 @@ package gitrepo
 import (
 	"errors"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -64,7 +65,7 @@ func (r *Repo) Ignored(path string) (ignored bool, source string) {
 // needs both: the file to edit, and which line in it — the fix for a
 // directory-only `.mkit/` is not the fix for a stray `*.toml`.
 func (r *Repo) IgnoreRule(path string) (ignored bool, source, pattern string) {
-	if _, err := run(r.Toplevel, "check-ignore", "-q", "--", path); err != nil {
+	if !r.Excluded(path) {
 		return false, "", ""
 	}
 	// -z, so each field is read whole. Without it the format is
@@ -87,6 +88,32 @@ func (r *Repo) IgnoreRule(path string) (ignored bool, source, pattern string) {
 		return true, f[0], ""
 	}
 	return true, "", ""
+}
+
+// Excluded is the boolean half of Ignored — `check-ignore -q` on its own,
+// without the second call that names the rule. Use it where nothing needs a
+// remedy: the scratch probes ask twice per call, and doubling that to name a
+// file no one reads is two forks on every skill's first call.
+func (r *Repo) Excluded(path string) bool {
+	_, err := run(r.Toplevel, "check-ignore", "-q", "--", path)
+	return err == nil
+}
+
+// CommonDir is the absolute `--git-common-dir`: the repository storage shared by
+// every linked worktree. It is where the one file mkit writes outside its own
+// three locations lives — `info/exclude`.
+//
+// git answers relatively when asked from inside the work tree, so the result is
+// resolved against Toplevel rather than returned as given.
+func (r *Repo) CommonDir() (string, error) {
+	out, err := run(r.Toplevel, "rev-parse", "--git-common-dir")
+	if err != nil || out == "" {
+		return "", ErrNotARepo
+	}
+	if !filepath.IsAbs(out) {
+		out = filepath.Join(r.Toplevel, out)
+	}
+	return filepath.Clean(out), nil
 }
 
 // Tracked reports whether path is in the index. A tracked file is unaffected by

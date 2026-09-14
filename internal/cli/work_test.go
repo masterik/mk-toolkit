@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/masterik/mk-toolkit/internal/core/gitrepo"
 	"github.com/masterik/mk-toolkit/internal/core/worklog"
 )
 
@@ -80,8 +82,13 @@ func TestWorkShowJSONShape(t *testing.T) {
 	}
 	// The envelope carries the *current* tree's fingerprint, which is what makes a
 	// record's own fingerprint answerable: "does this gist still describe the tree?"
-	if !strings.Contains(out, `"cause"`) {
-		t.Errorf("no current fingerprint and no cause for its absence:\n%s", out)
+	// Computed in process since M5 — this used to shell out to the payload and
+	// report a cause in a test repo, because there was no payload in reach.
+	if got.Fingerprint == "" {
+		t.Errorf("no current fingerprint in the envelope:\n%s", out)
+	}
+	if strings.Contains(out, `"cause"`) {
+		t.Errorf("a cause was reported for a fingerprint that succeeded:\n%s", out)
 	}
 	if got.Records[0].Schema != 1 || got.Records[0].TS == "" {
 		t.Errorf("binary-set fields: %+v", got.Records[0])
@@ -99,7 +106,10 @@ func TestWorkShowOnAnEmptyBranchExitsZero(t *testing.T) {
 	}
 }
 
-func TestWorkAppendJSONReportsTheDegradedFingerprint(t *testing.T) {
+// The fingerprint reaches the record. This asserted the opposite until M5 — the
+// payload was out of reach in a test repo, so the only observable was the cause —
+// and the port turned that degradation into the ordinary path.
+func TestWorkAppendJSONCarriesTheFingerprint(t *testing.T) {
 	out, code := runIn(t, newRepo(t), "work", "append", "--step", "review", "--gist", "two findings",
 		"--artifact", "https://example.invalid/pr/1", "--assume", "goal from branch name", "--json")
 	if code != 0 {
@@ -107,6 +117,7 @@ func TestWorkAppendJSONReportsTheDegradedFingerprint(t *testing.T) {
 	}
 	var got struct {
 		Branch string `json:"branch"`
+		Path   string `json:"path"`
 		Cause  string `json:"cause"`
 	}
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
@@ -115,10 +126,28 @@ func TestWorkAppendJSONReportsTheDegradedFingerprint(t *testing.T) {
 	if got.Branch != "main" {
 		t.Errorf("branch: %q", got.Branch)
 	}
-	// The payload is out of reach here, and that is a named cause rather than a
-	// silent empty field.
-	if got.Cause == "" {
-		t.Error("no fingerprint and no cause — a degradation went unreported")
+	// `cause` is present only when there is no fingerprint, so its absence is the
+	// success signal on this envelope — the fingerprint itself lives on the record.
+	if got.Cause != "" {
+		t.Errorf("a cause was reported for a fingerprint that succeeds now: %q", got.Cause)
+	}
+	if !strings.Contains(got.Path, filepath.Join(".mkit", "work", "main-")) {
+		t.Errorf("path: %q", got.Path)
+	}
+	// The record is where the fingerprint has to land: it is what a later reader
+	// compares against the tree in front of it.
+	b, err := os.ReadFile(got.Path)
+	if err != nil {
+		t.Fatalf("read log: %v", err)
+	}
+	var rec struct {
+		Fingerprint string `json:"fingerprint"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(string(b))), &rec); err != nil {
+		t.Fatalf("record is not JSON: %v\n%s", err, b)
+	}
+	if rec.Fingerprint == "" {
+		t.Errorf("the appended record carries no fingerprint:\n%s", b)
 	}
 }
 
@@ -189,25 +218,30 @@ func TestWorkShowUnknownWhenTreeHasNoFingerprint(t *testing.T) {
 		t.Fatalf("append exited %d", code)
 	}
 
-	// newRepo puts no payload in reach, so the *current* fingerprint is empty.
-	// Give the record one, which is the only combination that reaches the branch.
-	path := filepath.Join(dir, ".mkit", "work", worklog.FileName("main"))
-	b, err := os.ReadFile(path)
+	// Driven through the renderer rather than the command. Until M5 this case was
+	// reachable from the CLI because `worklog.Fingerprint` shelled out to the
+	// payload and a test repo had none in reach; the port computes it in process,
+	// so a valid work tree always has one and the empty-current branch has no
+	// command-level scenario left. The branch is still real — an unreadable tree
+	// reaches it — and it is the one this test exists for, so it is exercised
+	// where it lives.
+	repo, err := gitrepo.Open(dir)
 	if err != nil {
-		t.Fatalf("read log: %v", err)
+		t.Fatal(err)
 	}
-	patched := strings.Replace(string(b), `"fingerprint":""`, `"fingerprint":"abc123"`, 1)
-	if patched == string(b) {
-		t.Fatalf("record carried no empty fingerprint to patch:\n%s", b)
+	log := worklog.Open(repo, "")
+	recs, err := log.Show(worklog.Query{})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte(patched), 0o644); err != nil {
-		t.Fatalf("write log: %v", err)
+	if len(recs) != 1 || recs[0].Fingerprint == "" {
+		t.Fatalf("fixture needs one record carrying a fingerprint: %+v", recs)
 	}
 
-	out, code := runIn(t, dir, "work", "show")
-	if code != 0 {
-		t.Fatalf("show exited %d", code)
-	}
+	var buf bytes.Buffer
+	renderWorklog(&buf, log, "", recs)
+	out := buf.String()
+
 	if !strings.Contains(out, "(unknown)") || strings.Contains(out, "(stale)") {
 		t.Errorf("no current fingerprint must read (unknown), not (stale):\n%s", out)
 	}

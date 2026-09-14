@@ -15,9 +15,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 
+	"github.com/masterik/mk-toolkit/internal/core/gate"
 	"github.com/masterik/mk-toolkit/internal/core/gitrepo"
 	"github.com/masterik/mk-toolkit/internal/core/pluginroot"
 	"github.com/masterik/mk-toolkit/internal/core/repoconfig"
@@ -86,8 +86,8 @@ type Spec struct {
 	Ref   Value `json:"ref"`
 }
 
-// PayloadInfo records whether the plugin payload was reachable, since gate
-// discovery is delegated to it until M5 ports gate-detect.sh.
+// PayloadInfo records whether the plugin payload was reachable. Reported for the
+// payload's own sake — since M5 nothing in this profile is derived from it.
 type PayloadInfo struct {
 	Found   bool   `json:"found"`
 	Dir     string `json:"dir,omitempty"`
@@ -119,7 +119,7 @@ func Build(repo *gitrepo.Repo) (*Profile, error) {
 		p.Payload = PayloadInfo{Remedy: pluginroot.Remedy()}
 	}
 
-	p.Gate = buildGate(repo, cfg, root)
+	p.Gate = buildGate(repo, cfg)
 	p.Spec = discoverSpec(repo, cfg)
 	p.Scopes = discoverScopes(repo, cfg)
 	p.Review = discoverReviewers(repo, cfg)
@@ -127,99 +127,41 @@ func Build(repo *gitrepo.Repo) (*Profile, error) {
 	return p, nil
 }
 
-// buildGate merges pinned commands over the discovered sequence, by step name.
+// buildGate reports the quality gate as a tagged sequence.
 //
-// Discovery is delegated to the payload's gate-detect.sh rather than reimplemented
-// here. That is deliberate and temporary: the script is the single implementation
-// of that invariant until M5 ports it, and a second one in Go is exactly the
-// failure the porting rules name. When the payload is unreachable, the pinned half
-// still answers and the discovered half reports its cause.
-func buildGate(repo *gitrepo.Repo, cfg *repoconfig.Config, root *pluginroot.Root) Gate {
+// The merge of pinned over discovered lives in `gate.Detect`, which is what
+// `mkit gate detect` prints — so it exists once, and the profile consumes the
+// tagged result rather than redoing it. Until M5 this delegated to the payload's
+// gate-detect.sh; discovery no longer needs the payload at all, so an unreachable
+// payload is no longer a cause for an empty gate.
+func buildGate(repo *gitrepo.Repo, cfg *repoconfig.Config) Gate {
 	var g Gate
 
-	if root == nil {
-		g.Cause = "gate discovery needs the plugin payload (gate-detect.sh); " + pluginroot.Remedy()
-	} else {
-		out, err := root.Script(repo.Toplevel, "gate-detect.sh")
-		if err != nil && out == "" {
-			g.Cause = "gate-detect.sh did not run"
-		}
-		var scriptsState string
-		for _, line := range strings.Split(out, "\n") {
-			key, val, ok := strings.Cut(line, "=")
-			if !ok {
-				continue
-			}
-			switch key {
-			case "ecosystem":
-				if val != "none" {
-					g.Ecosystem = val
-				}
-			case "scripts_state":
-				scriptsState = val
-			case "full":
-				if val == "none" || val == "" {
-					continue
-				}
-				for _, cmd := range strings.Split(val, "|") {
-					cmd = strings.TrimSpace(cmd)
-					if cmd == "" {
-						continue
-					}
-					g.Steps = append(g.Steps, GateStep{
-						Step: stepName(cmd, len(g.Steps)), Command: cmd, Source: Discovered,
-					})
-				}
-			}
-		}
-		// `full=none` from a degraded run is not the same answer as `full=none`
-		// from a repo with no gate. gate-detect.sh exits 0 either way, so without
-		// this the profile reports "no gate" when the truth is "not looked".
-		//
-		// Independent of whether steps were found: a polyglot repo can yield a Go
-		// sequence while the Node half went uninspected, and an incomplete gate
-		// presented as a complete one is the worse of the two failures.
-		if g.Cause == "" {
-			switch scriptsState {
-			case "no-jq":
-				g.Cause = "gate discovery could not read package.json — jq is missing, " +
-					"so a Node repo's scripts were not inspected"
-			case "unreadable":
-				g.Cause = "gate discovery could not read package.json"
-			}
-		}
+	// The profile is a report, not a gate run: the ledger annotation would cost
+	// a fingerprint on every `repo profile` and say nothing about how the repo
+	// works.
+	d, err := gate.Detect(repo, cfg, gate.DetectOptions{NoCache: true})
+	if err != nil {
+		g.Cause = "gate discovery failed: " + err.Error()
+		return g
 	}
-
-	// Pinned wins per step name, and a pinned step discovery did not find is added.
-	for _, name := range sortedKeys(cfg.Gate.Commands) {
-		cmd := cfg.Gate.Commands[name]
-		replaced := false
-		for i := range g.Steps {
-			if g.Steps[i].Step == name {
-				g.Steps[i] = GateStep{Step: name, Command: cmd, Source: Pinned}
-				replaced = true
-				break
-			}
+	g.Ecosystem = strings.Join(d.Ecosystems, ",")
+	// `scripts=none` from an unreadable package.json is not the same answer as a
+	// package.json that declares no scripts. Independent of whether steps were
+	// found: a polyglot repo can yield a Go sequence while the Node half went
+	// uninspected, and an incomplete gate presented as complete is the worse
+	// failure.
+	if d.ScriptsState == "unreadable" {
+		g.Cause = "gate discovery could not read package.json"
+	}
+	for _, s := range d.Steps {
+		src := Discovered
+		if s.Origin == gate.Pinned {
+			src = Pinned
 		}
-		if !replaced {
-			g.Steps = append(g.Steps, GateStep{Step: name, Command: cmd, Source: Pinned})
-		}
+		g.Steps = append(g.Steps, GateStep{Step: s.Step, Command: s.Cmd, Source: src})
 	}
 	return g
-}
-
-// stepName labels a discovered command. An explicit table, not a guess: the label
-// is for a human reading the profile and for pinning an override by name, and a
-// command matching none of them keeps a positional name rather than a wrong one.
-func stepName(cmd string, i int) string {
-	for _, name := range []string{"typecheck", "build", "vet", "test", "lint", "fmt", "check"} {
-		for _, tok := range strings.Fields(cmd) {
-			if tok == name {
-				return name
-			}
-		}
-	}
-	return "step" + strconv.Itoa(i+1)
 }
 
 // discoverSpec reads the store from docs/agents/issue-tracker.md where a repo has
@@ -380,13 +322,4 @@ func discoverMerge(repo *gitrepo.Repo, cfg *repoconfig.Config) Value {
 	return Value{Source: Unavailable,
 		Cause: "not discoverable locally — the remote's merge settings are a network call, " +
 			"so pin it with `mkit init` if this repo squash-merges"}
-}
-
-func sortedKeys(m map[string]string) []string {
-	ks := make([]string, 0, len(m))
-	for k := range m {
-		ks = append(ks, k)
-	}
-	sort.Strings(ks)
-	return ks
 }

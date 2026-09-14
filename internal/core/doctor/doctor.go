@@ -10,9 +10,11 @@
 // cannot report on itself. Both were the hook's job and both are accepted losses
 // (docs/backlog.md, "Staying in bash, permanently").
 //
-// Every remedy sentence with a shell counterpart is *fetched* from
-// `lib/common.sh`, never re-worded here. One producer per sentence is a project
-// rule until M5 ports facts.sh.
+// Every degradation sentence has exactly one producer. Until M5 the shell was it
+// and this fetched from `lib/common.sh`; since the payload's last script went,
+// the producer is the Go package that owns the surface — `scratch` for the
+// user-scoped directory and for an unignored scratch root, `repoconfig` for a
+// shadowed config.
 //
 // Layering: returns data, never prints, never assumes a terminal.
 package doctor
@@ -29,6 +31,7 @@ import (
 	"github.com/masterik/mk-toolkit/internal/core/gitrepo"
 	"github.com/masterik/mk-toolkit/internal/core/pluginroot"
 	"github.com/masterik/mk-toolkit/internal/core/repoconfig"
+	"github.com/masterik/mk-toolkit/internal/core/scratch"
 )
 
 // Status is a check's verdict.
@@ -104,7 +107,7 @@ func Run(opts Options) *Report {
 	r.binary()
 	r.payload(root, rootErr, toplevel)
 	r.prerequisites()
-	r.userDir(root)
+	r.userDir()
 	if opts.Repo != nil {
 		r.repo(opts.Repo)
 	} else {
@@ -126,8 +129,7 @@ func (r *Report) binary() {
 func (r *Report) payload(root *pluginroot.Root, err error, toplevel string) {
 	if err != nil {
 		r.add(Check{Group: "install", Name: "plugin payload", Status: Fail,
-			Detail: "not found — the skills are unavailable, and so is every remedy " +
-				"sentence the binary reads from lib/common.sh",
+			Detail: "not found — the skills are unavailable",
 			Remedy: pluginroot.Remedy()})
 		// Enablement is an independent question — the harness's settings say
 		// whether the plugin is switched on whether or not a checkout was found,
@@ -204,14 +206,13 @@ type tool struct {
 }
 
 // The prerequisite table. `mkit doctor` restoring this report is M7's value: since
-// 0.15.0 nothing tells a user unprompted that a tool is missing, and it surfaces
-// only as a thinner facts.sh block or a gate_cache=no-hash annotation.
+// 0.15.0 nothing tells a user unprompted that a tool is missing. Before M5 it
+// surfaced as a thinner `mkit facts` block or a degraded gate annotation; the
+// binary has no half-capable mode, so today a missing tool surfaces only here.
 var tools = []tool{
 	{"git", "prerequisites", Fail, "every skill", ""},
-	{"bash", "prerequisites", Fail, "the whole payload", ""},
+	{"bash", "prerequisites", Fail, "mkit gate run", ""},
 	{"gh", "prerequisites", Warn, "pr, finish, and cleanup's PR column", "brew install gh, then `gh auth login`"},
-	{"jq", "prerequisites", Warn, "facts.sh's PR lookup, the gate ledger, branch-scan", "brew install jq"},
-	{"shasum", "prerequisites", Warn, "the gate cache fingerprint (reports gate_cache=no-hash without it)", ""},
 	{"rg", "optional", Warn, "faster searching; grep -E is used otherwise", "brew install ripgrep"},
 	{"wt", "optional", Warn, "worktrunk-managed worktree teardown in finish/cleanup", "brew install worktrunk"},
 	{"codex", "optional", Warn, "review's Codex reviewer", ""},
@@ -230,43 +231,45 @@ func (r *Report) prerequisites() {
 	}
 }
 
-// userDir asks the payload rather than probing itself, for both halves: the probe
-// (`mkit_user_dir_writable`, which is net-zero by construction) and the sentence
-// (`mkit_user_dir_remedy`, which must name creating the directory *and* granting
-// it). Re-implementing either here would be the second implementation the porting
-// rules forbid, and re-wording the sentence is how the original one-grant mistake
-// survived three files.
 // userDirCheck is a constant because a check's name is its identity: a report
 // whose rows rename themselves by branch cannot be diffed or matched against.
 const userDirCheck = "user state dir"
 
-func (r *Report) userDir(root *pluginroot.Root) {
-	if root == nil {
-		r.add(Check{Group: "sandbox", Name: userDirCheck, Status: Unknown,
-			Detail: "cannot probe it: the writability check and its remedy both live in " +
-				"the payload's lib/common.sh, which was not found"})
+// userDir reports both halves from `internal/core/scratch`: the probe (net-zero
+// by construction) and the sentence (which must name creating the directory *and*
+// granting it). One producer for each — until M5 both were fetched from the
+// payload's lib/common.sh, and re-wording the sentence is how the original
+// one-grant mistake survived three files.
+func (r *Report) userDir() {
+	dir := scratch.UserDir()
+	if dir == "" {
+		r.add(Check{Group: "sandbox", Name: userDirCheck, Status: Warn,
+			Detail: "no user-scoped directory: $HOME is unset and MKIT_HOME is not set",
+			Remedy: scratch.UserDirRemedy()})
 		return
 	}
-	dir, _ := root.CommonFunc("mkit_user_dir")
-	if _, err := root.CommonFunc("mkit_user_dir_writable"); err == nil {
+	if scratch.UserDirWritable() {
 		r.add(Check{Group: "sandbox", Name: userDirCheck, Status: OK, Detail: dir + " is writable"})
 		return
-	}
-	remedy, err := root.CommonFunc("mkit_user_dir_remedy")
-	if err != nil {
-		remedy = ""
 	}
 	// Warn, not Fail: the directory is empty today — its two files went with the
 	// hook — so nothing is failing yet. A later user-scoped write would.
 	r.add(Check{Group: "sandbox", Name: userDirCheck, Status: Warn,
 		Detail: dir + " is not writable; nothing needs it today, a later user-scoped write would",
-		Remedy: remedy})
+		Remedy: scratch.UserDirRemedy()})
 }
 
 func (r *Report) repo(repo *gitrepo.Repo) {
 	r.add(Check{Group: "repo", Name: "work tree", Status: OK, Detail: repo.Toplevel})
 
-	if ignored, _ := repo.Ignored(".mkit/gate.jsonl"); ignored {
+	// The remedy names this file rather than a fixed `.git/info/exclude`: under a
+	// linked worktree the exclude lives in the main checkout.
+	common, _ := repo.CommonDir()
+
+	// scratch.Ignored, not a single check-ignore: it probes the ledger *and* a
+	// run directory, because an unrelated `*.jsonl` rule hides the first while
+	// leaving the second untracked. facts reads the same producer.
+	if scratch.Ignored(repo) {
 		r.add(Check{Group: "repo", Name: "scratch ignored", Status: OK,
 			Detail: ".mkit/ scratch is excluded"})
 	} else {
@@ -274,8 +277,7 @@ func (r *Report) repo(repo *gitrepo.Repo) {
 			Detail: ".mkit/ is not ignored here — `git worktree remove` will refuse, " +
 				"`git add -A` would commit run artefacts, and the gate fingerprint " +
 				"sees a directory that changes while the gate runs",
-			Remedy: "from the main checkout, add `.mkit/*` and `!.mkit/config.toml` to " +
-				".git/info/exclude or .gitignore (run any mkit skill and run-open.sh does it)"})
+			Remedy: scratch.IgnoredRemedy(common)})
 	}
 
 	st := repoconfig.Stat(repo)

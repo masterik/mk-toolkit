@@ -65,18 +65,18 @@ tells it whether the gist still describes the tree in front of it.
 
 ### Reading it
 
-**Gated on the binary, never on the log.** A step reads the worklog only when its `facts.sh` call
-reported `mkit_bin=<path>`; on `mkit_bin=none` it skips the call and carries on. (`review` is the
-exception, and only because it needs no gate: its step 0 already stops the run when `mkit` is
-absent, so by the time it reads the log there is no `mkit_bin=none` case left.)
+**Ungated, and never gating.** A step reads the worklog unconditionally. It used to be gated on a
+`mkit_bin=` fact, because the binary was optional and the log was a bonus; since M5 the binary is a
+hard requirement and every skill's first call is `mkit facts`, which stops the run when it is absent
+or too old. By the time any step reads the log, there is no missing-binary case left to check for.
 
 ```bash
 mkit work show --json --limit 20
 ```
 
-`facts.sh` reports `mkit_bin=` and `mkit=` and compares nothing, so an absent, older or failing
-`mkit` is **one fewer input, never a stop** — rule 4 above, applied to the tool rather than to the
-record. That is what separates this call from `review`'s step-0 `mkit findings` probe: without the
+What the log itself reports is still **one fewer input, never a stop** — rule 4 above, applied to
+the record: an empty log, an unreadable one, or a binary that knows `facts` but not `work` all leave
+a step less informed rather than blocked. That is what separates this call from `review`'s step-0 `mkit findings` probe: without the
 findings arithmetic there is no review, and without the worklog there is a slightly less informed
 one. What each step does with what it reads is the step's own business, and stays in its `SKILL.md`.
 

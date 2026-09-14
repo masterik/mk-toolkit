@@ -2,7 +2,7 @@
 
 Command output is context you did not choose to load. Bounding it costs nothing and loses nothing.
 
-Used by every mkit skill. Owns the run directory and the two scripts that keep output bounded;
+Used by every mkit skill. Owns the run directory and the `mkit` commands that keep output bounded;
 `agent-delegation.md` covers using the run directory as transport between stages.
 
 Scale, on a *small* markdown-only branch: `git diff <base>` 57 KB · `--stat` 572 B · `git log --oneline`
@@ -10,10 +10,10 @@ Scale, on a *small* markdown-only branch: `git diff <base>` 57 KB · `--stat` 57
 
 ## One call to start
 
-A skill's first act is `${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh <skill>`. It opens this run's directory
+A skill's first act is `mkit facts <skill>`. It opens this run's directory
 **and** returns every read-only fact the skill starts from, as `key=value` lines:
 
-- **`run=`** — this run's directory: atomic (`mktemp -d`), absolute, `<toplevel>/.mkit/<skill>-…`, its
+- **`run=`** — this run's directory: unique, absolute, `<toplevel>/.mkit/<skill>-…`, its
   own per worktree. Every log and run file lives in it.
 - **`tmp=`** — where a file that dies with the command goes. See "Where a write may land".
 - **`run_ignored=` `user_dir=` `user_dir_writable=` `git_bin=`** — the four facts about what this
@@ -28,20 +28,22 @@ A skill's first act is `${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh <skill>`. It open
 - **`notes:`** — the last block, present only when something needs a sentence: a cause and the remedy
   for it. Values with spaces never go on a `key=value` line, because several of those lines pack more
   than one pair.
-- Flags: `--base <branch>` (adds `base..HEAD` commits, stat, `ff_from_base`) · `--range <range>` ·
+- Flags: `--base <branch>` (adds `base..HEAD` commits, stat, `ff_from_base`) · `--range <range>`
+  (an unresolvable one prints `range_state=unresolvable` and exits 1, like `--base`) ·
   `--gh` (does a PR already exist) · `--no-run` (probe without opening a directory).
-- Nonzero exit says why. Empty `${CLAUDE_PLUGIN_ROOT}` fails as `/scripts/facts.sh: not found` —
-  intended: find the plugin checkout and call the script by its real path, never `mkdir` a substitute.
+- Nonzero exit says why: 1 outside a work tree or on an unresolvable `--base`, 2 on bad usage.
+  `mkit: command not found` means the binary is missing — stop and say so (`brew install
+  masterik/tap/mkit`); never `mkdir` a substitute for the run directory.
 
 Then, for the rest of the run: write only inside `run=`; name it in the final summary (it is the record,
-which is what lets the summary stay short); prune with `run-open.sh --prune` at the **end**, never the
+which is what lets the summary stay short); prune with `mkit run prune` at the **end**, never the
 start — a concurrent run may be reading the older directories.
 
 ## Where a write may land
 
 Three boundaries can refuse a write, independently, and none of them announces itself in advance: the
 OS sandbox (the kernel, over the whole process tree), the permission gate's auto-mode classifier
-(before the tool runs), and the worktree-isolation guard (also before the tool runs). `facts.sh`
+(before the tool runs), and the worktree-isolation guard (also before the tool runs). `mkit facts`
 reports what each of them permits **as a starting fact**, so a refusal is something you read at the
 start rather than hit in the middle.
 
@@ -74,14 +76,14 @@ Two facts to act on before you stage anything:
 ### Carry the path, not a variable
 
 **There is no `$RUN_DIR`.** Each Bash call is a fresh shell — cwd persists, environment does not. Read
-`run=` once and pass that literal: as `gate-run.sh`'s first argument, as `mkit findings`'s run directory, and into every
-brief. Bind it inside a single call when one command needs it twice. Never re-run `facts.sh` to get it
+`run=` once and pass that literal: as `mkit gate run`'s first argument, as `mkit findings`'s run directory, and into every
+brief. Bind it inside a single call when one command needs it twice. Never re-run `mkit facts` to get it
 back (a second directory, run scattered), never park it in a fixed pointer file (concurrent runs
 overwrite it).
 
 ## Quality gates
 
-`scripts/gate-run.sh <run-dir> --chain '<step>=<cmd>' …` runs them. Full output to
+`mkit gate run <run-dir> --chain '<step>=<cmd>' …` runs them. Full output to
 `<run-dir>/gate-<step>.log`, exit code captured before anything can clobber it, chain stopped at the
 first failure, verdict on stdout:
 
@@ -94,19 +96,19 @@ gate=FAILED step=test exit=1
 ```
 
 - **Pass**: one line per step, then `gate=ok steps=…`. Nothing else enters context.
-- **Failure**: the step, its exit code, the grepped failures and the tail — never the log. The script's
+- **Failure**: the step, its exit code, the grepped failures and the tail — never the log. The command's
   own exit status is the failing step's, so a skill can branch on it.
 - `--tail N` / `--grep N` widen the excerpt; `--keep-going` runs past a failure when you deliberately
   want the whole picture.
 - Never re-run a gate to see output you discarded. That is what the log is for. Which commands to run:
-  `gate-detect.sh` (`quality-gate.md`).
+  `mkit gate detect` (`quality-gate.md`).
 
 ## Diffs
 
-- **`--stat` first**, always — `facts.sh` already returned it. "How big, and where" is what most
+- **`--stat` first**, always — `mkit facts` already returned it. "How big, and where" is what most
   decisions need.
 - **Full diff per file** (`git diff -- <path>`), never the whole tree, and only for files you must judge.
-  The script's file lists already exclude `*.lock` and `*.snap`.
+  `mkit facts`' file lists already exclude `*.lock` and `*.snap`.
 - **Never load a full branch diff to write prose.** Commit messages and `git log --oneline` are the
   source for a PR description or summary; the diff is a fallback for the one thing they do not explain.
 
@@ -124,5 +126,5 @@ Bounding must not become skipping the thing you are judging.
 ## Say what you read
 
 Say "tail of gate-test.log", not something implying you read the suite. A diff judged file by file is a
-complete review and reads as one. **Never describe a truncated read as a full one.** Where a script
+complete review and reads as one. **Never describe a truncated read as a full one.** Where a command
 capped something it says so (`... 12 more files not shown`, `log_lines=1841`) — pass that fact on.

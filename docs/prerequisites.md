@@ -1,19 +1,19 @@
 # Prerequisites
 
-mkit's plugin payload is Markdown plus five shell helpers — bash only since M4 took the last
-Node file with it. No hooks (removed in 0.15.0), nothing to build, and no *machine* setup step:
-installing the plugin is a clone. What follows is what those scripts call.
+mkit's plugin payload is **Markdown and nothing else** since M5 took the last shell script.
+No hooks (removed in 0.15.0), nothing to build, and no *machine* setup step: installing the
+plugin is a clone. What follows is what the skills, and the `mkit` binary they call, need.
 
 Per **repo** there is now one optional step, `mkit init`, which writes `.mkit/config.toml`
 ([ADR 0001](adr/0001-per-repo-config-and-init.md)). It pins what inspection cannot establish and
 is never a precondition: every command and every skill runs with no config present.
 
-The `mkit` **binary** is a separate install (`brew install masterik/tap/mkit`). It is
-[taking over the script layer](backlog.md) one milestone at a time, and each script it replaces
-deletes a row from this page — `node` left with `findings.mjs` (M4); `jq` and `shasum` go with the
-gate port (M5). One skill now **requires** it: `review` does its findings arithmetic with
-`mkit findings` and stops at step 0 if the binary is absent or too old to know that subcommand.
-Everything else still runs without it.
+The `mkit` **binary** is a separate install (`brew install masterik/tap/mkit`), and since M5 it
+is **required by every skill** — each one's first call is `mkit facts <skill>`, which opens the run
+directory and returns every starting fact. Presence only, with no declared minimum on either side: a
+subcommand that does not exist *is* the too-old signal. Absorbing the script layer deleted rows from
+this page as it went — `node` left with `findings.mjs` (M4), `shasum` and `jq` with the gate and
+facts ports (M5).
 
 > **`mkit doctor` reports on this page's tooling**, plus the sandbox writable set, the plugin
 > payload and the allowlist gaps below — on demand, reporting only. It checks *presence on
@@ -21,35 +21,32 @@ Everything else still runs without it.
 > healthy here and fails later. Two things it cannot tell
 > you, both deliberate: it does not run unprompted at session start, and it cannot report that
 > `mkit` itself is missing — a binary cannot report its own absence. That second gap is why
-> `review` probes for `mkit findings` itself, at step 0, and why `facts.sh` reports `mkit=` and
-> `mkit_bin=` as raw starting facts without comparing them to anything.
+> `review` probes for `mkit findings` itself, at step 0 — and why a skill whose first call is
+> `mkit facts` treats `command not found` as its own stop condition, with the `brew` remedy.
 
-**macOS is the supported platform — for the scripts and for the binary.** Nothing detects an OS or
-branches on one; the scripts are simply written to what macOS provides, which is the narrower
-target: no GNU-only flags, no `flock`, no bash 4. The binary keeps the same scope: the release
-builds `darwin` × amd64/arm64 (Intel + Apple Silicon), and the Homebrew cask that installs it is
-macOS-only in any case.
+**macOS is the supported platform.** Nothing detects an OS or branches on one: the release builds
+`darwin` × amd64/arm64 (Intel + Apple Silicon), and the Homebrew cask that installs it is macOS-only
+in any case.
 
 ## Required
 
 | Tool | Used by | Why |
 | --- | --- | --- |
 | `git` ≥ 2.30 | everything | `--absolute-git-dir`, `worktree list --porcelain`, `diff --shortstat` |
-| `bash` ≥ 3.2 | every `.sh` — five helpers plus the sourced `lib/common.sh` | macOS ships `/bin/bash` 3.2 (frozen there over GPLv3) and `/bin/zsh` 5.9. The scripts run under bash via `#!/usr/bin/env bash`, so **your interactive shell being zsh is irrelevant** — nothing here needs 4.x, and no Homebrew bash is required |
-| `jq` ≥ 1.6 | `gate-detect.sh`, `gate-run.sh`, `facts.sh`, `branch-scan.sh` | reads `package.json`, `wt list --format=json`, `gh`'s JSON, and the gate ledger's JSONL |
+| `bash` ≥ 3.2 | `mkit gate run` | gate steps run as `bash -c '<command>'`, so `-- sh -c 'a && b'` keeps meaning what it says. macOS ships `/bin/bash` 3.2 and nothing here needs 4.x |
+| `mkit` | every skill | the run directory, the starting facts, the gate, the branch classifier, the findings arithmetic |
 
 ```bash
-brew install git jq
+brew install git masterik/tap/mkit
 ```
 
 ## Recommended
 
 | Tool | Used by | Degrades to |
 | --- | --- | --- |
-| `rg` (ripgrep) | `gate-run.sh` failure digest, `gate-detect.sh` doc scan, the `fix-checks` sweep | `grep -E` (same output, slower) |
-| `shasum` | the gate ledger's content fingerprint | `gate_cache=no-hash` — the gate runs every step, exactly as before. Never a hard requirement: a latency optimization may not add a prerequisite. macOS ships it, but it is a Perl script, so a stripped environment can lack it |
-| `gh` | `pr`, `facts.sh --gh`, and `branch-scan.sh` (`cleanup`) | `pr` cannot open a PR at all; `facts.sh` prints `pr=gh-missing`; `branch-scan.sh` falls back to git-only classification and reports `gh=gh-missing` |
-| `wt` ([worktrunk](https://worktrunk.dev)) | `finish` cleanup, `facts.sh` worktree classification | plain `git worktree remove` |
+| `rg` (ripgrep) | the `fix-checks` sweep | `grep -E` (same output, slower) |
+| `gh` | `pr`, `mkit facts <skill> --gh`, and `mkit branch scan` (`cleanup`) | `pr` cannot open a PR at all; `mkit facts` prints `pr=gh-missing`; `mkit branch scan` falls back to git-only classification and reports `gh=gh-missing` |
+| `wt` ([worktrunk](https://worktrunk.dev)) | `finish` cleanup, `mkit facts` worktree classification | plain `git worktree remove` |
 
 ```bash
 brew install ripgrep gh worktrunk/tap/worktrunk
@@ -61,10 +58,9 @@ gh auth login
 Contributors need more than users do; none of this is required to *use* the plugin.
 
 ```bash
-brew install bats-core go golangci-lint    # bats for the shell suites, Go for the binary
-./tests/run.sh                             # bats tests/bats/
-go build ./... && go vet ./... && go test ./...   # the binary — what CI runs
-golangci-lint run                          # CI pins v2.12
+brew install go golangci-lint
+go build ./... && go vet ./... && go test ./...   # what CI runs
+golangci-lint run                                # CI pins v2.12
 ```
 
 **Under the sandbox the Go gate needs its caches redirected**, or it fails on `~/Library/Caches/
@@ -74,9 +70,13 @@ go-build` and `~/go` rather than on your code — see [Running under the OS sand
 export GOCACHE="$TMPDIR/go-build" GOMODCACHE="$TMPDIR/go-mod" GOLANGCI_LINT_CACHE="$TMPDIR/golangci"
 ```
 
-The bats suite needs nothing: `helpers.bash` points `MKIT_HOME` at a throwaway directory under
-`$TMPDIR` for every test, which is both the sandbox containment story and the reason a developer's
-own state cannot make an assertion pass or fail.
+Every test that touches user-scoped state points `MKIT_HOME` at a throwaway directory and builds
+its repo under `$TMPDIR`, which is both the sandbox containment story and the reason a developer's
+own state cannot make an assertion pass or fail. Unlike the deleted bats suite, which set it once in
+`helpers.bash`, Go has no shared setup: each suite that reaches user state sets it itself
+(`internal/cli`'s `factsRepo`, `internal/core/doctor`'s `isolate`). A suite that grows a call into
+`scratch.UserDir` and forgets is writing in a real home — `UserDirWritable` creates the directory
+when it is absent — so add it to that suite's helper, never to a `TestMain`.
 
 ## Optional — extra reviewers for `review`
 
@@ -96,8 +96,8 @@ The plugin ships **no hooks** and no installer. Both existed once: a `SessionSta
 prerequisite report belongs to the binary, and `mkit doctor` (M7) owns it now.
 
 **The gap that leaves, stated plainly:** nothing tells you unprompted that a tool from the table
-above is missing. It surfaces later — a thinner `facts.sh` block, a `gate_cache=no-hash`
-annotation on a gate report — which is exactly the debugging cost the hook existed to avoid.
+above is missing. It surfaces later — a thinner `mkit facts` block, a `pr=gh-missing`
+annotation — which is exactly the debugging cost the hook existed to avoid.
 `mkit doctor` is the check, and it is human-run: you have to think to run it. It does not fully
 replace the hook and never will — a binary cannot report its own absence, and cannot speak at
 session start. That is accepted.
@@ -108,55 +108,51 @@ it if you have one.
 ## Verify
 
 ```bash
-for t in git bash jq rg gh wt coderabbit codex mkit; do
+for t in git bash rg gh wt coderabbit codex mkit; do
 	printf '%-12s %s\n' "$t" "$(command -v "$t" || echo '— not found')"
 done
-git --version; jq --version; mkit version
+git --version; mkit version
 ```
 
-Then check the plugin itself, from any repo:
+Then check the toolkit itself, from any repo:
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh" commit --no-run   # prints a fact block
-"${CLAUDE_PLUGIN_ROOT}/scripts/gate-detect.sh"             # prints fast= and full=
-mkit findings schema                                       # prints the JSONL shape
+mkit facts commit --no-run   # prints a fact block, and where the payload is
+mkit gate detect             # prints the full: block and each step's source
+mkit findings schema         # prints the JSONL shape
+mkit doctor                  # this page's tooling, the sandbox, the payload, the allowlist
 ```
-
-Empty `${CLAUDE_PLUGIN_ROOT}` fails as `/scripts/facts.sh: not found`. That is intended:
-find the plugin checkout and call the script by its real path rather than working around it.
 
 ## Fewer permission prompts
 
-Each new script is a new Bash pattern, so the first run of each asks. Allow them once, in
+Each subcommand is its own Bash pattern, so the first run of each asks. Allow them once, in
 `~/.claude/settings.json` (user-wide) or a repo's `.claude/settings.json`:
 
 ```json
 {
   "permissions": {
     "allow": [
-      "Bash(*/mkit/scripts/facts.sh:*)",
-      "Bash(*/mkit/scripts/gate-detect.sh:*)",
-      "Bash(*/mkit/scripts/gate-run.sh:*)",
-      "Bash(*/mkit/scripts/run-open.sh:*)",
-      "Bash(*/mkit/scripts/branch-scan.sh:*)",
+      "Bash(mkit facts:*)",
+      "Bash(mkit run:*)",
       "Bash(mkit findings:*)",
-      "Bash(mkit work:*)"
+      "Bash(mkit work:*)",
+      "Bash(mkit branch scan:*)",
+      "Bash(mkit gate detect:*)",
+      "Bash(mkit gate run:*)"
     ]
   }
 }
 ```
 
-Adjust the path fragment to wherever the plugin is installed — under
-`~/.claude/plugins/cache/<marketplace>/mkit/<version>/` for a marketplace install, or your
-checkout for a local one. `gate-run.sh` runs the repo's own lint/test/build, so allowlisting
-it delegates that trust; leave it out if you would rather approve each gate.
+`mkit gate run` runs the repo's own lint/test/build, so allowlisting it delegates that trust;
+leave it out if you would rather approve each gate.
 
 ## Running under the OS sandbox
 
 Claude Code can run Bash tool calls inside an OS sandbox (Seatbelt on macOS). Everything below was
 measured on 2026-09-09 with `sandbox.enabled: true`. **One directory is all mkit itself needs** —
 though opening it takes two steps, not one; the rest of this section is what the tools mkit
-*composes* need, and the two facts that no script may forget.
+*composes* need, and the two facts nothing may forget.
 
 ### The two steps mkit needs
 
@@ -187,10 +183,10 @@ this section is two steps instead of one.
 
 `~/.mkit/` is **empty today** — its two files went with the hook — but it stays the declared home
 for user-scoped state, and it is what `MKIT_HOME` redirects. Nothing writes there yet, so neither
-step is required for anything the payload currently does; `facts.sh` reports `user_dir_writable=no`
+step is required for anything mkit currently does; `mkit facts` reports `user_dir_writable=no`
 without them, with this same two-part remedy, so the first user-scoped write the binary makes does
 not fail as a surprise. `mkit doctor` reports the same thing on demand, from the same producer —
-`mkit_user_dir_remedy()` in `lib/common.sh` is the only place this sentence is written.
+`scratch.UserDirRemedy` is the only place this sentence is written.
 
 `additionalDirectories` rather than `sandbox.filesystem.allowWrite` deliberately — it grants the
 sandbox write *and* makes the path a working directory, which also satisfies the auto-mode
@@ -226,32 +222,34 @@ export GOCACHE="$TMPDIR/go-build" GOMODCACHE="$TMPDIR/go-mod" GOLANGCI_LINT_CACH
 
 ### Network, for the remote-facing skills
 
-Sandboxed egress goes through a filtering proxy, so the network side is an allowlist too. What the
-payload itself reaches for:
+Sandboxed egress goes through a filtering proxy, so the network side is an allowlist too. What mkit
+itself reaches for:
 
-| skill / script | host | for |
+| skill / command | host | for |
 | --- | --- | --- |
-| `pr`, `facts.sh --gh`, `branch-scan.sh` | `api.github.com`, `github.com` | `gh pr view`, `gh pr list`, `gh pr create` |
+| `pr`, `mkit facts --gh`, `mkit branch scan` | `api.github.com`, `github.com` | `gh pr view`, `gh pr list`, `gh pr create` |
 | `pr`, `finish`, `cleanup` | your remote's host (`git remote -v`) | `fetch`, `push` |
 | `review`'s external reviewers | whatever the `codex` / `coderabbit` CLI calls | those are their own tools; check their docs for the hosts |
 
-`cleanup` and `branch-scan.sh` degrade rather than fail when GitHub is unreachable: `fetch=failed`
-and `gh=gh-error`, with every branch still classified from git alone. `pr` cannot open a PR without
+`cleanup` and `mkit branch scan` degrade rather than fail when GitHub is unreachable: `fetch=failed`
+and `gh=gh-unauthenticated` or `gh=gh-error` — unreachable fails the auth probe first, so which of
+the two you get depends on where the request died — with every branch still classified from git
+alone. `pr` cannot open a PR without
 `api.github.com` — there is no local substitute for that one.
 
 Attempt the call and read the error rather than predicting reachability; a denied connection is
 reported as such.
 
-### Two facts no script may forget
+### Two facts nothing may forget
 
 **`ps` and `pgrep` cannot list processes at all** under the sandbox — `operation not permitted: ps`,
-not an empty result. No script may depend on either, and a "is it still running?" check built on one
+not an empty result. Nothing may depend on either, and a "is it still running?" check built on one
 reads as *not running*.
 
 **`mktemp` with no template ignores `$TMPDIR`.** On macOS the bare and `-t` forms resolve the Darwin
 per-user temp directory (`/var/folders/…/T/`), which the sandbox denies. It is not fixable by
-environment. Always pass a template: `mktemp "$TMPDIR/name.XXXXXX"`. Both forms are banned from the
-payload and a test asserts it.
+environment; always pass a template. The binary uses Go's own temp-file API, which honours
+`$TMPDIR`, so this now bites only a command *you* write.
 
 Also protected *inside* the working directory: `.git/config` and `.git/hooks`. So `git config` fails,
 and a nested `git init` under the project half-fails.
@@ -260,11 +258,11 @@ and a nested `git init` under the project half-fails.
 
 **`wt` is usually a shell function.** Worktrunk's shell integration has to be a function to
 `cd` the parent shell, and it shadows the binary. `command -v wt` then answers `wt` with no
-path, so the scripts walk `PATH` for the real executable instead, and report `wt_bin=none`
-as *advisory* — the agent's own shell may still have `wt` when a script does not.
+path, so `mkit facts` looks for the real executable on `PATH` instead, and reports `wt_bin=none`
+as *advisory* — the agent's own shell may still have `wt` when the binary does not find one.
 
-**`rtk` is deliberately not used inside the scripts.** It reshapes command output for an
+**`rtk` is deliberately not used inside mkit.** It reshapes command output for an
 agent to read — it strips the leading space from `git diff --stat`, for one — which is
-exactly what a parser must not tolerate. The scripts consume `--porcelain`,
-`--shortstat`/`--name-only` and `--format=json`, and do their own compaction. rtk stays where it belongs:
+exactly what a parser must not tolerate. mkit consumes `--porcelain`,
+`--shortstat`/`--name-only` and `--format=json`, and does its own compaction. rtk stays where it belongs:
 on the agent's own direct commands, via the user's hook.

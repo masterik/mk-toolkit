@@ -31,11 +31,20 @@ References, read the ones a step calls for: `../_shared/references/worktree.md`,
 **One call**, which also opens this run's directory (`../_shared/references/output-discipline.md`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh finish --base <base> --gh
+mkit facts finish --base <base> --gh
 ```
 
-Then read what ran on this branch before, and what each step concluded — gated on `mkit_bin=`, and
-never a stop: `../_shared/references/workflow-contract.md`, "Reading it".
+`mkit facts` **is** this skill's dependency check. If it fails with `command not found` **or**
+`unknown command "facts"` — absent and too old are the same answer here — **stop** and say:
+
+> This skill runs on the `mkit` binary. Install it with `brew install masterik/tap/mkit` (or upgrade
+> with `brew upgrade mkit`), then run it again.
+
+Presence only, no declared minimum on either side — a subcommand that does not exist *is* the too-old
+signal.
+
+Then read what ran on this branch before, and what each step concluded — never a stop:
+`../_shared/references/workflow-contract.md`, "Reading it".
 
 ```bash
 mkit work show --json --limit 20
@@ -47,7 +56,7 @@ that applied fixes records a fingerprint the reviewers never saw and says so the
 merge, and it never substitutes for the quality gate, which has its own ledger.
 
 Keep the `run=` literal; this file writes it as `<run-dir>`. There is no `$RUN_DIR` — a shell variable does
-not survive to the next Bash call — and re-running the script opens a second directory instead of returning
+not survive to the next Bash call — and re-running `mkit facts` opens a second directory instead of returning
 the first. Check four things in what it printed:
 
 1. **Current branch** — `branch=` must be a feature/bugfix branch, not `default_branch=`. On `main`/`master`:
@@ -59,7 +68,7 @@ the first. Check four things in what it printed:
    worktrunk present) · `git-worktree` (linked, no worktrunk) · `none` (primary checkout). It decides step 4.
    Read `../_shared/references/worktree.md` there, not now.
 4. **Existing PR** — `pr=` is a URL only when one exists, alongside `pr_state=OPEN|CLOSED|MERGED` and
-   `pr_draft=true|false`. Sentinels (`none`, `gh-missing`, `jq-missing`, `gh-unauthenticated`, `no-remote`)
+   `pr_draft=true|false`. Sentinels (`none`, `gh-missing`, `gh-unauthenticated`, `no-remote`)
    mean there is nothing to merge remotely — take the **local merge path**. `pr_state=OPEN` (and not
    draft) redirects step 4 to the **PR merge path** instead: this branch is merged on GitHub, not with a
    local `git merge`. Treat `CLOSED`/`MERGED` like no PR for routing purposes, but mention it — a merged
@@ -81,16 +90,16 @@ equivalent, stop on first failure. A local merge skips review, so this gate is t
 failure; do not merge past it without an explicit user OK.
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/gate-detect.sh
-${CLAUDE_PLUGIN_ROOT}/scripts/gate-run.sh <run-dir> --chain 'lint=<cmd>' 'test=<cmd>' 'build=<cmd>'
+mkit gate detect
+mkit gate run <run-dir> --chain 'lint=<cmd>' 'test=<cmd>' 'build=<cmd>'
 ```
 
 One line per passing step; on failure the step, the exit code, the grepped failures and the tail
 (`../_shared/references/output-discipline.md`). A failing suite is thousands of lines, none of which change
 the decision ("fix it or get an explicit OK").
 
-`gate-detect.sh` also reports what the gate ledger already proved (`full_cache=`, pipe-parallel with
-`full=`). **This is the strictest consumer in the bundle**, because a local merge skips review and this gate
+`mkit gate detect` also reports what the gate ledger already proved — each step's `cache=` in the
+`full:` block. **This is the strictest consumer in the bundle**, because a local merge skips review and this gate
 is the only safety net: consume a step only on an exact command match, a matching fingerprint and an age
 inside the bound — per step, never a whole chain at once — and print `cached (Nm ago, exit=0)` on that
 step's own line, with the verdict naming how many were cached. `gate=ok` for a step that did not run is not
@@ -234,7 +243,7 @@ the branch it is keyed on — and a branch name is reusable, which hands a later
 rather than deriving the filename, which carries a digest:
 
 ```bash
-p=$(mkit work show --branch <feature-branch> --json | jq -r .path) && rm -f "$p"
+p=$(mkit work show --branch <feature-branch> --path) && rm -f "$p"
 ```
 
 Best effort, like every other `mkit work` call here: a path it cannot produce is one line of note. And skip
@@ -243,10 +252,10 @@ the append on this path — the record would go straight into the file being ret
 ### 5. Verify the cleanup
 
 **`$toplevel` is stale here whenever step 4 removed a worktree — and so may the shell's cwd be**, if it was
-inside that worktree when `git worktree remove` ran. `$toplevel` is the root `facts.sh` resolved at step
+inside that worktree when `git worktree remove` ran. `$toplevel` is the root `mkit facts` resolved at step
 1 — the *feature* worktree on any linked path — and that directory no longer exists, so a call pinned to it,
 or one run from a cwd still inside it, fails instead of verifying anything. Resolve `<surviving-root>` once
-(`primary=` from `facts.sh`, or re-resolve the root) and put every command below against it — `cd
+(`primary=` from `mkit facts`, or re-resolve the root) and put every command below against it — `cd
 "<surviving-root>"` first, since `pwd` and `git branch --show-current` have no `-C` equivalent, and pass
 `-C "<surviving-root>"` explicitly to the rest, including the pinned log check. On `linked=no` there was
 nothing to remove and `$toplevel`/the cwd are still correct.
@@ -261,7 +270,7 @@ nothing to remove and `$toplevel`/the cwd are still correct.
 
 ## Deliverable
 
-Prune with `${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh --prune` on the way out, folded into step 5's
+Prune with `mkit run prune` on the way out, folded into step 5's
 verification call.
 
 - Which path ran — local merge, or GitHub PR merge (name the PR URL and method used).
