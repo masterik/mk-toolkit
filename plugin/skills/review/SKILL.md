@@ -27,6 +27,7 @@ steps name them by bare filename:
 | --- | --- | --- |
 | `review-severity.md` | every reviewer | handed over in step 2 |
 | `lenses-correctness.md` / `lenses-craft.md` | Codex / the Claude reviewer | handed over in step 2 |
+| `workflow-contract.md` | **this session** | read at step 1 |
 | `triage-reconcile.md` | **this session** | read at step 3 |
 | `triage-verify.md` | each verifier subagent — or **this session**, on a handful | handed over in step 4, or read there |
 | `fix-checks.md` | **this session** | read at step 5, before the first fix |
@@ -115,9 +116,43 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh review --range <range>     # omit --range
 Keep the `run=` and `refs=` literals; every later step and every brief needs them, and re-running the script
 opens a second directory (`output-discipline.md`).
 
-**Also capture the goal** — what the change is trying to achieve, one or two lines, from the user, branch name,
-commit messages or ticket. The `impl` lens is judged against it; with no goal, say so and expect lower
-confidence rather than inventing one.
+Then read what already ran on this branch:
+
+```bash
+mkit work show --json --limit 20
+```
+
+**Unconditional here, unlike everywhere else.** The other skills gate this call on `mkit_bin=<path>`
+(`workflow-contract.md`, "Reading it"); `review` is the one skill that does not need to, because step 0
+already stopped the run if the binary was missing. There is no `mkit_bin=none` left to check for.
+
+What step 0 did *not* establish is that this binary knows `work` — it proved `findings` — and a binary from
+before the worklog landed answers one and not the other. So the second half of the shared rule still holds:
+**a nonzero exit is not a stop**, carry on without the log and say so in step 6. Read what it printed before
+naming the cause: an unknown subcommand is that skew, while a log it found and could not read is a different
+fact and worth reporting as one. A branch nothing has run on is different again — zero records and exit 0,
+because being first is the normal case, not a problem to report.
+
+The envelope's own `fingerprint` is the tree as it is right now; each record carries the tree it ran over.
+Comparing the two is what the goal order below means by "matching".
+
+**Also capture the goal** — what the change is trying to achieve, one or two lines. In this order:
+
+1. a worklog gist whose `fingerprint` matches the tree being reviewed — a `spec` or `implement` record is
+   the goal stated by whoever set it, not one inferred from the outside
+2. the user
+3. the branch name
+4. the commit messages
+5. the ticket
+
+A gist whose fingerprint **no longer matches** drops out of first place and sits **below the user** — it
+describes a tree that no longer exists, and a goal the user stated in this session is about the one being
+reviewed. So take it only when nothing above it in the list answers: prefer the user, then fall back to the
+stale gist ahead of the branch name, and name the downgrade in step 6 ("goal from the worklog, recorded
+before the last N files changed"). The `impl` lens is
+judged against the goal; with no goal at all, say so and expect lower confidence rather than inventing one.
+Whichever source it came from, say which — that is the contract's third rule, and it is the same degrade
+this step already performs when there is no spec.
 
 Write `<run-dir>/scope.md`: the range, the command producing the diff, the stat, the file list, the goal, and
 **the mode**. Later stages read that file instead of being told again — step 2's roster and step 3's
@@ -320,6 +355,42 @@ name that path once and let it hold the detail.
 A body appears in full where the reader acts on it, and nowhere twice: findings the user must decide on carry
 their full body, the one-line sections stay one line. End on the decision the user has to make — findings
 without an ask is the middle of the job, not the end.
+
+Then record the run:
+
+```bash
+mkit work append --step review --gist '<one line: what this review concluded>' \
+  --artifact '<run-dir>' [--assume '<what this run derived rather than found>']...
+```
+
+The run directory is the right `--artifact` here — it is what this step produced — but it is **perishable**:
+step 6 folds in `run-open.sh --prune`, which keeps the newest five per skill and additionally spares anything
+touched in the last 60 minutes, so the path survives an unpredictable number of later reviews and then stops
+existing. That is expected; the gist carries the conclusion. Name the reviewed range in the gist so the record
+still says what it covered once the directory is gone.
+
+After the summary is produced, and it never changes the summary: a failed append is one line of note, not a
+failed run. A run that found nothing still records — "no findings" is the most useful gist this step
+produces. The `--assume` list is where a derived goal goes, so the next step inherits the caveat instead of
+re-deriving it.
+
+**Whenever the fingerprinted tree is not the content the reviewers read, say so in an `--assume`.** The
+fingerprint is always of the working tree at the moment of the append, and a later step that matches it reads
+"reviewed" — over content no reviewer necessarily saw. Two things open that gap, and the second is the easier
+one to miss:
+
+- **Step 5 applied fixes.** The fingerprint is the tree *after* them; the reviewers ran before. Which
+  sentence depends on the second round: with none, `--assume 'fixes applied after the reviewers ran; the
+  fixed tree is unverified here'`; with one, name what it actually covered — `--assume 'fixes re-reviewed by
+  <sources> over the fixed files only'`.
+- **The review was of a committed range while the tree was dirty.** The reviewers read commits; the
+  fingerprint is of a working tree carrying edits they never saw, whether or not this run touched anything.
+  Name the scope: `--assume 'reviewed <range> only; the tree also carried uncommitted changes at this
+  fingerprint'`.
+
+Both are the same failure — a fingerprint standing for more than was examined — and both are what item 10 of
+the summary already says out loud. A record that states its scope lets `finish` match the fingerprint without
+concluding more than the run proved.
 
 Do not commit unless asked — leave fixes in the working tree for the user to commit (or chain into `commit`).
 Fold `${CLAUDE_PLUGIN_ROOT}/scripts/run-open.sh --prune` into step 6's call rather than spending a turn on it.

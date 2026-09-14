@@ -18,7 +18,7 @@ merges locally, no remote round trip. Either way this skill never *opens* a PR f
 References, read the ones a step calls for: `../_shared/references/worktree.md`,
 `../_shared/references/quality-gate.md`, `../_shared/references/conventional-commits.md`,
 `../_shared/references/git-safety.md`, `../_shared/references/branching.md`,
-`../_shared/references/output-discipline.md`.
+`../_shared/references/output-discipline.md`, `../_shared/references/workflow-contract.md`.
 
 ## When NOT to use this
 
@@ -33,6 +33,18 @@ References, read the ones a step calls for: `../_shared/references/worktree.md`,
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/facts.sh finish --base <base> --gh
 ```
+
+Then read what ran on this branch before, and what each step concluded — gated on `mkit_bin=`, and
+never a stop: `../_shared/references/workflow-contract.md`, "Reading it".
+
+```bash
+mkit work show --json --limit 20
+```
+
+A `review` record whose `fingerprint` matches the tree in front of you says a review already ran over this
+exact content — worth naming in the deliverable. **Read its `assumptions` before believing it**: a review
+that applied fixes records a fingerprint the reviewers never saw and says so there. It does not gate the
+merge, and it never substitutes for the quality gate, which has its own ledger.
 
 Keep the `run=` literal; this file writes it as `<run-dir>`. There is no `$RUN_DIR` — a shell variable does
 not survive to the next Bash call — and re-running the script opens a second directory instead of returning
@@ -173,7 +185,8 @@ After merge:      delete branch <feature-branch> (local + remote) + remove workt
      inside it.
    - `git-worktree`: `git worktree remove <toplevel>` then, if `git branch --list <feature-branch>` still
      shows it, `git branch -D <feature-branch>`, then `git worktree prune`.
-   - `none`: if `git branch --list <feature-branch>` still shows it, `git branch -D <feature-branch>`.
+   - `none`: if `git branch --list <feature-branch>` still shows it, `git branch -D <feature-branch>`,
+     then retire the worklog per **Retiring the worklog** below.
 
 **Local path** (no open PR) — by `cleanup_path`
 
@@ -212,6 +225,21 @@ git branch -d <feature-branch>
 Update the base against the remote first (`git fetch` / `git pull --ff-only <base>`) when one exists, so you
 merge onto current base.
 
+#### Retiring the worklog
+
+**Both paths, and only where `cleanup_path=none`.** The worklog lives in the work tree, so every other
+cleanup path carries it off with the worktree it removes. `none` removes no worktree, so the log outlives
+the branch it is keyed on — and a branch name is reusable, which hands a later `review` on a recreated
+`feat/x` the *old* `feat/x`'s gists, a goal for work that no longer exists. Ask the binary for the path
+rather than deriving the filename, which carries a digest:
+
+```bash
+p=$(mkit work show --branch <feature-branch> --json | jq -r .path) && rm -f "$p"
+```
+
+Best effort, like every other `mkit work` call here: a path it cannot produce is one line of note. And skip
+the append on this path — the record would go straight into the file being retired.
+
 ### 5. Verify the cleanup
 
 **`$toplevel` is stale here whenever step 4 removed a worktree — and so may the shell's cwd be**, if it was
@@ -241,6 +269,24 @@ verification call.
 - What merged into what, the resulting base HEAD, and that branch + worktree were removed.
 - Anything left in place on purpose (unmerged commits, dirty tree, a delete the user declined) — say so
   explicitly.
+
+Then record the run — from wherever this session ends up, and **only if that is still a work tree with
+this branch's log in it**. `finish` is the one step that usually destroys its own log: the worklog lives in
+the worktree it removes, and the branch it is keyed on is deleted a moment later. So the append is worth
+doing where the run stopped short — a declined merge, a failed gate, a PR not ready — and worth skipping
+where the cleanup actually ran. Skipping it is not a degradation to report:
+
+```bash
+mkit work append --step finish --gist '<one line: what this run concluded>' \
+  [--artifact '<merge-sha>'] [--assume '<what this run derived rather than found>']...
+```
+
+`--artifact` only where a merge happened; a run that stopped short has no sha to name, and the gist is
+where the reason goes.
+
+After the report is produced, and it never changes the report: a failed append is one line of note, not a
+failed run. A run that merged nothing still records where the log survives — the reason is exactly what the
+next `finish` wants to know.
 
 ## Git safety
 

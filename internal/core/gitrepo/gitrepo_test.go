@@ -119,3 +119,47 @@ func TestOpenOutsideARepo(t *testing.T) {
 		t.Errorf("err = %v, want ErrNotARepo", err)
 	}
 }
+
+// AliveCommits fails **open**, and the worklog's rotation is why that matters: it
+// drops every record whose head this map does not call alive. Invert the fallback and
+// the first rotation past Keep*2 discards the whole log instead of nothing — a silent
+// data loss with no test failing anywhere. So the fallback is pinned here, at the one
+// place that decides it.
+func TestAliveCommitsFailsOpen(t *testing.T) {
+	heads := []string{"deadbeef", "cafebabe"}
+
+	// A Repo whose work tree does not exist: `git cat-file` cannot run at all, which
+	// is the shape of every failure the fallback is for — no git, no repo, no HEAD.
+	broken := &Repo{Toplevel: filepath.Join(t.TempDir(), "no-such-work-tree")}
+	alive := broken.AliveCommits(heads)
+	for _, h := range heads {
+		if !alive[h] {
+			t.Errorf("a batch that could not run reported %s dead; rotation would drop it", h)
+		}
+	}
+
+	// The empty case stays empty — nothing asked about, nothing to keep alive.
+	if got := broken.AliveCommits(nil); len(got) != 0 {
+		t.Errorf("AliveCommits(nil) = %v, want empty", got)
+	}
+}
+
+// The counterpart to the fail-open test: a batch that *did* answer must still tell
+// alive from dead. A guard that fails open too eagerly is invisible — rotation simply
+// stops dropping anything, and the log grows with records pointing at gone commits.
+func TestAliveCommitsDistinguishesWhenTheBatchAnswers(t *testing.T) {
+	repo := newRepo(t)
+	head := repo.Head()
+	if head == "" {
+		t.Fatal("no HEAD in the throwaway repo")
+	}
+	const gone = "0000000000000000000000000000000000000001"
+
+	alive := repo.AliveCommits([]string{head, gone})
+	if !alive[head] {
+		t.Errorf("HEAD %s reported dead", head)
+	}
+	if alive[gone] {
+		t.Error("a commit that does not exist reported alive")
+	}
+}

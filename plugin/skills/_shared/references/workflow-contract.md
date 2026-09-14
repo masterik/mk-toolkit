@@ -33,7 +33,14 @@ makes a skipped step safe rather than silent. A run that assumed something and r
 result has lied by omission.
 
 **4. Record for the next step; never gate on the last one.** Every step appends one worklog record
-when it finishes. A later step reads it to be **cheaper and better informed** — never to decide
+when it finishes — with one exception, and it is the shape of the rule rather than a hole in it:
+`finish` usually destroys its own log, since the worklog lives in the worktree it removes and is
+keyed on the branch it deletes. So `finish` records where it stopped short and skips where the
+cleanup ran, and that skip is not a degradation to report.
+
+The exception has its own exception: on `cleanup_path=none` there is no worktree to remove, so the
+log outlives the branch — and a branch name is reusable, which would hand a later `review` on a
+recreated `feat/x` the *old* `feat/x`'s records. `finish` retires the log itself on that path. A later step reads it to be **cheaper and better informed** — never to decide
 whether it is allowed to run. This is `a recorded fact is an input, never a permission`, applied to
 the workflow rather than the gate ledger.
 
@@ -56,6 +63,23 @@ artifact it produced (an issue URL, a path, a run directory), a one-line gist, a
 it made. The gist is what a later step reads instead of re-deriving intent; the fingerprint is what
 tells it whether the gist still describes the tree in front of it.
 
+### Reading it
+
+**Gated on the binary, never on the log.** A step reads the worklog only when its `facts.sh` call
+reported `mkit_bin=<path>`; on `mkit_bin=none` it skips the call and carries on. (`review` is the
+exception, and only because it needs no gate: its step 0 already stops the run when `mkit` is
+absent, so by the time it reads the log there is no `mkit_bin=none` case left.)
+
+```bash
+mkit work show --json --limit 20
+```
+
+`facts.sh` reports `mkit_bin=` and `mkit=` and compares nothing, so an absent, older or failing
+`mkit` is **one fewer input, never a stop** — rule 4 above, applied to the tool rather than to the
+record. That is what separates this call from `review`'s step-0 `mkit findings` probe: without the
+findings arithmetic there is no review, and without the worklog there is a slightly less informed
+one. What each step does with what it reads is the step's own business, and stays in its `SKILL.md`.
+
 **Per branch, not per invocation.** A run directory (`<skill>-<timestamp>/`) belongs to one call and
 holds its working files. The worklog spans every call on a branch, which is the unit of work the
 finishing steps act on.
@@ -68,7 +92,7 @@ finishing steps act on.
 | `spec` | decisions | reads the conversation and the repo; no re-interview | the spec artifact + task graph |
 | `implement` | a task graph | one slice covering the ask | which slices landed, gate results |
 | `commit` | a dirty tree | — | the commits made, and their scope |
-| `review` | a diff + a goal | goal from branch, commits, or worklog | findings, verdicts, fixes applied |
+| `review` | a diff + a goal | goal from a matching `spec`/`implement` gist, then the user, a stale one, branch, commits, ticket | findings, verdicts, fixes applied |
 | `pr` | commits + a branch | commits first, inline | the PR URL, gate verdict |
 | `finish` | a merged-able branch | commits first, inline | the merge, the cleanup |
 

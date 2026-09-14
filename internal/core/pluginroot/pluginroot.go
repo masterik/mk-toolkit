@@ -106,9 +106,17 @@ func Remedy() string {
 // Invoked through bash by absolute path, with no arguments and no shell
 // interpolation of caller data — the function name is a compile-time constant at
 // every call site.
-func (r *Root) CommonFunc(fn string) (string, error) {
+func (r *Root) CommonFunc(fn string) (string, error) { return r.CommonFuncIn("", fn) }
+
+// CommonFuncIn is CommonFunc with an explicit working directory. Several helpers
+// answer about "the repository you are standing in" — the fingerprint most of all —
+// so the caller that already knows which work tree it means says so, rather than
+// relying on the process happening to be inside it.
+func (r *Root) CommonFuncIn(dir, fn string) (string, error) {
 	script := ". " + shellQuote(filepath.Join(r.Dir, "scripts", "lib", "common.sh")) + "; " + fn
-	out, err := exec.Command("bash", "-c", script).Output()
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Dir = dir
+	out, err := cmd.Output()
 	if err != nil {
 		return "", err
 	}

@@ -46,7 +46,9 @@ skills, Homebrew ships the binary, and the two version independently
 ([ADR 0003](docs/adr/0003-two-distribution-channels.md)). The binary answers `mkit version` today
 and is [absorbing the script layer](docs/backlog.md) one milestone at a time. As of M4 the `review`
 skill calls `mkit findings` for its findings arithmetic and stops if the binary is absent; every
-other skill still runs with no binary installed. The scripts need `git`,
+other skill still runs with no binary installed. As of M6 all four also read and write a per-branch
+**worklog** through `mkit work` — what ran on this branch and what it concluded — which is an
+optional input: no skill stops for a worklog it cannot reach. The scripts need `git`,
 `bash` and `jq`; `rg`, `gh` and `wt` are recommended — see
 [Prerequisites](docs/prerequisites.md).
 
