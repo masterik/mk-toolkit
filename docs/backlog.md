@@ -95,9 +95,10 @@ not a trade-off.
 
 ## Near-term, outside the port line
 
-Neither of these is a port, and neither waits on a milestone. Both follow from
+None of these is a port, and none waits on a milestone. The first two follow from
 [ADR 0002](adr/0002-state-locations-under-a-sandbox.md) landing and
-[ADR 0003](adr/0003-two-distribution-channels.md) being taken.
+[ADR 0003](adr/0003-two-distribution-channels.md) being taken; the third follows from M7 landing
+a config nothing reads.
 
 - ~~**Delete `plugin/install.sh`.**~~ **Done (0.15.0)**, together with the `SessionStart` hook —
   `hooks/hooks.json`, `scripts/hooks/session-bootstrap.sh`, both `.bats` suites, and the
@@ -112,6 +113,44 @@ Neither of these is a port, and neither waits on a milestone. Both follow from
     not re-add a shell reporter for either gap.
   - **`mkit facts`' `user_dir_writable=` survives**, so no skill lost information. `~/.mkit/` is
     empty but still the declared home for user-scoped state.
+
+- **The config has no consumers.** M7 landed `mkit init`, `config.toml` and
+  `mkit repo profile --json`, and **nothing reads the answer.** No skill calls `repo profile`;
+  `facts.sh` reports `config=` and `config_state=` and no pinned *value*. Of the five sections
+  `init` writes, `spec.*` gets its consumer at M8 and `gate.commands` at M5 (both below) — the
+  other three are written and read by nobody, and no milestone will pick them up. Four items,
+  none of them a port, all independent of the port line:
+
+  - **`merge.style` → `finish`.** `finish` step 4 runs
+    `gh repo view --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed` and, when more
+    than one is allowed, **asks the user with squash as the suggested default** — on every run, in
+    every repo, including ones whose answer has never changed. The pinned value is exactly the
+    thing that question is asking for. Two pieces of real content beyond the lookup: a pinned style
+    the remote does not allow is **reported, never silently substituted** (a pinned value cheap to
+    verify gets verified — invariant 13), and `wt merge` carries the user's own squash/rebase
+    config, so the skill must decide whether a pinned style means passing `--no-squash` / `--no-ff`
+    or leaving worktrunk's own config alone.
+  - **`commit.scopes` + `review.reviewers` → `commit` and `pr`.** `commit` already tells itself to
+    honour "any repo rules: max subject length, required scopes" with nothing to read them from;
+    `pr` re-derives reviewers from `CODEOWNERS` every run. One item, because it is one mechanism
+    in two skills. **The decision it carries:** the profile is *optional enrichment*, not a
+    prerequisite. M4 made `mkit` a hard requirement for `review` because the arithmetic has no
+    fallback — here the fallback is exactly today's discovery, so these skills read the profile
+    when it answers and degrade **silently** when `mkit` is absent. A step-0 probe that stops the
+    run would break invariant 8 for nothing.
+  - **Config validation.** `repoconfig.Load` is a plain `toml.Unmarshal`: unknown keys are dropped
+    and enum values unchecked. Validation exists only on `init`'s flags and its TUI — yet `init`'s
+    own success message says "or edit the file directly". A hand-typed `style = "sqaush"`, or a
+    `[reviewers]` table that should have been `[review]`, is silently ignored for the life of the
+    repo, and `repo profile` reports the value as *discovered* because the pinned one never
+    arrived. Strict decode, an `unavailable` cause naming the bad key, and a `doctor` check.
+  - **`[cleanup] keep`.** A new key, and the one candidate that survives the schema's own filter —
+    *pin only what inspection cannot establish*. `cleanup` hardcodes "the default branch, and a
+    develop-like branch if one exists locally". A repo with `staging` or a long-lived release
+    branch cannot say so, branch protection is a network call, and being wrong here **deletes a
+    branch**. Deliberately *not* pinned alongside it: the base branch (`origin/HEAD` answers it),
+    PR labels and commit types — a pinned copy of a discoverable fact is a staleness surface
+    bought for nothing.
 
 ## Milestones
 
@@ -323,6 +362,11 @@ because git cannot re-include a file whose parent directory is excluded.
   the surface — `scratch.UserDirWritable`/`UserDirRemedy` for the user directory,
   `repoconfig.ShadowedRemedy` for a shadowed config. `doctor` and `facts` both read them; neither
   words its own.
+**What it deliberately did not do, and now needs picking up:** it landed the config *surface* and
+no consumer. `spec.*` gets one at M8; `gate.commands` got one at M5; `merge.style`, `commit.scopes` and
+`review.reviewers` get one from "The config has no consumers" above, which is where the rest of
+that gap is tracked.
+
 **Done — all four met:** the committed config path is decided and recorded; `mkit doctor` names an
 unwritable `~/.mkit/` without failing, with a remedy naming **both** halves (create, then grant —
 the grant alone cannot create it); `mkit repo profile --json` distinguishes discovered from pinned
@@ -349,6 +393,10 @@ support and can land whenever.
   **Sequential in place is the default**, not a worktree per slice: `wt` is sandbox-fragile
   (observed failing to `mktemp`), and parallel editors over one tree is the collision `review`
   already avoids. Parallel worktrees stay an opt-in for a graph with genuinely independent slices.
+  **The opt-in needs a home:** `[implement] worktrees = false`, a new config key, written by
+  `mkit init` like every other pinned answer. It is not discoverable — whether this repo's tooling
+  survives two editors over two trees is a property of the repo and its hooks, and guessing it
+  wrong costs a collision in the user's working tree.
 - **Settled in M5: there is no fast tier.** M5 deleted it outright rather than keeping it as a
   pinned config key, because nothing read it and the config pins only what inspection cannot
   establish. `implement` therefore runs the **full** gate between slices and leans on the ledger
