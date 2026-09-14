@@ -179,3 +179,86 @@ func run(dir string, args ...string) (string, error) {
 	out, err := cmd.Output()
 	return strings.TrimRight(string(out), "\n"), err
 }
+
+// Branch returns the current branch name, or "" on a detached HEAD. Detachment is
+// a normal state — the caller names its log after the head instead — so it is
+// reported as an empty answer rather than an error.
+//
+// `symbolic-ref`, not `rev-parse --abbrev-ref HEAD`: before the first commit the
+// latter fails and prints the literal `HEAD`, which would make a repository's own
+// branch look detached and give it a different worklog before and after its first
+// commit. `symbolic-ref` answers from the ref, which exists from `git init`, and
+// fails only when HEAD really is detached.
+func (r *Repo) Branch() string {
+	out, err := run(r.Toplevel, "symbolic-ref", "--short", "-q", "HEAD")
+	if err != nil {
+		return ""
+	}
+	return out
+}
+
+// Head returns the commit HEAD resolves to, or "" on an unborn branch.
+//
+// The error is checked, not discarded: on an unborn branch `rev-parse HEAD` exits
+// nonzero *and* prints the literal `HEAD`, so ignoring the status records that
+// string as a commit — and rotation, finding no such object, would treat every
+// record written before the first commit as dead.
+func (r *Repo) Head() string { return r.Rev("HEAD") }
+
+// Rev resolves a revision to a commit id, or "" when it does not resolve.
+//
+// `--end-of-options` so a revision that begins with a dash is read as a revision
+// rather than as a flag — the caller's string is data here, never syntax.
+func (r *Repo) Rev(rev string) string {
+	out, err := run(r.Toplevel, "rev-parse", "--verify", "-q", "--end-of-options", rev+"^{commit}")
+	if err != nil {
+		return ""
+	}
+	return out
+}
+
+// BranchHead resolves a *branch* to its tip, or "" when no such branch exists.
+//
+// Not Rev: a revision string is a small language, and `@`, `HEAD` and `x@{1}` all
+// resolve to something other than the branch of that name. Asking for
+// `refs/heads/<branch>` asks the question the caller meant.
+func (r *Repo) BranchHead(branch string) string {
+	return r.Rev("refs/heads/" + branch)
+}
+
+// AliveCommits reports, for each of heads, whether it still resolves to a commit.
+//
+// One `cat-file --batch-check` for the whole set, not one call per head: this runs
+// on the rotation path, where paying a fork per record would make the bookkeeping
+// the expensive part of the command it hangs off. Unknown input lines come back as
+// `<input> missing`, which is the answer, not an error — so a batch that fails
+// outright reports every head alive, and rotation then drops nothing rather than
+// dropping everything.
+func (r *Repo) AliveCommits(heads []string) map[string]bool {
+	alive := make(map[string]bool, len(heads))
+	if len(heads) == 0 {
+		return alive
+	}
+	var in strings.Builder
+	for _, h := range heads {
+		in.WriteString(h + "^{commit}\n")
+	}
+	out, err := runStdin(r.Toplevel, in.String(), "cat-file", "--batch-check")
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	// One line per head, or the batch did not answer the question asked. A git
+	// killed mid-stream leaves *partial* output, and a partial answer read as a
+	// whole one silently marks every head past the last line dead — which is the
+	// direction that loses records. Anything short of the full set fails open.
+	if err != nil || out == "" || len(lines) != len(heads) {
+		for _, h := range heads {
+			alive[h] = true
+		}
+		return alive
+	}
+	for i, line := range lines {
+		if !strings.HasSuffix(line, " missing") {
+			alive[heads[i]] = true
+		}
+	}
+	return alive
+}

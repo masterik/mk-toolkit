@@ -135,6 +135,7 @@ Each subcommand is its own Bash pattern, so the first run of each asks. Allow th
       "Bash(mkit facts:*)",
       "Bash(mkit run:*)",
       "Bash(mkit findings:*)",
+      "Bash(mkit work:*)",
       "Bash(mkit branch scan:*)",
       "Bash(mkit gate detect:*)",
       "Bash(mkit gate run:*)"

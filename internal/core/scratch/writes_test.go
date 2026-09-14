@@ -37,6 +37,8 @@ var reviewed = map[string]struct {
 	"internal/core/repoconfig/repoconfig.go": {2, "<toplevel>/.mkit/config.toml — the one committed file in the scratch root"},
 	"internal/core/doctor/doctor.go":         {4, "probes writability by creating and removing a temp file in each declared location"},
 	"internal/core/storage/apply.go":         {3, "deletes only what Scan named, home-containment guarded"},
+	"internal/core/worklog/worklog.go":       {2, "<toplevel>/.mkit/work/<branch>.jsonl — MkdirAll+OpenFile to append, inside the scratch root"},
+	"internal/core/worklog/rotate.go":        {8, "rotates that same file: Mkdir/RemoveAll/Mkdir/RemoveAll for the lock, CreateTemp+Remove+Chmod+Rename to replace it"},
 }
 
 // The calls that put something on disk, or take it off.

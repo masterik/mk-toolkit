@@ -13,6 +13,8 @@ the skills orchestrate `git`, `gh`, `wt`, and code-review tools — no new git l
 **M7 (`mkit repo profile`/`init`/`doctor`) done** — repo config is `<toplevel>/.mkit/config.toml`,
 committed ([ADR 0001's config-path amendment](docs/adr/0001-per-repo-config-and-init.md#amendment-the-config-path)).
 **M4 (`mkit findings`) done** — `internal/core/findings/` + `internal/cli/findings.go`.
+**M6 (`mkit work`) done** — the per-branch worklog under `<toplevel>/.mkit/work/`, read and written
+by all four skills; what it reports is **one fewer input, never a stop**.
 **M5 (the `jq` consumers) done** — `mkit facts`, `mkit gate detect|run`, `mkit branch scan` and
 `mkit run open|prune` replaced the last five scripts, and **the payload is Markdown only**: no
 `plugin/scripts/`, no `lib/common.sh`, no `tests/`. That makes `mkit` a **hard requirement for
@@ -46,6 +48,7 @@ just build / vet / test          # go build|vet|test ./...
 just lint                        # golangci-lint run (CI pins v2.12, brew install golangci-lint)
 just run version --json          # exercise the front-end contract
 just run doctor                  # prerequisites, sandbox writability, plugin state
+just run work show --json        # this branch's worklog: what ran, and what it concluded
 just run repo profile --json     # how this repo works: discovered|pinned|unavailable
 just run facts commit --no-run   # every starting fact, without opening a run dir
 ```
@@ -161,6 +164,22 @@ reads as it does:
     is flagged as thin or an unmerged pair comes back for review — location decides the merge
     itself. Every order-bearing sort is `sort.SliceStable`; ids come from a sort with ties. Writes the run
     directory's artefacts, prints nothing.
+  - `worklog/` (M6): the per-branch record of what each step concluded,
+    `<toplevel>/.mkit/work/<branch>.jsonl`. `FileName` is the branch→file mapping **both verbs go
+    through** — one that `show` and `append` derive separately is one they eventually disagree
+    about, and the symptom is an empty log rather than an error. It escapes to `%XX` and then
+    appends the **full** SHA-256 of the exact branch to **every** name: macOS is
+    case-insensitive, so `JIRA-123` and `jira-123` would otherwise be one file; a digest added
+    only to the uppercase ones is still ordinary branch text that another branch could spell; and
+    a truncated one turns "same string" into "same string, or unlucky". Since git allows ref names
+    longer than a filename may be, the name is budgeted against `NAME_MAX` and the **readable
+    half** is what gets cut to fit, never the digest — injectivity was never carried by the
+    readable half, and an unbudgeted name would not degrade but fail outright, `open` returning
+    ENAMETOOLONG so the branch could not record at all. Rotation mirrors `gate-run.sh`'s
+    `ledger_trim` down to the constant (`Keep = 200`, trim past `Keep*2`, dead heads first, mkdir
+    lock with the 60-minute staleness break) — including its hardest rule: **a rotation that cannot
+    read the file cleanly does not rotate.** The fingerprint is **delegated to
+    `mkit_tree_fingerprint`** via `pluginroot.CommonFunc`, never reimplemented, until M5 ports it.
 - `internal/tui/` — Bubble Tea rendering over `core`, one subpackage per command.
   `internal/tui/storageprune/` (M2): the size-sorted tick-list `storage prune --apply` opens on a
   TTY. `internal/tui/repoinit/` (M7): the `mkit init` form. Neither `Update` holds command logic —
@@ -218,7 +237,8 @@ reads as it does:
   reporter for them. `mkit facts`' `user_dir_writable=` and `config_state=` starting facts
   are what a *skill* reads, since `doctor` is for a human.
 - `<toplevel>/.mkit/` — the scratch root, owned by `internal/core/scratch`: per-run directories plus `gate.jsonl` (the gate
-  ledger, append-only, rotated back to the newest 200 records once it passes 400) — **and one
+  ledger, append-only, rotated back to the newest 200 records once it passes 400) and `work/`
+  (M6's worklog, one `<branch>.jsonl` per branch, same append-only shape and same rotation) — **and one
   committed file, `config.toml`**, the repo config `mkit init` writes
   ([ADR 0001](docs/adr/0001-per-repo-config-and-init.md#amendment-the-config-path)). That is why
   the ignore rule is the **pair** `.mkit/*` + `!.mkit/config.toml` and not a directory-only line:
@@ -234,7 +254,9 @@ reads as it does:
   than tidy: unignored, `git worktree remove` refuses, `git add -A` would commit run artefacts, and
   the gate fingerprint sees a directory that changes while the gate runs. `mkit facts` reports
   `run_ignored=` because an isolated session cannot write that file. `mkit run prune` only removes
-  `<skill>-*` **directories**, which keeps `gate.jsonl` out of its range.
+  `<skill>-*` **directories**, which keeps `gate.jsonl` and `work/` out of its range. The worklog
+  needs **no ignore rule of its own** — `.mkit/*` already covers it, and a second rule would be a
+  second thing to keep true.
 - `~/.mkit/` — the declared home for state outside a repo, overridable with `MKIT_HOME` (the tests
   set it so a developer's real state cannot affect a run). **Empty today**: its two files,
   `bootstrap.state` and `bootstrap.disabled`, went with the hook in 0.15.0. It keeps its definition

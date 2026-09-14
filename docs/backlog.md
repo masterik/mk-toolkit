@@ -116,7 +116,9 @@ Neither of these is a port, and neither waits on a milestone. Both follow from
 ## Milestones
 
 **Order.** `mkit init` was the priority, so **M7 went first**, ahead of the remaining ports; it is
-done; **M4 followed**, then **M5**, which finished the port. **M6 is next**, then M8. M3 is withdrawn. The M-numbers are stable
+done, and **M4 followed**, then **M6** — the worklog is what the front half will read, so it was
+worth having before any of the new skills exist — then **M5**, which finished the port. **M8 is
+next.** M3 is withdrawn. The M-numbers are stable
 identities referenced from `concept.md` and `AGENTS.md`, so nothing is renumbered when the order
 changes.
 
@@ -247,20 +249,44 @@ layer in.
 **Done:** `jq`, `shasum` and `bats-core` are gone from [`prerequisites.md`](prerequisites.md);
 `just shtest` and `tests/` are gone; every skill's first call is `mkit facts <skill>`.
 
-### M6 — `mkit work` + the workflow contract
+### M6 — `mkit work` + the workflow contract — done
 The substrate the seven steps stand on, landed before any of the new skills, so the back half
 starts recording immediately and the front half has something to read.
+
+**One deviation from the plan:**
+[`workflow-contract.md`](../plugin/skills/_shared/references/workflow-contract.md) already shipped,
+ahead of the command it documents — so this milestone made the contract true rather than writing
+it. What was missing was the link from the four skills, and the command itself.
 - `mkit work show|append`, `--json`. `<toplevel>/.mkit/work/<branch>.jsonl`, append-only, rotated
   like `gate.jsonl`, never committed, per-worktree. A record carries step, timestamp, content
   fingerprint (reusing `mkit_tree_fingerprint`'s successor), artifact pointer, one-line gist, and
   assumptions. Appending is bookkeeping; **reading it is judgement and stays in the skills.**
+  The fingerprint is reached through `pluginroot`'s `CommonFunc` — one producer until M5 ports it,
+  the same delegation M7 used for gate discovery. An unavailable one is `""` plus a named cause,
+  never a failed append.
+  `work append` **errors** on a failed write, unlike the gate ledger's best-effort appends: it is a
+  command someone invoked. The best-effort half lives in the skills, which append after their report
+  and treat a failure as one line of note — rule 4 says a recorded fact is an input, never a
+  permission. Exit codes follow M4's vocabulary rather than adding one: `usageErr` (2) for a
+  mistake at the command line — an unknown `--step`, a missing `--gist` — and a plain error (1) for
+  no work tree, which is the environment and is what `repo profile` already returns there.
 - Ship [`workflow-contract.md`](../plugin/skills/_shared/references/workflow-contract.md) and link
   it from all four existing skills.
+- **The worklog calls are optional, and that is the difference from M4's probe.** M4 settled the
+  skew question as presence-only, and made `review` *stop* when `mkit findings` is missing, because
+  without the arithmetic there is no reconcile. Nothing here is load-bearing that way: a worklog
+  `mkit` cannot answer for costs a step one input and never stops it, which is rule 4 again — a
+  recorded fact is an input, never a permission. So these calls read `facts.sh`'s `mkit=` /
+  `mkit_bin=` starting facts and carry on either way, and no skill grew a second probe.
 - Retrofit the back half: `commit`, `review`, `pr`, `finish` each append one record and each read
   the log for a goal before deriving one. `review`'s step 1 goal derivation is the model — it
   already degrades correctly, so this generalises an existing behaviour rather than inventing one.
 **Done when:** a branch that ran `commit` then `review` shows both in `mkit work show --json`, and
-`review` invoked cold on that branch takes its goal from the log instead of the branch name.
+`review` invoked cold on that branch takes its goal from the log instead of the branch name. `show`
+reports the **current** tree's fingerprint in the same envelope — a record's fingerprint answers
+nothing on its own.
+`finish` is the exception worth naming: it destroys the log it would write to, so it records only
+where the run stopped short of the cleanup.
 
 ### M7 — `mkit repo profile` + `init` + `doctor` — done
 The configuration surface ([ADR 0001](adr/0001-per-repo-config-and-init.md)). Independent of M6

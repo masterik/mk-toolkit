@@ -45,8 +45,11 @@ Nothing to build either way, and **both steps are required** — the marketplace
 Homebrew ships the binary, and the two version independently
 ([ADR 0003](docs/adr/0003-two-distribution-channels.md)). Since M5 every skill's first call is
 `mkit facts <skill>`, so a missing binary stops a skill at step 0 with a `brew` remedy rather than
-degrading. Presence only, with no declared minimum on either side. Beyond `git` and `bash`, `rg`,
-`gh` and `wt` are recommended — see [Prerequisites](docs/prerequisites.md).
+degrading. Presence only, with no declared minimum on either side. All four skills also read and
+write a per-branch **worklog** through `mkit work` (M6) — what ran on this branch and what it
+concluded — which is an optional *input*: a worklog a step cannot read costs it one input and never
+stops it. Beyond `git` and `bash`, `rg`, `gh` and `wt` are recommended — see
+[Prerequisites](docs/prerequisites.md).
 
 ## Not re-proving the same tree (the gate ledger)
 
