@@ -66,7 +66,9 @@ tells it whether the gist still describes the tree in front of it.
 ### Reading it
 
 **Gated on the binary, never on the log.** A step reads the worklog only when its `facts.sh` call
-reported `mkit_bin=<path>`; on `mkit_bin=none` it skips the call and carries on:
+reported `mkit_bin=<path>`; on `mkit_bin=none` it skips the call and carries on. (`review` is the
+exception, and only because it needs no gate: its step 0 already stops the run when `mkit` is
+absent, so by the time it reads the log there is no `mkit_bin=none` case left.)
 
 ```bash
 mkit work show --json --limit 20

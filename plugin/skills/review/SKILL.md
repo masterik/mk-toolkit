@@ -122,13 +122,16 @@ Then read what already ran on this branch:
 mkit work show --json --limit 20
 ```
 
-Gated and never a stop, as everywhere (`workflow-contract.md`, "Reading it") — but the reason it can fail
-here is this skill's own: step 0 established that this binary knows `findings`, not that it knows `work`, and
-a binary from before the worklog landed answers one and not the other. **A nonzero exit is not a stop** —
-carry on without the log and say so in step 6. Read what it printed before naming the cause: an unknown
-subcommand is that skew, while a log it found and could not read is a different fact and worth reporting as
-one. A branch nothing has run on is different
-again: zero records and exit 0, because being first is the normal case, not a problem to report.
+**Unconditional here, unlike everywhere else.** The other skills gate this call on `mkit_bin=<path>`
+(`workflow-contract.md`, "Reading it"); `review` is the one skill that does not need to, because step 0
+already stopped the run if the binary was missing. There is no `mkit_bin=none` left to check for.
+
+What step 0 did *not* establish is that this binary knows `work` — it proved `findings` — and a binary from
+before the worklog landed answers one and not the other. So the second half of the shared rule still holds:
+**a nonzero exit is not a stop**, carry on without the log and say so in step 6. Read what it printed before
+naming the cause: an unknown subcommand is that skew, while a log it found and could not read is a different
+fact and worth reporting as one. A branch nothing has run on is different again — zero records and exit 0,
+because being first is the normal case, not a problem to report.
 
 The envelope's own `fingerprint` is the tree as it is right now; each record carries the tree it ran over.
 Comparing the two is what the goal order below means by "matching".
