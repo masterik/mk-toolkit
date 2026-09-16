@@ -33,7 +33,7 @@ A PR that is easy to review and safe to merge:
 - **Base branch** — default `main`; ask if unclear.
 - **Draft?** — draft if the work isn't ready for review.
 - **Area prefix** — scoped to one package → prefix the title `[area]` (`[api]`, `[ui]`).
-- **Reviewers** — step 6: from repo config, or ask.
+- **Reviewers** — step 6: pinned in the repo config, from `CODEOWNERS`, or ask.
 
 ## Workflow
 
@@ -68,6 +68,28 @@ That covers the branch, the status, `commits:` for `<base>..HEAD`, the stat, `co
 `pr=` — whether this branch already has one, which is the check that otherwise gets skipped. Keep the `run=`
 literal; this file writes it as `<run-dir>`. There is no `$RUN_DIR` (a shell variable does not survive to the
 next Bash call), and re-running `mkit facts` opens a second directory instead of returning the first.
+
+Then who this repo says reviews it — one more read-only call, cheap enough to send in the same
+message as the one above:
+
+```bash
+mkit repo profile --json
+```
+
+`reviewers`, tagged `pinned` or `discovered`, is step 6's first answer:
+
+- **`pinned`** — the repo's own default reviewers, for exactly the repo that has no `CODEOWNERS`. Use them
+  as given; **do not read `CODEOWNERS` to cross-check them**, and do not re-derive.
+- **`discovered`** — this is `CODEOWNERS` flattened to its owner tokens, with the patterns dropped. That is
+  a worse answer than step 6's own read, which matches owners against *the changed paths*, so take it as
+  confirmation there is a file and do step 6 normally.
+
+**Silence, with one exception.** A failed call, or `unavailable` with nothing but "no CODEOWNERS file and
+nothing pinned" behind it, changes nothing: step 6 runs as it always has and **this skill never mentions
+the binary**. The exception is a **pin that went nowhere** — a non-empty `config_problems`, or an
+`unavailable` whose `cause` names `.mkit/config.toml`. A misspelled `[review]` table is how a pinned
+reviewer list silently becomes no reviewer list, so report that one line (the `detail` is already the
+whole sentence) and then fall back.
 
 ### 1. Commit remaining work
 
@@ -166,6 +188,9 @@ Honest and brief. **Never** include co-authorship lines or any mention of AI/Cla
 Runs alongside step 5 — spawn both in one message, or do it inline when the lookup is a `CODEOWNERS` read and
 nothing more. Figure out who, without hardcoding handles:
 
+0. **`reviewers` tagged `pinned`** in step 0's profile — the repo already answered this. Use that list and
+   **skip 1 entirely**; it is the answer the key exists for, and re-deriving it would be asking a question
+   that has been settled in a committed file. Say it is pinned in the preview and the report (rule 3).
 1. `CODEOWNERS` — step 0 reported `codeowners=<path>` or `none`; owners of the changed paths are the natural
    reviewers.
 2. Repo/team conventions the user or docs mention; a configured default reviewer/team (`gh repo view`, org
@@ -181,10 +206,13 @@ Show the full PR and confirm (unless the user already said "just create it"):
 Title:     <title>
 Base:      <base> ← <feature-branch>
 Draft:     <yes/no>
-Reviewers: <handles or "none">
+Reviewers: <handles or "none"> (<pinned in .mkit/config.toml | from CODEOWNERS | asked>)
 
 <description>
 ```
+
+The parenthesis is rule 3 in its shortest form: where the handles came from, so a wrong list is fixed in
+the right place. Drop it only where there are no reviewers at all.
 
 ### 8. Create the PR
 
@@ -215,7 +243,7 @@ Close with a full report, even if step 1 made no new commits:
 PR:        <url>
 Base:      <base> ← <feature-branch>
 Draft:     <yes/no>
-Reviewers: <handles or "none">
+Reviewers: <handles or "none"> (<where they came from>)
 
 Title: <title>
 
@@ -252,6 +280,7 @@ a completed no-op is a fact, and is not what an absent record says.
 | Lint/test/build fails               | Report which step; user decides fix vs proceed-as-draft.          |
 | On the base branch                  | Stop — tell the user to create a feature branch first.            |
 | No reviewers determinable           | Ask, or skip for a draft.                                         |
+| Config problem in the profile       | Report its `detail` verbatim, then fall back to `CODEOWNERS`.      |
 
 ## Git safety
 

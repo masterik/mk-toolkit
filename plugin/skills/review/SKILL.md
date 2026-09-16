@@ -102,7 +102,18 @@ both and note the split.
 **Decide the mode**: **full** (all three reviewers, all eight lenses — the default) or **quick** (CodeRabbit +
 Codex on `bugs`/`impl` only; no Claude craft subagent; no `adversarial`). `$ARGUMENTS` decides it outright when
 present (`quick` or `full`). Otherwise, an explicit signal — "quick review", "fast pass", "just check for
-bugs" — selects quick; ask only if genuinely ambiguous; **default to full** otherwise, since "before a
+bugs" — selects quick; then **the repo's own default**, if it pinned one:
+
+```bash
+mkit repo profile --json     # review_mode: "full" | "quick", tagged pinned
+```
+
+A pinned `review_mode` is the repo saying which roster it wants when nobody said — three reviewers is tens
+of thousands of tokens, and whether a team spends that by default is a decision, not a `command -v` result.
+It is a default, never a ceiling: `$ARGUMENTS` and an explicit signal both still win, and the user can ask
+for the other mode at any point. Say it was pinned when it decided the run (rule 3), and record it in
+`scope.md` like any other mode. A failed call or an absent value changes nothing and is not mentioned.
+Ask only if genuinely ambiguous; **default to full** otherwise, since "before a
 commit/PR" is the typical high-stakes trigger this skill is built for. Quick is a **deliberate** narrower
 scope, not a degraded run — step 2 and step 6 must never describe it the way a missing/failed reviewer is
 described.

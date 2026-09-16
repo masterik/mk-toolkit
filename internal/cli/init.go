@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -27,14 +28,16 @@ type initResult struct {
 
 func newInitCmd() *cobra.Command {
 	var (
-		gate      []string
-		specStore string
-		specRef   string
-		scopes    []string
-		reviewers []string
-		merge     string
-		keep      []string
-		force     bool
+		gate       []string
+		specStore  string
+		specRef    string
+		scopes     []string
+		subjectMax int
+		reviewers  []string
+		reviewMode string
+		merge      string
+		keep       []string
+		force      bool
 	)
 
 	cmd := &cobra.Command{
@@ -88,7 +91,12 @@ func newInitCmd() *cobra.Command {
 			}
 
 			cfg := existing
-			if err := applyFlags(cfg, gate, specStore, specRef, scopes, reviewers, merge, keep); err != nil {
+			if err := applyFlags(cfg, flagValues{
+				gate: gate, specStore: specStore, specRef: specRef,
+				scopes: scopes, subjectMax: subjectMax,
+				reviewers: reviewers, reviewMode: reviewMode,
+				merge: merge, keep: keep,
+			}); err != nil {
 				return err
 			}
 
@@ -133,7 +141,10 @@ func newInitCmd() *cobra.Command {
 	cmd.Flags().StringVar(&specStore, "spec-store", "", "github-issues | gitlab | files | none")
 	cmd.Flags().StringVar(&specRef, "spec-ref", "", "qualifies --spec-store (owner/repo, or a path)")
 	cmd.Flags().StringArrayVar(&scopes, "scope", nil, "pin a conventional-commit scope (repeatable)")
+	cmd.Flags().IntVar(&subjectMax, "subject-max", 0,
+		"pin the longest commit subject this repo accepts, in characters")
 	cmd.Flags().StringArrayVar(&reviewers, "reviewer", nil, "pin a default reviewer (repeatable)")
+	cmd.Flags().StringVar(&reviewMode, "review-mode", "", "full | quick — the roster the review skill opens with")
 	cmd.Flags().StringVar(&merge, "merge", "", "merge | squash | rebase")
 	cmd.Flags().StringArrayVar(&keep, "keep", nil,
 		"pin a branch cleanup must never delete (repeatable); the default branch is kept regardless")
@@ -152,9 +163,27 @@ func newInitCmd() *cobra.Command {
 var (
 	specStores  = repoconfig.SpecStores
 	mergeStyles = repoconfig.MergeStyles
+	reviewModes = repoconfig.ReviewModes
 )
 
-func applyFlags(cfg *repoconfig.Config, gate []string, store, ref string, scopes, reviewers []string, merge string, keep []string) error {
+// flagValues is every pinnable field as `init` received it. A struct rather than
+// a tenth positional parameter: the list grows with the schema, and a caller that
+// transposes two `[]string` arguments compiles.
+type flagValues struct {
+	gate       []string
+	specStore  string
+	specRef    string
+	scopes     []string
+	subjectMax int
+	reviewers  []string
+	reviewMode string
+	merge      string
+	keep       []string
+}
+
+func applyFlags(cfg *repoconfig.Config, f flagValues) error {
+	gate, store, ref := f.gate, f.specStore, f.specRef
+	scopes, reviewers, merge, keep := f.scopes, f.reviewers, f.merge, f.keep
 	for _, g := range gate {
 		step, command, ok := strings.Cut(g, "=")
 		if !ok || step == "" || command == "" {
@@ -177,8 +206,26 @@ func applyFlags(cfg *repoconfig.Config, gate []string, store, ref string, scopes
 	if len(scopes) > 0 {
 		cfg.Commit.Scopes = scopes
 	}
+	// Validated here for the same reason the enumerated fields are: the value is
+	// written into a committed file and read back by every later run, so a
+	// nonsensical limit costs least at the flag. The rule is `repoconfig`'s —
+	// a positive number of characters, no upper bound — and Load enforces the
+	// same one on read, because the file is hand-edited too.
+	if f.subjectMax != 0 {
+		if f.subjectMax < 0 {
+			return fmt.Errorf("--subject-max %d: a subject length is a positive number of characters", f.subjectMax)
+		}
+		n := f.subjectMax
+		cfg.Commit.SubjectMax = &n
+	}
 	if len(reviewers) > 0 {
 		cfg.Review.Reviewers = reviewers
+	}
+	if f.reviewMode != "" {
+		if !repoconfig.OneOf(f.reviewMode, reviewModes) {
+			return fmt.Errorf("--review-mode %q: expected one of %s", f.reviewMode, strings.Join(reviewModes, ", "))
+		}
+		cfg.Review.Mode = f.reviewMode
 	}
 	if merge != "" {
 		if !repoconfig.OneOf(merge, mergeStyles) {
@@ -212,8 +259,15 @@ func initFields(p *profile.Profile) []tui.Field {
 			Help: "owner/repo for a tracker, or a path"},
 		{Key: "scopes", Label: "scopes", Discovered: strings.Join(p.Scopes.Values, ", "),
 			Help: "comma-separated conventional-commit scopes"},
+		// No discovered value, ever — that is the key's reason to exist, and an
+		// empty column here says so more honestly than a number lifted off
+		// history would.
+		{Key: "subject-max", Label: "subject max", Discovered: p.SubjectMax.Value,
+			Help: "longest commit subject in characters; not discoverable, so blank means commit's own convention"},
 		{Key: "reviewers", Label: "reviewers", Discovered: strings.Join(p.Review.Values, ", "),
 			Help: "comma-separated; only needed where there is no CODEOWNERS"},
+		{Key: "review-mode", Label: "review mode", Discovered: p.ReviewMode.Value,
+			Help: "full | quick — the roster review opens with when you name none"},
 		{Key: "merge", Label: "merge style", Discovered: p.Merge.Value,
 			Help: "merge | squash | rebase"},
 		// The discovered value is the set cleanup protects today, so the field
@@ -254,8 +308,19 @@ func applyFields(cfg *repoconfig.Config, fields []tui.Field) error {
 			cfg.Spec.Ref = v
 		case "scopes":
 			cfg.Commit.Scopes = splitList(v)
+		case "subject-max":
+			n, err := strconv.Atoi(v)
+			if err != nil || n <= 0 {
+				return fmt.Errorf("subject max %q: expected a positive number of characters", v)
+			}
+			cfg.Commit.SubjectMax = &n
 		case "reviewers":
 			cfg.Review.Reviewers = splitList(v)
+		case "review-mode":
+			if !repoconfig.OneOf(v, reviewModes) {
+				return fmt.Errorf("review mode %q: expected one of %s", v, strings.Join(reviewModes, ", "))
+			}
+			cfg.Review.Mode = v
 		case "merge":
 			if !repoconfig.OneOf(v, mergeStyles) {
 				return fmt.Errorf("merge style %q: expected one of %s", v, strings.Join(mergeStyles, ", "))

@@ -115,13 +115,12 @@ a config nothing reads.
     empty but still the declared home for user-scoped state.
 
 - **The config has no consumers.** M7 landed `mkit init`, `config.toml` and
-  `mkit repo profile --json`, and **nothing reads the answer.** No skill calls `repo profile`;
-  `facts.sh` reports `config=` and `config_state=` and no pinned *value*. Of the five sections M7's
-  `init` wrote, `spec.*` gets its consumer at M8 and `gate.commands` at M5 (both below) — the
-  other three are written and read by nobody, and no milestone will pick them up. Four items,
-  none of them a port, all independent of the port line. **One is done**: `[cleanup] keep` (issue
-  #20) is a sixth section, and `mkit branch scan` is the first command outside `repo profile` and
-  `gate detect` to read a pinned value:
+  `mkit repo profile --json`, and nothing read the answer. Of the five sections M7's `init` wrote,
+  `spec.*` gets its consumer at M8 and `gate.commands` got one at M5 (both below); the other
+  three were written and read by nobody. Four items, none of them a port, all independent of the
+  port line — **three are done**, and `merge.style` → `finish` is what is left. `commit` and `pr`
+  are the first *skills* to call `repo profile`, and `mkit branch scan` the first command outside
+  `repo profile` and `gate detect` to read a pinned value:
 
   - **`merge.style` → `finish`.** `finish` step 4 runs
     `gh repo view --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed` and, when more
@@ -132,14 +131,29 @@ a config nothing reads.
     verify gets verified — invariant 13), and `wt merge` carries the user's own squash/rebase
     config, so the skill must decide whether a pinned style means passing `--no-squash` / `--no-ff`
     or leaving worktrunk's own config alone.
-  - **`commit.scopes` + `review.reviewers` → `commit` and `pr`.** `commit` already tells itself to
-    honour "any repo rules: max subject length, required scopes" with nothing to read them from;
-    `pr` re-derives reviewers from `CODEOWNERS` every run. One item, because it is one mechanism
-    in two skills. **The decision it carries:** the profile is *optional enrichment*, not a
-    prerequisite. M4 made `mkit` a hard requirement for `review` because the arithmetic has no
-    fallback — here the fallback is exactly today's discovery, so these skills read the profile
-    when it answers and degrade **silently** when `mkit` is absent. A step-0 probe that stops the
-    run would break invariant 8 for nothing.
+  - ~~**`commit.scopes` + `review.reviewers` → `commit` and `pr`.**~~ **Done** (issue #18). Both
+    skills read `mkit repo profile --json` in their step-0 block and name a pinned value as pinned
+    (workflow-contract rule 3); `pr` step 6 takes a pinned reviewer list **instead of** the
+    `CODEOWNERS` read, and keeps that read for the `discovered` case, where the profile's
+    pattern-less owner list is the worse answer. **The decision it carried, and settled:** the
+    profile is *optional enrichment*, not a prerequisite. M4 made `mkit` a hard requirement for
+    `review` because the arithmetic has no fallback — here the fallback is exactly today's
+    discovery, so no step-0 presence probe was added, nothing stops on it, and neither skill
+    mentions the binary when it has nothing to say. One thing it does say: a pin that went
+    nowhere — a `config_problems` entry, or an `unavailable` whose cause names the config file —
+    is surfaced in one line, because a rejected pin is not the same answer as no answer, and
+    making that visible is what #19 exists for.
+
+    Two keys landed with it, both **not discoverable**, which is the schema's own filter:
+    `[commit] subject_max` (the other half of the line `commit` already promised to honour —
+    history shows what past subjects *happened to be*, not what the repo requires) and
+    `[review] mode` (`full` | `quick`). `mode` was folded in rather than split out because it cost
+    exactly one key: it joins `ReviewModes` beside `SpecStores`/`MergeStyles`, is validated by
+    #19's existing machinery, and `review` step 1 reads it as a default that `$ARGUMENTS` still
+    overrides. `subject_max` is an `*int`, so `subject_max = 0` is distinguishable from absent and
+    reported as an invalid value rather than silently read as unset; there is **no upper bound**,
+    because 500 is a silly limit but an operable one, and refusing it would pin a house style into
+    the schema instead of catching a mistake.
   - ~~**Config validation.**~~ **Done** (issue #19). `repoconfig.Load` decodes strictly and
     collects *every* unknown key, validates `spec.store` and `merge.style` against the sets
     `mkit init` now consumes from `repoconfig` rather than keeping its own copy, and clears a
@@ -375,9 +389,9 @@ because git cannot re-include a file whose parent directory is excluded.
   `repoconfig.ShadowedRemedy` for a shadowed config. `doctor` and `facts` both read them; neither
   words its own.
 **What it deliberately did not do, and now needs picking up:** it landed the config *surface* and
-no consumer. `spec.*` gets one at M8; `gate.commands` got one at M5; `merge.style`, `commit.scopes` and
-`review.reviewers` get one from "The config has no consumers" above, which is where the rest of
-that gap is tracked.
+no consumer. `spec.*` gets one at M8; `gate.commands` got one at M5; `commit.scopes` and
+`review.reviewers` got theirs at issue #18, and `merge.style` is the one left — see "The config has
+no consumers" above, which is where the rest of that gap is tracked.
 
 **Done — all four met:** the committed config path is decided and recorded; `mkit doctor` names an
 unwritable `~/.mkit/` without failing, with a remedy naming **both** halves (create, then grant —
