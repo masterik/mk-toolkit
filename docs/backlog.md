@@ -114,22 +114,26 @@ a config nothing reads.
   - **`mkit facts`' `user_dir_writable=` survives**, so no skill lost information. `~/.mkit/` is
     empty but still the declared home for user-scoped state.
 
-- **The config has no consumers.** M7 landed `mkit init`, `config.toml` and
-  `mkit repo profile --json`, and **nothing reads the answer.** No skill calls `repo profile`;
-  `facts.sh` reports `config=` and `config_state=` and no pinned *value*. Of the five sections
-  `init` writes, `spec.*` gets its consumer at M8 and `gate.commands` at M5 (both below) — the
-  other three are written and read by nobody, and no milestone will pick them up. Four items,
-  none of them a port, all independent of the port line:
+- **The config has (almost) no consumers.** M7 landed `mkit init`, `config.toml` and
+  `mkit repo profile --json`, and for a while **nothing read the answer**; `merge.style` → `finish`
+  is done and the rest of the list stands. `facts.sh` reports `config=` and `config_state=` and no
+  pinned *value*. Of the five sections `init` writes, `spec.*` gets its consumer at M8 and
+  `gate.commands` at M5 (both below) — of the other three, one now has a reader. Four items, none
+  of them a port, all independent of the port line:
 
-  - **`merge.style` → `finish`.** `finish` step 4 runs
-    `gh repo view --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed` and, when more
-    than one is allowed, **asks the user with squash as the suggested default** — on every run, in
-    every repo, including ones whose answer has never changed. The pinned value is exactly the
-    thing that question is asking for. Two pieces of real content beyond the lookup: a pinned style
-    the remote does not allow is **reported, never silently substituted** (a pinned value cheap to
-    verify gets verified — invariant 13), and `wt merge` carries the user's own squash/rebase
-    config, so the skill must decide whether a pinned style means passing `--no-squash` / `--no-ff`
-    or leaving worktrunk's own config alone.
+  - **`merge.style` → `finish` — done.** `finish` step 4 opens with `mkit repo profile --json` and
+    takes `merge_style` on `pinned` or `discovered` instead of asking; `unavailable`, or a binary
+    too old to know `repo`, falls through to exactly the old question — the profile is **optional
+    enrichment, never a prerequisite** (invariant 8), so it is not probed at step 0 and is not
+    mentioned when it has nothing to say. A pinned style the remote does not allow is **reported,
+    never silently substituted** (invariant 13). The `wt merge` question is decided in
+    `_shared/references/worktree.md`, "A pinned merge style vs. worktrunk's own config": the pin
+    wins wherever a flag can carry it (`rebase` → `--no-squash`, `merge` → `--no-squash --no-ff`),
+    and `wt merge`'s flags being **negative only** — with `--config-set` swallowing a mistyped key
+    silently, so it is no forcing device — means a repo pinned to `squash` against a user's
+    `merge.squash = false` is reported rather than forced. `cleanup` was checked and left alone: a
+    pinned style says *why* a merged branch's SHAs differ, never *whether* the PR merged, so
+    `merged-pr` still needs the same `gh` call and the same `headRefOid` check.
   - **`commit.scopes` + `review.reviewers` → `commit` and `pr`.** `commit` already tells itself to
     honour "any repo rules: max subject length, required scopes" with nothing to read them from;
     `pr` re-derives reviewers from `CODEOWNERS` every run. One item, because it is one mechanism

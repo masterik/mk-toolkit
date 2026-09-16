@@ -128,12 +128,13 @@ Commits to merge: <the commits: block, re-read if step 1 committed>
 After merge:      delete branch <feature-branch> + remove worktree (if any)
 ```
 
-**PR path** — step 4's first two items (push, then pick the merge method) run *before* this: fill this
-block in with the method just picked, get the go-ahead, and only then continue with the rest of step 4:
+**PR path** — step 4's opening profile call and its first two items (push, then pick the merge method) run
+*before* this: fill this block in with the method just picked, get the go-ahead, and only then continue with
+the rest of step 4:
 
 ```
 Finish feature:  <feature-branch>
-Merge via:        GitHub PR <pr-url> (<squash|merge|rebase>)
+Merge via:        GitHub PR <pr-url> (<squash|merge|rebase>, <pinned|discovered|asked>)
 Base:             <base-branch>
 Worktree:         <cleanup_path> @ <toplevel>
 Commits to merge: <the commits: block, re-read if step 1 committed>
@@ -143,13 +144,45 @@ After merge:      delete branch <feature-branch> (local + remote) + remove workt
 
 ### 4. Merge back + clean up
 
+**Both paths start here: ask the repo how it merges.** One call, and it is **optional enrichment,
+never a prerequisite** — it answers the question this step used to ask on every run, and when it does not
+answer, this step behaves exactly as it did before the call existed:
+
+```bash
+mkit repo profile --json
+```
+
+`merge_style` is `{"value": "merge|squash|rebase", "source": "pinned|discovered|unavailable"}`.
+Take the value on **`pinned`** (a human wrote it in `.mkit/config.toml`) or **`discovered`** (read from this
+repo's own git config) and stop asking. On `unavailable` — or if the command fails at all, which an older
+binary that knows `facts` but not `repo` will do — there is **no style and nothing to report**: fall through
+to asking, exactly as below. Unlike `mkit facts`, this call never stops the run and is never mentioned when
+it has nothing to say. It is one fewer question, not a dependency.
+
 **PR path** (`pr=<url>`, `pr_state=OPEN`, not draft) — merge on GitHub, then sync locally:
 
 1. **Push anything step 1 committed.** `gh pr merge` merges what's on GitHub, not local state:
    `pushed=no` → `git push -u origin <feature-branch>`; otherwise plain `git push` if `ahead=` > 0.
 2. **Pick the merge method.** `gh repo view --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed`
-   — if exactly one is allowed, use it. If more than one, ask (default suggestion: squash). Never pass
-   `--admin` (bypasses branch protection / required reviews) unless the user explicitly asks for it.
+   tells you what the remote will accept; `merge_style` above tells you what this repo wants.
+   `merge`→`--merge`/`mergeCommitAllowed`, `squash`→`--squash`/`squashMergeAllowed`,
+   `rebase`→`--rebase`/`rebaseMergeAllowed`. In order:
+
+   - **Exactly one method allowed** → use it, whatever `merge_style` says. GitHub decides what it will
+     accept; a pin cannot widen that. If the pin named a different one, say so in one line.
+   - **A style, and the remote allows it** → use it and **do not ask**. Name where it came from — "squash,
+     pinned in `.mkit/config.toml`" or "squash, discovered from this repo's git config" — so a wrong pin is
+     visible the first time it is used rather than on the merge it produced.
+   - **A style the remote does not allow** → **report it, never substitute.** Say which value was pinned,
+     what the remote actually allows, and let the user pick; do not quietly fall back to squash. A pinned
+     value cheap to verify gets verified, and the point of verifying is to surface the mismatch, not to
+     paper over it. A pin that is wrong for the repo is worth one interruption; a silent substitution on
+     every run for the rest of the repo's life is not.
+   - **No style** (`unavailable`, or no profile at all) and more than one method allowed → ask, default
+     suggestion squash, as before.
+
+   Never pass `--admin` (bypasses branch protection / required reviews) unless the user explicitly asks
+   for it.
 
    **Stop here and show step 3's PR-path confirmation block, filled in with the method just picked. Get
    the go-ahead before continuing** — nothing below this point runs without it.
@@ -206,8 +239,15 @@ the user's hooks:
 wt merge <base>        # add -y only if non-interactive completion is authorized
 ```
 
-`wt merge` removes the worktree by default and deletes the branch as part of the flow. Use `--no-remove` /
-`--no-squash` / `--no-ff` only to override the user's config on request.
+`wt merge` removes the worktree by default and deletes the branch as part of the flow.
+
+**A `merge_style` from the profile goes on this command line.** worktrunk carries the user's own
+squash/rebase config, and a repo-wide pin outranks a personal default — but `wt merge`'s flags only turn
+defaults *off*, so one direction cannot be forced and is reported instead of fought.
+`../_shared/references/worktree.md`, "A pinned merge style vs. worktrunk's own config", has the mapping
+(`squash` → no flag · `rebase` → `--no-squash` · `merge` → `--no-squash --no-ff`) and the reasoning. No
+style → plain `wt merge <base>`, worktrunk's config unchallenged, as today. Use `--no-remove` only to
+override the user's config on request.
 
 **`exit-worktree`** — merge into the base, then hand back via the **ExitWorktree** tool
 (`action: "remove"`). Never `git worktree remove` the harness's own worktree from inside it. If the base
@@ -233,6 +273,11 @@ git branch -d <feature-branch>
 
 Update the base against the remote first (`git fetch` / `git pull --ff-only <base>`) when one exists, so you
 merge onto current base.
+
+On the three plain-git paths a `merge_style` decides the shape of that merge, with none of worktrunk's
+config to contend with: `merge` → `git merge --no-ff` · `rebase` → rebase the feature branch onto `<base>`
+first, then fast-forward · `squash` → `git merge --squash` followed by one commit. No style → the command
+as written above. Say which one you used, the same as on the other paths.
 
 #### Retiring the worklog
 
@@ -273,7 +318,10 @@ nothing to remove and `$toplevel`/the cwd are still correct.
 Prune with `mkit run prune` on the way out, folded into step 5's
 verification call.
 
-- Which path ran — local merge, or GitHub PR merge (name the PR URL and method used).
+- Which path ran — local merge, or GitHub PR merge (name the PR URL and method used), and **where the
+  method came from**: pinned, discovered, or asked. Plus, only when there was something to say: a pinned
+  style the remote refused, or a `wt merge` whose output shows the user's worktrunk config overrode the
+  pin. Silence when the profile had no answer — that is not a degradation.
 - The gate verdict, naming any step served from the ledger as `cached` and how old that proof was.
 - What merged into what, the resulting base HEAD, and that branch + worktree were removed.
 - Anything left in place on purpose (unmerged commits, dirty tree, a delete the user declined) — say so
