@@ -64,12 +64,17 @@ type GateStep struct {
 type Profile struct {
 	Toplevel string            `json:"toplevel"`
 	Config   repoconfig.Status `json:"config"`
-	Gate     Gate              `json:"gate"`
-	Spec     Spec              `json:"spec"`
-	Scopes   List              `json:"commit_scopes"`
-	Review   List              `json:"reviewers"`
-	Merge    Value             `json:"merge_style"`
-	Payload  PayloadInfo       `json:"payload"`
+	// ConfigProblems is what the config file says that mkit could not honour.
+	// Reported at the top level as well as on the affected value, because an
+	// unknown key affects no value at all — it is precisely the pin that went
+	// nowhere, and a profile that only tagged values would never mention it.
+	ConfigProblems []repoconfig.Problem `json:"config_problems,omitempty"`
+	Gate           Gate                 `json:"gate"`
+	Spec           Spec                 `json:"spec"`
+	Scopes         List                 `json:"commit_scopes"`
+	Review         List                 `json:"reviewers"`
+	Merge          Value                `json:"merge_style"`
+	Payload        PayloadInfo          `json:"payload"`
 }
 
 // Gate is the quality gate as a sequence.
@@ -108,8 +113,9 @@ func Build(repo *gitrepo.Repo) (*Profile, error) {
 	}
 
 	p := &Profile{
-		Toplevel: repo.Toplevel,
-		Config:   repoconfig.Stat(repo),
+		Toplevel:       repo.Toplevel,
+		Config:         repoconfig.Stat(repo),
+		ConfigProblems: cfg.Problems,
 	}
 
 	root, rerr := pluginroot.Find(repo.Toplevel)
@@ -170,7 +176,12 @@ func buildGate(repo *gitrepo.Repo, cfg *repoconfig.Config) Gate {
 func discoverSpec(repo *gitrepo.Repo, cfg *repoconfig.Config) Spec {
 	var s Spec
 
-	if cfg.Spec.Store != "" {
+	// An invalid pinned store is Unavailable, not Discovered. Falling through to
+	// discovery here is the failure shape issue #19 names: the config looks
+	// applied, because a plausible answer arrives tagged as if nothing were wrong.
+	if pb := cfg.Problem("spec.store"); pb != nil {
+		s.Store = Value{Source: Unavailable, Cause: pb.Detail}
+	} else if cfg.Spec.Store != "" {
 		s.Store = Value{Value: cfg.Spec.Store, Source: Pinned}
 	} else if store := readTrackerDoc(repo.Toplevel); store != "" {
 		s.Store = Value{Value: store, Source: Discovered}
@@ -306,6 +317,11 @@ func discoverReviewers(repo *gitrepo.Repo, cfg *repoconfig.Config) List {
 // report, and `gh` may be missing or unauthenticated — both of which would turn a
 // profile into a thing that sometimes hangs.
 func discoverMerge(repo *gitrepo.Repo, cfg *repoconfig.Config) Value {
+	// Same rule as the spec store: a pinned value that was rejected is reported
+	// as rejected, never replaced by a discovered one wearing the `discovered` tag.
+	if pb := cfg.Problem("merge.style"); pb != nil {
+		return Value{Source: Unavailable, Cause: pb.Detail}
+	}
 	if cfg.Merge.Style != "" {
 		return Value{Value: cfg.Merge.Style, Source: Pinned}
 	}

@@ -70,7 +70,11 @@ func newInitCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if present && !existing.IsZero() && !force {
+			// A file mkit could not fully honour still counts as configured. It
+			// decodes to something close to zero, and without this a repo whose
+			// config is one typo away from correct would be silently overwritten
+			// by an `init` that thought it was writing into empty space.
+			if present && (!existing.IsZero() || len(existing.Problems) > 0) && !force {
 				return emitInit(out, opts, initResult{
 					Path: st.Path, State: "already-configured", Written: false,
 					Detail: "nothing changed — pass --force to rewrite, or edit the file directly",
@@ -138,9 +142,13 @@ func newInitCmd() *cobra.Command {
 // read back by every later run and by a skill that branches on it, so persisting
 // `--merge sqaush` buys a typo a long life; failing at the flag is where it costs
 // least.
+//
+// The allowed sets live in `repoconfig` because `repoconfig.Load` validates the
+// same fields on read — the file is committed and hand-edited, and a second copy
+// of the vocabulary here is a second thing to keep true.
 var (
-	specStores  = []string{"github-issues", "gitlab", "files", "none"}
-	mergeStyles = []string{"merge", "squash", "rebase"}
+	specStores  = repoconfig.SpecStores
+	mergeStyles = repoconfig.MergeStyles
 )
 
 func applyFlags(cfg *repoconfig.Config, gate []string, store, ref string, scopes, reviewers []string, merge string) error {
@@ -155,7 +163,7 @@ func applyFlags(cfg *repoconfig.Config, gate []string, store, ref string, scopes
 		cfg.Gate.Commands[step] = command
 	}
 	if store != "" {
-		if !oneOf(store, specStores) {
+		if !repoconfig.OneOf(store, specStores) {
 			return fmt.Errorf("--spec-store %q: expected one of %s", store, strings.Join(specStores, ", "))
 		}
 		cfg.Spec.Store = store
@@ -170,21 +178,12 @@ func applyFlags(cfg *repoconfig.Config, gate []string, store, ref string, scopes
 		cfg.Review.Reviewers = reviewers
 	}
 	if merge != "" {
-		if !oneOf(merge, mergeStyles) {
+		if !repoconfig.OneOf(merge, mergeStyles) {
 			return fmt.Errorf("--merge %q: expected one of %s", merge, strings.Join(mergeStyles, ", "))
 		}
 		cfg.Merge.Style = merge
 	}
 	return nil
-}
-
-func oneOf(v string, allowed []string) bool {
-	for _, a := range allowed {
-		if v == a {
-			return true
-		}
-	}
-	return false
 }
 
 // initFields shows the discovered answer beside every field, so the form is a
@@ -231,7 +230,7 @@ func applyFields(cfg *repoconfig.Config, fields []tui.Field) error {
 				cfg.Gate.Commands[strings.TrimSpace(step)] = strings.TrimSpace(command)
 			}
 		case "spec-store":
-			if !oneOf(v, specStores) {
+			if !repoconfig.OneOf(v, specStores) {
 				return fmt.Errorf("spec store %q: expected one of %s", v, strings.Join(specStores, ", "))
 			}
 			cfg.Spec.Store = v
@@ -242,7 +241,7 @@ func applyFields(cfg *repoconfig.Config, fields []tui.Field) error {
 		case "reviewers":
 			cfg.Review.Reviewers = splitList(v)
 		case "merge":
-			if !oneOf(v, mergeStyles) {
+			if !repoconfig.OneOf(v, mergeStyles) {
 				return fmt.Errorf("merge style %q: expected one of %s", v, strings.Join(mergeStyles, ", "))
 			}
 			cfg.Merge.Style = v

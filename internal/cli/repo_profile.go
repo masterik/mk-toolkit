@@ -47,6 +47,11 @@ func renderProfile(out io.Writer, p *profile.Profile) {
 	if p.Config.IgnoreSource != "" {
 		_, _ = fmt.Fprintf(out, "  shadowed by %s\n", p.Config.IgnoreSource)
 	}
+	// Printed under the config, not beside a value: an unknown key belongs to no
+	// value — being attached to nothing is exactly what is wrong with it.
+	for _, pb := range p.ConfigProblems {
+		_, _ = fmt.Fprintf(out, "  %s %s\n", pb.Detail, tag(string(pb.Kind)))
+	}
 
 	_, _ = fmt.Fprintln(out, "\nquality gate:")
 	if p.Gate.Ecosystem != "" {
