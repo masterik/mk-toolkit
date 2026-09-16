@@ -2,8 +2,9 @@
 name: cleanup
 description: >-
   Sweep every local branch and worktree in the repo: auto-delete what's merged (locally or via a closed PR),
-  remove the worktrees that go with them, keep only the default branch (main/master/trunk) and a develop-like
-  branch if one exists locally, then switch to one of those and pull it up to date with the remote. Trigger on
+  remove the worktrees that go with them, keep only the branches `mkit branch scan` reports as `protected=`
+  (the default branch, a develop-like branch if one exists locally, and anything the repo config pinned under
+  `[cleanup] keep`), then switch to one of those and pull it up to date with the remote. Trigger on
   "cleanup branches", "clean up my branches", "prune stale branches", "remove merged branches", "clean up
   worktrees", "tidy up local branches", "get rid of old branches". Local-only: it never deletes, force-pushes
   to, or otherwise touches a branch on the remote — only this checkout's own local branches and worktrees.
@@ -27,10 +28,15 @@ References, read the ones a step calls for: `../_shared/references/worktree.md`,
   `git fetch --prune` is the only network call, and it only updates this repo's own remote-tracking refs
   (`refs/remotes/<remote>/*`) — that is what makes `upstream=gone` mean anything, and it cannot delete anything
   on the remote itself.
-- Keeps exactly the **default branch** (`main`/`master`/`trunk`, whichever the repo resolves to) and, if one
-  exists **as a local branch**, the first of `develop`/`development`/`dev`. A `develop` that exists only as
+- Keeps exactly what `mkit branch scan` reports as `protected=`, and never re-derives that set: the
+  **default branch** (`main`/`master`/`trunk`, whichever the repo resolves to); if one exists **as a local
+  branch**, the first of `develop`/`development`/`dev`; and every branch name the repo pinned under
+  `[cleanup] keep` in `.mkit/config.toml` that exists as a local branch here. A `develop` that exists only as
   `origin/develop` and was never checked out locally is not kept — nothing here creates a local branch, only
-  removes them.
+  removes them, and the same rule applies to a pinned name.
+- **The default branch is protected whether or not the keep list names it.** A keep list that omits it is a
+  mistake, not an instruction: the pinned names are *added* to what cleanup already protects, never
+  substituted for them. This is decided in `mkit branch scan`, not here.
 - Ends by switching to one of the kept branches and pulling it up to date with the remote `mkit branch scan`
   discovers (never assumed to be named `origin`).
 
@@ -60,7 +66,11 @@ From `mkit facts`: `branch=` (current branch — cannot be deleted while checked
 worktree dirty right now), `cleanup_path=` (only relevant if this session's own worktree turns out to be one
 of the ones in play — see step 3).
 
-From `mkit branch scan`: `protected=`, `develop=`, `remote=`, `fetch=` (say if it came back `failed` — classify
+From `mkit branch scan`: `protected=` (the whole kept set — use it as given, never rebuild it), `develop=`,
+`keep=` (what `[cleanup] keep` pinned, or `none`), `keep_unknown=` (pinned names with no local branch here —
+**not an error**: a keep list travels with the repo, so a long-lived branch nobody has checked out in this
+clone is the ordinary state. Mention it once in the final report, so a typo in the config is visible without
+being treated as one), `remote=`, `fetch=` (say if it came back `failed` — classify
 on what you have and note it), `gh=` (`ok | skipped | no-remote | gh-missing | gh-unauthenticated | gh-error`;
 say if it is anything but `ok` — some classes below then rest on git alone, while every branch and worktree
 row is still complete), the `branches:` table and the `worktrees:` table. Full column meaning is in
@@ -68,9 +78,9 @@ row is still complete), the `branches:` table and the `worktrees:` table. Full c
 
 | `class` | means | default handling |
 | --- | --- | --- |
-| `protected` | the default/develop branch | never a candidate |
+| `protected` | a branch in `protected=`: the default branch, a develop-like one, or a pinned `[cleanup] keep` name | never a candidate |
 | `current` | whatever is checked out right now | never *directly* touched — see step 1's current-branch note before assuming it's out of scope entirely |
-| `merged` | git proves it: an ancestor of a protected branch (`merged_into` names which) | auto-delete |
+| `merged` | git proves it: an ancestor of the default or develop branch (`merged_into` names which) — a pinned keep branch is **not** a merge target, so work merged only into `staging` is never auto-deleted on that basis | auto-delete |
 | `merged-pr` | not an ancestor locally (squash/rebase merge changes the SHAs), but GitHub says the PR merged, verified against this branch's own content | auto-delete, say how you know |
 | `open-pr` | an open PR exists for this branch | ask |
 | `closed-pr` | a PR exists and was closed without merging | ask |
@@ -82,8 +92,9 @@ row is still complete), the `branches:` table and the `worktrees:` table. Full c
 
 ### 1. Classify
 
-Walk the `branches:` table. Every `protected` row is out of scope, full stop — never propose deleting either
-of the two kept branches. For everything else, sort into:
+Walk the `branches:` table. Every `protected` row is out of scope, full stop — never propose deleting a
+branch in `protected=`, and never second-guess that set: a pinned keep name is there because a human decided
+this repo keeps it. For everything else, sort into:
 
 - **auto-delete**: `merged` or `merged-pr`, **and** (no attached worktree, or its `worktrees:` row is
   `clean=yes`). A `merged`/`merged-pr` branch whose worktree is `clean=no` **or `clean=error`** moves to
@@ -145,9 +156,9 @@ in step 5 either way.
 
 `git switch` refuses when the target is already checked out in another worktree (relevant if `mkit facts`'s own
 `cleanup_path=` said this session is itself inside a linked or `.claude/worktrees/` checkout, and the default
-branch is checked out in the primary one). Try `develop` instead if it exists and isn't taken either; if both
-protected branches are unavailable, stop and say so rather than forcing anything — this is the one place in
-the workflow where "switch away" can fail through no fault of the branch being deleted.
+branch is checked out in the primary one). Try another branch from `protected=` if one exists and isn't taken
+either; if every protected branch is unavailable, stop and say so rather than forcing anything — this is the
+one place in the workflow where "switch away" can fail through no fault of the branch being deleted.
 
 ### 4. Delete — worktree first, then branch, always verified, never a blind `-d`
 
@@ -192,13 +203,13 @@ force-delete anything you merely suspect is fine.
 
 ### 5. Switch and pull
 
-Bring both kept branches up to date with the **discovered** remote — the one `mkit branch scan` reported as
+Bring the kept branches up to date with the **discovered** remote — the one `mkit branch scan` reported as
 `remote=`, never a hardcoded name, since nothing here is safe to assume about a repo you didn't set up:
 
 ```bash
-git switch <default-or-develop>                           # land on whichever you're ending on
+git switch <one of protected=>                            # land on whichever you're ending on
 git pull --ff-only                                        # only if remote != none
-git fetch <remote> <the-other-one>:<the-other-one>         # update the other one without checking it out
+git fetch <remote> <other>:<other>                        # update each other kept branch without checking it out
 ```
 
 `remote=none` (no remote configured at all): skip both network calls entirely and say so — there is nothing to
@@ -209,13 +220,13 @@ elsewhere (`../_shared/references/worktree.md`, "merge without checkout") — if
 ahead/diverged locally and needs a manual look, don't force it.
 
 Prefer switching to the **default** branch as the place to land, unless the user's request or standing habit
-points at `develop` instead — say which one you picked and why it was a judgement call, not a fact the
+points at `develop` or another kept branch instead — say which one you picked and why it was a judgement call, not a fact the
 command handed you.
 
 ### 6. Verify
 
-- `git branch -vv` — only the protected branches remain, and both (if two) show no `ahead`/`behind` against
-  their upstream.
+- `git branch -vv` — only the branches in `protected=` remain, and each shows no `ahead`/`behind` against its
+  upstream (a pinned keep branch may have no upstream at all; that is not a finding).
 - `git worktree list` — every removed worktree is gone; `git worktree prune` first if step 1 saw any
   `clean=missing` stale metadata.
 
@@ -238,6 +249,7 @@ Left alone:
 ...
 
 Note: <branch> is N commits behind origin/<branch> — <why it couldn't be fast-forwarded, if it couldn't>
+Note: `[cleanup] keep` pins <name>, which is not a local branch in this checkout — nothing to protect here.
 ```
 
 Omit any section with nothing in it. Never report a branch as deleted that the user did not either fall into

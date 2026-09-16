@@ -87,6 +87,8 @@ type Config struct {
 	Review  Review `toml:"review"`
 	Merge   Merge  `toml:"merge"`
 
+	Cleanup Cleanup `toml:"cleanup"`
+
 	// Problems is what Load could not honour in the file it read: keys mkit does
 	// not know, values outside an enumerated set, a document that would not parse
 	// at all, a version from the future. Never marshalled — it describes the read,
@@ -192,6 +194,32 @@ type Review struct {
 // Merge pins how this repo integrates a branch: merge, squash or rebase.
 type Merge struct {
 	Style string `toml:"style,omitempty"`
+}
+
+// Cleanup pins the branches a repo-wide cleanup must never delete, beyond the
+// ones it already works out for itself.
+//
+// Not discoverable: branch protection is a network call on an otherwise local
+// classifier, and `gh` may be missing or unauthenticated. Which local branches
+// are long-lived — a `staging`, a release branch — is exactly the kind of answer
+// a committed config exists to hold, and being wrong here deletes a branch.
+type Cleanup struct {
+	// Keep is branch **names**, not patterns. Narrow on purpose: a glob that
+	// matches more than its author meant is the failure this key exists to
+	// prevent, so globs wait for a repo that turns up needing them.
+	//
+	// **It is added to what cleanup protects, never substituted for it.** The
+	// default branch is protected whether or not it appears here — a keep list
+	// that omits it is a mistake, not an instruction — and the union lives in
+	// `branchscan.ProtectedSet`, which is its one producer.
+	//
+	// No enumeration, so `Allowed("cleanup.keep")` is nil and `validate` has
+	// nothing to check: any string is a legal branch name to pin, and a name that
+	// is not a local branch here is not an error either — a keep list travels
+	// with the repo, and `mkit branch scan` reports such a name as `keep_unknown=`
+	// rather than refusing it. A blank entry pins nothing and is dropped by the
+	// same producer.
+	Keep []string `toml:"keep,omitempty"`
 }
 
 // Path returns the absolute config path for a work tree.
@@ -384,7 +412,8 @@ func (c *Config) IsZero() bool {
 		c.Spec.Store == "" && c.Spec.Ref == "" &&
 		len(c.Commit.Scopes) == 0 &&
 		len(c.Review.Reviewers) == 0 &&
-		c.Merge.Style == ""
+		c.Merge.Style == "" &&
+		len(c.Cleanup.Keep) == 0
 }
 
 // Write renders the config to disk, creating `.mkit/` if needed.
@@ -450,6 +479,12 @@ func render(c *Config) string {
 		b.WriteString("\n# How this repo integrates a branch: merge | squash | rebase.\n")
 		b.WriteString("[merge]\n")
 		fmt.Fprintf(&b, "style = %s\n", quote(c.Merge.Style))
+	}
+	if len(c.Cleanup.Keep) > 0 {
+		b.WriteString("\n# Branches `cleanup` must never delete — names, not patterns. Added to what\n")
+		b.WriteString("# it already protects: the default branch is kept whether or not it is listed.\n")
+		b.WriteString("[cleanup]\n")
+		fmt.Fprintf(&b, "keep = %s\n", quoteList(c.Cleanup.Keep))
 	}
 	return b.String()
 }

@@ -262,3 +262,33 @@ func (r *Repo) AliveCommits(heads []string) map[string]bool {
 	}
 	return alive
 }
+
+// DefaultBranch resolves this repo's default branch: the remote's own HEAD where
+// there is one, then the first local branch named main, master or trunk, then
+// "unknown".
+//
+// **One implementation**: `mkit facts` prints it as `default_branch=`, `mkit
+// branch scan` is handed it rather than re-deriving it, and `mkit repo profile`
+// needs it to report the branches cleanup protects with nothing pinned. A second
+// resolution here is a second thing to keep true, and the symptom of a
+// disagreement is a cleanup that protects a different branch than the one the
+// facts named.
+//
+// "unknown" rather than an error: a repo with no remote and no conventionally
+// named branch is a normal repo, and every caller reports the answer rather than
+// stopping on it.
+func (r *Repo) DefaultBranch() string {
+	if remote := r.Remote(); remote != "" {
+		if head, err := run(r.Toplevel, "symbolic-ref", "--short", "refs/remotes/"+remote+"/HEAD"); err == nil {
+			if b := strings.TrimPrefix(head, remote+"/"); b != "" {
+				return b
+			}
+		}
+	}
+	for _, b := range []string{"main", "master", "trunk"} {
+		if _, err := run(r.Toplevel, "show-ref", "--verify", "--quiet", "refs/heads/"+b); err == nil {
+			return b
+		}
+	}
+	return "unknown"
+}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/masterik/mk-toolkit/internal/core/branchscan"
 	"github.com/masterik/mk-toolkit/internal/core/gitrepo"
+	"github.com/masterik/mk-toolkit/internal/core/repoconfig"
 )
 
 func newBranchScanCmd() *cobra.Command {
@@ -27,6 +28,11 @@ func newBranchScanCmd() *cobra.Command {
 			"repo's own remote-tracking refs.\n\n" +
 			"`--default` is the branch `mkit facts` already resolved; this command does\n" +
 			"not re-derive it, so there is exactly one place that logic lives.\n\n" +
+			"`protected=` is the default branch, a local develop-like branch, and every\n" +
+			"name pinned in the repo config's `[cleanup] keep`. The default branch is in it\n" +
+			"whether or not the keep list names it — a list that omits it is a mistake, not\n" +
+			"an instruction. A pinned name with no local branch is reported as\n" +
+			"`keep_unknown=`, not an error: a keep list travels with the repo.\n\n" +
 			"Columns, in the order they are printed:\n" +
 			"  branch       the local branch name\n" +
 			"  class        protected | current | merged | merged-pr | open-pr | closed-pr |\n" +
@@ -48,8 +54,15 @@ func newBranchScanCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Config is an input, never a permission: a config this binary could
+			// not fully honour still scans, with whatever did parse. Load's only
+			// error is a file it could not read at all.
+			cfg, _, err := repoconfig.Load(repo.Toplevel)
+			if err != nil {
+				return err
+			}
 			s, err := branchscan.Run(repo, branchscan.Options{
-				Default: def, NoFetch: noFetch, NoGH: noGH,
+				Default: def, Keep: cfg.Cleanup.Keep, NoFetch: noFetch, NoGH: noGH,
 			})
 			if err != nil {
 				return &ExitError{Code: 2, Msg: err.Error()}
@@ -72,6 +85,12 @@ func renderBranchScan(out io.Writer, s *branchscan.Scan) {
 	_, _ = fmt.Fprintf(out, "default=%s\n", s.Default)
 	_, _ = fmt.Fprintf(out, "develop=%s\n", s.Develop)
 	_, _ = fmt.Fprintf(out, "protected=%s\n", strings.Join(s.Protected, ","))
+	// Both reported, because they answer different questions: `keep=` is what the
+	// config pinned, `keep_unknown=` is which of those names this checkout has no
+	// branch for. An empty `keep=` with a non-empty `keep_unknown=` is impossible;
+	// a non-empty `keep=` with nothing in `protected=` beyond the default is not.
+	_, _ = fmt.Fprintf(out, "keep=%s\n", orNone(strings.Join(s.Keep, ",")))
+	_, _ = fmt.Fprintf(out, "keep_unknown=%s\n", orNone(strings.Join(s.KeepUnknown, ",")))
 	_, _ = fmt.Fprintf(out, "remote=%s\n", orNone(s.Remote))
 	_, _ = fmt.Fprintf(out, "fetch=%s\n", s.Fetch)
 	_, _ = fmt.Fprintf(out, "gh=%s\n", s.GH)
@@ -101,6 +120,8 @@ type branchScanJSON struct {
 	Default        string             `json:"default"`
 	Develop        string             `json:"develop"`
 	Protected      []string           `json:"protected"`
+	Keep           []string           `json:"keep"`
+	KeepUnknown    []string           `json:"keep_unknown"`
 	Remote         string             `json:"remote"`
 	Fetch          string             `json:"fetch"`
 	GH             string             `json:"gh"`
@@ -127,6 +148,7 @@ type worktreeScanJSON struct {
 func writeBranchScanJSON(out io.Writer, s *branchscan.Scan) error {
 	j := branchScanJSON{
 		Default: s.Default, Develop: s.Develop, Protected: s.Protected,
+		Keep: nonNil(s.Keep), KeepUnknown: nonNil(s.KeepUnknown),
 		Remote: s.Remote, Fetch: s.Fetch, GH: s.GH, WorktreesState: s.WorktreesState,
 		Branches:  make([]branchJSON, 0, len(s.Branches)),
 		Worktrees: make([]worktreeScanJSON, 0, len(s.Worktrees)),

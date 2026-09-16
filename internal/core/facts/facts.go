@@ -371,21 +371,10 @@ func (f *Facts) setBranch(repo *gitrepo.Repo) {
 	}
 	f.Remote = firstLine(git(repo, "remote"))
 
-	if f.Remote != "" {
-		head := git(repo, "symbolic-ref", "--short", "refs/remotes/"+f.Remote+"/HEAD")
-		f.DefaultBranch = strings.TrimPrefix(head, f.Remote+"/")
-	}
-	if f.DefaultBranch == "" {
-		for _, b := range []string{"main", "master", "trunk"} {
-			if run(repo, "show-ref", "--verify", "--quiet", "refs/heads/"+b) == nil {
-				f.DefaultBranch = b
-				break
-			}
-		}
-	}
-	if f.DefaultBranch == "" {
-		f.DefaultBranch = "unknown"
-	}
+	// Delegated, never re-derived: `mkit branch scan` is handed this answer and
+	// `mkit repo profile` reports the branches it protects, so the resolution
+	// lives in exactly one place.
+	f.DefaultBranch = repo.DefaultBranch()
 
 	if f.HasUpstream {
 		counts := strings.Fields(git(repo, "rev-list", "--left-right", "--count", "HEAD..."+f.Upstream))
