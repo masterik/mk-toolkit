@@ -116,10 +116,12 @@ a config nothing reads.
 
 - **The config has no consumers.** M7 landed `mkit init`, `config.toml` and
   `mkit repo profile --json`, and **nothing reads the answer.** No skill calls `repo profile`;
-  `facts.sh` reports `config=` and `config_state=` and no pinned *value*. Of the five sections
-  `init` writes, `spec.*` gets its consumer at M8 and `gate.commands` at M5 (both below) — the
+  `facts.sh` reports `config=` and `config_state=` and no pinned *value*. Of the five sections M7's
+  `init` wrote, `spec.*` gets its consumer at M8 and `gate.commands` at M5 (both below) — the
   other three are written and read by nobody, and no milestone will pick them up. Four items,
-  none of them a port, all independent of the port line:
+  none of them a port, all independent of the port line. **One is done**: `[cleanup] keep` (issue
+  #20) is a sixth section, and `mkit branch scan` is the first command outside `repo profile` and
+  `gate detect` to read a pinned value:
 
   - **`merge.style` → `finish`.** `finish` step 4 runs
     `gh repo view --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed` and, when more
@@ -147,13 +149,20 @@ a config nothing reads.
     `discovered`, and `mkit doctor` warns once per problem with exit status still 0. **A
     `version` higher than `repoconfig.Version` is reported, never refused**: the reasoning is in
     `Version`'s doc comment.
-  - **`[cleanup] keep`.** A new key, and the one candidate that survives the schema's own filter —
-    *pin only what inspection cannot establish*. `cleanup` hardcodes "the default branch, and a
-    develop-like branch if one exists locally". A repo with `staging` or a long-lived release
-    branch cannot say so, branch protection is a network call, and being wrong here **deletes a
-    branch**. Deliberately *not* pinned alongside it: the base branch (`origin/HEAD` answers it),
-    PR labels and commit types — a pinned copy of a discoverable fact is a staleness surface
-    bought for nothing.
+  - ~~**`[cleanup] keep`.**~~ **Done** (issue #20). The one candidate that survived the schema's own
+    filter — *pin only what inspection cannot establish*: branch protection is a network call on an
+    otherwise local classifier, and being wrong here **deletes a branch**. `branchscan.ProtectedSet`
+    is the one producer of the kept set, unioning the pinned names with the default branch and a
+    develop-like one; **the default branch is in it whether or not the list names it**, because a
+    keep list that omits it is a mistake, not an instruction. Names, not patterns. A pinned name
+    with no local branch is reported as `keep_unknown=`, never refused — a keep list travels with
+    the repo. `mkit branch scan` surfaces `protected=`/`keep=`/`keep_unknown=` (and the same in
+    `--json`), `mkit repo profile` tags the value `pinned`/`discovered`, and `cleanup` reads
+    `protected=` as given rather than re-deriving it. No enumeration, so `repoconfig.Allowed`
+    returns nil for it and #19's validation has nothing to check beyond the strict decode that
+    already catches a misspelled table. Deliberately *not* pinned alongside it: the base branch
+    (`origin/HEAD` answers it), PR labels and commit types — a pinned copy of a discoverable fact
+    is a staleness surface bought for nothing.
 
 ## Milestones
 
