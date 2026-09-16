@@ -155,9 +155,16 @@ mkit repo profile --json
 `merge_style` is `{"value": "merge|squash|rebase", "source": "pinned|discovered|unavailable"}`.
 Take the value on **`pinned`** (a human wrote it in `.mkit/config.toml`) or **`discovered`** (read from this
 repo's own git config) and stop asking. On `unavailable` — or if the command fails at all, which an older
-binary that knows `facts` but not `repo` will do — there is **no style and nothing to report**: fall through
-to asking, exactly as below. Unlike `mkit facts`, this call never stops the run and is never mentioned when
-it has nothing to say. It is one fewer question, not a dependency.
+binary that knows `facts` but not `repo` will do — there is **no style**: fall through to asking, exactly as
+below. Unlike `mkit facts`, this call never stops the run and is never mentioned when it has nothing to say.
+It is one fewer question, not a dependency.
+
+**Silence, with one exception — a pin that went nowhere.** A non-empty `config_problems`, or an
+`unavailable` whose `cause` names `.mkit/config.toml`, is not "no answer": it is this repo pinning a merge
+style mkit could not honour — a misspelled `style`, or a `[merge]` table that never arrived. Report that
+`detail` in one line, verbatim, then ask as usual. Falling silently back to the question is the failure
+shape that validation exists to kill: the config looks applied, and the only symptom is the question the
+pin was supposed to have answered. An `unavailable` carrying nothing but "not discoverable" stays silent.
 
 **PR path** (`pr=<url>`, `pr_state=OPEN`, not draft) — merge on GitHub, then sync locally:
 
@@ -320,8 +327,10 @@ verification call.
 
 - Which path ran — local merge, or GitHub PR merge (name the PR URL and method used), and **where the
   method came from**: pinned, discovered, or asked. Plus, only when there was something to say: a pinned
-  style the remote refused, or a `wt merge` whose output shows the user's worktrunk config overrode the
-  pin. Silence when the profile had no answer — that is not a degradation.
+  style the remote refused, a pinned style mkit could not honour at all (`config_problems`, or an
+  `unavailable` whose `cause` names the config file), or a `wt merge` whose output shows the user's
+  worktrunk config overrode the pin. Silence when the profile simply had no answer — that is not a
+  degradation.
 - The gate verdict, naming any step served from the ledger as `cached` and how old that proof was.
 - What merged into what, the resulting base HEAD, and that branch + worktree were removed.
 - Anything left in place on purpose (unmerged commits, dirty tree, a delete the user declined) — say so
