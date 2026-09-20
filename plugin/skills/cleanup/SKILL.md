@@ -70,11 +70,20 @@ From `mkit branch scan`: `protected=` (the whole kept set — use it as given, n
 `keep=` (what `[cleanup] keep` pinned, or `none`), `keep_unknown=` (pinned names with no local branch here —
 **not an error**: a keep list travels with the repo, so a long-lived branch nobody has checked out in this
 clone is the ordinary state. Mention it once in the final report, so a typo in the config is visible without
-being treated as one), `remote=`, `fetch=` (say if it came back `failed` — classify
+being treated as one), `config_problems=` (see below), `remote=`, `fetch=` (say if it came back `failed` — classify
 on what you have and note it), `gh=` (`ok | skipped | no-remote | gh-missing | gh-unauthenticated | gh-error`;
 say if it is anything but `ok` — some classes below then rest on git alone, while every branch and worktree
 row is still complete), the `branches:` table and the `worktrees:` table. Full column meaning is in
 `mkit branch scan --help`; the short version:
+
+**`config_problems=` is the one that stops you — a pin that went nowhere.** It counts the things this repo's
+`.mkit/config.toml` says that mkit could not honour, with a sentence for each in the trailing `notes:` block:
+a misspelled table (`[cleanp] keep`), a file that is not TOML, a file that could not be read at all. Any count
+above `0` means **`keep=` may be missing names the user pinned**, and this skill deletes branches — so report
+every note verbatim, and treat the keep list as incomplete rather than empty. Do not guess which names are
+missing, and do not offer to fix the config. This is the one place where `keep=none` must not be read as "this
+repo pinned nothing": with a problem reported, the two are indistinguishable, and only one of them is safe.
+`config_problems=0` is the ordinary case and is never mentioned.
 
 | `class` | means | default handling |
 | --- | --- | --- |
@@ -218,6 +227,13 @@ pull from, and that is not a failure.
 The `fetch ref:ref` form only succeeds as a fast-forward and only when that branch is not checked out
 elsewhere (`../_shared/references/worktree.md`, "merge without checkout") — if it fails, say the branch is
 ahead/diverged locally and needs a manual look, don't force it.
+
+**A pinned keep branch may have no remote counterpart at all**, and that is the normal case rather than a
+fault: `[cleanup] keep` names local branches, and step 6 already says such a branch having no upstream is not
+a finding. `git fetch <remote> <other>:<other>` for one of those fails with `couldn't find remote ref` — which
+is not the ahead/diverged case above, and reporting it as one blames the user for a branch that is behaving
+exactly as pinned. Fetch only the kept branches that have a remote counterpart (the branch row's `upstream=`
+says), skip the rest silently, and never report a missing remote ref as divergence.
 
 Prefer switching to the **default** branch as the place to land, unless the user's request or standing habit
 points at `develop` or another kept branch instead — say which one you picked and why it was a judgement call, not a fact the
