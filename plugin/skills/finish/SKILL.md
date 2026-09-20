@@ -168,6 +168,12 @@ that looks for one reports nothing. Falling silently back to the question is the
 shape that validation exists to kill: the config looks applied, and the only symptom is the question the
 pin was supposed to have answered. An `unavailable` carrying nothing but "not discoverable" stays silent.
 
+**A binary whose `repo profile` predates config validation emits neither signal** — there is no
+`config_problems` key, and `merge_style` never carries a `cause` naming the config file. Nothing special is
+needed for that: both conditions are simply false, this paragraph does not fire, and the skill behaves as it
+does with no profile at all. That is the same silence the rule above describes, not a degradation to
+announce — and it is why the two conditions are written as things to look for rather than fields to expect.
+
 **PR path** (`pr=<url>`, `pr_state=OPEN`, not draft) — merge on GitHub, then sync locally:
 
 1. **Push anything step 1 committed.** `gh pr merge` merges what's on GitHub, not local state:
