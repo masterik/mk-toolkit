@@ -310,7 +310,13 @@ func writeConfig(t *testing.T, dir, body string) {
 // The pin then matches nothing, the branch is not protected, and this is the
 // path that decides what gets deleted.
 func TestAKeepNameWithUnicodeWhitespaceIsNotRewritten(t *testing.T) {
-	const name = "release 2026" // NBSP, legal in a ref name
+	// The NBSP is **trailing, not interior**, and that is the whole test:
+	// TrimSpace strips leading and trailing Unicode whitespace only, so an
+	// interior one is left alone by both implementations and the test would
+	// pass either way. Trailing, strings.TrimSpace yields "release" while the
+	// ASCII-only trim keeps it — the pin matches a branch under one and
+	// nothing under the other. git check-ref-format accepts the name.
+	const name = "release " // trailing NBSP, legal in a ref name
 	repo := scanRepo(t)
 	diverged(t, repo, name)
 	pinKeep(t, repo, name)
