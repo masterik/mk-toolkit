@@ -114,6 +114,7 @@ a config nothing reads.
   - **`mkit facts`' `user_dir_writable=` survives**, so no skill lost information. `~/.mkit/` is
     empty but still the declared home for user-scoped state.
 
+<<<<<<< HEAD
 - **Giving the config its consumers.** M7 landed `mkit init`, `config.toml` and
   `mkit repo profile --json`, and nothing read the answer. Of the five sections M7's `init` wrote,
   `spec.*` gets its consumer at M8 and `gate.commands` got one at M5 (both below); the other
@@ -121,6 +122,16 @@ a config nothing reads.
   port line — **three are done**, and `merge.style` → `finish` is what is left. `commit` and `pr`
   are the first *skills* to call `repo profile`, and `mkit branch scan` the first command outside
   `repo profile` and `gate detect` to read a pinned value:
+=======
+- **The config has no consumers.** M7 landed `mkit init`, `config.toml` and
+  `mkit repo profile --json`, and **nothing reads the answer.** No skill calls `repo profile`;
+  `facts.sh` reports `config=` and `config_state=` and no pinned *value*. Of the five sections M7's
+  `init` wrote, `spec.*` gets its consumer at M8 and `gate.commands` at M5 (both below) — the
+  other three are written and read by nobody, and no milestone will pick them up. Four items,
+  none of them a port, all independent of the port line. **Two are done**: config validation (issue
+  #19), and now `[cleanup] keep` (issue #20) — a sixth section, and `mkit branch scan` is the first
+  command outside `repo profile` and `gate detect` to read a pinned value:
+>>>>>>> feat/cleanup-keep
 
   - **`merge.style` → `finish`.** `finish` step 4 runs
     `gh repo view --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed` and, when more

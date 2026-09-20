@@ -293,3 +293,22 @@ func cutAfter(s, sep string) (string, bool) {
 	_, rest, ok := strings.Cut(s, sep)
 	return rest, ok
 }
+
+// Git forbids the ASCII space in a ref name but allows Unicode whitespace, so a
+// TrimSpace on a pinned entry rewrites a legal branch name into a different one.
+// The pin then matches nothing, the branch is not protected, and this is the
+// path that decides what gets deleted.
+func TestAKeepNameWithUnicodeWhitespaceIsNotRewritten(t *testing.T) {
+	const name = "release 2026" // NBSP, legal in a ref name
+	repo := scanRepo(t)
+	diverged(t, repo, name)
+	pinKeep(t, repo, name)
+
+	out := scan(t, "--default", "main", "--no-fetch", "--no-gh").stdout
+	if got := col(t, out, "branches", name, 2); got != "protected" {
+		t.Errorf("%q class = %q, want protected — the pin was rewritten\n%s", name, got, out)
+	}
+	if strings.Contains(out, "keep_unknown="+name) {
+		t.Errorf("a branch that exists was reported as unknown:\n%s", out)
+	}
+}

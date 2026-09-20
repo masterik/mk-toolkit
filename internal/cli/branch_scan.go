@@ -33,6 +33,9 @@ func newBranchScanCmd() *cobra.Command {
 			"whether or not the keep list names it — a list that omits it is a mistake, not\n" +
 			"an instruction. A pinned name with no local branch is reported as\n" +
 			"`keep_unknown=`, not an error: a keep list travels with the repo.\n" +
+			"A branch name containing a comma is ambiguous on the comma-joined lines\n" +
+			"(`protected=`, `keep=`, `keep_unknown=`); `--json` carries each as an exact\n" +
+			"array element.\n" +
 			"`config_problems=` counts what the config said that could not be honoured, one\n" +
 			"sentence each in the trailing `notes:` block; above zero, `keep=` may be missing\n" +
 			"names that were pinned.\n\n" +
@@ -106,7 +109,13 @@ func renderBranchScan(out io.Writer, s *branchscan.Scan) {
 	_, _ = fmt.Fprintf(out, "protected=%s\n", strings.Join(s.Protected, ","))
 	// Both reported, because they answer different questions: `keep=` is what the
 	// config pinned, `keep_unknown=` is which of those names this checkout has no
-	// branch for. An empty `keep=` with a non-empty `keep_unknown=` is impossible;
+	// branch for.
+	//
+	// Comma-joined, like `protected=` before them, which makes a branch name that
+	// *contains* a comma ambiguous on these lines. Not fixed by escaping here:
+	// the human lines are read by a skill that would then have to unescape them,
+	// and `--json` already carries every one of these as an exact array element.
+	// The exact-name consumer is `--json`; these lines are for reading. An empty `keep=` with a non-empty `keep_unknown=` is impossible;
 	// a non-empty `keep=` with nothing in `protected=` beyond the default is not.
 	_, _ = fmt.Fprintf(out, "keep=%s\n", orNone(strings.Join(s.Keep, ",")))
 	_, _ = fmt.Fprintf(out, "keep_unknown=%s\n", orNone(strings.Join(s.KeepUnknown, ",")))

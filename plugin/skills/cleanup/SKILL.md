@@ -66,7 +66,9 @@ From `mkit facts`: `branch=` (current branch — cannot be deleted while checked
 worktree dirty right now), `cleanup_path=` (only relevant if this session's own worktree turns out to be one
 of the ones in play — see step 3).
 
-From `mkit branch scan`: `protected=` (the whole kept set — use it as given, never rebuild it), `develop=`,
+From `mkit branch scan` (add `--json` if any branch name contains a comma — `protected=`, `keep=` and
+`keep_unknown=` are comma-joined, and only the JSON arrays carry such a name exactly):
+`protected=` (the whole kept set — use it as given, never rebuild it), `develop=`,
 `keep=` (what `[cleanup] keep` pinned, or `none`), `keep_unknown=` (pinned names with no local branch here —
 **not an error**: a keep list travels with the repo, so a long-lived branch nobody has checked out in this
 clone is the ordinary state. Mention it once in the final report, so a typo in the config is visible without
@@ -238,6 +240,12 @@ says), skip the rest silently, and never report a missing remote ref as divergen
 Prefer switching to the **default** branch as the place to land, unless the user's request or standing habit
 points at `develop` or another kept branch instead — say which one you picked and why it was a judgement call, not a fact the
 command handed you.
+
+**The `git pull --ff-only` above is gated on the landing branch having an upstream, not just on
+`remote != none`.** Landing on a pinned keep branch is exactly the case with no remote counterpart, and a
+pull there fails with "no tracking information" — a failure about a branch that is behaving as pinned. Check
+the branch row's `upstream=` for whichever branch you land on: no upstream, skip the pull silently, the same
+as the fetch.
 
 ### 6. Verify
 
