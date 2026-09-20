@@ -293,14 +293,3 @@ func cutAfter(s, sep string) (string, bool) {
 	_, rest, ok := strings.Cut(s, sep)
 	return rest, ok
 }
-
-func writeConfig(t *testing.T, dir, body string) {
-	t.Helper()
-	path := filepath.Join(dir, repoconfig.RelPath)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}

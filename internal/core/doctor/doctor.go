@@ -315,7 +315,17 @@ func (r *Report) repo(repo *gitrepo.Repo) {
 // words from the same place.
 func (r *Report) configValues(repo *gitrepo.Repo) {
 	cfg, present, err := repoconfig.Load(repo.Toplevel)
-	if err != nil || !present {
+	if err != nil {
+		// A file that is there and cannot be read is exactly what a human-run
+		// report exists to name. Staying silent here left `doctor` reporting
+		// nothing at all about the one config state a user cannot see for
+		// themselves from the file's contents.
+		pb := repoconfig.UnreadableProblem(repoconfig.Path(repo.Toplevel), err)
+		r.add(Check{Group: "repo", Name: "config values", Status: Warn,
+			Detail: pb.Detail, Remedy: configRemedy(pb)})
+		return
+	}
+	if !present {
 		return
 	}
 	if len(cfg.Problems) == 0 {
@@ -349,6 +359,9 @@ func configRemedy(pb repoconfig.Problem) string {
 			return "set `" + pb.Key + "` in " + pb.Path + " to " + rule + ", or remove it"
 		}
 		return "correct `" + pb.Key + "` in " + pb.Path + ", or remove it"
+	case repoconfig.ProblemUnreadable:
+		return "make " + pb.Path + " readable, or delete it — discovery answers " +
+			"everything it pinned"
 	case repoconfig.ProblemUnparsable:
 		return "fix the TOML syntax in " + pb.Path + ", or delete the file — " +
 			"discovery answers everything it pinned"

@@ -1,6 +1,7 @@
 package doctor
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -113,5 +114,30 @@ func TestRemedyForANonEnumeratedKeyNamesTheRule(t *testing.T) {
 	// The rule has one producer; the remedy must be quoting it, not rewording it.
 	if want := repoconfig.Rule("commit.subject_max"); !strings.Contains(remedy, want) {
 		t.Errorf("remedy %q does not name the rule %q", remedy, want)
+	}
+}
+
+// doctor is the human-run report, and a config file that is present but cannot
+// be read is precisely the state a user cannot diagnose from the file's
+// contents. Returning on Load's error reported nothing at all.
+func TestAnUnreadableConfigIsReportedNotSkipped(t *testing.T) {
+	isolate(t)
+	repo := newRepo(t)
+	writeFile(t, repo.Toplevel, repoconfig.RelPath, "version = 1\n")
+	path := repoconfig.Path(repo.Toplevel)
+	if err := os.Chmod(path, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0o644) })
+
+	checks := findAll(Run(Options{Repo: repo}), "config values")
+	if len(checks) != 1 {
+		t.Fatalf("got %d config-value checks, want 1: %+v", len(checks), checks)
+	}
+	if checks[0].Status != Warn {
+		t.Errorf("status = %q, want warn: an unreadable config stops nothing", checks[0].Status)
+	}
+	if checks[0].Remedy == "" {
+		t.Errorf("no remedy on %q", checks[0].Detail)
 	}
 }
