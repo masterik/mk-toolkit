@@ -114,7 +114,7 @@ a config nothing reads.
   - **`mkit facts`' `user_dir_writable=` survives**, so no skill lost information. `~/.mkit/` is
     empty but still the declared home for user-scoped state.
 
-- **The config has no consumers.** M7 landed `mkit init`, `config.toml` and
+- **Giving the config its consumers.** M7 landed `mkit init`, `config.toml` and
   `mkit repo profile --json`, and nothing read the answer. Of the five sections M7's `init` wrote,
   `spec.*` gets its consumer at M8 and `gate.commands` got one at M5 (both below); the other
   three were written and read by nobody. Four items, none of them a port, all independent of the

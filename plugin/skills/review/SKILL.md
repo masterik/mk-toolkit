@@ -117,8 +117,8 @@ for the other mode at any point. Say it was pinned when it decided the run (rule
 **Silence, with one exception — a pin that went nowhere.** A non-empty `config_problems`, or a `review_mode`
 whose `source` is `unavailable` and whose `cause` names `.mkit/config.toml`, is not "no answer": it is the
 repo pinning a mode mkit could not honour — `mode = "quik"`, or a `[reviewers]` table where `[review]` was
-meant. Report that `detail` in one line, verbatim, then carry on with the mode you would otherwise have
-chosen. Falling silently back to full is the failure this reporting exists to prevent: the config looks
+meant. Report that sentence in one line, verbatim, then carry on with the mode you would otherwise have
+chosen. Mind which field carries it: the sentence is `detail` on a `config_problems` entry and `cause` on the value itself — there is no `detail` on a value, and an agent that looks for one reports nothing. Falling silently back to full is the failure this reporting exists to prevent: the config looks
 applied, and the only symptom is a roster the team thought they had changed.
 Ask only if genuinely ambiguous; **default to full** otherwise, since "before a
 commit/PR" is the typical high-stakes trigger this skill is built for. Quick is a **deliberate** narrower

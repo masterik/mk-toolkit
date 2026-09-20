@@ -66,8 +66,25 @@ func TestSubjectMaxIsPinnedOrAbsentAndNeverDiscovered(t *testing.T) {
 
 func TestReviewModeIsPinnedOrAbsent(t *testing.T) {
 	repo := newRepo(t)
-	write(t, repo.Toplevel, &repoconfig.Config{Review: repoconfig.Review{Mode: "quick"}})
+
+	// The absent arm first, on a repo with no config at all: nothing in a repo is
+	// evidence of the roster a team wants, so there is no discovery arm to fall
+	// back to and `review` keeps its own default. Asserted because the name
+	// promises it — a test covering only the pinned half cannot tell a missing
+	// discovery arm from a broken one.
 	p, err := Build(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.ReviewMode.Source != Unavailable || p.ReviewMode.Value != "" {
+		t.Errorf("review mode = %+v, want unavailable with no value", p.ReviewMode)
+	}
+	if p.ReviewMode.Cause == "" {
+		t.Error("an unavailable value with no cause presents an empty answer as an answer")
+	}
+
+	write(t, repo.Toplevel, &repoconfig.Config{Review: repoconfig.Review{Mode: "quick"}})
+	p, err = Build(repo)
 	if err != nil {
 		t.Fatal(err)
 	}

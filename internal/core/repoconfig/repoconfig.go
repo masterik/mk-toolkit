@@ -55,9 +55,6 @@ var (
 	ReviewModes = []string{"full", "quick"}
 )
 
-// Allowed returns the accepted values for an enumerated key, or nil for a key
-// that has no enumeration. The key→set mapping lives here with the sets, so a
-// remedy elsewhere cannot name a vocabulary Load does not enforce.
 // Rule is the human rule for a key whose legal values are not an enumeration,
 // phrased to drop into "set `<key>` to <rule>". It is the one producer of that
 // phrase: `Allowed` answers nothing for such a key, so a caller rendering a
@@ -74,6 +71,9 @@ func Rule(key string) string {
 	return ""
 }
 
+// Allowed returns the accepted values for an enumerated key, or nil for a key
+// that has no enumeration. The key→set mapping lives here with the sets, so a
+// remedy elsewhere cannot name a vocabulary Load does not enforce.
 func Allowed(key string) []string {
 	switch key {
 	case "spec.store":

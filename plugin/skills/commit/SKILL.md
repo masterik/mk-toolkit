@@ -74,7 +74,9 @@ message as the one above:
 mkit repo profile --json
 ```
 
-Two values, each tagged `pinned` or `discovered`:
+Two values, each carrying a `source`. `commit_scopes` is `pinned`, `discovered` or `unavailable`;
+`commit_subject_max` is only ever `pinned` or `unavailable`, never `discovered` — nothing in a repo is
+evidence of the limit it requires. Treat `unavailable` by the silence rule below:
 
 - **`commit_scopes`** — the scopes this repo uses. `pinned` is the repo's own list: use it as given and
   **do not re-derive scopes from history** (`../_shared/references/conventional-commits.md`'s scope
@@ -91,8 +93,8 @@ named as pinned in the final report, a discovered one is named as derived.
 "not discoverable" behind it, carry on exactly as this skill did before it existed and **say nothing about
 it** — the profile is enrichment, not a prerequisite, and there is no version of this skill that stops on
 it. The exception is a **pin that went nowhere**: a non-empty `config_problems`, or an `unavailable` whose
-`cause` names `.mkit/config.toml`. That is the repo asking for something mkit could not honour — report the
-`detail` in one line, verbatim, and carry on with what is left.
+`cause` names `.mkit/config.toml`. That is the repo asking for something mkit could not honour — report that
+sentence in one line, verbatim, and carry on with what is left. Mind which field carries it: the sentence is `detail` on a `config_problems` entry and `cause` on the value itself — there is no `detail` on a value, and an agent that looks for one reports nothing.
 
 1. **Inspect before staging** — step 0's `mkit facts` returned all of it.
    - Confirm `branch=` is the intended one; matters inside a worktree (`linked=yes`).
@@ -210,7 +212,7 @@ that satisfies it:
 
 ```
 Scopes: cli, core (pinned in .mkit/config.toml) · subject max 72 (pinned)
-Scopes: derived from the last 200 commits · no subject limit pinned (~72 assumed)
+Scopes: derived from the last 200 commits · subject max ~72 (this skill's own convention)
 ```
 
 Nothing pinned and nothing to say → no line. A rejected pin is reported here too, in the words the

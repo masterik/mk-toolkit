@@ -37,9 +37,10 @@ A PR that is easy to review and safe to merge:
 
 ## Workflow
 
-**Step 0 — one call.** Once the base is settled, it opens the run directory and returns every read-only fact
-this skill needs (`../_shared/references/output-discipline.md`). The same outputs serve step 2's pre-flight,
-step 4's context and the final report, and none change when step 3 pushes:
+**Step 0 — one message, two read-only calls.** Once the base is settled, the first opens the run directory
+and returns every read-only fact this skill needs (`../_shared/references/output-discipline.md`); the second,
+below, asks who reviews. The same outputs serve step 2's pre-flight, step 4's context and the final report,
+and none change when step 3 pushes:
 
 ```bash
 mkit facts pr --base <base> --gh
@@ -88,8 +89,8 @@ mkit repo profile --json
 nothing pinned" behind it, changes nothing: step 6 runs as it always has and **this skill never mentions
 the binary**. The exception is a **pin that went nowhere** — a non-empty `config_problems`, or an
 `unavailable` whose `cause` names `.mkit/config.toml`. A misspelled `[review]` table is how a pinned
-reviewer list silently becomes no reviewer list, so report that one line (the `detail` is already the
-whole sentence) and then fall back.
+reviewer list silently becomes no reviewer list, so report that one line verbatim and then fall back.
+Mind which field carries it: the sentence is `detail` on a `config_problems` entry and `cause` on the value itself — there is no `detail` on a value, and an agent that looks for one reports nothing.
 
 ### 1. Commit remaining work
 
@@ -206,7 +207,8 @@ Show the full PR and confirm (unless the user already said "just create it"):
 Title:     <title>
 Base:      <base> ← <feature-branch>
 Draft:     <yes/no>
-Reviewers: <handles or "none"> (<pinned in .mkit/config.toml | from CODEOWNERS | asked>)
+Reviewers: <handles or "none"> (<pinned in .mkit/config.toml | from CODEOWNERS | repo/org default |
+           named by you | asked>)
 
 <description>
 ```
