@@ -58,6 +58,22 @@ var (
 // Allowed returns the accepted values for an enumerated key, or nil for a key
 // that has no enumeration. The key→set mapping lives here with the sets, so a
 // remedy elsewhere cannot name a vocabulary Load does not enforce.
+// Rule is the human rule for a key whose legal values are not an enumeration,
+// phrased to drop into "set `<key>` to <rule>". It is the one producer of that
+// phrase: `Allowed` answers nothing for such a key, so a caller rendering a
+// remedy from the allowed set alone names no value at all.
+//
+// A key absent from both `Allowed` and here still gets a remedy from its caller
+// — "correct it, or remove it" — because a remedy that names nothing is worse
+// than a blunt one.
+func Rule(key string) string {
+	switch key {
+	case "commit.subject_max":
+		return "a positive number of characters"
+	}
+	return ""
+}
+
 func Allowed(key string) []string {
 	switch key {
 	case "spec.store":
@@ -164,8 +180,8 @@ func invalidValueProblem(key, value, path string, allowed []string) Problem {
 func subjectMaxProblem(n int, path string) Problem {
 	return Problem{Kind: ProblemInvalidValue, Key: "commit.subject_max", Value: strconv.Itoa(n), Path: path,
 		Detail: fmt.Sprintf("`commit.subject_max` in %s is %d, which is not a usable subject length "+
-			"— a length is a positive number of characters, so the pinned limit is ignored and "+
-			"`commit` falls back to its own convention", path, n)}
+			"— a length is %s, so the pinned limit is ignored and "+
+			"`commit` falls back to its own convention", path, n, Rule("commit.subject_max"))}
 }
 
 func unparsableProblem(path, msg string) Problem {

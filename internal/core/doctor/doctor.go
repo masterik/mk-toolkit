@@ -337,8 +337,18 @@ func configRemedy(pb repoconfig.Problem) string {
 	case repoconfig.ProblemUnknownKey:
 		return "remove or correct `" + pb.Key + "` in " + pb.Path
 	case repoconfig.ProblemInvalidValue:
-		return "set `" + pb.Key + "` in " + pb.Path + " to one of " +
-			strings.Join(repoconfig.Allowed(pb.Key), ", ") + ", or remove it"
+		// Not every invalid value has an enumeration behind it: `commit.subject_max`
+		// is a number with a rule, and rendering its allowed set produces "to one
+		// of , or remove it" — a remedy naming no value, which is the one thing a
+		// degradation sentence may not be.
+		if allowed := repoconfig.Allowed(pb.Key); len(allowed) > 0 {
+			return "set `" + pb.Key + "` in " + pb.Path + " to one of " +
+				strings.Join(allowed, ", ") + ", or remove it"
+		}
+		if rule := repoconfig.Rule(pb.Key); rule != "" {
+			return "set `" + pb.Key + "` in " + pb.Path + " to " + rule + ", or remove it"
+		}
+		return "correct `" + pb.Key + "` in " + pb.Path + ", or remove it"
 	case repoconfig.ProblemUnparsable:
 		return "fix the TOML syntax in " + pb.Path + ", or delete the file — " +
 			"discovery answers everything it pinned"

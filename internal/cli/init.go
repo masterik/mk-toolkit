@@ -94,7 +94,11 @@ func newInitCmd() *cobra.Command {
 			if err := applyFlags(cfg, flagValues{
 				gate: gate, specStore: specStore, specRef: specRef,
 				scopes: scopes, subjectMax: subjectMax,
-				reviewers: reviewers, reviewMode: reviewMode,
+				// Whether the flag was *given* is the fact, not whether it is
+				// non-zero: `--subject-max 0` is a value the user typed, and a
+				// zero-value test cannot tell it from an omitted flag.
+				subjectMaxSet: cmd.Flags().Changed("subject-max"),
+				reviewers:     reviewers, reviewMode: reviewMode,
 				merge: merge, keep: keep,
 			}); err != nil {
 				return err
@@ -175,10 +179,14 @@ type flagValues struct {
 	specRef    string
 	scopes     []string
 	subjectMax int
-	reviewers  []string
-	reviewMode string
-	merge      string
-	keep       []string
+	// subjectMaxSet records that --subject-max was given at all. SubjectMax is a
+	// *int precisely so 0 is distinguishable from absent; testing subjectMax != 0
+	// here would collapse that distinction at the one door the type exists for.
+	subjectMaxSet bool
+	reviewers     []string
+	reviewMode    string
+	merge         string
+	keep          []string
 }
 
 func applyFlags(cfg *repoconfig.Config, f flagValues) error {
@@ -211,9 +219,10 @@ func applyFlags(cfg *repoconfig.Config, f flagValues) error {
 	// nonsensical limit costs least at the flag. The rule is `repoconfig`'s —
 	// a positive number of characters, no upper bound — and Load enforces the
 	// same one on read, because the file is hand-edited too.
-	if f.subjectMax != 0 {
-		if f.subjectMax < 0 {
-			return fmt.Errorf("--subject-max %d: a subject length is a positive number of characters", f.subjectMax)
+	if f.subjectMaxSet {
+		if f.subjectMax <= 0 {
+			return fmt.Errorf("--subject-max %d: a subject length is %s", f.subjectMax,
+				repoconfig.Rule("commit.subject_max"))
 		}
 		n := f.subjectMax
 		cfg.Commit.SubjectMax = &n
@@ -311,7 +320,8 @@ func applyFields(cfg *repoconfig.Config, fields []tui.Field) error {
 		case "subject-max":
 			n, err := strconv.Atoi(v)
 			if err != nil || n <= 0 {
-				return fmt.Errorf("subject max %q: expected a positive number of characters", v)
+				return fmt.Errorf("subject max %q: expected %s", v,
+					repoconfig.Rule("commit.subject_max"))
 			}
 			cfg.Commit.SubjectMax = &n
 		case "reviewers":

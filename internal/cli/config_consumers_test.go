@@ -167,6 +167,11 @@ func TestInitRefusesAValueItWouldHaveToWriteAndThenReject(t *testing.T) {
 	configRepo(t)
 	for _, args := range [][]string{
 		{"init", "--yes", "--subject-max", "-5"},
+		// 0 is the case a `subjectMax != 0` guard cannot see. SubjectMax is a
+		// *int so that 0 differs from absent; a flag path that tests the zero
+		// value instead of whether the flag was given writes a config with no
+		// limit at all and tells the user nothing.
+		{"init", "--yes", "--subject-max", "0"},
 		{"init", "--yes", "--review-mode", "fast"},
 	} {
 		res := run(t, args...)
