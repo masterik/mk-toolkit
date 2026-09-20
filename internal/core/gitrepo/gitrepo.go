@@ -278,17 +278,36 @@ func (r *Repo) AliveCommits(heads []string) map[string]bool {
 // named branch is a normal repo, and every caller reports the answer rather than
 // stopping on it.
 func (r *Repo) DefaultBranch() string {
+	var remoteHead string
 	if remote := r.Remote(); remote != "" {
 		if head, err := run(r.Toplevel, "symbolic-ref", "--short", "refs/remotes/"+remote+"/HEAD"); err == nil {
-			if b := strings.TrimPrefix(head, remote+"/"); b != "" {
-				return b
-			}
+			remoteHead = strings.TrimPrefix(head, remote+"/")
 		}
 	}
+	// The remote's answer wins only when this checkout actually has that branch.
+	// A stale `origin/HEAD`, or one naming a branch that exists only as a
+	// remote-tracking ref, otherwise wins over a perfectly good local `main`:
+	// `mkit branch scan` refuses a `--default` absent from `refs/heads` before it
+	// fetches anything, so the whole of `cleanup` stops on a name this repo has
+	// never checked out.
+	if remoteHead != "" && r.hasLocalBranch(remoteHead) {
+		return remoteHead
+	}
 	for _, b := range []string{"main", "master", "trunk"} {
-		if _, err := run(r.Toplevel, "show-ref", "--verify", "--quiet", "refs/heads/"+b); err == nil {
+		if r.hasLocalBranch(b) {
 			return b
 		}
 	}
+	// Nothing local matched. The remote's name is still a better report than
+	// "unknown" — every caller reports this rather than branching on it, and the
+	// one that refuses a non-local default refuses "unknown" just the same.
+	if remoteHead != "" {
+		return remoteHead
+	}
 	return "unknown"
+}
+
+func (r *Repo) hasLocalBranch(name string) bool {
+	_, err := run(r.Toplevel, "show-ref", "--verify", "--quiet", "refs/heads/"+name)
+	return err == nil
 }

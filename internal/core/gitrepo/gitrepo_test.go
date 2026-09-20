@@ -163,3 +163,40 @@ func TestAliveCommitsDistinguishesWhenTheBatchAnswers(t *testing.T) {
 		t.Error("a commit that does not exist reported alive")
 	}
 }
+
+// git runs a command in the repo, failing the test on error.
+func git(t *testing.T, repo *Repo, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = repo.Toplevel
+	cmd.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t",
+		"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
+// A stale `origin/HEAD` — or one naming a branch that exists only as a
+// remote-tracking ref — must not beat a local branch that is actually here.
+// `mkit branch scan` refuses a --default absent from refs/heads before it
+// fetches, so returning the non-local name stops the whole of `cleanup` on a
+// branch this checkout has never had.
+func TestDefaultBranchPrefersALocalBranchOverAStaleRemoteHead(t *testing.T) {
+	repo := newRepo(t)
+	git(t, repo, "branch", "-M", "main")
+	git(t, repo, "remote", "add", "origin", "https://example.invalid/r.git")
+	// origin/HEAD -> origin/develop, with no local develop anywhere.
+	git(t, repo, "update-ref", "refs/remotes/origin/develop", "HEAD")
+	git(t, repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/develop")
+
+	if got := repo.DefaultBranch(); got != "main" {
+		t.Errorf("DefaultBranch() = %q, want main: the remote's answer names no local branch", got)
+	}
+
+	// With the branch actually present, the remote's answer is the right one.
+	git(t, repo, "branch", "develop")
+	if got := repo.DefaultBranch(); got != "develop" {
+		t.Errorf("DefaultBranch() = %q, want develop once it exists locally", got)
+	}
+}
