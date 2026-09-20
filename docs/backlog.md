@@ -368,7 +368,7 @@ because git cannot re-include a file whose parent directory is excluded.
   words its own.
 **What it deliberately did not do, and now needs picking up:** it landed the config *surface* and
 no consumer. `spec.*` gets one at M8; `gate.commands` got one at M5; `merge.style`, `commit.scopes` and
-`review.reviewers` get one from "The config has no consumers" above, which is where the rest of
+`review.reviewers` get one from "Giving the config its consumers" above, which is where the rest of
 that gap is tracked.
 
 **Done — all four met:** the committed config path is decided and recorded; `mkit doctor` names an

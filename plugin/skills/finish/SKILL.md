@@ -162,7 +162,9 @@ It is one fewer question, not a dependency.
 **Silence, with one exception — a pin that went nowhere.** A non-empty `config_problems`, or an
 `unavailable` whose `cause` names `.mkit/config.toml`, is not "no answer": it is this repo pinning a merge
 style mkit could not honour — a misspelled `style`, or a `[merge]` table that never arrived. Report that
-`detail` in one line, verbatim, then ask as usual. Falling silently back to the question is the failure
+sentence in one line, verbatim, then ask as usual. Mind which field carries it: the sentence is `detail` on
+a `config_problems` entry and `cause` on `merge_style` itself — there is no `detail` on a value, and an agent
+that looks for one reports nothing. Falling silently back to the question is the failure
 shape that validation exists to kill: the config looks applied, and the only symptom is the question the
 pin was supposed to have answered. An `unavailable` carrying nothing but "not discoverable" stays silent.
 
