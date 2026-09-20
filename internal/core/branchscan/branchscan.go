@@ -93,7 +93,11 @@ type Scan struct {
 	// reported so `cleanup` can say the pin had nothing to protect here instead of
 	// silently dropping it.
 	KeepUnknown []string
-	Remote      string
+	// ConfigProblems is Options.ConfigProblems carried into the report. Without
+	// it, "nothing was pinned" and "the pin never arrived" both print as
+	// `keep=none`.
+	ConfigProblems []string
+	Remote         string
 	// Fetch is ok, skipped, no-remote or failed.
 	Fetch string
 	// WorktreesState is ok or unreadable. `cleanup` plans teardown from these
@@ -114,9 +118,18 @@ type Options struct {
 	// Keep is the repo config's `[cleanup] keep`. Read by the caller and passed
 	// in, for the same reason Default is: this package classifies, it does not
 	// decide where an answer comes from.
-	Keep    []string
-	NoFetch bool
-	NoGH    bool
+	Keep []string
+	// ConfigProblems is what the config said that the caller could not honour,
+	// already worded by `repoconfig`'s producers. Passed as sentences rather than
+	// typed problems so this package cannot reword one: it classifies branches,
+	// and has no opinion about config.
+	//
+	// Load-bearing rather than informational: a keep pin that was dropped is
+	// indistinguishable from nothing pinned, and that difference decides whether
+	// `cleanup` deletes a branch the user asked it to keep.
+	ConfigProblems []string
+	NoFetch        bool
+	NoGH           bool
 }
 
 // pullRequest is one PR as the batched lookup returns it.
@@ -137,7 +150,8 @@ func Run(repo *gitrepo.Repo, opt Options) (*Scan, error) {
 		return nil, fmt.Errorf("--default branch does not exist locally: %s", opt.Default)
 	}
 
-	s := &Scan{Default: opt.Default, Develop: Develop(repo, opt.Default), Keep: opt.Keep}
+	s := &Scan{Default: opt.Default, Develop: Develop(repo, opt.Default), Keep: opt.Keep,
+		ConfigProblems: opt.ConfigProblems}
 	local, unknown := splitKeep(repo, opt.Keep)
 	s.Protected, s.KeepUnknown = ProtectedSet(opt.Default, s.Develop, local), unknown
 
