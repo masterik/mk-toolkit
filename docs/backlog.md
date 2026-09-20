@@ -119,9 +119,9 @@ a config nothing reads.
   `facts.sh` reports `config=` and `config_state=` and no pinned *value*. Of the five sections M7's
   `init` wrote, `spec.*` gets its consumer at M8 and `gate.commands` at M5 (both below) — the
   other three are written and read by nobody, and no milestone will pick them up. Four items,
-  none of them a port, all independent of the port line. **One is done**: `[cleanup] keep` (issue
-  #20) is a sixth section, and `mkit branch scan` is the first command outside `repo profile` and
-  `gate detect` to read a pinned value:
+  none of them a port, all independent of the port line. **Two are done**: config validation (issue
+  #19), and now `[cleanup] keep` (issue #20) — a sixth section, and `mkit branch scan` is the first
+  command outside `repo profile` and `gate detect` to read a pinned value:
 
   - **`merge.style` → `finish`.** `finish` step 4 runs
     `gh repo view --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed` and, when more

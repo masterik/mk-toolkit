@@ -333,9 +333,29 @@ func ProtectedSet(def, develop string, keep []string) []string {
 		add(develop)
 	}
 	for _, k := range keep {
-		add(strings.TrimSpace(k))
+		if name, ok := keepName(k); ok {
+			add(name)
+		}
 	}
 	return out
+}
+
+// keepName trims a pinned entry and says whether anything is left.
+//
+// **ASCII whitespace only, never `strings.TrimSpace`.** Git forbids the ASCII
+// space and control characters in a ref name, so trimming those can only remove
+// padding a human left in the TOML — but it *allows* Unicode whitespace, so
+// TrimSpace rewrites a legal branch name (`release\u00a02026`) into a different
+// one. The pin then matches no branch, the branch is not protected, and this is
+// the code path that decides what gets deleted.
+//
+// So both cases stay true: `" staging "` pins `staging`, and a name whose own
+// characters include U+00A0 is looked up exactly as written.
+const asciiSpace = " \t\n\r\v\f"
+
+func keepName(k string) (string, bool) {
+	k = strings.Trim(k, asciiSpace)
+	return k, k != ""
 }
 
 // splitKeep divides the pinned names into those that exist as a local branch here
@@ -343,8 +363,8 @@ func ProtectedSet(def, develop string, keep []string) []string {
 // never dropped in silence — see Scan.KeepUnknown.
 func splitKeep(repo *gitrepo.Repo, keep []string) (local, unknown []string) {
 	for _, k := range keep {
-		k = strings.TrimSpace(k)
-		if k == "" {
+		k, ok := keepName(k)
+		if !ok {
 			continue
 		}
 		if err := run(repo, "git", "show-ref", "--verify", "--quiet", "refs/heads/"+k); err == nil {
