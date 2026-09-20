@@ -32,7 +32,10 @@ func newBranchScanCmd() *cobra.Command {
 			"name pinned in the repo config's `[cleanup] keep`. The default branch is in it\n" +
 			"whether or not the keep list names it — a list that omits it is a mistake, not\n" +
 			"an instruction. A pinned name with no local branch is reported as\n" +
-			"`keep_unknown=`, not an error: a keep list travels with the repo.\n\n" +
+			"`keep_unknown=`, not an error: a keep list travels with the repo.\n" +
+			"`config_problems=` counts what the config said that could not be honoured, one\n" +
+			"sentence each in the trailing `notes:` block; above zero, `keep=` may be missing\n" +
+			"names that were pinned.\n\n" +
 			"Columns, in the order they are printed:\n" +
 			"  branch       the local branch name\n" +
 			"  class        protected | current | merged | merged-pr | open-pr | closed-pr |\n" +
@@ -56,13 +59,29 @@ func newBranchScanCmd() *cobra.Command {
 			}
 			// Config is an input, never a permission: a config this binary could
 			// not fully honour still scans, with whatever did parse. Load's only
-			// error is a file it could not read at all.
+			// error is a file it could not read at all — mode 000, a directory
+			// where the file should be, an I/O or sandbox denial — and that is
+			// the same rule, not an exception to it. Returning it here would let
+			// an unreadable file abort a command that never needed to open it,
+			// taking `cleanup`'s whole classifier with it.
+			//
+			// Not silently, though: the scan reports it, for the same reason it
+			// reports a dropped pin. A keep list that never arrived and a repo
+			// that pinned nothing both produce `keep=none`, and only one of them
+			// means a branch is unprotected.
 			cfg, _, err := repoconfig.Load(repo.Toplevel)
+			var problems []string
 			if err != nil {
-				return err
+				problems = append(problems,
+					repoconfig.UnreadableProblem(repoconfig.Path(repo.Toplevel), err).Detail)
+				cfg = &repoconfig.Config{}
+			}
+			for _, pb := range cfg.Problems {
+				problems = append(problems, pb.Detail)
 			}
 			s, err := branchscan.Run(repo, branchscan.Options{
-				Default: def, Keep: cfg.Cleanup.Keep, NoFetch: noFetch, NoGH: noGH,
+				Default: def, Keep: cfg.Cleanup.Keep, ConfigProblems: problems,
+				NoFetch: noFetch, NoGH: noGH,
 			})
 			if err != nil {
 				return &ExitError{Code: 2, Msg: err.Error()}
@@ -91,6 +110,10 @@ func renderBranchScan(out io.Writer, s *branchscan.Scan) {
 	// a non-empty `keep=` with nothing in `protected=` beyond the default is not.
 	_, _ = fmt.Fprintf(out, "keep=%s\n", orNone(strings.Join(s.Keep, ",")))
 	_, _ = fmt.Fprintf(out, "keep_unknown=%s\n", orNone(strings.Join(s.KeepUnknown, ",")))
+	// The count on the key line, the sentences in `notes:` — a cause needing a
+	// sentence never goes on a `key=value` line, because several of those pack
+	// more than one pair and a reader splits them.
+	_, _ = fmt.Fprintf(out, "config_problems=%d\n", len(s.ConfigProblems))
 	_, _ = fmt.Fprintf(out, "remote=%s\n", orNone(s.Remote))
 	_, _ = fmt.Fprintf(out, "fetch=%s\n", s.Fetch)
 	_, _ = fmt.Fprintf(out, "gh=%s\n", s.GH)
@@ -107,6 +130,14 @@ func renderBranchScan(out io.Writer, s *branchscan.Scan) {
 	for _, w := range s.Worktrees {
 		_, _ = fmt.Fprintf(out, "%s\t%s\t%s\t%s\n", w.Branch, w.Path, w.Origin, w.Clean)
 	}
+	// Last, and only when there is something to say: the sentences behind
+	// `config_problems=`, each already worded by `repoconfig`.
+	if len(s.ConfigProblems) > 0 {
+		_, _ = fmt.Fprintln(out, "notes:")
+		for _, n := range s.ConfigProblems {
+			_, _ = fmt.Fprintf(out, "- %s\n", n)
+		}
+	}
 }
 
 func dashIfEmpty(s string) string {
@@ -121,6 +152,7 @@ type branchScanJSON struct {
 	Develop        string             `json:"develop"`
 	Protected      []string           `json:"protected"`
 	Keep           []string           `json:"keep"`
+	ConfigProblems []string           `json:"config_problems"`
 	KeepUnknown    []string           `json:"keep_unknown"`
 	Remote         string             `json:"remote"`
 	Fetch          string             `json:"fetch"`
@@ -149,7 +181,8 @@ func writeBranchScanJSON(out io.Writer, s *branchscan.Scan) error {
 	j := branchScanJSON{
 		Default: s.Default, Develop: s.Develop, Protected: s.Protected,
 		Keep: nonNil(s.Keep), KeepUnknown: nonNil(s.KeepUnknown),
-		Remote: s.Remote, Fetch: s.Fetch, GH: s.GH, WorktreesState: s.WorktreesState,
+		ConfigProblems: nonNil(s.ConfigProblems),
+		Remote:         s.Remote, Fetch: s.Fetch, GH: s.GH, WorktreesState: s.WorktreesState,
 		Branches:  make([]branchJSON, 0, len(s.Branches)),
 		Worktrees: make([]worktreeScanJSON, 0, len(s.Worktrees)),
 	}

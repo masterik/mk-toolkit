@@ -111,6 +111,16 @@ const (
 	ProblemUnparsable ProblemKind = "unparsable"
 	// ProblemNewerVersion — written by a newer mkit. Reported, never refused.
 	ProblemNewerVersion ProblemKind = "newer-version"
+	// ProblemUnreadable — the file is there and could not be read at all (mode
+	// 000, a directory in its place, an I/O or sandbox denial). Distinct from
+	// ProblemUnparsable, which is a file that was read and is not TOML.
+	//
+	// `Load` still returns this case as an error, because most callers want it:
+	// a command that exists to read the config should say so and stop. It is a
+	// *Problem* for the callers that do not — one that pins nothing and merely
+	// consults, where aborting would take a capability away over a file the
+	// command never needed.
+	ProblemUnreadable ProblemKind = "unreadable"
 )
 
 // Problem is one thing Load could not honour, named with the key and the file it
@@ -147,6 +157,16 @@ func unparsableProblem(path, msg string) Problem {
 	return Problem{Kind: ProblemUnparsable, Value: msg, Path: path,
 		Detail: fmt.Sprintf("%s is not valid TOML (%s) — nothing in it is pinned, and every "+
 			"command runs on discovery alone", path, msg)}
+}
+
+// UnreadableProblem is the one producer of the sentence for a config file that
+// could not be read. Exported, unlike its four siblings, because `Load` reports
+// this case as an error and the caller that chooses to carry on instead must not
+// reword it.
+func UnreadableProblem(path string, err error) Problem {
+	return Problem{Kind: ProblemUnreadable, Path: path, Value: err.Error(),
+		Detail: fmt.Sprintf("%s could not be read (%s) — nothing in it is pinned, and this "+
+			"command runs on discovery alone", path, err)}
 }
 
 func newerVersionProblem(version int, path string) Problem {

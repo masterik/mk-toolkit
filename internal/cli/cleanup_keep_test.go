@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"github.com/masterik/mk-toolkit/internal/core/repoconfig"
 	"os"
 	"path/filepath"
 	"strings"
@@ -226,4 +227,80 @@ func brokenConfigFreeRepo(t *testing.T) string {
 	t.Setenv("CLAUDE_PLUGIN_ROOT", "")
 	t.Setenv("MKIT_PLUGIN_ROOT", "")
 	return repo
+}
+
+// Config is an input, never a permission — and that rule does not stop at a file
+// mkit could not parse. This command did not open the config at all before
+// `[cleanup] keep`, so returning Load's read error would let an unreadable
+// config.toml abort the scan and take `cleanup`'s whole classifier with it, over
+// a file the scan does not need. It scans with nothing pinned instead.
+func TestAnUnreadableConfigDoesNotAbortTheScan(t *testing.T) {
+	dir := scanRepo(t)
+	path := filepath.Join(dir, repoconfig.RelPath)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("version = 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Mode 000 is the cheapest unreadable-but-present file; a directory at the
+	// same path is the other shape and reaches the same branch.
+	if err := os.Chmod(path, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0o644) })
+
+	res := scan(t, "--default", "main", "--no-fetch", "--no-gh")
+	if res.code != 0 {
+		t.Fatalf("exit %d on an unreadable config; the scan needs no config to classify: %s%s",
+			res.code, res.stdout, res.stderr)
+	}
+	if !strings.Contains(res.stdout, "protected=main") {
+		t.Errorf("default branch not protected on the degraded path:\n%s", res.stdout)
+	}
+	// Carrying on is only half of it: an unreadable config must not look like a
+	// repo that pinned nothing, or `cleanup` deletes on an empty keep list it
+	// believes is real.
+	if !strings.Contains(res.stdout, "config_problems=1") || !strings.Contains(res.stdout, "notes:") {
+		t.Errorf("an unreadable config was swallowed silently:\n%s", res.stdout)
+	}
+}
+
+// The failure #19 exists to prevent, on the one path that deletes things: a
+// typo'd table drops the keep pin, and `keep=none` then reads exactly like a
+// repo that pinned nothing.
+func TestADroppedKeepPinIsReportedNotSilentlyEmpty(t *testing.T) {
+	dir := scanRepo(t)
+	writeConfig(t, dir, "version = 1\n\n[cleanp]\nkeep = [\"staging\"]\n")
+
+	res := scan(t, "--default", "main", "--no-fetch", "--no-gh")
+	if res.code != 0 {
+		t.Fatalf("exit %d: config is an input, never a permission: %s%s", res.code, res.stdout, res.stderr)
+	}
+	if !strings.Contains(res.stdout, "keep=none") {
+		t.Errorf("the dropped pin should leave keep empty:\n%s", res.stdout)
+	}
+	if !strings.Contains(res.stdout, "config_problems=1") {
+		t.Fatalf("a dropped keep pin is indistinguishable from none pinned:\n%s", res.stdout)
+	}
+	notes, ok := cutAfter(res.stdout, "notes:")
+	if !ok || !strings.Contains(notes, "cleanp") {
+		t.Errorf("the note does not name the key that was dropped:\n%s", res.stdout)
+	}
+}
+
+func cutAfter(s, sep string) (string, bool) {
+	_, rest, ok := strings.Cut(s, sep)
+	return rest, ok
+}
+
+func writeConfig(t *testing.T, dir, body string) {
+	t.Helper()
+	path := filepath.Join(dir, repoconfig.RelPath)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
 }
