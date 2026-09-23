@@ -138,12 +138,15 @@ a config nothing reads.
     fallback — here the fallback is exactly today's discovery, so these skills read the profile
     when it answers and degrade **silently** when `mkit` is absent. A step-0 probe that stops the
     run would break invariant 8 for nothing.
-  - **Config validation.** `repoconfig.Load` is a plain `toml.Unmarshal`: unknown keys are dropped
-    and enum values unchecked. Validation exists only on `init`'s flags and its TUI — yet `init`'s
-    own success message says "or edit the file directly". A hand-typed `style = "sqaush"`, or a
-    `[reviewers]` table that should have been `[review]`, is silently ignored for the life of the
-    repo, and `repo profile` reports the value as *discovered* because the pinned one never
-    arrived. Strict decode, an `unavailable` cause naming the bad key, and a `doctor` check.
+  - ~~**Config validation.**~~ **Done** (issue #19). `repoconfig.Load` decodes strictly and
+    collects *every* unknown key, validates `spec.store` and `merge.style` against the sets
+    `mkit init` now consumes from `repoconfig` rather than keeping its own copy, and clears a
+    rejected value while recording a `repoconfig.Problem`. Nothing it finds fails a command —
+    config is an input, never a permission — so `repo profile` reports the affected value as
+    `unavailable` with a cause naming the key and the file instead of falling through to
+    `discovered`, and `mkit doctor` warns once per problem with exit status still 0. **A
+    `version` higher than `repoconfig.Version` is reported, never refused**: the reasoning is in
+    `Version`'s doc comment.
   - **`[cleanup] keep`.** A new key, and the one candidate that survives the schema's own filter —
     *pin only what inspection cannot establish*. `cleanup` hardcodes "the default branch, and a
     develop-like branch if one exists locally". A repo with `staging` or a long-lived release
