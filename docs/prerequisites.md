@@ -123,6 +123,24 @@ mkit findings schema         # prints the JSONL shape
 mkit doctor                  # this page's tooling, the sandbox, the payload, the allowlist
 ```
 
+## Gatekeeper blocks the binary after install/upgrade
+
+**"mkit" was blocked to protect your Mac.** The cask ships an unsigned, unnotarized binary — no
+signing step exists in `.goreleaser.yaml` yet ([#28](https://github.com/masterik/mk-toolkit/issues/28)
+tracks adding it) — so macOS quarantines every fresh download and refuses to run it, on both
+`brew install` and `brew upgrade`.
+
+**Workaround, until signing lands** — strip the quarantine attribute Homebrew's download left on
+the binary:
+
+```bash
+xattr -d com.apple.quarantine "$(which mkit)"
+```
+
+Re-run after every `brew upgrade mkit`; each new download is quarantined again. The GUI path
+(System Settings → Privacy & Security → "Allow Anyway", then confirm "Open Anyway" on the next
+launch) works too, but the command above is one line and needs no clicking.
+
 ## Fewer permission prompts
 
 Each subcommand is its own Bash pattern, so the first run of each asks. Allow them once, in
