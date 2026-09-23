@@ -1,0 +1,149 @@
+---
+name: sandbox-audit
+description: >-
+  Scan recent Claude Code sessions, user-wide, for sandbox and auto-mode friction — what the OS sandbox
+  blocked, what ran with the sandbox disabled, what the auto-mode classifier, a permission rule or the user
+  refused — and propose paste-ready settings changes (network allowlist, filesystem allowWrite, env,
+  excludedCommands, permission and autoMode rules) plus the guards that should stay. Trigger on "sandbox
+  audit", "audit my sandbox", "scan sessions for sandbox issues", "why does the sandbox keep blocking",
+  "update my allowlist from recent sessions", "review my auto mode denials", "reduce sandbox overrides".
+  Report-only: it never edits a settings file.
+---
+
+# Audit the sandbox and permission gate across sessions
+
+Part of the **mkit** bundle, but outside the edit → commit → review → finish/pr line, like `cleanup`: this
+is machine gardening, not feature work, and it is **not repo-scoped** — it reads every project's transcripts
+under the Claude home, so it runs the same from any directory, inside a repository or not.
+
+References: `../_shared/references/output-discipline.md` (bounded output, where a write may land).
+
+## What this does and does not touch
+
+- Reads transcripts (through `mkit audit sessions`) and settings files. Nothing else.
+- **Never writes a settings file.** `~/.claude/settings.json` and every `.claude/settings*.json` are
+  sandbox-protected, and a changed permission is the user's decision to make, file by file. The output is a
+  paste-ready diff.
+- Writes one file: its own ledger, `~/.mkit/sandbox-audit.md` (step 5) — the decisions a later run must not
+  re-litigate.
+
+## Preconditions
+
+**One call, and it is the dependency check.** This skill has no run directory and no repository, so it does
+not start with `mkit facts`; the command it needs *is* the probe:
+
+```bash
+mkit audit sessions --days <N, default 14> --top 0
+```
+
+If it fails with `command not found` **or** `unknown command "audit"` — absent and too old are the same
+answer — **stop** and say:
+
+> This skill runs on the `mkit` binary. Install it with `brew install masterik/tap/mkit` (or upgrade
+> with `brew upgrade mkit`), then run it again.
+
+A non-zero exit naming the projects directory means there are no transcripts to read (a fresh machine, or
+`CLAUDE_HOME` pointing somewhere else) — say so and stop; that is not a finding.
+
+Read `~/.mkit/sandbox-audit.md` if it exists: the last run's date, counts, and the **stay-blocked** and
+**applied** lists. Its absence is the ordinary first run, never mentioned.
+
+## Workflow
+
+### 1. Read the report
+
+The human output is the summary: headline counts as `key=value`, then four groupings — sandbox blocks by
+target, by command, overrides by command, auto-mode denials by reason — then a per-project table. Pull the
+JSON only when a bucket needs drilling into:
+
+```bash
+mkit audit sessions --days <N> --json --events > <tmp>/audit.json
+```
+
+and query that file with a short script, never by reading it whole. `projects[].paths` is every working
+directory a project's sessions ran in: that is where its `.claude/settings*.json` live.
+
+Know what the counts mean before reasoning from them:
+
+- **`sandbox_blocks`** — sandboxed Bash calls the sandbox denied. A `network-outbound <host>` target came from
+  Claude Code's own `<sandbox_violations>` report and is exact. Any other target is the tool's own EPERM
+  line, normalized (`~`, `.claude/worktrees/*`, `<file>`, `#` for ids) — read it as evidence, not a path to
+  allowlist verbatim.
+- **`overrides`** — calls run with `dangerouslyDisableSandbox`, whatever became of them.
+  `overrides_preemptive` had no sandbox block before them in their session: the agent guessed the sandbox
+  would fail. `overrides_read_only` were reads the sandbox allows anyway. Both are **behaviour**, not a
+  config gap.
+- **`automode_denials`** — the classifier's refusals, with the reason it gave. An override the classifier
+  refused counts here too, and in `override_outcomes`.
+- `rule_denials`, `user_denials` — a `permissions.deny` rule, or the user at the prompt.
+
+### 2. Read the current config
+
+`~/.claude/settings.json`, and `.claude/settings.json` + `.claude/settings.local.json` under each path in
+`projects[].paths` that has events. Note `sandbox.*`, `permissions.*` (`allow`, `ask`, `deny`,
+`additionalDirectories`), `autoMode.*`, `env`. Also the user's `~/.claude/CLAUDE.md`, for step 3's
+behaviour rules.
+
+Before recommending any key, **check its exact name and semantics against the current docs** —
+`https://code.claude.com/docs/en/sandboxing` and `…/settings-reference`. Settings keys change between
+releases, and a misspelled key is silently ignored: it looks applied and does nothing. Flag anything you
+could not confirm, such as how a wildcard inside an `excludedCommands` pattern matches.
+
+### 3. Decide each finding
+
+Group the buckets by root cause, not by command: toolchain caches and temp dirs, network hosts, protected
+paths, unix sockets, non-HTTP network, nested sandboxes, no cause at all. Then give each root cause exactly
+one disposition, preferring them in this order:
+
+| disposition | when | the change |
+| --- | --- | --- |
+| **covered** | the current config already handles it | none — but a covered finding still occurring is a regression worth one line |
+| **stop the traffic** | telemetry or analytics the task never needed (`telemetry.*`, `analytics.*`, `posthog`) | an `env` opt-out (`DO_NOT_TRACK`, `HOMEBREW_NO_ANALYTICS`, the tool's own) — never allowlist a tracker |
+| **allowlist** | a host or a path a tool legitimately needs | `sandbox.network.allowedDomains`, `sandbox.filesystem.allowWrite`, or an `env` redirect of a temp or cache dir into a writable one |
+| **pre-approve** | the classifier refused something routine the user always approves | a narrow `permissions.allow` rule, or an `autoMode.allow` sentence scoped to the exact operation |
+| **exclude** | the sandbox cannot run it at all: a protected path (`.git/config`, `.git/hooks`, `.vscode`, `.claude/*`, `~/.claude/plugins`), a nested sandbox (`sandbox_apply`), docker, ssh | `sandbox.excludedCommands` — the narrowest pattern that covers it. Keep this list short; an excluded command still meets the permission gate, so say whether an `ask` rule keeps it prompting |
+| **stay blocked** | the guard did its job: a merge nobody asked for, a sandbox-bypass env var, a read of `.env` or a secret, destructive git during a merge | none — name it, so the next run does not propose it |
+| **behaviour** | preemptive overrides, overrides on read-only commands, an override carried forward to every later command | a rule for `~/.claude/CLAUDE.md`, not a setting |
+
+A protected path cannot be allowlisted: an `allowWrite` entry covering it is inert, which is why those rows
+go to **exclude**. Never propose widening `allowWrite` to a credentials directory, a shell rc file, or
+anything under `~/.claude`.
+
+Anything already on the ledger's **stay-blocked** list stays there unless the user says otherwise — report
+its count, do not re-propose it.
+
+### 4. Report
+
+In this order, and nothing else:
+
+1. **Headline table** — the counts, and against the ledger's last run where there is one (`sandbox_blocks
+   105 → 40`). A delta is only meaningful over the same `--days`; say so if the windows differ.
+2. **Settings diff** — per file, only the keys that change, as paste-ready JSON. One line under each change:
+   the finding and how many events it removes.
+3. **Stay blocked** — what, how often, why.
+4. **Behaviour** — any CLAUDE.md wording, with the counts behind it.
+5. **Undiagnosed** — buckets you could not attribute, one example command each.
+
+Then ask which changes the user is taking. They paste them; this skill does not.
+
+### 5. Update the ledger
+
+After the user answers, write `~/.mkit/sandbox-audit.md` — overwrite it whole, it is a snapshot, not a log:
+
+```markdown
+# sandbox-audit ledger
+last_run: <UTC date> · days: <N>
+counts: sandbox_blocks=… overrides=… overrides_preemptive=… overrides_read_only=… automode_denials=… rule_denials=… user_denials=…
+
+## Applied
+- <change> — <finding> (<date>)
+
+## Stay blocked
+- <operation> — <why> (<date>)
+
+## Declined
+- <change> — <user's reason, if given> (<date>)
+```
+
+Carry every earlier entry forward; add this run's. If `~/.mkit` is not writable, say so with the remedy
+`mkit doctor` reports, print the ledger instead, and finish — the audit itself is complete without it.
