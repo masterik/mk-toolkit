@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/masterik/mk-toolkit/internal/core/branchscan"
 	"github.com/masterik/mk-toolkit/internal/core/gate"
 	"github.com/masterik/mk-toolkit/internal/core/gitrepo"
 	"github.com/masterik/mk-toolkit/internal/core/pluginroot"
@@ -64,12 +65,19 @@ type GateStep struct {
 type Profile struct {
 	Toplevel string            `json:"toplevel"`
 	Config   repoconfig.Status `json:"config"`
-	Gate     Gate              `json:"gate"`
-	Spec     Spec              `json:"spec"`
-	Scopes   List              `json:"commit_scopes"`
-	Review   List              `json:"reviewers"`
-	Merge    Value             `json:"merge_style"`
-	Payload  PayloadInfo       `json:"payload"`
+	// ConfigProblems is what the config file says that mkit could not honour.
+	// Reported at the top level as well as on the affected value, because an
+	// unknown key affects no value at all — it is precisely the pin that went
+	// nowhere, and a profile that only tagged values would never mention it.
+	ConfigProblems []repoconfig.Problem `json:"config_problems,omitempty"`
+	Gate           Gate                 `json:"gate"`
+	Spec           Spec                 `json:"spec"`
+	Scopes         List                 `json:"commit_scopes"`
+	Review         List                 `json:"reviewers"`
+	Merge          Value                `json:"merge_style"`
+	// Keep is the branches `cleanup` must never delete.
+	Keep    List        `json:"cleanup_keep"`
+	Payload PayloadInfo `json:"payload"`
 }
 
 // Gate is the quality gate as a sequence.
@@ -108,8 +116,9 @@ func Build(repo *gitrepo.Repo) (*Profile, error) {
 	}
 
 	p := &Profile{
-		Toplevel: repo.Toplevel,
-		Config:   repoconfig.Stat(repo),
+		Toplevel:       repo.Toplevel,
+		Config:         repoconfig.Stat(repo),
+		ConfigProblems: cfg.Problems,
 	}
 
 	root, rerr := pluginroot.Find(repo.Toplevel)
@@ -124,6 +133,7 @@ func Build(repo *gitrepo.Repo) (*Profile, error) {
 	p.Scopes = discoverScopes(repo, cfg)
 	p.Review = discoverReviewers(repo, cfg)
 	p.Merge = discoverMerge(repo, cfg)
+	p.Keep = discoverKeep(repo, cfg)
 	return p, nil
 }
 
@@ -170,7 +180,12 @@ func buildGate(repo *gitrepo.Repo, cfg *repoconfig.Config) Gate {
 func discoverSpec(repo *gitrepo.Repo, cfg *repoconfig.Config) Spec {
 	var s Spec
 
-	if cfg.Spec.Store != "" {
+	// An invalid pinned store is Unavailable, not Discovered. Falling through to
+	// discovery here is the failure shape issue #19 names: the config looks
+	// applied, because a plausible answer arrives tagged as if nothing were wrong.
+	if pb := cfg.Problem("spec.store"); pb != nil {
+		s.Store = Value{Source: Unavailable, Cause: pb.Detail}
+	} else if cfg.Spec.Store != "" {
 		s.Store = Value{Value: cfg.Spec.Store, Source: Pinned}
 	} else if store := readTrackerDoc(repo.Toplevel); store != "" {
 		s.Store = Value{Value: store, Source: Discovered}
@@ -306,6 +321,11 @@ func discoverReviewers(repo *gitrepo.Repo, cfg *repoconfig.Config) List {
 // report, and `gh` may be missing or unauthenticated — both of which would turn a
 // profile into a thing that sometimes hangs.
 func discoverMerge(repo *gitrepo.Repo, cfg *repoconfig.Config) Value {
+	// Same rule as the spec store: a pinned value that was rejected is reported
+	// as rejected, never replaced by a discovered one wearing the `discovered` tag.
+	if pb := cfg.Problem("merge.style"); pb != nil {
+		return Value{Source: Unavailable, Cause: pb.Detail}
+	}
 	if cfg.Merge.Style != "" {
 		return Value{Value: cfg.Merge.Style, Source: Pinned}
 	}
@@ -322,4 +342,30 @@ func discoverMerge(repo *gitrepo.Repo, cfg *repoconfig.Config) Value {
 	return Value{Source: Unavailable,
 		Cause: "not discoverable locally — the remote's merge settings are a network call, " +
 			"so pin it with `mkit init` if this repo squash-merges"}
+}
+
+// discoverKeep reports the branches `cleanup` must never delete.
+//
+// The discovered answer is what cleanup already protects with nothing pinned:
+// the default branch, plus the first local one of develop/development/dev. It is
+// read from `branchscan`, the package that actually computes it, rather than
+// restated here — a profile that advertised a different set than the classifier
+// uses would be worse than reporting nothing.
+//
+// A pinned list **replaces** the reported value the way `commit.scopes` and
+// `reviewers` do, and the tag says which. It does not replace the protection:
+// `branchscan.ProtectedSet` unions the pinned names with the default branch, so the
+// default branch is kept whether or not the list names it. This is a report of
+// what was pinned, not of what will survive.
+func discoverKeep(repo *gitrepo.Repo, cfg *repoconfig.Config) List {
+	if len(cfg.Cleanup.Keep) > 0 {
+		return List{Values: cfg.Cleanup.Keep, Source: Pinned}
+	}
+	def := repo.DefaultBranch()
+	if def == "unknown" {
+		return List{Values: []string{}, Source: Unavailable,
+			Cause: "no remote HEAD and no local main/master/trunk, so the default branch " +
+				"cleanup protects cannot be named here"}
+	}
+	return List{Values: branchscan.ProtectedSet(def, branchscan.Develop(repo, def), nil), Source: Discovered}
 }

@@ -15,7 +15,7 @@ import (
 func newRepoProfileCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "profile",
-		Short: "Report gate commands, spec store, scopes, reviewers and merge style",
+		Short: "Report gate commands, spec store, scopes, reviewers, merge style and kept branches",
 		Long: "Report how this repo works, merging what mkit discovers with what `mkit init` pinned.\n\n" +
 			"Every value is tagged `discovered` or `pinned`. The distinction is the point: a\n" +
 			"discovered value is re-derived every run and cannot go stale; a pinned one captured\n" +
@@ -47,6 +47,11 @@ func renderProfile(out io.Writer, p *profile.Profile) {
 	if p.Config.IgnoreSource != "" {
 		_, _ = fmt.Fprintf(out, "  shadowed by %s\n", p.Config.IgnoreSource)
 	}
+	// Printed under the config, not beside a value: an unknown key belongs to no
+	// value — being attached to nothing is exactly what is wrong with it.
+	for _, pb := range p.ConfigProblems {
+		_, _ = fmt.Fprintf(out, "  %s %s\n", pb.Detail, tag(string(pb.Kind)))
+	}
 
 	_, _ = fmt.Fprintln(out, "\nquality gate:")
 	if p.Gate.Ecosystem != "" {
@@ -73,6 +78,7 @@ func renderProfile(out io.Writer, p *profile.Profile) {
 	renderList(out, "reviewers", p.Review)
 	_, _ = fmt.Fprintln(out)
 	renderValue(out, "merge style", p.Merge)
+	renderList(out, "cleanup keep", p.Keep)
 
 	_, _ = fmt.Fprintln(out, "\npayload:")
 	if p.Payload.Found {

@@ -11,12 +11,14 @@
 package repoconfig
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
@@ -26,7 +28,50 @@ import (
 
 // Version is the schema version written into new files. It exists so a later
 // reader can recognise a file it does not fully understand rather than guessing.
+//
+// **A file whose version is higher than this one is read, not refused.** The
+// decision, and why it is not a choice between "refuse" and "ignore": config is
+// an input, never a permission (ADR 0001 decision 3), so a reader that refuses a
+// newer file turns a colleague's upgrade into a broken checkout for everyone who
+// has not upgraded yet. Reading it is also safe by construction — an unknown key
+// is already reported as one, and a key this reader *does* know is a key whose
+// meaning this schema fixed. So the newer version is reported as a Problem, the
+// values that parse are used, and nothing is refused.
 const Version = 1
+
+// The enumerated fields' vocabularies. **One producer**: `mkit init` validates
+// its flags and its form against these, and Load validates the file against the
+// same sets. Two copies would be two things to keep true, and the file is
+// committed and hand-edited — `init`'s own success message says so.
+var (
+	// SpecStores are the accepted `spec.store` values.
+	SpecStores = []string{"github-issues", "gitlab", "files", "none"}
+	// MergeStyles are the accepted `merge.style` values.
+	MergeStyles = []string{"merge", "squash", "rebase"}
+)
+
+// Allowed returns the accepted values for an enumerated key, or nil for a key
+// that has no enumeration. The key→set mapping lives here with the sets, so a
+// remedy elsewhere cannot name a vocabulary Load does not enforce.
+func Allowed(key string) []string {
+	switch key {
+	case "spec.store":
+		return SpecStores
+	case "merge.style":
+		return MergeStyles
+	}
+	return nil
+}
+
+// OneOf reports whether v is in allowed.
+func OneOf(v string, allowed []string) bool {
+	for _, a := range allowed {
+		if v == a {
+			return true
+		}
+	}
+	return false
+}
 
 // RelPath is the config's path relative to the work tree root.
 const RelPath = ".mkit/config.toml"
@@ -41,6 +86,103 @@ type Config struct {
 	Commit  Commit `toml:"commit"`
 	Review  Review `toml:"review"`
 	Merge   Merge  `toml:"merge"`
+
+	Cleanup Cleanup `toml:"cleanup"`
+
+	// Problems is what Load could not honour in the file it read: keys mkit does
+	// not know, values outside an enumerated set, a document that would not parse
+	// at all, a version from the future. Never marshalled — it describes the read,
+	// not the config — and never an error, because config is an input, never a
+	// permission: a malformed file degrades to the values that did parse, and the
+	// rest is reported.
+	Problems []Problem `toml:"-" json:"problems,omitempty"`
+}
+
+// ProblemKind classifies what Load could not honour.
+type ProblemKind string
+
+const (
+	// ProblemUnknownKey — a key or table mkit does not know. Whatever it meant to
+	// pin never took effect.
+	ProblemUnknownKey ProblemKind = "unknown-key"
+	// ProblemInvalidValue — an enumerated field outside its allowed set.
+	ProblemInvalidValue ProblemKind = "invalid-value"
+	// ProblemUnparsable — the document is not TOML.
+	ProblemUnparsable ProblemKind = "unparsable"
+	// ProblemNewerVersion — written by a newer mkit. Reported, never refused.
+	ProblemNewerVersion ProblemKind = "newer-version"
+	// ProblemUnreadable — the file is there and could not be read at all (mode
+	// 000, a directory in its place, an I/O or sandbox denial). Distinct from
+	// ProblemUnparsable, which is a file that was read and is not TOML.
+	//
+	// `Load` still returns this case as an error, because most callers want it:
+	// a command that exists to read the config should say so and stop. It is a
+	// *Problem* for the callers that do not — one that pins nothing and merely
+	// consults, where aborting would take a capability away over a file the
+	// command never needed.
+	ProblemUnreadable ProblemKind = "unreadable"
+)
+
+// Problem is one thing Load could not honour, named with the key and the file it
+// is in — a reader who is told "ignored" without being told where cannot fix it.
+type Problem struct {
+	Kind ProblemKind `json:"kind"`
+	// Key is the dotted config key, empty for a whole-document problem.
+	Key string `json:"key,omitempty"`
+	// Value is the offending value, or the parser's message for an unparsable
+	// document.
+	Value string `json:"value,omitempty"`
+	// Path is the config file, always set.
+	Path string `json:"path"`
+	// Detail is the whole sentence, produced once here so every consumer —
+	// `repo profile`, `doctor` — reports the same words.
+	Detail string `json:"detail"`
+}
+
+// The four sentences, one producer each.
+
+func unknownKeyProblem(key, path string) Problem {
+	return Problem{Kind: ProblemUnknownKey, Key: key, Path: path,
+		Detail: fmt.Sprintf("`%s` in %s is not a key mkit knows — it is ignored, "+
+			"so whatever it meant to pin never took effect", key, path)}
+}
+
+func invalidValueProblem(key, value, path string, allowed []string) Problem {
+	return Problem{Kind: ProblemInvalidValue, Key: key, Value: value, Path: path,
+		Detail: fmt.Sprintf("`%s` in %s is %q, which is not one of %s — the pinned value "+
+			"is ignored and discovery answers instead", key, path, value, strings.Join(allowed, ", "))}
+}
+
+func unparsableProblem(path, msg string) Problem {
+	return Problem{Kind: ProblemUnparsable, Value: msg, Path: path,
+		Detail: fmt.Sprintf("%s is not valid TOML (%s) — nothing in it is pinned, and every "+
+			"command runs on discovery alone", path, msg)}
+}
+
+// UnreadableProblem is the one producer of the sentence for a config file that
+// could not be read. Exported, unlike its four siblings, because `Load` reports
+// this case as an error and the caller that chooses to carry on instead must not
+// reword it.
+func UnreadableProblem(path string, err error) Problem {
+	return Problem{Kind: ProblemUnreadable, Path: path, Value: err.Error(),
+		Detail: fmt.Sprintf("%s could not be read (%s) — nothing in it is pinned, and this "+
+			"command runs on discovery alone", path, err)}
+}
+
+func newerVersionProblem(version int, path string) Problem {
+	return Problem{Kind: ProblemNewerVersion, Key: "version", Value: strconv.Itoa(version), Path: path,
+		Detail: fmt.Sprintf("%s declares version %d and this mkit knows version %d — it is read, "+
+			"not refused; keys this version does not know are reported as unknown", path, version, Version)}
+}
+
+// Problem returns the problem recorded for a dotted key, or nil.
+func (c *Config) Problem(key string) *Problem {
+	for i := range c.Problems {
+		if c.Problems[i].Key == key {
+			return &c.Problems[i]
+		}
+	}
+	return nil
 }
 
 // Gate pins quality-gate commands discovery would otherwise guess at — which of
@@ -72,6 +214,32 @@ type Review struct {
 // Merge pins how this repo integrates a branch: merge, squash or rebase.
 type Merge struct {
 	Style string `toml:"style,omitempty"`
+}
+
+// Cleanup pins the branches a repo-wide cleanup must never delete, beyond the
+// ones it already works out for itself.
+//
+// Not discoverable: branch protection is a network call on an otherwise local
+// classifier, and `gh` may be missing or unauthenticated. Which local branches
+// are long-lived — a `staging`, a release branch — is exactly the kind of answer
+// a committed config exists to hold, and being wrong here deletes a branch.
+type Cleanup struct {
+	// Keep is branch **names**, not patterns. Narrow on purpose: a glob that
+	// matches more than its author meant is the failure this key exists to
+	// prevent, so globs wait for a repo that turns up needing them.
+	//
+	// **It is added to what cleanup protects, never substituted for it.** The
+	// default branch is protected whether or not it appears here — a keep list
+	// that omits it is a mistake, not an instruction — and the union lives in
+	// `branchscan.ProtectedSet`, which is its one producer.
+	//
+	// No enumeration, so `Allowed("cleanup.keep")` is nil and `validate` has
+	// nothing to check: any string is a legal branch name to pin, and a name that
+	// is not a local branch here is not an error either — a keep list travels
+	// with the repo, and `mkit branch scan` reports such a name as `keep_unknown=`
+	// rather than refusing it. A blank entry pins nothing and is dropped by the
+	// same producer.
+	Keep []string `toml:"keep,omitempty"`
 }
 
 // Path returns the absolute config path for a work tree.
@@ -197,19 +365,65 @@ func parentExcluded(repo *gitrepo.Repo, pattern string) bool {
 
 // Load reads the config. A missing file is not an error: it returns a zero Config
 // and false, because running with no config is the supported default.
+//
+// **Nothing in the file's content is an error either.** The decode is strict, so
+// an unknown key is seen rather than dropped, and the enumerated fields are
+// checked on read with the same sets `mkit init` validates against — but every
+// finding lands in Config.Problems and the values that did parse are kept. The
+// only error this returns is a file it could not read at all.
+//
+// Strict decode collects *every* offending key: go-toml accumulates them into one
+// StrictMissingError at the end of the decode, so the known fields are populated
+// and the unknown ones are all named. Failing on the first would make fixing a
+// hand-edited file a game of whack-a-mole.
+//
+// An invalid enumerated value is **cleared** as well as reported. Leaving it in
+// place would hand a skill a `merge.style` of "sqaush" to branch on; clearing it
+// makes the pinned answer absent, which is a state every caller already handles,
+// and the Problem is what turns that absence into "ignored" rather than "never
+// pinned" — see profile.discoverMerge.
 func Load(toplevel string) (*Config, bool, error) {
-	b, err := os.ReadFile(Path(toplevel))
+	path := Path(toplevel)
+	b, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return &Config{}, false, nil
 	}
 	if err != nil {
 		return nil, false, err
 	}
-	var c Config
-	if err := toml.Unmarshal(b, &c); err != nil {
-		return nil, true, fmt.Errorf("%s: %w", Path(toplevel), err)
+	c := &Config{}
+	dec := toml.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(c); err != nil {
+		var missing *toml.StrictMissingError
+		if !errors.As(err, &missing) {
+			// Not TOML, or a value whose type the schema cannot hold. Nothing
+			// decoded is trustworthy, so the config is the zero one and the
+			// document is reported whole.
+			return &Config{Problems: []Problem{unparsableProblem(path, err.Error())}}, true, nil
+		}
+		for i := range missing.Errors {
+			c.Problems = append(c.Problems, unknownKeyProblem(strings.Join(missing.Errors[i].Key(), "."), path))
+		}
 	}
-	return &c, true, nil
+	c.validate(path)
+	return c, true, nil
+}
+
+// validate checks what the type system cannot: the enumerated fields, and a
+// version from the future.
+func (c *Config) validate(path string) {
+	if c.Spec.Store != "" && !OneOf(c.Spec.Store, SpecStores) {
+		c.Problems = append(c.Problems, invalidValueProblem("spec.store", c.Spec.Store, path, SpecStores))
+		c.Spec.Store = ""
+	}
+	if c.Merge.Style != "" && !OneOf(c.Merge.Style, MergeStyles) {
+		c.Problems = append(c.Problems, invalidValueProblem("merge.style", c.Merge.Style, path, MergeStyles))
+		c.Merge.Style = ""
+	}
+	if c.Version > Version {
+		c.Problems = append(c.Problems, newerVersionProblem(c.Version, path))
+	}
 }
 
 // IsZero reports whether the config pins nothing at all.
@@ -218,7 +432,8 @@ func (c *Config) IsZero() bool {
 		c.Spec.Store == "" && c.Spec.Ref == "" &&
 		len(c.Commit.Scopes) == 0 &&
 		len(c.Review.Reviewers) == 0 &&
-		c.Merge.Style == ""
+		c.Merge.Style == "" &&
+		len(c.Cleanup.Keep) == 0
 }
 
 // Write renders the config to disk, creating `.mkit/` if needed.
@@ -284,6 +499,12 @@ func render(c *Config) string {
 		b.WriteString("\n# How this repo integrates a branch: merge | squash | rebase.\n")
 		b.WriteString("[merge]\n")
 		fmt.Fprintf(&b, "style = %s\n", quote(c.Merge.Style))
+	}
+	if len(c.Cleanup.Keep) > 0 {
+		b.WriteString("\n# Branches `cleanup` must never delete — names, not patterns. Added to what\n")
+		b.WriteString("# it already protects: the default branch is kept whether or not it is listed.\n")
+		b.WriteString("[cleanup]\n")
+		fmt.Fprintf(&b, "keep = %s\n", quoteList(c.Cleanup.Keep))
 	}
 	return b.String()
 }

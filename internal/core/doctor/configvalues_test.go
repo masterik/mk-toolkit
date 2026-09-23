@@ -1,0 +1,91 @@
+package doctor
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/masterik/mk-toolkit/internal/core/repoconfig"
+)
+
+func findAll(r *Report, name string) []Check {
+	var cs []Check
+	for _, c := range r.Checks {
+		if c.Name == name {
+			cs = append(cs, c)
+		}
+	}
+	return cs
+}
+
+// Issue #19's doctor half: the human-run report names what the config says that
+// mkit could not honour, and the file it is in.
+func TestConfigValuesReportsUnknownKeysAndBadEnums(t *testing.T) {
+	isolate(t)
+	repo := newRepo(t)
+	writeFile(t, repo.Toplevel, repoconfig.RelPath,
+		"version = 1\n\n[reviewers]\nreviewers = [\"@a\"]\n\n[merge]\nstyle = \"sqaush\"\n")
+
+	checks := findAll(Run(Options{Repo: repo}), "config values")
+	if len(checks) != 2 {
+		t.Fatalf("got %d config-value checks, want 2 (the unknown table and the bad style): %+v", len(checks), checks)
+	}
+	joined := ""
+	for _, c := range checks {
+		// Warn, never Fail: config is an input, never a permission — nothing here
+		// stops a command.
+		if c.Status != Warn {
+			t.Errorf("status = %q, want warn: %s", c.Status, c.Detail)
+		}
+		if c.Remedy == "" {
+			t.Errorf("no remedy on %q", c.Detail)
+		}
+		joined += c.Detail + "\n" + c.Remedy + "\n"
+	}
+	for _, want := range []string{"reviewers", "merge.style", "sqaush", repoconfig.Path(repo.Toplevel), "squash"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("the report never mentions %q:\n%s", want, joined)
+		}
+	}
+}
+
+func TestConfigValuesAreOKWhenUnderstood(t *testing.T) {
+	isolate(t)
+	repo := newRepo(t)
+	if err := repoconfig.Write(repo.Toplevel, &repoconfig.Config{
+		Merge: repoconfig.Merge{Style: "merge"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if c := find(t, Run(Options{Repo: repo}), "config values"); c.Status != OK {
+		t.Errorf("status = %q, want ok: %s", c.Status, c.Detail)
+	}
+}
+
+func TestNoConfigValuesCheckWithoutAConfig(t *testing.T) {
+	isolate(t)
+	// Absent is a normal state, not a finding — and not a check with nothing to
+	// say either.
+	if cs := findAll(Run(Options{Repo: newRepo(t)}), "config values"); len(cs) != 0 {
+		t.Errorf("got %+v, want no check at all", cs)
+	}
+}
+
+// A future version is reported and carries no remedy: there is nothing to edit in
+// the file, and offering configuration that changes nothing is the ADR 0002 rule
+// this report exists to obey.
+func TestNewerConfigVersionWarnsWithoutARemedy(t *testing.T) {
+	isolate(t)
+	repo := newRepo(t)
+	writeFile(t, repo.Toplevel, repoconfig.RelPath, "version = 99\n")
+
+	checks := findAll(Run(Options{Repo: repo}), "config values")
+	if len(checks) != 1 || checks[0].Status != Warn {
+		t.Fatalf("got %+v", checks)
+	}
+	if checks[0].Remedy != "" {
+		t.Errorf("remedy = %q, want none", checks[0].Remedy)
+	}
+	if !strings.Contains(checks[0].Detail, "99") {
+		t.Errorf("detail does not name the version: %s", checks[0].Detail)
+	}
+}

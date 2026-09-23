@@ -26,7 +26,8 @@ type Class string
 
 // The classes, in the precedence order Run evaluates them.
 const (
-	// Protected — the default branch, or a develop-like branch. Never a candidate.
+	// Protected — the default branch, a develop-like branch, or a name pinned in
+	// the repo config's `[cleanup] keep`. Never a candidate.
 	Protected Class = "protected"
 	// Current — you cannot delete the branch you are standing on, however merged
 	// it already is. Ahead of Merged for exactly that reason.
@@ -78,10 +79,25 @@ type Scan struct {
 	Default string
 	// Develop is the first of develop/development/dev that exists locally.
 	Develop string
-	// Protected is Default plus Develop. Kept as a list, never a joined string:
-	// a branch name may legally contain a comma.
+	// Protected is Default, plus Develop, plus every pinned Keep name that exists
+	// as a local branch. Kept as a list, never a joined string: a branch name may
+	// legally contain a comma.
 	Protected []string
-	Remote    string
+	// Keep is the pinned `[cleanup] keep` list exactly as the config gave it,
+	// reported so a caller can tell a repo that pinned nothing from one whose pins
+	// all resolved.
+	Keep []string
+	// KeepUnknown is every pinned name with no local branch of that name. **Not an
+	// error**: a keep list travels with the repo, and a long-lived branch nobody
+	// has checked out in this clone is the ordinary state, not a mistake. It is
+	// reported so `cleanup` can say the pin had nothing to protect here instead of
+	// silently dropping it.
+	KeepUnknown []string
+	// ConfigProblems is Options.ConfigProblems carried into the report. Without
+	// it, "nothing was pinned" and "the pin never arrived" both print as
+	// `keep=none`.
+	ConfigProblems []string
+	Remote         string
 	// Fetch is ok, skipped, no-remote or failed.
 	Fetch string
 	// WorktreesState is ok or unreadable. `cleanup` plans teardown from these
@@ -99,8 +115,21 @@ type Options struct {
 	// Default is the branch `facts.sh` already resolved. This package never
 	// re-derives it, so there is exactly one place that logic lives.
 	Default string
-	NoFetch bool
-	NoGH    bool
+	// Keep is the repo config's `[cleanup] keep`. Read by the caller and passed
+	// in, for the same reason Default is: this package classifies, it does not
+	// decide where an answer comes from.
+	Keep []string
+	// ConfigProblems is what the config said that the caller could not honour,
+	// already worded by `repoconfig`'s producers. Passed as sentences rather than
+	// typed problems so this package cannot reword one: it classifies branches,
+	// and has no opinion about config.
+	//
+	// Load-bearing rather than informational: a keep pin that was dropped is
+	// indistinguishable from nothing pinned, and that difference decides whether
+	// `cleanup` deletes a branch the user asked it to keep.
+	ConfigProblems []string
+	NoFetch        bool
+	NoGH           bool
 }
 
 // pullRequest is one PR as the batched lookup returns it.
@@ -121,21 +150,10 @@ func Run(repo *gitrepo.Repo, opt Options) (*Scan, error) {
 		return nil, fmt.Errorf("--default branch does not exist locally: %s", opt.Default)
 	}
 
-	s := &Scan{Default: opt.Default, Develop: "none", Protected: []string{opt.Default}}
-
-	// Only a *local* branch counts. A develop that exists only as origin/develop
-	// is not one of this repo's branches to keep — nothing here creates one, and
-	// this only ever reports on what is already checked out somewhere.
-	for _, cand := range []string{"develop", "development", "dev"} {
-		if cand == opt.Default {
-			continue
-		}
-		if err := run(repo, "git", "show-ref", "--verify", "--quiet", "refs/heads/"+cand); err == nil {
-			s.Develop = cand
-			s.Protected = append(s.Protected, cand)
-			break
-		}
-	}
+	s := &Scan{Default: opt.Default, Develop: Develop(repo, opt.Default), Keep: opt.Keep,
+		ConfigProblems: opt.ConfigProblems}
+	local, unknown := splitKeep(repo, opt.Keep)
+	s.Protected, s.KeepUnknown = ProtectedSet(opt.Default, s.Develop, local), unknown
 
 	current, _ := git(repo, "branch", "--show-current")
 	s.Remote = firstLine(mustGit(repo, "remote"))
@@ -209,15 +227,24 @@ func lookupPRs(repo *gitrepo.Repo, remote string, skip bool) (map[string]pullReq
 
 func classify(repo *gitrepo.Repo, s *Scan, current string, prs map[string]pullRequest) []Branch {
 	var out []Branch
+	protected := map[string]bool{}
+	for _, p := range s.Protected {
+		protected[p] = true
+	}
 	for _, name := range lines(mustGit(repo, "for-each-ref", "refs/heads", "--format=%(refname:short)")) {
 		if name == "" {
 			continue
 		}
 		b := Branch{Name: name, Upstream: upstream(repo, name)}
 
-		// Default and Develop are tested directly rather than by splitting a
-		// comma-joined list: a branch name may legally contain a comma, and
-		// splitting on one would silently test a nonexistent fragment.
+		// **Default and Develop only, not the whole protected set.** A pinned
+		// keep branch is a branch never to delete, not a new proof that other
+		// work has landed: treating `merged into staging` as merged would turn a
+		// key whose whole purpose is to delete less into one that deletes more.
+		//
+		// Tested directly rather than by splitting a comma-joined list: a branch
+		// name may legally contain a comma, and splitting on one would silently
+		// test a nonexistent fragment.
 		for _, p := range []string{s.Default, s.Develop} {
 			if p == "none" || p == "" {
 				continue
@@ -234,7 +261,7 @@ func classify(repo *gitrepo.Repo, s *Scan, current string, prs map[string]pullRe
 		}
 
 		switch {
-		case name == s.Default || (s.Develop != "none" && name == s.Develop):
+		case protected[name]:
 			b.Class = Protected
 		case name == current:
 			b.Class = Current
@@ -256,6 +283,97 @@ func classify(repo *gitrepo.Repo, s *Scan, current string, prs map[string]pullRe
 		out = append(out, b)
 	}
 	return out
+}
+
+// DevelopCandidates are the develop-like names, in the order the first local one
+// wins.
+var DevelopCandidates = []string{"develop", "development", "dev"}
+
+// Develop returns the first of DevelopCandidates that exists as a local branch,
+// or "none".
+//
+// Only a *local* branch counts. A develop that exists only as origin/develop is
+// not one of this repo's branches to keep — nothing here creates one, and this
+// only ever reports on what is already checked out somewhere.
+//
+// Exported because `mkit repo profile` reports the set cleanup protects with
+// nothing pinned, and that set has to be the one this package actually computes.
+func Develop(repo *gitrepo.Repo, def string) string {
+	for _, cand := range DevelopCandidates {
+		if cand == def {
+			continue
+		}
+		if err := run(repo, "git", "show-ref", "--verify", "--quiet", "refs/heads/"+cand); err == nil {
+			return cand
+		}
+	}
+	return "none"
+}
+
+// ProtectedSet unions the default branch, the develop-like branch and a pinned keep
+// list into the branches cleanup must never delete. The one producer of that set.
+//
+// **The default branch comes first and unconditionally.** A keep list that omits
+// it is a mistake, not an instruction: config is an input, and this key only ever
+// adds to what cleanup already protects. Order is default, develop, then the
+// pinned names as written — stable, so two runs on one repo report the same list
+// and a diff of it means something. Blank entries are dropped; they pin nothing.
+func ProtectedSet(def, develop string, keep []string) []string {
+	out := make([]string, 0, len(keep)+2)
+	seen := map[string]bool{}
+	add := func(name string) {
+		if name == "" || seen[name] {
+			return
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	add(def)
+	if develop != "none" {
+		add(develop)
+	}
+	for _, k := range keep {
+		if name, ok := keepName(k); ok {
+			add(name)
+		}
+	}
+	return out
+}
+
+// keepName trims a pinned entry and says whether anything is left.
+//
+// **ASCII whitespace only, never `strings.TrimSpace`.** Git forbids the ASCII
+// space and control characters in a ref name, so trimming those can only remove
+// padding a human left in the TOML — but it *allows* Unicode whitespace, so
+// TrimSpace rewrites a legal branch name (`release\u00a02026`) into a different
+// one. The pin then matches no branch, the branch is not protected, and this is
+// the code path that decides what gets deleted.
+//
+// So both cases stay true: `" staging "` pins `staging`, and a name whose own
+// characters include U+00A0 is looked up exactly as written.
+const asciiSpace = " \t\n\r\v\f"
+
+func keepName(k string) (string, bool) {
+	k = strings.Trim(k, asciiSpace)
+	return k, k != ""
+}
+
+// splitKeep divides the pinned names into those that exist as a local branch here
+// and those that do not. A name with no branch is reported, never refused and
+// never dropped in silence — see Scan.KeepUnknown.
+func splitKeep(repo *gitrepo.Repo, keep []string) (local, unknown []string) {
+	for _, k := range keep {
+		k, ok := keepName(k)
+		if !ok {
+			continue
+		}
+		if err := run(repo, "git", "show-ref", "--verify", "--quiet", "refs/heads/"+k); err == nil {
+			local = append(local, k)
+		} else {
+			unknown = append(unknown, k)
+		}
+	}
+	return local, unknown
 }
 
 func upstream(repo *gitrepo.Repo, name string) string {

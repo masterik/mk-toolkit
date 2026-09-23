@@ -33,6 +33,7 @@ func newInitCmd() *cobra.Command {
 		scopes    []string
 		reviewers []string
 		merge     string
+		keep      []string
 		force     bool
 	)
 
@@ -70,7 +71,11 @@ func newInitCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if present && !existing.IsZero() && !force {
+			// A file mkit could not fully honour still counts as configured. It
+			// decodes to something close to zero, and without this a repo whose
+			// config is one typo away from correct would be silently overwritten
+			// by an `init` that thought it was writing into empty space.
+			if present && (!existing.IsZero() || len(existing.Problems) > 0) && !force {
 				return emitInit(out, opts, initResult{
 					Path: st.Path, State: "already-configured", Written: false,
 					Detail: "nothing changed — pass --force to rewrite, or edit the file directly",
@@ -83,7 +88,7 @@ func newInitCmd() *cobra.Command {
 			}
 
 			cfg := existing
-			if err := applyFlags(cfg, gate, specStore, specRef, scopes, reviewers, merge); err != nil {
+			if err := applyFlags(cfg, gate, specStore, specRef, scopes, reviewers, merge, keep); err != nil {
 				return err
 			}
 
@@ -130,6 +135,8 @@ func newInitCmd() *cobra.Command {
 	cmd.Flags().StringArrayVar(&scopes, "scope", nil, "pin a conventional-commit scope (repeatable)")
 	cmd.Flags().StringArrayVar(&reviewers, "reviewer", nil, "pin a default reviewer (repeatable)")
 	cmd.Flags().StringVar(&merge, "merge", "", "merge | squash | rebase")
+	cmd.Flags().StringArrayVar(&keep, "keep", nil,
+		"pin a branch cleanup must never delete (repeatable); the default branch is kept regardless")
 	cmd.Flags().BoolVar(&force, "force", false, "rewrite an existing config")
 	return cmd
 }
@@ -138,12 +145,16 @@ func newInitCmd() *cobra.Command {
 // read back by every later run and by a skill that branches on it, so persisting
 // `--merge sqaush` buys a typo a long life; failing at the flag is where it costs
 // least.
+//
+// The allowed sets live in `repoconfig` because `repoconfig.Load` validates the
+// same fields on read — the file is committed and hand-edited, and a second copy
+// of the vocabulary here is a second thing to keep true.
 var (
-	specStores  = []string{"github-issues", "gitlab", "files", "none"}
-	mergeStyles = []string{"merge", "squash", "rebase"}
+	specStores  = repoconfig.SpecStores
+	mergeStyles = repoconfig.MergeStyles
 )
 
-func applyFlags(cfg *repoconfig.Config, gate []string, store, ref string, scopes, reviewers []string, merge string) error {
+func applyFlags(cfg *repoconfig.Config, gate []string, store, ref string, scopes, reviewers []string, merge string, keep []string) error {
 	for _, g := range gate {
 		step, command, ok := strings.Cut(g, "=")
 		if !ok || step == "" || command == "" {
@@ -155,7 +166,7 @@ func applyFlags(cfg *repoconfig.Config, gate []string, store, ref string, scopes
 		cfg.Gate.Commands[step] = command
 	}
 	if store != "" {
-		if !oneOf(store, specStores) {
+		if !repoconfig.OneOf(store, specStores) {
 			return fmt.Errorf("--spec-store %q: expected one of %s", store, strings.Join(specStores, ", "))
 		}
 		cfg.Spec.Store = store
@@ -170,21 +181,19 @@ func applyFlags(cfg *repoconfig.Config, gate []string, store, ref string, scopes
 		cfg.Review.Reviewers = reviewers
 	}
 	if merge != "" {
-		if !oneOf(merge, mergeStyles) {
+		if !repoconfig.OneOf(merge, mergeStyles) {
 			return fmt.Errorf("--merge %q: expected one of %s", merge, strings.Join(mergeStyles, ", "))
 		}
 		cfg.Merge.Style = merge
 	}
-	return nil
-}
-
-func oneOf(v string, allowed []string) bool {
-	for _, a := range allowed {
-		if v == a {
-			return true
-		}
+	// No validation, because there is nothing to validate against: any string is
+	// a legal branch name to pin, and a name with no branch here is not an error
+	// (`mkit branch scan` reports it as `keep_unknown=`). `repoconfig.Allowed`
+	// returns nil for this key for the same reason, so flags and file agree.
+	if len(keep) > 0 {
+		cfg.Cleanup.Keep = keep
 	}
-	return false
+	return nil
 }
 
 // initFields shows the discovered answer beside every field, so the form is a
@@ -207,6 +216,12 @@ func initFields(p *profile.Profile) []tui.Field {
 			Help: "comma-separated; only needed where there is no CODEOWNERS"},
 		{Key: "merge", Label: "merge style", Discovered: p.Merge.Value,
 			Help: "merge | squash | rebase"},
+		// The discovered value is the set cleanup protects today, so the field
+		// reads as "these are already kept, add to them" rather than a blank that
+		// looks like it replaces them.
+		{Key: "keep", Label: "keep branches", Discovered: strings.Join(p.Keep.Values, ", "),
+			Help: "comma-separated branch names cleanup must never delete; " +
+				"added to the default branch, which is kept regardless"},
 	}
 }
 
@@ -231,7 +246,7 @@ func applyFields(cfg *repoconfig.Config, fields []tui.Field) error {
 				cfg.Gate.Commands[strings.TrimSpace(step)] = strings.TrimSpace(command)
 			}
 		case "spec-store":
-			if !oneOf(v, specStores) {
+			if !repoconfig.OneOf(v, specStores) {
 				return fmt.Errorf("spec store %q: expected one of %s", v, strings.Join(specStores, ", "))
 			}
 			cfg.Spec.Store = v
@@ -242,10 +257,12 @@ func applyFields(cfg *repoconfig.Config, fields []tui.Field) error {
 		case "reviewers":
 			cfg.Review.Reviewers = splitList(v)
 		case "merge":
-			if !oneOf(v, mergeStyles) {
+			if !repoconfig.OneOf(v, mergeStyles) {
 				return fmt.Errorf("merge style %q: expected one of %s", v, strings.Join(mergeStyles, ", "))
 			}
 			cfg.Merge.Style = v
+		case "keep":
+			cfg.Cleanup.Keep = splitList(v)
 		}
 	}
 	return nil

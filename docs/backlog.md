@@ -114,12 +114,16 @@ a config nothing reads.
   - **`mkit facts`' `user_dir_writable=` survives**, so no skill lost information. `~/.mkit/` is
     empty but still the declared home for user-scoped state.
 
-- **The config has (almost) no consumers.** M7 landed `mkit init`, `config.toml` and
-  `mkit repo profile --json`, and for a while **nothing read the answer**; `merge.style` → `finish`
-  is done and the rest of the list stands. `facts.sh` reports `config=` and `config_state=` and no
-  pinned *value*. Of the five sections `init` writes, `spec.*` gets its consumer at M8 and
-  `gate.commands` at M5 (both below) — of the other three, one now has a reader. Four items, none
-  of them a port, all independent of the port line:
+- **Giving the config its consumers.** M7 landed `mkit init`, `config.toml` and
+  `mkit repo profile --json`, and nothing read the answer: no skill called `repo profile`, and
+  `mkit facts` reported `config=` and `config_state=` but no pinned *value*. Of the five sections
+  M7's `init` wrote, `spec.*` gets its consumer at M8 and `gate.commands` got one at M5 (both
+  below); the other three were written and read by nobody. Four items, none of them a port, all
+  independent of the port line — **three are done**: config validation (issue #19), `[cleanup]
+  keep` (issue #20, a sixth section), and `merge.style` → `finish` (issue #17). `commit.scopes` +
+  `review.reviewers` is what is left. `finish` is the first *skill* to call `repo profile`, and
+  `mkit branch scan` the first command outside `repo profile` and `gate detect` to read a pinned
+  value:
 
   - **`merge.style` → `finish` — done.** `finish` step 4 opens with `mkit repo profile --json` and
     takes `merge_style` on `pinned` or `discovered` instead of asking; `unavailable`, or a binary
@@ -142,19 +146,29 @@ a config nothing reads.
     fallback — here the fallback is exactly today's discovery, so these skills read the profile
     when it answers and degrade **silently** when `mkit` is absent. A step-0 probe that stops the
     run would break invariant 8 for nothing.
-  - **Config validation.** `repoconfig.Load` is a plain `toml.Unmarshal`: unknown keys are dropped
-    and enum values unchecked. Validation exists only on `init`'s flags and its TUI — yet `init`'s
-    own success message says "or edit the file directly". A hand-typed `style = "sqaush"`, or a
-    `[reviewers]` table that should have been `[review]`, is silently ignored for the life of the
-    repo, and `repo profile` reports the value as *discovered* because the pinned one never
-    arrived. Strict decode, an `unavailable` cause naming the bad key, and a `doctor` check.
-  - **`[cleanup] keep`.** A new key, and the one candidate that survives the schema's own filter —
-    *pin only what inspection cannot establish*. `cleanup` hardcodes "the default branch, and a
-    develop-like branch if one exists locally". A repo with `staging` or a long-lived release
-    branch cannot say so, branch protection is a network call, and being wrong here **deletes a
-    branch**. Deliberately *not* pinned alongside it: the base branch (`origin/HEAD` answers it),
-    PR labels and commit types — a pinned copy of a discoverable fact is a staleness surface
-    bought for nothing.
+  - ~~**Config validation.**~~ **Done** (issue #19). `repoconfig.Load` decodes strictly and
+    collects *every* unknown key, validates `spec.store` and `merge.style` against the sets
+    `mkit init` now consumes from `repoconfig` rather than keeping its own copy, and clears a
+    rejected value while recording a `repoconfig.Problem`. Nothing it finds fails a command —
+    config is an input, never a permission — so `repo profile` reports the affected value as
+    `unavailable` with a cause naming the key and the file instead of falling through to
+    `discovered`, and `mkit doctor` warns once per problem with exit status still 0. **A
+    `version` higher than `repoconfig.Version` is reported, never refused**: the reasoning is in
+    `Version`'s doc comment.
+  - ~~**`[cleanup] keep`.**~~ **Done** (issue #20). The one candidate that survived the schema's own
+    filter — *pin only what inspection cannot establish*: branch protection is a network call on an
+    otherwise local classifier, and being wrong here **deletes a branch**. `branchscan.ProtectedSet`
+    is the one producer of the kept set, unioning the pinned names with the default branch and a
+    develop-like one; **the default branch is in it whether or not the list names it**, because a
+    keep list that omits it is a mistake, not an instruction. Names, not patterns. A pinned name
+    with no local branch is reported as `keep_unknown=`, never refused — a keep list travels with
+    the repo. `mkit branch scan` surfaces `protected=`/`keep=`/`keep_unknown=` (and the same in
+    `--json`), `mkit repo profile` tags the value `pinned`/`discovered`, and `cleanup` reads
+    `protected=` as given rather than re-deriving it. No enumeration, so `repoconfig.Allowed`
+    returns nil for it and #19's validation has nothing to check beyond the strict decode that
+    already catches a misspelled table. Deliberately *not* pinned alongside it: the base branch
+    (`origin/HEAD` answers it), PR labels and commit types — a pinned copy of a discoverable fact
+    is a staleness surface bought for nothing.
 
 ## Milestones
 

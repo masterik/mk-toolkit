@@ -300,6 +300,51 @@ func (r *Report) repo(repo *gitrepo.Repo) {
 		r.add(Check{Group: "repo", Name: "config", Status: OK,
 			Detail: "none — every command runs without one; `mkit init` writes " + st.Path})
 	}
+
+	r.configValues(repo)
+}
+
+// configValues reports what the config file says that mkit could not honour: a
+// key it does not know, an enumerated value outside its set, a document that will
+// not parse, a version from the future.
+//
+// Warn, never Fail, and the exit status stays 0: config is an input, never a
+// permission (ADR 0001 decision 3) — nothing here stops a command, it only means
+// a pin the reader believed in never took effect. The sentences come from
+// `repoconfig`, which is their one producer; `mkit repo profile` prints the same
+// words from the same place.
+func (r *Report) configValues(repo *gitrepo.Repo) {
+	cfg, present, err := repoconfig.Load(repo.Toplevel)
+	if err != nil || !present {
+		return
+	}
+	if len(cfg.Problems) == 0 {
+		r.add(Check{Group: "repo", Name: "config values", Status: OK,
+			Detail: "every key and value in " + repoconfig.Path(repo.Toplevel) + " is understood"})
+		return
+	}
+	for _, pb := range cfg.Problems {
+		r.add(Check{Group: "repo", Name: "config values", Status: Warn,
+			Detail: pb.Detail, Remedy: configRemedy(pb)})
+	}
+}
+
+// configRemedy names an edit that works. A newer-version file gets none on
+// purpose: there is nothing to fix in it — upgrading is the reader's move, not an
+// edit to a colleague's committed file — so it says so rather than offering one.
+func configRemedy(pb repoconfig.Problem) string {
+	switch pb.Kind {
+	case repoconfig.ProblemUnknownKey:
+		return "remove or correct `" + pb.Key + "` in " + pb.Path
+	case repoconfig.ProblemInvalidValue:
+		return "set `" + pb.Key + "` in " + pb.Path + " to one of " +
+			strings.Join(repoconfig.Allowed(pb.Key), ", ") + ", or remove it"
+	case repoconfig.ProblemUnparsable:
+		return "fix the TOML syntax in " + pb.Path + ", or delete the file — " +
+			"discovery answers everything it pinned"
+	default:
+		return ""
+	}
 }
 
 // writableSet reports the three locations the project declares, by writing to
