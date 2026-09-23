@@ -32,7 +32,8 @@ Commits that are easy to review and safe to ship:
 
 - One commit or several? (Unsure → default to several small ones when changes are unrelated.)
 - Conventional Commits are required.
-- Any repo rules: max subject length, required scopes.
+- Repo rules — required scopes and max subject length — are **read, not asked for**: step 0's
+  `mkit repo profile --json` answers both. Ask only for what it leaves unanswered.
 
 ## Workflow
 
@@ -66,7 +67,36 @@ Keep the `run=` and `refs=` literals it prints; this file writes the first as `<
 `$RUN_DIR` — a shell variable does not survive to the next Bash call — and re-running `mkit facts` opens a
 second directory instead of returning the first.
 
-1. **Inspect before staging** — the call above returned all of it.
+Then how this repo words a commit — one more read-only call, cheap enough to send in the same
+message as the one above:
+
+```bash
+mkit repo profile --json
+```
+
+Two values, each carrying a `source`. `commit_scopes` is `pinned`, `discovered` or `unavailable`;
+`commit_subject_max` is only ever `pinned` or `unavailable`, never `discovered` — nothing in a repo is
+evidence of the limit it requires. Treat `unavailable` by the silence rule below:
+
+- **`commit_scopes`** — the scopes this repo uses. `pinned` is the repo's own list: use it as given and
+  **do not re-derive scopes from history** (`../_shared/references/conventional-commits.md`'s scope
+  detection is the fallback, not a cross-check). `discovered` is that same history read for you, so it is
+  a starting set, not a rule.
+- **`commit_subject_max`** — the longest subject this repo accepts. Only ever `pinned`: nothing discovers
+  it, because history shows what past subjects happened to be, not what is required. Absent → the
+  conventional ~72.
+
+**Rule 3 applies to what you used** (`../_shared/references/workflow-contract.md`): a pinned value is
+named as pinned in the final report, a discovered one is named as derived.
+
+**Silence, with one exception.** If this call fails, or a value comes back `unavailable` with nothing but
+"not discoverable" behind it, carry on exactly as this skill did before it existed and **say nothing about
+it** — the profile is enrichment, not a prerequisite, and there is no version of this skill that stops on
+it. The exception is a **pin that went nowhere**: a non-empty `config_problems`, or an `unavailable` whose
+`cause` names `.mkit/config.toml`. That is the repo asking for something mkit could not honour — report that
+sentence in one line, verbatim, and carry on with what is left. Mind which field carries it: the sentence is `detail` on a `config_problems` entry and `cause` on the value itself — there is no `detail` on a value, and an agent that looks for one reports nothing.
+
+1. **Inspect before staging** — step 0's `mkit facts` returned all of it.
    - Confirm `branch=` is the intended one; matters inside a worktree (`linked=yes`).
    - **`run_ignored=no` stops this skill before step 3.** mkit's own scratch root is not ignored here,
      so staging would sweep run artefacts into your commit. Report the `notes:` remedy — it has to be
@@ -109,6 +139,9 @@ second directory instead of returning the first.
 5. **Describe the staged change in 1–2 sentences** before writing the message: what changed, why. If you
    cannot describe it cleanly the commit is too big or mixed — back to step 2.
 6. **Write the message.** Conventional Commits required (`../_shared/references/conventional-commits.md`).
+   The scope comes from step 0's `commit_scopes` — a scope outside a **pinned** list is a scope this repo
+   does not use, so pick from the list or say why none fits; keep the subject within
+   `commit_subject_max` where one is pinned.
    Single line: `git commit -m '<subject>'`. Multi-line: allocate the file with
    `mktemp "<tmp>/mkit-msg.XXXXXX"`, write the message to the path it prints, then
    `git commit -F "<msgfile>"` — not `-v` (interactive) and not `-F -` with the body on a heredoc,
@@ -173,6 +206,17 @@ confirm hashes, then report every commit — never skip this, even for one:
 ```
 
 One block per commit, in order. Say so if staged changes were deliberately left out.
+
+Then one line for what the repo told you, where it told you anything — rule 3, and the shortest form
+that satisfies it:
+
+```
+Scopes: cli, core (pinned in .mkit/config.toml) · subject max 72 (pinned)
+Scopes: derived from the last 200 commits · subject max ~72 (this skill's own convention)
+```
+
+Nothing pinned and nothing to say → no line. A rejected pin is reported here too, in the words the
+profile's `cause` used.
 
 Then record the run:
 

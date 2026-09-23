@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/masterik/mk-toolkit/internal/core/branchscan"
@@ -73,8 +74,15 @@ type Profile struct {
 	Gate           Gate                 `json:"gate"`
 	Spec           Spec                 `json:"spec"`
 	Scopes         List                 `json:"commit_scopes"`
-	Review         List                 `json:"reviewers"`
-	Merge          Value                `json:"merge_style"`
+	// SubjectMax is the longest commit subject this repo accepts. Never
+	// Discovered — the key exists precisely because history cannot answer it.
+	SubjectMax Value `json:"commit_subject_max"`
+	Review     List  `json:"reviewers"`
+	// ReviewMode is the roster `review` opens with when the user named none.
+	// Never Discovered either: a `command -v coderabbit` says a reviewer is
+	// installed, not that the team wants it run.
+	ReviewMode Value `json:"review_mode"`
+	Merge      Value `json:"merge_style"`
 	// Keep is the branches `cleanup` must never delete.
 	Keep    List        `json:"cleanup_keep"`
 	Payload PayloadInfo `json:"payload"`
@@ -131,7 +139,9 @@ func Build(repo *gitrepo.Repo) (*Profile, error) {
 	p.Gate = buildGate(repo, cfg)
 	p.Spec = discoverSpec(repo, cfg)
 	p.Scopes = discoverScopes(repo, cfg)
+	p.SubjectMax = subjectMax(cfg)
 	p.Review = discoverReviewers(repo, cfg)
+	p.ReviewMode = reviewMode(cfg)
 	p.Merge = discoverMerge(repo, cfg)
 	p.Keep = discoverKeep(repo, cfg)
 	return p, nil
@@ -279,6 +289,41 @@ func discoverScopes(repo *gitrepo.Repo, cfg *repoconfig.Config) List {
 		return scopes[i] < scopes[j]
 	})
 	return List{Values: scopes, Source: Discovered}
+}
+
+// subjectMax reports the pinned commit-subject limit. There is no discovery arm
+// and there is not meant to be one: the longest subject in the last 200 commits
+// is what the repo *happened* to write, not what it requires, and a limit derived
+// that way would tighten itself every time someone wrote a short subject.
+//
+// So the three states are pinned, rejected-and-reported, or absent — and absent
+// means `commit` uses its own convention, which is a complete answer rather than
+// a degradation.
+func subjectMax(cfg *repoconfig.Config) Value {
+	if pb := cfg.Problem("commit.subject_max"); pb != nil {
+		return Value{Source: Unavailable, Cause: pb.Detail}
+	}
+	if cfg.Commit.SubjectMax != nil {
+		return Value{Value: strconv.Itoa(*cfg.Commit.SubjectMax), Source: Pinned}
+	}
+	return Value{Source: Unavailable,
+		Cause: "not discoverable — history shows what past subjects happened to be, not what " +
+			"this repo requires; pin it with `mkit init --subject-max`"}
+}
+
+// reviewMode reports the pinned default review roster. Same shape as subjectMax
+// and for the same reason: which reviewers a team wants spending tens of
+// thousands of tokens is a decision, and nothing in the repo is evidence of it.
+func reviewMode(cfg *repoconfig.Config) Value {
+	if pb := cfg.Problem("review.mode"); pb != nil {
+		return Value{Source: Unavailable, Cause: pb.Detail}
+	}
+	if cfg.Review.Mode != "" {
+		return Value{Value: cfg.Review.Mode, Source: Pinned}
+	}
+	return Value{Source: Unavailable,
+		Cause: "not discoverable — an installed reviewer is not evidence the team wants it run; " +
+			"`review` defaults to full"}
 }
 
 // discoverReviewers reads CODEOWNERS where there is one. Only the owner tokens are
