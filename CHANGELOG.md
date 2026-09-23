@@ -12,6 +12,55 @@ nothing — `brew install masterik/tap/mkit` delivers whatever the newest tag bu
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project
 predates any semver commitment and is pre-1.0, so minor bumps carry breaking changes.
 
+## [0.19.0] — 2026-09-23
+
+M5 finishes the port — the remaining `jq` consumers and the shell layer's deletion — and M7's
+config surface gets its last four consumers.
+
+### Added
+- **`mkit gate run | detect`, `mkit branch scan`, `mkit facts`, `mkit run open | prune`** — the
+  port of `gate-run.sh`, `gate-detect.sh`, `branch-scan.sh`, `facts.sh` and `run-open.sh`. Five
+  scripts, not four: `facts.sh` opened the run directory by calling `run-open.sh`, so a Go `facts`
+  needed a run-directory implementation either way. `lib/common.sh` and the whole `tests/` tree
+  went with them — **the payload ships no executable code at all.**
+- **`[cleanup] keep`** — the one config key that survived the schema's own filter: branch
+  protection is a network call on an otherwise local classifier, and being wrong here deletes a
+  branch. `branchscan.ProtectedSet` unions the pinned names with the default branch (always in it,
+  whether or not the list names it) and a develop-like one. A pinned name with no local branch
+  reports `keep_unknown=`, never refused.
+- **`merge.style` → `finish`** — step 4 opens with `mkit repo profile --json` and takes
+  `merge_style` on `pinned`/`discovered` instead of asking; a pinned style the remote does not
+  allow is reported, never silently substituted.
+- **`commit.scopes` + `review.reviewers` → `commit` and `pr`** — both skills read the profile in
+  step 0; `pr` step 6 takes a pinned reviewer list instead of the `CODEOWNERS` read, keeping that
+  read for the `discovered` case only. Two schema-only keys landed with it: `[commit] subject_max`
+  and `[review] mode` (`full` | `quick`).
+- **Config validation** — `repoconfig.Load` decodes strictly, collects every unknown key,
+  validates `spec.store`/`merge.style` against the sets `init` itself now consumes, and clears a
+  rejected value while recording a `repoconfig.Problem`. Nothing it finds fails a command; `repo
+  profile` reports the affected value `unavailable` with a cause, and `doctor` warns once per
+  problem with exit status still 0.
+
+### Changed
+- **A whole family of degradation branches is gone**, because a binary is never half-capable:
+  `pr=jq-missing`, `gate_cache=no-jq`, `gate_cache=no-hash`, `scripts_state=no-jq`,
+  `gh=jq-missing`, `gh=no-cache`.
+- **The fast tier was deleted, not pinned.** Nothing had consumed `fast=`/`fast_cache=` since it
+  left `commit`/`review`; a repo's own documented `check:` target still surfaces as `documented=`,
+  and is the chain itself when nothing is discovered.
+- **`gate.commands` merges once.** `mkit gate detect` reads `repoconfig` and tags every step
+  `discovered`/`pinned`/`documented`; `profile.buildGate` consumes that tagged result instead of
+  re-running the script and merging a second time.
+
+### Notes
+- **`jq`, `shasum` and `bats-core` are gone from `prerequisites.md`**; every skill's first call is
+  now `mkit facts <skill>`.
+- **`internal/core/scratch`'s `TestWriteSitesAreOnTheReviewedAllowlist`** gives the
+  three-write-locations rule a real behavioral seam for the first time — the same trick
+  `payload.bats` played, one layer in.
+- A rejected config pin is surfaced in one line by `finish`/`commit`/`pr` rather than falling
+  through silently — a rejected pin is not the same answer as no answer.
+
 ## [0.18.0] — 2026-09-12
 
 M6: the per-branch worklog, and the four existing skills start recording into it.
