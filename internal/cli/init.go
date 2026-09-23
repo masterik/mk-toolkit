@@ -33,6 +33,7 @@ func newInitCmd() *cobra.Command {
 		scopes    []string
 		reviewers []string
 		merge     string
+		keep      []string
 		force     bool
 	)
 
@@ -87,7 +88,7 @@ func newInitCmd() *cobra.Command {
 			}
 
 			cfg := existing
-			if err := applyFlags(cfg, gate, specStore, specRef, scopes, reviewers, merge); err != nil {
+			if err := applyFlags(cfg, gate, specStore, specRef, scopes, reviewers, merge, keep); err != nil {
 				return err
 			}
 
@@ -134,6 +135,8 @@ func newInitCmd() *cobra.Command {
 	cmd.Flags().StringArrayVar(&scopes, "scope", nil, "pin a conventional-commit scope (repeatable)")
 	cmd.Flags().StringArrayVar(&reviewers, "reviewer", nil, "pin a default reviewer (repeatable)")
 	cmd.Flags().StringVar(&merge, "merge", "", "merge | squash | rebase")
+	cmd.Flags().StringArrayVar(&keep, "keep", nil,
+		"pin a branch cleanup must never delete (repeatable); the default branch is kept regardless")
 	cmd.Flags().BoolVar(&force, "force", false, "rewrite an existing config")
 	return cmd
 }
@@ -151,7 +154,7 @@ var (
 	mergeStyles = repoconfig.MergeStyles
 )
 
-func applyFlags(cfg *repoconfig.Config, gate []string, store, ref string, scopes, reviewers []string, merge string) error {
+func applyFlags(cfg *repoconfig.Config, gate []string, store, ref string, scopes, reviewers []string, merge string, keep []string) error {
 	for _, g := range gate {
 		step, command, ok := strings.Cut(g, "=")
 		if !ok || step == "" || command == "" {
@@ -183,6 +186,13 @@ func applyFlags(cfg *repoconfig.Config, gate []string, store, ref string, scopes
 		}
 		cfg.Merge.Style = merge
 	}
+	// No validation, because there is nothing to validate against: any string is
+	// a legal branch name to pin, and a name with no branch here is not an error
+	// (`mkit branch scan` reports it as `keep_unknown=`). `repoconfig.Allowed`
+	// returns nil for this key for the same reason, so flags and file agree.
+	if len(keep) > 0 {
+		cfg.Cleanup.Keep = keep
+	}
 	return nil
 }
 
@@ -206,6 +216,12 @@ func initFields(p *profile.Profile) []tui.Field {
 			Help: "comma-separated; only needed where there is no CODEOWNERS"},
 		{Key: "merge", Label: "merge style", Discovered: p.Merge.Value,
 			Help: "merge | squash | rebase"},
+		// The discovered value is the set cleanup protects today, so the field
+		// reads as "these are already kept, add to them" rather than a blank that
+		// looks like it replaces them.
+		{Key: "keep", Label: "keep branches", Discovered: strings.Join(p.Keep.Values, ", "),
+			Help: "comma-separated branch names cleanup must never delete; " +
+				"added to the default branch, which is kept regardless"},
 	}
 }
 
@@ -245,6 +261,8 @@ func applyFields(cfg *repoconfig.Config, fields []tui.Field) error {
 				return fmt.Errorf("merge style %q: expected one of %s", v, strings.Join(mergeStyles, ", "))
 			}
 			cfg.Merge.Style = v
+		case "keep":
+			cfg.Cleanup.Keep = splitList(v)
 		}
 	}
 	return nil

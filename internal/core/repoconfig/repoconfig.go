@@ -87,6 +87,8 @@ type Config struct {
 	Review  Review `toml:"review"`
 	Merge   Merge  `toml:"merge"`
 
+	Cleanup Cleanup `toml:"cleanup"`
+
 	// Problems is what Load could not honour in the file it read: keys mkit does
 	// not know, values outside an enumerated set, a document that would not parse
 	// at all, a version from the future. Never marshalled — it describes the read,
@@ -109,6 +111,16 @@ const (
 	ProblemUnparsable ProblemKind = "unparsable"
 	// ProblemNewerVersion — written by a newer mkit. Reported, never refused.
 	ProblemNewerVersion ProblemKind = "newer-version"
+	// ProblemUnreadable — the file is there and could not be read at all (mode
+	// 000, a directory in its place, an I/O or sandbox denial). Distinct from
+	// ProblemUnparsable, which is a file that was read and is not TOML.
+	//
+	// `Load` still returns this case as an error, because most callers want it:
+	// a command that exists to read the config should say so and stop. It is a
+	// *Problem* for the callers that do not — one that pins nothing and merely
+	// consults, where aborting would take a capability away over a file the
+	// command never needed.
+	ProblemUnreadable ProblemKind = "unreadable"
 )
 
 // Problem is one thing Load could not honour, named with the key and the file it
@@ -145,6 +157,16 @@ func unparsableProblem(path, msg string) Problem {
 	return Problem{Kind: ProblemUnparsable, Value: msg, Path: path,
 		Detail: fmt.Sprintf("%s is not valid TOML (%s) — nothing in it is pinned, and every "+
 			"command runs on discovery alone", path, msg)}
+}
+
+// UnreadableProblem is the one producer of the sentence for a config file that
+// could not be read. Exported, unlike its four siblings, because `Load` reports
+// this case as an error and the caller that chooses to carry on instead must not
+// reword it.
+func UnreadableProblem(path string, err error) Problem {
+	return Problem{Kind: ProblemUnreadable, Path: path, Value: err.Error(),
+		Detail: fmt.Sprintf("%s could not be read (%s) — nothing in it is pinned, and this "+
+			"command runs on discovery alone", path, err)}
 }
 
 func newerVersionProblem(version int, path string) Problem {
@@ -192,6 +214,32 @@ type Review struct {
 // Merge pins how this repo integrates a branch: merge, squash or rebase.
 type Merge struct {
 	Style string `toml:"style,omitempty"`
+}
+
+// Cleanup pins the branches a repo-wide cleanup must never delete, beyond the
+// ones it already works out for itself.
+//
+// Not discoverable: branch protection is a network call on an otherwise local
+// classifier, and `gh` may be missing or unauthenticated. Which local branches
+// are long-lived — a `staging`, a release branch — is exactly the kind of answer
+// a committed config exists to hold, and being wrong here deletes a branch.
+type Cleanup struct {
+	// Keep is branch **names**, not patterns. Narrow on purpose: a glob that
+	// matches more than its author meant is the failure this key exists to
+	// prevent, so globs wait for a repo that turns up needing them.
+	//
+	// **It is added to what cleanup protects, never substituted for it.** The
+	// default branch is protected whether or not it appears here — a keep list
+	// that omits it is a mistake, not an instruction — and the union lives in
+	// `branchscan.ProtectedSet`, which is its one producer.
+	//
+	// No enumeration, so `Allowed("cleanup.keep")` is nil and `validate` has
+	// nothing to check: any string is a legal branch name to pin, and a name that
+	// is not a local branch here is not an error either — a keep list travels
+	// with the repo, and `mkit branch scan` reports such a name as `keep_unknown=`
+	// rather than refusing it. A blank entry pins nothing and is dropped by the
+	// same producer.
+	Keep []string `toml:"keep,omitempty"`
 }
 
 // Path returns the absolute config path for a work tree.
@@ -384,7 +432,8 @@ func (c *Config) IsZero() bool {
 		c.Spec.Store == "" && c.Spec.Ref == "" &&
 		len(c.Commit.Scopes) == 0 &&
 		len(c.Review.Reviewers) == 0 &&
-		c.Merge.Style == ""
+		c.Merge.Style == "" &&
+		len(c.Cleanup.Keep) == 0
 }
 
 // Write renders the config to disk, creating `.mkit/` if needed.
@@ -450,6 +499,12 @@ func render(c *Config) string {
 		b.WriteString("\n# How this repo integrates a branch: merge | squash | rebase.\n")
 		b.WriteString("[merge]\n")
 		fmt.Fprintf(&b, "style = %s\n", quote(c.Merge.Style))
+	}
+	if len(c.Cleanup.Keep) > 0 {
+		b.WriteString("\n# Branches `cleanup` must never delete — names, not patterns. Added to what\n")
+		b.WriteString("# it already protects: the default branch is kept whether or not it is listed.\n")
+		b.WriteString("[cleanup]\n")
+		fmt.Fprintf(&b, "keep = %s\n", quoteList(c.Cleanup.Keep))
 	}
 	return b.String()
 }

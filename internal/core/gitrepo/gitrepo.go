@@ -262,3 +262,52 @@ func (r *Repo) AliveCommits(heads []string) map[string]bool {
 	}
 	return alive
 }
+
+// DefaultBranch resolves this repo's default branch: the remote's own HEAD where
+// there is one, then the first local branch named main, master or trunk, then
+// "unknown".
+//
+// **One implementation**: `mkit facts` prints it as `default_branch=`, `mkit
+// branch scan` is handed it rather than re-deriving it, and `mkit repo profile`
+// needs it to report the branches cleanup protects with nothing pinned. A second
+// resolution here is a second thing to keep true, and the symptom of a
+// disagreement is a cleanup that protects a different branch than the one the
+// facts named.
+//
+// "unknown" rather than an error: a repo with no remote and no conventionally
+// named branch is a normal repo, and every caller reports the answer rather than
+// stopping on it.
+func (r *Repo) DefaultBranch() string {
+	var remoteHead string
+	if remote := r.Remote(); remote != "" {
+		if head, err := run(r.Toplevel, "symbolic-ref", "--short", "refs/remotes/"+remote+"/HEAD"); err == nil {
+			remoteHead = strings.TrimPrefix(head, remote+"/")
+		}
+	}
+	// The remote's answer wins only when this checkout actually has that branch.
+	// A stale `origin/HEAD`, or one naming a branch that exists only as a
+	// remote-tracking ref, otherwise wins over a perfectly good local `main`:
+	// `mkit branch scan` refuses a `--default` absent from `refs/heads` before it
+	// fetches anything, so the whole of `cleanup` stops on a name this repo has
+	// never checked out.
+	if remoteHead != "" && r.hasLocalBranch(remoteHead) {
+		return remoteHead
+	}
+	for _, b := range []string{"main", "master", "trunk"} {
+		if r.hasLocalBranch(b) {
+			return b
+		}
+	}
+	// Nothing local matched. The remote's name is still a better report than
+	// "unknown" — every caller reports this rather than branching on it, and the
+	// one that refuses a non-local default refuses "unknown" just the same.
+	if remoteHead != "" {
+		return remoteHead
+	}
+	return "unknown"
+}
+
+func (r *Repo) hasLocalBranch(name string) bool {
+	_, err := run(r.Toplevel, "show-ref", "--verify", "--quiet", "refs/heads/"+name)
+	return err == nil
+}
