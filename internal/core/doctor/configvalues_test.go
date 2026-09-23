@@ -1,6 +1,7 @@
 package doctor
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -87,5 +88,56 @@ func TestNewerConfigVersionWarnsWithoutARemedy(t *testing.T) {
 	}
 	if !strings.Contains(checks[0].Detail, "99") {
 		t.Errorf("detail does not name the version: %s", checks[0].Detail)
+	}
+}
+
+// A remedy for a key with no enumerated set must still name a value. The
+// enumerated branch rendered `strings.Join(Allowed(key), ", ")` unconditionally,
+// and `commit.subject_max` is a number with a rule rather than a set — so the
+// sentence came out as "to one of , or remove it", which tells the reader
+// nothing and breaks the rule that a degradation sentence names a remedy that
+// works. Raised independently by all three review sources.
+func TestRemedyForANonEnumeratedKeyNamesTheRule(t *testing.T) {
+	isolate(t)
+	repo := newRepo(t)
+	writeFile(t, repo.Toplevel, repoconfig.RelPath,
+		"version = 1\n\n[commit]\nsubject_max = 0\n")
+
+	checks := findAll(Run(Options{Repo: repo}), "config values")
+	if len(checks) != 1 {
+		t.Fatalf("got %d config-value checks, want 1: %+v", len(checks), checks)
+	}
+	remedy := checks[0].Remedy
+	if strings.Contains(remedy, "one of ,") || strings.Contains(remedy, "to one of  ") {
+		t.Fatalf("remedy renders an empty allowed-set: %q", remedy)
+	}
+	// The rule has one producer; the remedy must be quoting it, not rewording it.
+	if want := repoconfig.Rule("commit.subject_max"); !strings.Contains(remedy, want) {
+		t.Errorf("remedy %q does not name the rule %q", remedy, want)
+	}
+}
+
+// doctor is the human-run report, and a config file that is present but cannot
+// be read is precisely the state a user cannot diagnose from the file's
+// contents. Returning on Load's error reported nothing at all.
+func TestAnUnreadableConfigIsReportedNotSkipped(t *testing.T) {
+	isolate(t)
+	repo := newRepo(t)
+	writeFile(t, repo.Toplevel, repoconfig.RelPath, "version = 1\n")
+	path := repoconfig.Path(repo.Toplevel)
+	if err := os.Chmod(path, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0o644) })
+
+	checks := findAll(Run(Options{Repo: repo}), "config values")
+	if len(checks) != 1 {
+		t.Fatalf("got %d config-value checks, want 1: %+v", len(checks), checks)
+	}
+	if checks[0].Status != Warn {
+		t.Errorf("status = %q, want warn: an unreadable config stops nothing", checks[0].Status)
+	}
+	if checks[0].Remedy == "" {
+		t.Errorf("no remedy on %q", checks[0].Detail)
 	}
 }

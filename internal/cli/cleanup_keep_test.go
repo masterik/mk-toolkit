@@ -294,17 +294,6 @@ func cutAfter(s, sep string) (string, bool) {
 	return rest, ok
 }
 
-func writeConfig(t *testing.T, dir, body string) {
-	t.Helper()
-	path := filepath.Join(dir, repoconfig.RelPath)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
 // Git forbids the ASCII space in a ref name but allows Unicode whitespace, so a
 // TrimSpace on a pinned entry rewrites a legal branch name into a different one.
 // The pin then matches nothing, the branch is not protected, and this is the

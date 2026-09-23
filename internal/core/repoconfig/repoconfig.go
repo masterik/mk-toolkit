@@ -48,7 +48,28 @@ var (
 	SpecStores = []string{"github-issues", "gitlab", "files", "none"}
 	// MergeStyles are the accepted `merge.style` values.
 	MergeStyles = []string{"merge", "squash", "rebase"}
+	// ReviewModes are the accepted `review.mode` values — the two rosters
+	// `review` already runs. Named here rather than in the skill because whether
+	// a team wants the full three-reviewer pass by default is a decision, not a
+	// `command -v` result, and nothing in the repo is evidence for it.
+	ReviewModes = []string{"full", "quick"}
 )
+
+// Rule is the human rule for a key whose legal values are not an enumeration,
+// phrased to drop into "set `<key>` to <rule>". It is the one producer of that
+// phrase: `Allowed` answers nothing for such a key, so a caller rendering a
+// remedy from the allowed set alone names no value at all.
+//
+// A key absent from both `Allowed` and here still gets a remedy from its caller
+// — "correct it, or remove it" — because a remedy that names nothing is worse
+// than a blunt one.
+func Rule(key string) string {
+	switch key {
+	case "commit.subject_max":
+		return "a positive number of characters"
+	}
+	return ""
+}
 
 // Allowed returns the accepted values for an enumerated key, or nil for a key
 // that has no enumeration. The key→set mapping lives here with the sets, so a
@@ -59,6 +80,8 @@ func Allowed(key string) []string {
 		return SpecStores
 	case "merge.style":
 		return MergeStyles
+	case "review.mode":
+		return ReviewModes
 	}
 	return nil
 }
@@ -153,6 +176,24 @@ func invalidValueProblem(key, value, path string, allowed []string) Problem {
 			"is ignored and discovery answers instead", key, path, value, strings.Join(allowed, ", "))}
 }
 
+// subjectMaxProblem is the one sentence for a `commit.subject_max` that is not a
+// usable length.
+//
+// Its own producer rather than invalidValueProblem's, because that sentence names
+// an allowed *set* and ends "discovery answers instead", and both halves would be
+// false here: the key is enumerated by nothing, and discovered by nothing — so
+// what happens next is `commit`'s own convention, not a discovered answer.
+//
+// Only a value that cannot be a length at all is refused. There is no upper
+// bound: 500 is a silly subject limit but an operable one, and a schema that
+// refused it would be pinning a house style rather than catching a mistake.
+func subjectMaxProblem(n int, path string) Problem {
+	return Problem{Kind: ProblemInvalidValue, Key: "commit.subject_max", Value: strconv.Itoa(n), Path: path,
+		Detail: fmt.Sprintf("`commit.subject_max` in %s is %d, which is not a usable subject length "+
+			"— a length is %s, so the pinned limit is ignored and "+
+			"`commit` falls back to its own convention", path, n, Rule("commit.subject_max"))}
+}
+
 func unparsableProblem(path, msg string) Problem {
 	return Problem{Kind: ProblemUnparsable, Value: msg, Path: path,
 		Detail: fmt.Sprintf("%s is not valid TOML (%s) — nothing in it is pinned, and every "+
@@ -201,14 +242,33 @@ type Spec struct {
 	Ref string `toml:"ref,omitempty"`
 }
 
-// Commit pins the conventional-commit scopes this repo uses.
+// Commit pins the rules `commit` already promises to honour: the scopes this
+// repo uses, and the longest subject it accepts.
 type Commit struct {
 	Scopes []string `toml:"scopes,omitempty"`
+	// SubjectMax is the longest commit subject this repo accepts, in characters.
+	//
+	// **Not discoverable, and deliberately so** — history shows what past
+	// subjects happened to be, not what the repo requires, and the longest one
+	// ever written is evidence of nothing. So there is no discovered counterpart:
+	// absent means `commit` falls back to its own convention.
+	//
+	// A pointer, so absent and `subject_max = 0` are different states. They
+	// decode to the same int, and zero is not "no limit" — it is a pin that would
+	// silently take no effect, which is exactly the failure #19's validation
+	// exists to make visible. Nil is absent; a rejected value is cleared back to
+	// nil and the Problem is what says which.
+	SubjectMax *int `toml:"subject_max,omitempty"`
 }
 
-// Review pins default reviewers, for repos with no CODEOWNERS to read.
+// Review pins default reviewers, for repos with no CODEOWNERS to read, and the
+// review roster this repo runs by default.
 type Review struct {
 	Reviewers []string `toml:"reviewers,omitempty"`
+	// Mode is one of full, quick — the roster `review` opens with when the user
+	// named none. `$ARGUMENTS` still wins: a pinned default is a default, not a
+	// ceiling.
+	Mode string `toml:"mode,omitempty"`
 }
 
 // Merge pins how this repo integrates a branch: merge, squash or rebase.
@@ -421,6 +481,17 @@ func (c *Config) validate(path string) {
 		c.Problems = append(c.Problems, invalidValueProblem("merge.style", c.Merge.Style, path, MergeStyles))
 		c.Merge.Style = ""
 	}
+	if c.Review.Mode != "" && !OneOf(c.Review.Mode, ReviewModes) {
+		c.Problems = append(c.Problems, invalidValueProblem("review.mode", c.Review.Mode, path, ReviewModes))
+		c.Review.Mode = ""
+	}
+	// Cleared to zero, which is the same state as absent — and that is what the
+	// recorded Problem is for: `Problem("commit.subject_max")` is how a consumer
+	// tells "ignored" from "never pinned", exactly as it does for merge.style.
+	if c.Commit.SubjectMax != nil && *c.Commit.SubjectMax <= 0 {
+		c.Problems = append(c.Problems, subjectMaxProblem(*c.Commit.SubjectMax, path))
+		c.Commit.SubjectMax = nil
+	}
 	if c.Version > Version {
 		c.Problems = append(c.Problems, newerVersionProblem(c.Version, path))
 	}
@@ -430,8 +501,8 @@ func (c *Config) validate(path string) {
 func (c *Config) IsZero() bool {
 	return len(c.Gate.Commands) == 0 &&
 		c.Spec.Store == "" && c.Spec.Ref == "" &&
-		len(c.Commit.Scopes) == 0 &&
-		len(c.Review.Reviewers) == 0 &&
+		len(c.Commit.Scopes) == 0 && c.Commit.SubjectMax == nil &&
+		len(c.Review.Reviewers) == 0 && c.Review.Mode == "" &&
 		c.Merge.Style == "" &&
 		len(c.Cleanup.Keep) == 0
 }
@@ -485,15 +556,28 @@ func render(c *Config) string {
 			fmt.Fprintf(&b, "ref = %s\n", quote(c.Spec.Ref))
 		}
 	}
-	if len(c.Commit.Scopes) > 0 {
-		b.WriteString("\n# Conventional-commit scopes this repo uses.\n")
+	if len(c.Commit.Scopes) > 0 || c.Commit.SubjectMax != nil {
+		b.WriteString("\n# The rules `commit` honours: the conventional-commit scopes this repo\n")
+		b.WriteString("# uses, and the longest subject it accepts. subject_max is not discoverable —\n")
+		b.WriteString("# history shows what past subjects happened to be, not what is required.\n")
 		b.WriteString("[commit]\n")
-		fmt.Fprintf(&b, "scopes = %s\n", quoteList(c.Commit.Scopes))
+		if len(c.Commit.Scopes) > 0 {
+			fmt.Fprintf(&b, "scopes = %s\n", quoteList(c.Commit.Scopes))
+		}
+		if c.Commit.SubjectMax != nil {
+			fmt.Fprintf(&b, "subject_max = %d\n", *c.Commit.SubjectMax)
+		}
 	}
-	if len(c.Review.Reviewers) > 0 {
-		b.WriteString("\n# Default reviewers, for a repo with no CODEOWNERS to read.\n")
+	if len(c.Review.Reviewers) > 0 || c.Review.Mode != "" {
+		b.WriteString("\n# Default reviewers, for a repo with no CODEOWNERS to read, and the roster\n")
+		b.WriteString("# `review` opens with when the user named none: mode = full | quick.\n")
 		b.WriteString("[review]\n")
-		fmt.Fprintf(&b, "reviewers = %s\n", quoteList(c.Review.Reviewers))
+		if len(c.Review.Reviewers) > 0 {
+			fmt.Fprintf(&b, "reviewers = %s\n", quoteList(c.Review.Reviewers))
+		}
+		if c.Review.Mode != "" {
+			fmt.Fprintf(&b, "mode = %s\n", quote(c.Review.Mode))
+		}
 	}
 	if c.Merge.Style != "" {
 		b.WriteString("\n# How this repo integrates a branch: merge | squash | rebase.\n")
