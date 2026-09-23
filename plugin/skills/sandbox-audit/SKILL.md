@@ -33,8 +33,11 @@ References: `../_shared/references/output-discipline.md` (bounded output, where 
 not start with `mkit facts`; the command it needs *is* the probe:
 
 ```bash
-mkit audit sessions --days <N, default 14> --top 0
+mkit audit sessions --days <N, default 14>
 ```
+
+The default `--top 10` per grouping keeps this bounded; a long tail of one-off targets is step 1's
+JSON drill-down, never a reason to print everything here.
 
 If it fails with `command not found` **or** `unknown command "audit"` — absent and too old are the same
 answer — **stop** and say:
@@ -42,8 +45,10 @@ answer — **stop** and say:
 > This skill runs on the `mkit` binary. Install it with `brew install masterik/tap/mkit` (or upgrade
 > with `brew upgrade mkit`), then run it again.
 
-A non-zero exit naming the projects directory means there are no transcripts to read (a fresh machine, or
-`CLAUDE_HOME` pointing somewhere else) — say so and stop; that is not a finding.
+A non-zero exit whose message is **`no such file or directory`** for the projects directory means there
+are no transcripts to read (a fresh machine, or `CLAUDE_HOME` pointing somewhere else) — say so and stop;
+that is not a finding. **Any other error** — permission denied, not a directory, a walk that failed — is a
+failed audit, not an empty one: report it verbatim and stop. Never present it as "nothing found".
 
 Read `~/.mkit/sandbox-audit.md` if it exists: the last run's date, counts, and the **stay-blocked** and
 **applied** lists. Its absence is the ordinary first run, never mentioned.
@@ -57,11 +62,18 @@ target, by command, overrides by command, auto-mode denials by reason — then a
 JSON only when a bucket needs drilling into:
 
 ```bash
-mkit audit sessions --days <N> --json --events > <tmp>/audit.json
+f=$(mktemp "${TMPDIR:?}/sandbox-audit.XXXXXX") && mkit audit sessions --days <N> --json --events > "$f" && echo "$f"
 ```
 
-and query that file with a short script, never by reading it whole. `projects[].paths` is every working
-directory a project's sessions ran in: that is where its `.claude/settings*.json` live.
+Carry the printed path as a literal into every later call — a shell variable does not survive to the next
+one — query the file with a short script, never by reading it whole, and `rm` it when the report is done.
+`mktemp` with an explicit template under `$TMPDIR` is what keeps two concurrent runs from sharing a file.
+
+`projects[].paths` is every working directory a project's sessions ran in — a checkout, a linked
+worktree, or a subdirectory of either. Resolve each to its root with
+`git -C <path> rev-parse --show-toplevel` (keep the path as given when it is not a work tree), and read
+settings from the root: a session started in `repo/packages/web` still loads `repo/.claude/`. A path that
+no longer exists is a removed worktree; skip it.
 
 Know what the counts mean before reasoning from them:
 
@@ -79,9 +91,10 @@ Know what the counts mean before reasoning from them:
 
 ### 2. Read the current config
 
-`~/.claude/settings.json`, and `.claude/settings.json` + `.claude/settings.local.json` under each path in
-`projects[].paths` that has events. Note `sandbox.*`, `permissions.*` (`allow`, `ask`, `deny`,
-`additionalDirectories`), `autoMode.*`, `env`. Also the user's `~/.claude/CLAUDE.md`, for step 3's
+The user config directory is **`$CLAUDE_CONFIG_DIR`** when it is set, else `~/.claude` — resolve it once
+and use it for every user-level read below. Read `<config dir>/settings.json`, and `.claude/settings.json` +
+`.claude/settings.local.json` under each resolved project root that has events. Note `sandbox.*`, `permissions.*` (`allow`, `ask`, `deny`,
+`additionalDirectories`), `autoMode.*`, `env`. Also `<config dir>/CLAUDE.md`, for step 3's
 behaviour rules.
 
 Before recommending any key, **check its exact name and semantics against the current docs** —
@@ -101,12 +114,13 @@ one disposition, preferring them in this order:
 | **stop the traffic** | telemetry or analytics the task never needed (`telemetry.*`, `analytics.*`, `posthog`) | an `env` opt-out (`DO_NOT_TRACK`, `HOMEBREW_NO_ANALYTICS`, the tool's own) — never allowlist a tracker |
 | **allowlist** | a host or a path a tool legitimately needs | `sandbox.network.allowedDomains`, `sandbox.filesystem.allowWrite`, or an `env` redirect of a temp or cache dir into a writable one |
 | **pre-approve** | the classifier refused something routine the user always approves | a narrow `permissions.allow` rule, or an `autoMode.allow` sentence scoped to the exact operation |
-| **exclude** | the sandbox cannot run it at all: a protected path (`.git/config`, `.git/hooks`, `.vscode`, `.claude/*`, `~/.claude/plugins`), a nested sandbox (`sandbox_apply`), docker, ssh | `sandbox.excludedCommands` — the narrowest pattern that covers it. Keep this list short; an excluded command still meets the permission gate, so say whether an `ask` rule keeps it prompting |
-| **stay blocked** | the guard did its job: a merge nobody asked for, a sandbox-bypass env var, a read of `.env` or a secret, destructive git during a merge | none — name it, so the next run does not propose it |
+| **exclude — the user's call** | a named tool that cannot run sandboxed *by design* and whose own job is the blocked write: `git push -u` recording its upstream in `.git/config`, `git worktree remove` deleting a worktree's `.vscode`/`.claude`, a tool that starts its own sandbox (`sandbox_apply`), docker, ssh | **proposed, never recommended.** `sandbox.excludedCommands` turns the sandbox off for *every* run of that command, not just the one write, so present it as a trade-off for the user to accept: the narrowest pattern, what it unsandboxes, and whether an `ask` rule keeps it prompting. Only for commands matched by name — never a pattern broad enough to cover arbitrary scripts |
+| **stay blocked** | the guard did its job: a merge nobody asked for, a sandbox-bypass env var, **any read or write of a credential, secret or `.env` path**, a write to Claude Code's own configuration (`settings*.json`, `.claude/hooks`, `.claude/skills`, `~/.claude/plugins`) by anything other than the tool that owns it, destructive git during a merge | none — name it, so the next run does not propose it. A protected path is protected on purpose: its block is only ever an exclude candidate when the command writing it is that path's own tool (git for `.git/config`) |
 | **behaviour** | preemptive overrides, overrides on read-only commands, an override carried forward to every later command | a rule for `~/.claude/CLAUDE.md`, not a setting |
 
-A protected path cannot be allowlisted: an `allowWrite` entry covering it is inert, which is why those rows
-go to **exclude**. Never propose widening `allowWrite` to a credentials directory, a shell rc file, or
+A protected path cannot be allowlisted: an `allowWrite` entry covering it is inert. That makes it a
+**stay blocked** row by default, and an **exclude** proposal only under that row's narrow condition — never
+the reverse. Never propose widening `allowWrite` to a credentials directory, a shell rc file, or
 anything under `~/.claude`.
 
 Anything already on the ledger's **stay-blocked** list stays there unless the user says otherwise — report

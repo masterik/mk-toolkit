@@ -46,7 +46,8 @@ brew install masterik/tap/mkit
 Nothing to build either way, and **both steps are required** — the marketplace ships the skills,
 Homebrew ships the binary, and the two version independently
 ([ADR 0003](docs/adr/0003-two-distribution-channels.md)). Since M5 every repo-scoped skill's first call is
-`mkit facts <skill>`, so a missing binary stops a skill at step 0 with a `brew` remedy rather than
+`mkit facts <skill>` (`review` runs a one-line `mkit findings` compatibility probe just before it;
+`sandbox-audit`, which is user-wide, starts with `mkit audit sessions`), so a missing binary stops a skill at step 0 with a `brew` remedy rather than
 degrading. Presence only, with no declared minimum on either side. All four skills also read and
 write a per-branch **worklog** through `mkit work` (M6) — what ran on this branch and what it
 concluded — which is an optional *input*: a worklog a step cannot read costs it one input and never
