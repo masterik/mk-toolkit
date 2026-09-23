@@ -24,7 +24,7 @@ References: `../_shared/references/output-discipline.md` (bounded output, where 
 - **Never writes a settings file.** `~/.claude/settings.json` and every `.claude/settings*.json` are
   sandbox-protected, and a changed permission is the user's decision to make, file by file. The output is a
   paste-ready diff.
-- Writes one file: its own ledger, `${MKIT_HOME:-~/.mkit}/sandbox-audit.md` (step 5) — the decisions a later run must not
+- Writes one file: its own ledger, `${MKIT_HOME:-$HOME/.mkit}/sandbox-audit.md` (step 5) — the decisions a later run must not
   re-litigate.
 
 ## Preconditions
@@ -56,7 +56,7 @@ transcript is unreadable (`transcripts=0` with `unreadable` above 0), that is a 
 paths and stop. Otherwise carry on, but list the unreadable paths at the top of the report, call every
 count a **lower bound**, and never present a finding's absence as proof it did not happen.
 
-Read `${MKIT_HOME:-~/.mkit}/sandbox-audit.md` if it exists: the last run's date, counts, and the **stay-blocked** and
+Read `${MKIT_HOME:-$HOME/.mkit}/sandbox-audit.md` if it exists: the last run's date, counts, and the **stay-blocked** and
 **applied** lists. Its absence is the ordinary first run, never mentioned.
 
 ## Workflow
@@ -150,7 +150,7 @@ Then ask which changes the user is taking. They paste them; this skill does not.
 
 ### 5. Update the ledger
 
-After the user answers, write `${MKIT_HOME:-~/.mkit}/sandbox-audit.md` — overwrite it whole, it is a snapshot, not a log:
+After the user answers, write `${MKIT_HOME:-$HOME/.mkit}/sandbox-audit.md` — overwrite it whole, it is a snapshot, not a log:
 
 ```markdown
 # sandbox-audit ledger
