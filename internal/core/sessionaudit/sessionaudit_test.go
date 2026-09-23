@@ -246,14 +246,26 @@ func TestMissingRootIsAnError(t *testing.T) {
 
 func TestReadOnlyMeansOneReadOnlyCommand(t *testing.T) {
 	for cmd, want := range map[string]bool{
-		"cat README.md":                 true,
-		"cd /r && sed -n '1,5p' f":      true,
-		"cat in > out":                  false,
-		"git status && rm -rf x":        false,
-		"cat f | tee g":                 false,
-		"echo $(rm x)":                  false,
-		"grep -rn foo . ; touch marker": false,
-		"bun run test":                  false,
+		"cat README.md":                    true,
+		"cd /r && sed -n '1,5p' f":         true,
+		"cat in > out":                     false,
+		"git status && rm -rf x":           false,
+		"cat f | tee g":                    false,
+		"echo $(rm x)":                     false,
+		"grep -rn foo . ; touch marker":    false,
+		"bun run test":                     false,
+		"cat f 2>&1 | head -20":            true,
+		"grep -rn x . 2>/dev/null | wc -l": true,
+		"cat f | head > out":               false,
+		"cat f || rm f":                    false,
+		"cat a; echo ---; cat b":           true,
+		"cd /r && ls && git status":        true,
+		"sleep 5 & cat f":                  false,
+		"find . -name '*.go'":              true,
+		"find . -name '*.tmp' -delete":     false,
+		"find . -exec rm {} +":             false,
+		"sed -n -i '1p' f":                 false,
+		"git diff --output=patch":          false,
 	} {
 		if got := isReadOnly(cmd); got != want {
 			t.Errorf("isReadOnly(%q) = %v, want %v", cmd, got, want)

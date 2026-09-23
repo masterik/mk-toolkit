@@ -95,6 +95,17 @@ func renderAudit(out io.Writer, r *sessionaudit.Report, top int) {
 	renderBuckets(out, "overrides by command", r.OverrideHeads, top)
 	renderBuckets(out, "auto-mode denials by reason", r.AutoModeReasons, top)
 
+	defer func() {
+		// Named, not just counted: a skill cannot say which transcripts its
+		// counts are missing from a number.
+		if len(r.Unreadable) > 0 {
+			_, _ = fmt.Fprintln(out, "\nunreadable:")
+			for _, p := range r.Unreadable {
+				_, _ = fmt.Fprintf(out, "  %s\n", p)
+			}
+		}
+	}()
+
 	if len(r.Projects) > 0 {
 		_, _ = fmt.Fprintln(out, "\nby project  (blocks / overrides, preemptive / automode / rule / user)")
 		for _, p := range r.Projects {

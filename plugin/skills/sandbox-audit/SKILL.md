@@ -50,6 +50,12 @@ are no transcripts to read (a fresh machine, or `CLAUDE_HOME` pointing somewhere
 that is not a finding. **Any other error** — permission denied, not a directory, a walk that failed — is a
 failed audit, not an empty one: report it verbatim and stop. Never present it as "nothing found".
 
+**`unreadable=N` on an exit-0 run means the counts are partial.** The command skips a transcript it cannot
+open rather than failing the whole scan, and names each one in the trailing `unreadable:` block. If every
+transcript is unreadable (`transcripts=0` with `unreadable` above 0), that is a failed audit — report the
+paths and stop. Otherwise carry on, but list the unreadable paths at the top of the report, call every
+count a **lower bound**, and never present a finding's absence as proof it did not happen.
+
 Read `~/.mkit/sandbox-audit.md` if it exists: the last run's date, counts, and the **stay-blocked** and
 **applied** lists. Its absence is the ordinary first run, never mentioned.
 

@@ -82,3 +82,18 @@ func TestAuditSessionsRejectsBadLimits(t *testing.T) {
 		}
 	}
 }
+
+func TestAuditSessionsNamesUnreadableTranscripts(t *testing.T) {
+	auditHome(t)
+	bad := filepath.Join(os.Getenv("CLAUDE_HOME"), "projects", "-p-app", "locked.jsonl")
+	if err := os.WriteFile(bad, []byte("{}\n"), 0o000); err != nil {
+		t.Fatal(err)
+	}
+	res := run(t, "audit", "sessions")
+	if res.code != 0 {
+		t.Fatalf("exit %d: %s", res.code, res.stderr)
+	}
+	if !strings.Contains(res.stdout, "unreadable=1\n") || !strings.Contains(res.stdout, "unreadable:\n  "+bad+"\n") {
+		t.Errorf("stdout does not name the unreadable transcript:\n%s", res.stdout)
+	}
+}
