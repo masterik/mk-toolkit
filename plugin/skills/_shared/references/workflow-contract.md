@@ -8,7 +8,8 @@ brainstorm → spec → implement → commit → review → pr ──┐
                                                         ├─→ (merged)
                                               finish ──┘
 
-cleanup   repo-wide gardening, not a step in the line
+cleanup         repo-wide gardening, not a step in the line
+sandbox-audit   user-wide: past sessions' sandbox and gate events → a proposed settings diff
 ```
 
 The arrows are the **common** path, not a required one. Each step is **entry-capable**: it runs as
@@ -67,8 +68,10 @@ tells it whether the gist still describes the tree in front of it.
 
 **Ungated, and never gating.** A step reads the worklog unconditionally. It used to be gated on a
 `mkit_bin=` fact, because the binary was optional and the log was a bonus; since M5 the binary is a
-hard requirement and every skill's first call is `mkit facts`, which stops the run when it is absent
-or too old. By the time any step reads the log, there is no missing-binary case left to check for.
+hard requirement and every repo-scoped skill's first call is `mkit facts` (`review` probes
+`mkit findings` just before it), which stops the run when it is absent or too old. `sandbox-audit`
+is user-wide, opens no run directory and reads no worklog; its first call, `mkit audit sessions`, is
+its own dependency check. By the time any step reads the log, there is no missing-binary case left to check for.
 
 ```bash
 mkit work show --json --limit 20

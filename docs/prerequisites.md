@@ -199,9 +199,10 @@ this section is two steps instead of one.
 }
 ```
 
-`~/.mkit/` is **empty today** — its two files went with the hook — but it stays the declared home
-for user-scoped state, and it is what `MKIT_HOME` redirects. Nothing writes there yet, so neither
-step is required for anything mkit currently does; `mkit facts` reports `user_dir_writable=no`
+The binary writes nothing to `~/.mkit/` today — its two files went with the hook — but it stays the
+declared home for user-scoped state, and it is what `MKIT_HOME` redirects. The one file in it is the
+`sandbox-audit` skill's ledger, which only that skill needs; otherwise neither step is required for
+anything mkit currently does; `mkit facts` reports `user_dir_writable=no`
 without them, with this same two-part remedy, so the first user-scoped write the binary makes does
 not fail as a surprise. `mkit doctor` reports the same thing on demand, from the same producer —
 `scratch.UserDirRemedy` is the only place this sentence is written.

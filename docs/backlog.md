@@ -68,8 +68,9 @@ not a trade-off.
    worktree-isolation guard all permit it with no configuration. One file in there is **committed**
    and not scratch: `config.toml`, the repo config, which is why the ignore rule is the pair
    `.mkit/*` + `!.mkit/config.toml` rather than a directory-only line. User scope (`~/.mkit/`, overridable
-   with `MKIT_HOME`) holds only what must outlive every repo — **empty today**: its two files, the
-   hook tombstone and its once-per-tool messages, went with the hook in 0.15.0. Not `~/.claude/…`: that is a *protected* region where an allowlist entry
+   with `MKIT_HOME`) holds only what must outlive every repo — the binary writes nothing there today: its two files, the
+   hook tombstone and its once-per-tool messages, went with the hook in 0.15.0, and the one file in it
+   is the `sandbox-audit` skill's ledger, written by the agent. Not `~/.claude/…`: that is a *protected* region where an allowlist entry
    is inert, so it is a path no remedy sentence can point at
    ([ADR 0002](adr/0002-state-locations-under-a-sandbox.md)).
 10. **Sandbox degradation is named, never hit.** A command that would write a sandbox-denied path

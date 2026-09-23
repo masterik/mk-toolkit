@@ -19,8 +19,9 @@ by all four skills; what it reports is **one fewer input, never a stop**.
 `mkit run open|prune` replaced the last five scripts, and **the payload is Markdown only**: no
 `plugin/scripts/`, no `lib/common.sh`, no `tests/`. That makes `mkit` a **hard requirement for
 every skill** — each one's first call is `mkit facts <skill>` (`review` alone runs a one-line
-compatibility probe before it, because its later steps need `mkit findings` too), and a binary that
-is absent *or too old* is its stop condition with a `brew` remedy: `command not found` and
+compatibility probe before it, because its later steps need `mkit findings` too; `sandbox-audit`,
+which is not repo-scoped and opens no run directory, starts with `mkit audit sessions` instead), and a
+binary that is absent *or too old* is its stop condition with a `brew` remedy: `command not found` and
 `unknown command "facts"` are the same answer. Presence only, no declared minimum on either side: a subcommand
 that does not exist *is* the too-old signal. Milestones and the full invariant list:
 [`backlog.md`](docs/backlog.md). Direction and rationale: [`concept.md`](docs/concept.md) — the
@@ -51,6 +52,7 @@ just run doctor                  # prerequisites, sandbox writability, plugin st
 just run work show --json        # this branch's worklog: what ran, and what it concluded
 just run repo profile --json     # how this repo works: discovered|pinned|unavailable
 just run facts commit --no-run   # every starting fact, without opening a run dir
+just run audit sessions --days 14 # sandbox/permission-gate events across every session
 ```
 
 Release is tag-driven: push `vX.Y.Z` → GoReleaser builds darwin × amd64/arm64 and commits
@@ -155,6 +157,19 @@ reads as it does:
     rotate) and `Run` (step execution, full log, bounded excerpt). The two `gate run` call forms
     execute the same string but **normalize the ledger key differently**, and that seam is what
     makes a `review` → `finish` cache hit possible at all.
+  - `sessionaudit/`: `mkit audit sessions` — reads `<claude home>/projects/**/*.jsonl` (the
+    storage package's `CLAUDE_HOME` rule, not a second one) and classifies every tool result the
+    sandbox or the permission gate had a say in. **Each result is matched against its own call**, paired
+    by `tool_use_id`, never by substring over a transcript: that counted every `cat` of a doc quoting
+    the markers. The three refusals are **anchored at the start of the result**, where Claude Code puts
+    them. An EPERM is found by **the line's shape**, not the exit status — `git push … | tail` exits 0
+    whatever push did, and a `grep` over docs that quote the error exits 1 — so a backticked, table,
+    diff, comment or numbered-listing line is a file being read, not a command failing. An override is
+    **preemptive** when no block had preceded it in its transcript by the time it was *called* — calls issued
+    in one turn return in any order. The window is each event's own timestamp, the file's mtime only a
+    prefilter: a session resumed today still holds last month's events. Its own runs are skipped, and so
+    are queries of the report the skill saves (`sandbox-audit.*`), or each scan would re-count the last
+    one's output. Read-only; the `sandbox-audit` skill holds the judgement.
   - `findings/` (M4): the review-run arithmetic — validate, similarity, reconcile, group, report.
     Records are an **order-preserving `Record`**, not a struct: `reconciled.jsonl` and `final.jsonl`
     re-serialize wholesale, and a struct would silently drop `fix`, `also` or anything a reviewer
@@ -211,9 +226,11 @@ reads as it does:
   at the **plugin root** in `hooks/hooks.json` (not `.claude-plugin/`), is auto-discovered, and
   takes no `matcher` — a mistyped matcher is a hook that silently never runs.
 - `plugin/skills/<name>/SKILL.md` — the triggerable skills. The workflow is **seven steps**
-  (`brainstorm` → `spec` → `implement` → `commit` → `review` → `pr`/`finish`) plus `cleanup`
-  (repo-wide branch/worktree gardening, outside the line). **Five exist today** — `commit`,
-  `review`, `pr`, `finish`, `cleanup`; the front half is designed and unbuilt (`backlog.md`,
+  (`brainstorm` → `spec` → `implement` → `commit` → `review` → `pr`/`finish`) plus two outside the
+  line: `cleanup` (repo-wide branch/worktree gardening) and `sandbox-audit` (user-wide: every
+  session's sandbox and permission-gate events, turned into a proposed settings diff — report-only,
+  never edits a settings file). **Six exist today** — `commit`, `review`, `pr`, `finish`, `cleanup`,
+  `sandbox-audit`; the front half is designed and unbuilt (`backlog.md`,
   M6–M8), so don't describe `brainstorm`/`spec`/`implement` as shipping.
   The steps are **composable, not sequential**: each is entry-capable, runs alone in any order with
   any subset skipped, derives the thin version of what it can't find, and names what it assumed.
@@ -224,7 +241,7 @@ reads as it does:
   portable.
 - **The payload ships no executable code at all** (M5). `plugin/` is the manifest, the skills and
   `_shared/`; there is no `scripts/`, no `lib/common.sh`, and nothing in it is run. `mkit facts
-  <skill>` is every skill's first call — it opens the run directory under `<toplevel>/.mkit/` and
+  <skill>` is every repo-scoped skill's first call — it opens the run directory under `<toplevel>/.mkit/` and
   returns every starting fact, including the three that say what this machine will let a skill do:
   `run_ignored=`, `user_dir_writable=` and `git_bin=` (the absolute git path, for any call whose
   output a skill parses — an output-reshaping hook can hand it a summarized status that reads
@@ -258,9 +275,11 @@ reads as it does:
   needs **no ignore rule of its own** — `.mkit/*` already covers it, and a second rule would be a
   second thing to keep true.
 - `~/.mkit/` — the declared home for state outside a repo, overridable with `MKIT_HOME` (the tests
-  set it so a developer's real state cannot affect a run). **Empty today**: its two files,
-  `bootstrap.state` and `bootstrap.disabled`, went with the hook in 0.15.0. It keeps its definition
-  because it is where the binary's user-scoped state will land, and `mkit facts` still probes it so
+  set it so a developer's real state cannot affect a run). **The binary writes nothing there today**:
+  its two files, `bootstrap.state` and `bootstrap.disabled`, went with the hook in 0.15.0. The one
+  file in it is `sandbox-audit.md`, the `sandbox-audit` skill's ledger, written by the agent rather
+  than by `mkit`. It keeps its definition because it is where the binary's user-scoped state will
+  land, and `mkit facts` still probes it so
   an unwritable one is a starting fact rather than a later surprise. **Not `~/.claude/mkit/`**: that
   region is sandbox-*protected*, where an allowlist entry is inert, so it was a path no remedy could
   point at; here, one `permissions.additionalDirectories` entry works.

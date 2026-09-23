@@ -252,10 +252,12 @@ func (r *Report) userDir() {
 		r.add(Check{Group: "sandbox", Name: userDirCheck, Status: OK, Detail: dir + " is writable"})
 		return
 	}
-	// Warn, not Fail: the directory is empty today — its two files went with the
-	// hook — so nothing is failing yet. A later user-scoped write would.
+	// Warn, not Fail: the binary writes nothing there today — its two files went
+	// with the hook — and the one file in it, the sandbox-audit skill's ledger, is
+	// optional: that skill prints the ledger instead. A later user-scoped write
+	// would fail.
 	r.add(Check{Group: "sandbox", Name: userDirCheck, Status: Warn,
-		Detail: dir + " is not writable; nothing needs it today, a later user-scoped write would",
+		Detail: dir + " is not writable; the sandbox-audit ledger cannot be kept, and a later user-scoped write would fail",
 		Remedy: scratch.UserDirRemedy()})
 }
 

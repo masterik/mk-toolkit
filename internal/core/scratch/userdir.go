@@ -11,8 +11,10 @@ import (
 // repo goes. `MKIT_HOME` overrides it, and tests set it so a run can never read
 // or write a developer's real state.
 //
-// **Empty today.** It held exactly two files, `bootstrap.state` and
-// `bootstrap.disabled`, and both died with the `SessionStart` hook. The directory
+// **The binary writes nothing there today.** It held exactly two files,
+// `bootstrap.state` and `bootstrap.disabled`, and both died with the
+// `SessionStart` hook. The one file in it now is `sandbox-audit.md`, the
+// `sandbox-audit` skill's ledger, written by the agent, not by mkit. The directory
 // keeps its definition anyway: it is the answer to "where does user-scoped state
 // go", the path a remedy sentence can point at, and what `MKIT_HOME` redirects.
 //
