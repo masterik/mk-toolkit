@@ -198,8 +198,9 @@ var reWrites = regexp.MustCompile("[>`]|\\$\\(|(?:^|[^&])&(?:[^&]|$)")
 var reHarmless = regexp.MustCompile(`\d?>&\d|\d?>\s*/dev/null`)
 
 // reWritingFlag is the options that make a read-only head write or run
-// something: find's actions, `sed -i`, and git's `--output=<file>`.
-var reWritingFlag = regexp.MustCompile(`\s-(?:delete|exec|execdir|ok|okdir|fprint0?|fprintf|fls)\b|\s-i\b|\s--output\b`)
+// something, each anchored to its own tool: find's actions, `sed -i`, and
+// git's `--output=<file>`. `grep -i` is a case-insensitive read.
+var reWritingFlag = regexp.MustCompile(`^find\b.*\s-(?:delete|exec|execdir|ok|okdir|fprint0?|fprintf|fls)\b|^sed\b.*\s-i\b|^git\b.*\s--output\b`)
 
 // reStages splits a command line into the commands it runs.
 var reStages = regexp.MustCompile(`\|\||&&|[|;\n]`)
@@ -221,7 +222,7 @@ func isReadOnly(command string) bool {
 		if f := strings.Fields(stage); f[0] == "cd" {
 			continue
 		}
-		if !readOnly[head(stage)] || reWritingFlag.MatchString(stage) {
+		if !readOnly[head(stage)] || reWritingFlag.MatchString(rePrelude.ReplaceAllString(stage, "")) {
 			return false
 		}
 	}

@@ -266,6 +266,8 @@ func TestReadOnlyMeansOneReadOnlyCommand(t *testing.T) {
 		"find . -exec rm {} +":             false,
 		"sed -n -i '1p' f":                 false,
 		"git diff --output=patch":          false,
+		"grep -rin foo . | head":           true,
+		"grep -i foo f":                    true,
 	} {
 		if got := isReadOnly(cmd); got != want {
 			t.Errorf("isReadOnly(%q) = %v, want %v", cmd, got, want)
