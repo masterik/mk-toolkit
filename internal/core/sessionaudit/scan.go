@@ -102,7 +102,7 @@ func Scan(opts Options) (*Report, error) {
 			return nil
 		}
 		rel, _ := filepath.Rel(root, path)
-		evs, err := scanFile(path, rel, homePrefix)
+		evs, err := scanFile(path, rel, homePrefix, since)
 		if err != nil {
 			rep.Unreadable = append(rep.Unreadable, path)
 			return nil
@@ -149,9 +149,13 @@ type call struct {
 	name    string
 	summary string
 	input   toolInput
+	// blocked is whether the sandbox had blocked anything in this transcript
+	// when the call was made — not when its result came back, since calls
+	// issued together in one turn return in any order.
+	blocked bool
 }
 
-func scanFile(path, rel, homePrefix string) ([]Event, error) {
+func scanFile(path, rel, homePrefix string, since time.Time) ([]Event, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -192,7 +196,7 @@ func scanFile(path, rel, homePrefix string) ([]Event, error) {
 					for _, b := range blocks {
 						switch b.Type {
 						case "tool_use":
-							c := call{name: b.Name}
+							c := call{name: b.Name, blocked: blocked}
 							_ = json.Unmarshal(b.Input, &c.input)
 							c.summary = c.input.Command
 							if c.summary == "" {
@@ -204,13 +208,15 @@ func scanFile(path, rel, homePrefix string) ([]Event, error) {
 							if !ok {
 								continue
 							}
-							evs := resultEvents(base, l.Timestamp, c, resultText(b.Content), b.IsError, blocked)
+							evs := resultEvents(base, l.Timestamp, c, resultText(b.Content), b.IsError, c.blocked)
 							for _, e := range evs {
 								if e.Kind == KindSandboxBlock {
 									blocked = true
 								}
 							}
-							out = append(out, evs...)
+							if !before(l.Timestamp, since) {
+								out = append(out, evs...)
+							}
 						}
 					}
 				}
@@ -239,9 +245,10 @@ func resultEvents(base Event, ts string, c call, text string, isError, blockedBe
 	}
 
 	// This command's own report quotes every denial it found; reading it back in
-	// the next scan would count each of them again. Matched anywhere in the
-	// command, since a build-then-run chain puts it after a `&&`.
-	if strings.Contains(c.input.Command, "mkit audit sessions") {
+	// the next scan would count each of them again — and so would the skill's
+	// queries of the report it saved, which name its file. Matched anywhere in
+	// the command, since a build-then-run chain puts it after a `&&`.
+	if strings.Contains(c.input.Command, "mkit audit sessions") || strings.Contains(c.input.Command, ReportFilePrefix) {
 		return nil
 	}
 
@@ -280,6 +287,19 @@ func resultEvents(base Event, ts string, c call, text string, isError, blockedBe
 		e.Targets = targets(text)
 	}
 	return append(out, e)
+}
+
+// ReportFilePrefix is the name the sandbox-audit skill gives the JSON report it
+// saves for drilling into (`mktemp "$TMPDIR/sandbox-audit.XXXXXX"`). A command
+// naming it is a query of this package's own output, skipped like a run is.
+const ReportFilePrefix = "sandbox-audit."
+
+// before reports whether a transcript timestamp falls before the window. A
+// transcript's mtime only says its last line is recent: a session resumed today
+// still holds last month's events. A line with no parsable timestamp is kept.
+func before(ts string, since time.Time) bool {
+	t, err := time.Parse(time.RFC3339Nano, ts)
+	return err == nil && t.Before(since)
 }
 
 // resultText flattens a tool result's content, which is a string or a list of

@@ -165,8 +165,11 @@ reads as it does:
     them. An EPERM is found by **the line's shape**, not the exit status — `git push … | tail` exits 0
     whatever push did, and a `grep` over docs that quote the error exits 1 — so a backticked, table,
     diff, comment or numbered-listing line is a file being read, not a command failing. An override is
-    **preemptive** when no block preceded it in its transcript. Its own runs are skipped, or each scan
-    would re-count the last one's report. Read-only; the `sandbox-audit` skill holds the judgement.
+    **preemptive** when no block had preceded it in its transcript by the time it was *called* — calls issued
+    in one turn return in any order. The window is each event's own timestamp, the file's mtime only a
+    prefilter: a session resumed today still holds last month's events. Its own runs are skipped, and so
+    are queries of the report the skill saves (`sandbox-audit.*`), or each scan would re-count the last
+    one's output. Read-only; the `sandbox-audit` skill holds the judgement.
   - `findings/` (M4): the review-run arithmetic — validate, similarity, reconcile, group, report.
     Records are an **order-preserving `Record`**, not a struct: `reconciled.jsonl` and `final.jsonl`
     re-serialize wholesale, and a struct would silently drop `fix`, `also` or anything a reviewer
@@ -272,9 +275,11 @@ reads as it does:
   needs **no ignore rule of its own** — `.mkit/*` already covers it, and a second rule would be a
   second thing to keep true.
 - `~/.mkit/` — the declared home for state outside a repo, overridable with `MKIT_HOME` (the tests
-  set it so a developer's real state cannot affect a run). **Empty today**: its two files,
-  `bootstrap.state` and `bootstrap.disabled`, went with the hook in 0.15.0. It keeps its definition
-  because it is where the binary's user-scoped state will land, and `mkit facts` still probes it so
+  set it so a developer's real state cannot affect a run). **The binary writes nothing there today**:
+  its two files, `bootstrap.state` and `bootstrap.disabled`, went with the hook in 0.15.0. The one
+  file in it is `sandbox-audit.md`, the `sandbox-audit` skill's ledger, written by the agent rather
+  than by `mkit`. It keeps its definition because it is where the binary's user-scoped state will
+  land, and `mkit facts` still probes it so
   an unwritable one is a starting fact rather than a later surprise. **Not `~/.claude/mkit/`**: that
   region is sandbox-*protected*, where an allowlist entry is inert, so it was a path no remedy could
   point at; here, one `permissions.additionalDirectories` entry works.

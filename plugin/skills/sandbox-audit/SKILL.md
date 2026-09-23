@@ -24,7 +24,7 @@ References: `../_shared/references/output-discipline.md` (bounded output, where 
 - **Never writes a settings file.** `~/.claude/settings.json` and every `.claude/settings*.json` are
   sandbox-protected, and a changed permission is the user's decision to make, file by file. The output is a
   paste-ready diff.
-- Writes one file: its own ledger, `~/.mkit/sandbox-audit.md` (step 5) — the decisions a later run must not
+- Writes one file: its own ledger, `${MKIT_HOME:-~/.mkit}/sandbox-audit.md` (step 5) — the decisions a later run must not
   re-litigate.
 
 ## Preconditions
@@ -56,7 +56,7 @@ transcript is unreadable (`transcripts=0` with `unreadable` above 0), that is a 
 paths and stop. Otherwise carry on, but list the unreadable paths at the top of the report, call every
 count a **lower bound**, and never present a finding's absence as proof it did not happen.
 
-Read `~/.mkit/sandbox-audit.md` if it exists: the last run's date, counts, and the **stay-blocked** and
+Read `${MKIT_HOME:-~/.mkit}/sandbox-audit.md` if it exists: the last run's date, counts, and the **stay-blocked** and
 **applied** lists. Its absence is the ordinary first run, never mentioned.
 
 ## Workflow
@@ -74,6 +74,8 @@ f=$(mktemp "${TMPDIR:?}/sandbox-audit.XXXXXX") && mkit audit sessions --days <N>
 Carry the printed path as a literal into every later call — a shell variable does not survive to the next
 one — query the file with a short script, never by reading it whole, and `rm` it when the report is done.
 `mktemp` with an explicit template under `$TMPDIR` is what keeps two concurrent runs from sharing a file.
+Keep the `sandbox-audit.` name: the command skips any call that names it, which is what stops the next
+audit counting these queries' output — EPERM lines, quoted — as fresh sandbox blocks.
 
 `projects[].paths` is every working directory a project's sessions ran in — a checkout, a linked
 worktree, or a subdirectory of either. Resolve each to its root with
@@ -148,7 +150,7 @@ Then ask which changes the user is taking. They paste them; this skill does not.
 
 ### 5. Update the ledger
 
-After the user answers, write `~/.mkit/sandbox-audit.md` — overwrite it whole, it is a snapshot, not a log:
+After the user answers, write `${MKIT_HOME:-~/.mkit}/sandbox-audit.md` — overwrite it whole, it is a snapshot, not a log:
 
 ```markdown
 # sandbox-audit ledger
@@ -165,5 +167,5 @@ counts: sandbox_blocks=… overrides=… overrides_preemptive=… overrides_read
 - <change> — <user's reason, if given> (<date>)
 ```
 
-Carry every earlier entry forward; add this run's. If `~/.mkit` is not writable, say so with the remedy
+Carry every earlier entry forward; add this run's. If that directory is not writable, say so with the remedy
 `mkit doctor` reports, print the ledger instead, and finish — the audit itself is complete without it.

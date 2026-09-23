@@ -63,7 +63,13 @@ func denials(text string) []string {
 	for _, m := range reViolations.FindAllStringSubmatch(text, -1) {
 		for _, line := range strings.Split(m[1], "\n") {
 			if d := reDenyLine.FindStringSubmatch(strings.TrimSpace(line)); d != nil {
-				out = append(out, d[1]+" "+normalize(d[2]))
+				target := d[2]
+				// A host is exact: normalizing api1234.example:8443 to api#.example:#
+				// would merge hosts and hand the skill an allowlist entry that is none.
+				if !strings.HasPrefix(d[1], "network") {
+					target = normalize(target)
+				}
+				out = append(out, d[1]+" "+target)
 			}
 		}
 	}
@@ -222,7 +228,7 @@ func isReadOnly(command string) bool {
 		if f := strings.Fields(stage); f[0] == "cd" {
 			continue
 		}
-		if !readOnly[head(stage)] || reWritingFlag.MatchString(rePrelude.ReplaceAllString(stage, "")) {
+		if !readOnly[head(stage)] || reWritingFlag.MatchString(bare(stage)) {
 			return false
 		}
 	}
@@ -234,11 +240,21 @@ var (
 	reSedN    = regexp.MustCompile(`^sed\s+-n\b`)
 )
 
+// bare is a command with its prelude dropped and its binary named by basename,
+// arguments kept: the form a per-tool flag check reads, so `/usr/bin/find .
+// -delete` is checked as the `find` that head() already called it.
+func bare(command string) string {
+	c := rePrelude.ReplaceAllString(strings.TrimSpace(command), "")
+	return reBinDir.ReplaceAllString(c, "")
+}
+
+var reBinDir = regexp.MustCompile(`^\S*/`)
+
 // head reduces a command to what it runs: the leading `cd …&&`, `export …;` and
 // `VAR=value` prefixes dropped, the binary's basename, and — for a verb tool —
 // its subcommand, skipping `git -C <path>`.
 func head(command string) string {
-	c := rePrelude.ReplaceAllString(strings.TrimSpace(command), "")
+	c := bare(command)
 	if reSedN.MatchString(c) {
 		return "sed -n"
 	}

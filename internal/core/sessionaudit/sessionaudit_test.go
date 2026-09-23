@@ -16,6 +16,7 @@ type turn struct {
 	input   map[string]any
 	result  any // string, or []map[string]any content blocks
 	isError bool
+	ago     time.Duration // how long before now the call was made
 }
 
 func writeTranscript(t *testing.T, home, rel string, age time.Duration, turns ...turn) {
@@ -27,9 +28,12 @@ func writeTranscript(t *testing.T, home, rel string, age time.Duration, turns ..
 	var b strings.Builder
 	for i, tu := range turns {
 		id := "toolu_" + string(rune('a'+i))
-		use := map[string]any{"type": "assistant", "timestamp": "2026-09-20T10:00:00Z", "message": map[string]any{
+		// Relative to now, not a fixed date: the window is, and a fixed date
+		// would age out of it.
+		at := time.Now().Add(-age - tu.ago).UTC()
+		use := map[string]any{"type": "assistant", "timestamp": at.Format(time.RFC3339), "message": map[string]any{
 			"content": []any{map[string]any{"type": "tool_use", "id": id, "name": tu.tool, "input": tu.input}}}}
-		res := map[string]any{"type": "user", "timestamp": "2026-09-20T10:00:01Z", "message": map[string]any{
+		res := map[string]any{"type": "user", "timestamp": at.Add(time.Second).Format(time.RFC3339), "message": map[string]any{
 			"content": []any{map[string]any{"type": "tool_result", "tool_use_id": id, "content": tu.result, "is_error": tu.isError}}}}
 		for _, l := range []any{use, res} {
 			raw, err := json.Marshal(l)
@@ -215,11 +219,82 @@ func TestOwnReportIsNotReadBack(t *testing.T) {
 	}
 }
 
+// The skill queries the JSON report it saved; that query's output quotes EPERM
+// lines too, and counting them would add phantom blocks on every run.
+func TestQueriesOfTheSavedReportAreNotReadBack(t *testing.T) {
+	home := t.TempDir()
+	writeTranscript(t, home, "-p-app/s1.jsonl", 0,
+		turn{tool: "Bash", input: bash(`jq -r '.block_targets[].key' /t/sandbox-audit.Ab12Cd`, false),
+			result: "mkdir: ~/x: Operation not permitted"})
+	if rep := scan(t, home); len(rep.Events) != 0 {
+		t.Errorf("events = %v, want none", kinds(rep.Events))
+	}
+}
+
+// A transcript's mtime is its last line: a session resumed today still holds
+// events from before the window, and those are not this window's.
+func TestEventsOlderThanTheWindowAreDropped(t *testing.T) {
+	home := t.TempDir()
+	block := func(ago time.Duration) turn {
+		return turn{tool: "Bash", input: bash("mkdir /x", false), result: "mkdir: /x: Operation not permitted", ago: ago}
+	}
+	writeTranscript(t, home, "-p-app/s1.jsonl", 0, block(30*24*time.Hour), block(0))
+	rep := scan(t, home)
+	if rep.Counts.SandboxBlocks != 1 {
+		t.Errorf("sandbox_blocks = %d, want 1 (the 30-day-old event is outside the window)", rep.Counts.SandboxBlocks)
+	}
+}
+
+// Calls issued together return in any order; an override requested alongside a
+// call that went on to be blocked was still requested before any block.
+func TestPreemptiveIsDecidedWhenTheCallIsMade(t *testing.T) {
+	home := t.TempDir()
+	path := filepath.Join(home, "projects", "-p-app", "s1.jsonl")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ts := time.Now().UTC().Format(time.RFC3339)
+	lines := []map[string]any{
+		{"timestamp": ts, "message": map[string]any{"content": []any{
+			map[string]any{"type": "tool_use", "id": "a", "name": "Bash", "input": bash("mkdir /x", false)},
+			map[string]any{"type": "tool_use", "id": "b", "name": "Bash", "input": bash("mkdir /y", true)},
+		}}},
+		{"timestamp": ts, "message": map[string]any{"content": []any{
+			map[string]any{"type": "tool_result", "tool_use_id": "a", "content": "mkdir: /x: Operation not permitted"},
+			map[string]any{"type": "tool_result", "tool_use_id": "b", "content": ""},
+		}}},
+	}
+	var b strings.Builder
+	for _, l := range lines {
+		raw, err := json.Marshal(l)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b.Write(raw)
+		b.WriteByte('\n')
+	}
+	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rep := scan(t, home)
+	if rep.Counts.SandboxBlocks != 1 || rep.Counts.OverridesPreemptive != 1 {
+		t.Errorf("counts = %+v, want one block and one preemptive override", rep.Counts)
+	}
+}
+
+func TestHostTargetsAreExact(t *testing.T) {
+	text := "<sandbox_violations>\ndeny network-outbound api1234.example:8443\n</sandbox_violations>"
+	if got := targets(text); len(got) != 1 || got[0] != "network-outbound api1234.example:8443" {
+		t.Errorf("targets = %v, want the host and port verbatim", got)
+	}
+}
+
 func TestHead(t *testing.T) {
 	for cmd, want := range map[string]string{
 		"cd /x && git -C /y push -u origin b": "git push",
 		"export A=1; FOO=bar bun run test":    "bun run",
 		"/usr/bin/git status --short":         "git status",
+		"/usr/bin/sed -n '1p' f":              "sed -n",
 		"sed -n '1,5p' f":                     "sed -n",
 		"python3 - <<'EOF'":                   "python3",
 		"gh --repo o/r pr view":               "gh",
@@ -268,6 +343,10 @@ func TestReadOnlyMeansOneReadOnlyCommand(t *testing.T) {
 		"git diff --output=patch":          false,
 		"grep -rin foo . | head":           true,
 		"grep -i foo f":                    true,
+		"/usr/bin/find . -delete":          false,
+		"/usr/bin/sed -i '' 's/a/b/' f":    false,
+		"/usr/bin/git diff --output=p":     false,
+		"/usr/bin/find . -name x":          true,
 	} {
 		if got := isReadOnly(cmd); got != want {
 			t.Errorf("isReadOnly(%q) = %v, want %v", cmd, got, want)
