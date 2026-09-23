@@ -119,21 +119,25 @@ a config nothing reads.
   `mkit facts` reported `config=` and `config_state=` but no pinned *value*. Of the five sections
   M7's `init` wrote, `spec.*` gets its consumer at M8 and `gate.commands` got one at M5 (both
   below); the other three were written and read by nobody. Four items, none of them a port, all
-  independent of the port line — **three are done**: config validation (issue #19), `[cleanup]
-  keep` (issue #20, a sixth section), and `commit.scopes` + `review.reviewers` (issue #18).
-  `merge.style` → `finish` is what is left. `commit` and `pr` are the first *skills* to call
+  independent of the port line — **all four are done**: config validation (issue #19), `[cleanup]
+  keep` (issue #20, a sixth section), `commit.scopes` + `review.reviewers` (issue #18), and
+  `merge.style` → `finish` (issue #17). `commit`, `pr` and `finish` are the first *skills* to call
   `repo profile`, and `mkit branch scan` the first command outside `repo profile` and
   `gate detect` to read a pinned value:
 
-  - **`merge.style` → `finish`.** `finish` step 4 runs
-    `gh repo view --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed` and, when more
-    than one is allowed, **asks the user with squash as the suggested default** — on every run, in
-    every repo, including ones whose answer has never changed. The pinned value is exactly the
-    thing that question is asking for. Two pieces of real content beyond the lookup: a pinned style
-    the remote does not allow is **reported, never silently substituted** (a pinned value cheap to
-    verify gets verified — invariant 13), and `wt merge` carries the user's own squash/rebase
-    config, so the skill must decide whether a pinned style means passing `--no-squash` / `--no-ff`
-    or leaving worktrunk's own config alone.
+  - ~~**`merge.style` → `finish`.**~~ **Done** (issue #17). `finish` step 4 opens with `mkit repo profile --json` and
+    takes `merge_style` on `pinned` or `discovered` instead of asking; `unavailable`, or a binary
+    too old to know `repo`, falls through to exactly the old question — the profile is **optional
+    enrichment, never a prerequisite** (invariant 8), so it is not probed at step 0 and is not
+    mentioned when it has nothing to say. A pinned style the remote does not allow is **reported,
+    never silently substituted** (invariant 13). The `wt merge` question is decided in
+    `_shared/references/worktree.md`, "A pinned merge style vs. worktrunk's own config": the pin
+    wins wherever a flag can carry it (`rebase` → `--no-squash`, `merge` → `--no-squash --no-ff`),
+    and `wt merge`'s flags being **negative only** — with `--config-set` swallowing a mistyped key
+    silently, so it is no forcing device — means a repo pinned to `squash` against a user's
+    `merge.squash = false` is reported rather than forced. `cleanup` was checked and left alone: a
+    pinned style says *why* a merged branch's SHAs differ, never *whether* the PR merged, so
+    `merged-pr` still needs the same `gh` call and the same `headRefOid` check.
   - ~~**`commit.scopes` + `review.reviewers` → `commit` and `pr`.**~~ **Done** (issue #18). Both
     skills read `mkit repo profile --json` in their step-0 block and name a pinned value as pinned
     (workflow-contract rule 3); `pr` step 6 takes a pinned reviewer list **instead of** the
@@ -392,9 +396,9 @@ because git cannot re-include a file whose parent directory is excluded.
   `repoconfig.ShadowedRemedy` for a shadowed config. `doctor` and `facts` both read them; neither
   words its own.
 **What it deliberately did not do, and now needs picking up:** it landed the config *surface* and
-no consumer. `spec.*` gets one at M8; `gate.commands` got one at M5; `commit.scopes` and
-`review.reviewers` got theirs at issue #18, and `merge.style` is the one left — see "The config has
-no consumers" above, which is where the rest of that gap is tracked.
+no consumer. `spec.*` gets one at M8; `gate.commands` got one at M5; `merge.style`,
+`commit.scopes` and `review.reviewers` all got theirs from the config-consumers item above, which
+is where that gap was tracked and closed.
 
 **Done — all four met:** the committed config path is decided and recorded; `mkit doctor` names an
 unwritable `~/.mkit/` without failing, with a remedy naming **both** halves (create, then grant —
