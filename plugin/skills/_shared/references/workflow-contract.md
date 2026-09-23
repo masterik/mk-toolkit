@@ -8,7 +8,8 @@ brainstorm → spec → implement → commit → review → pr ──┐
                                                         ├─→ (merged)
                                               finish ──┘
 
-cleanup   repo-wide gardening, not a step in the line
+cleanup         repo-wide gardening, not a step in the line
+sandbox-audit   user-wide: past sessions' sandbox and gate events → a proposed settings diff
 ```
 
 The arrows are the **common** path, not a required one. Each step is **entry-capable**: it runs as
