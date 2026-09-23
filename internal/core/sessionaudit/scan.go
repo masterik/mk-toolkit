@@ -88,7 +88,9 @@ func Scan(opts Options) (*Report, error) {
 			}
 			return nil
 		}
-		if d.IsDir() || !strings.HasSuffix(path, ".jsonl") {
+		// A symlink is skipped, not followed: a link under projects/ would make
+		// the audit read outside the Claude home.
+		if d.IsDir() || d.Type()&fs.ModeSymlink != 0 || !strings.HasSuffix(path, ".jsonl") {
 			return nil
 		}
 		fi, err := d.Info()
@@ -248,9 +250,13 @@ func resultEvents(base Event, ts string, c call, text string, isError, blockedBe
 		o := e
 		o.Kind = KindOverride
 		o.Preemptive = !blockedBefore
-		o.ReadOnly = readOnly[o.Head]
+		o.ReadOnly = isReadOnly(c.input.Command)
 		o.Reason = reason
 		switch {
+		case kind == KindSandboxBlock:
+			// Outside the sandbox an EPERM is the command's own failure — a
+			// protected file, a missing grant — not the sandbox's.
+			o.Outcome = "error"
 		case kind != "":
 			o.Outcome = string(kind)
 		case isError:

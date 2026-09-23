@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -29,6 +30,9 @@ func newAuditSessionsCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if days <= 0 {
 				return usageErr("--days must be positive")
+			}
+			if top < 0 {
+				return usageErr("--top must be 0 (all) or positive")
 			}
 			claude, _ := storage.ByName("claude")
 			rep, err := sessionaudit.Scan(sessionaudit.Options{Home: claude.ResolveHome(), Days: days})
@@ -66,9 +70,19 @@ func renderAudit(out io.Writer, r *sessionaudit.Report, top int) {
 		_, _ = fmt.Fprintf(out, "unreadable=%d\n", len(r.Unreadable))
 	}
 
+	// Every outcome the scan produced, the common ones first, so a new one is
+	// printed rather than silently dropped.
 	var outcomes []string
-	for _, k := range []string{"ok", "error", "automode_deny", "user_deny", "rule_deny"} {
-		if n := r.OverrideOutcomes[k]; n > 0 {
+	seen := map[string]bool{}
+	keys := []string{"ok", "error", "automode_deny", "user_deny", "rule_deny"}
+	rest := make([]string, 0, len(r.OverrideOutcomes))
+	for k := range r.OverrideOutcomes {
+		rest = append(rest, k)
+	}
+	sort.Strings(rest)
+	for _, k := range append(keys, rest...) {
+		if n := r.OverrideOutcomes[k]; n > 0 && !seen[k] {
+			seen[k] = true
 			outcomes = append(outcomes, fmt.Sprintf("%s:%d", k, n))
 		}
 	}

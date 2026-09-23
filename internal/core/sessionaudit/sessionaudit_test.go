@@ -123,6 +123,7 @@ func TestQuotingAMarkerIsNotHittingIt(t *testing.T) {
 		"42-# with `mkstemp failed on /z: Operation not permitted`",
 		"The sentence " + autoModeDenial,
 		"<sandbox_violations> is where the host is named.",
+		"<sandbox_violations>\n(none)\n</sandbox_violations>",
 	}, "\n")
 	writeTranscript(t, home, "-p-app/s1.jsonl", 0,
 		turn{tool: "Bash", input: bash("cat docs/adr/0002.md", false), result: doc},
@@ -130,17 +131,10 @@ func TestQuotingAMarkerIsNotHittingIt(t *testing.T) {
 		turn{tool: "Read", input: map[string]any{"file_path": "docs/adr/0002.md"}, result: doc},
 		turn{tool: "AskUserQuestion", input: map[string]any{}, result: "The user doesn't want to proceed with this tool use."},
 	)
-	rep := scan(t, home)
-	// The one survivor is the `<sandbox_violations>` mention in Bash output: a
-	// block that names no target. It is reported as (unnamed) rather than
-	// dropped, because a real block with an empty violations list looks the same.
-	for _, e := range rep.Events {
-		if e.Kind != KindSandboxBlock || len(e.Targets) != 0 {
-			t.Errorf("unexpected event %+v", e)
-		}
-	}
-	if rep.Counts.AutoModeDenials != 0 || rep.Counts.UserDenials != 0 {
-		t.Errorf("counts = %+v", rep.Counts)
+	// Not even the bare tag, nor a block naming nothing: evidence is a
+	// `deny` entry, and a doc has none.
+	if rep := scan(t, home); len(rep.Events) != 0 {
+		t.Errorf("events = %v, want none", kinds(rep.Events))
 	}
 }
 
@@ -240,7 +234,82 @@ func TestMissingRootIsAnError(t *testing.T) {
 	if _, err := Scan(Options{Home: t.TempDir(), Days: 14}); err == nil {
 		t.Error("want an error for a home with no projects directory")
 	}
-	if _, err := Scan(Options{Home: t.TempDir(), Days: 0}); err == nil {
+	withProjects := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(withProjects, "projects"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// The home is valid, so only the window can be what is rejected.
+	if _, err := Scan(Options{Home: withProjects, Days: 0}); err == nil {
 		t.Error("want an error for a non-positive window")
+	}
+}
+
+func TestReadOnlyMeansOneReadOnlyCommand(t *testing.T) {
+	for cmd, want := range map[string]bool{
+		"cat README.md":                 true,
+		"cd /r && sed -n '1,5p' f":      true,
+		"cat in > out":                  false,
+		"git status && rm -rf x":        false,
+		"cat f | tee g":                 false,
+		"echo $(rm x)":                  false,
+		"grep -rn foo . ; touch marker": false,
+		"bun run test":                  false,
+	} {
+		if got := isReadOnly(cmd); got != want {
+			t.Errorf("isReadOnly(%q) = %v, want %v", cmd, got, want)
+		}
+	}
+}
+
+func TestAnUnsandboxedEPERMIsTheCommandsOwnError(t *testing.T) {
+	home := t.TempDir()
+	writeTranscript(t, home, "-p-app/s1.jsonl", 0,
+		turn{tool: "Bash", input: bash("git push -u origin b", true),
+			result: "error: could not lock config file .git/config: Operation not permitted", isError: true})
+	rep := scan(t, home)
+	if len(rep.Events) != 1 || rep.Events[0].Kind != KindOverride || rep.Events[0].Outcome != "error" {
+		t.Fatalf("events = %+v, want one override with outcome error", rep.Events)
+	}
+	if rep.Counts.SandboxBlocks != 0 {
+		t.Errorf("sandbox_blocks = %d, want 0", rep.Counts.SandboxBlocks)
+	}
+}
+
+func TestNormalizedTargetsKeepTheirLabels(t *testing.T) {
+	got := normalize("mktemp: mkstemp failed on /var/folders/4t/kvabc/T/mkitfp.Xy12: Operation not permitted")
+	if !strings.Contains(got, "$DARWIN_TMPDIR/…") {
+		t.Errorf("normalize = %q, want the $DARWIN_TMPDIR label kept", got)
+	}
+}
+
+func TestSymlinkedTranscriptsAreNotFollowed(t *testing.T) {
+	home := t.TempDir()
+	outside := t.TempDir()
+	writeTranscript(t, outside, "-x/secret.jsonl", 0,
+		turn{tool: "Bash", input: bash("cat /etc/hosts", true), result: "ok"})
+	if err := os.MkdirAll(filepath.Join(home, "projects", "-p-app"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "projects", "-x", "secret.jsonl"),
+		filepath.Join(home, "projects", "-p-app", "link.jsonl")); err != nil {
+		t.Fatal(err)
+	}
+	rep := scan(t, home)
+	if rep.Transcripts != 0 || len(rep.Events) != 0 {
+		t.Errorf("transcripts=%d events=%d, want the symlink skipped", rep.Transcripts, len(rep.Events))
+	}
+}
+
+func TestAnEmptyScanHasAnEmptyProjectArray(t *testing.T) {
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, "projects"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(scan(t, home))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"projects":[]`) {
+		t.Errorf("json = %s, want projects as []", raw)
 	}
 }

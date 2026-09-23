@@ -120,6 +120,9 @@ func (r *Report) aggregate() {
 	r.BlockTargets = tgts.buckets()
 	r.BlockHeads = bheads.buckets()
 	r.OverrideHeads = oheads.buckets()
+	// An array, never null: an empty scan still has a project list, just an
+	// empty one, and a consumer iterating it should not have to check.
+	r.Projects = []ProjectCounts{}
 	for _, p := range sortedKeys(projects) {
 		r.Projects = append(r.Projects, ProjectCounts{Project: p, Paths: sortedKeys(paths[p]), Counts: *projects[p]})
 	}

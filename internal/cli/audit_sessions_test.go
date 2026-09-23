@@ -74,9 +74,11 @@ func TestAuditSessionsJSONOmitsEventsUnlessAsked(t *testing.T) {
 	}
 }
 
-func TestAuditSessionsRejectsANonPositiveWindow(t *testing.T) {
+func TestAuditSessionsRejectsBadLimits(t *testing.T) {
 	auditHome(t)
-	if res := run(t, "audit", "sessions", "--days", "0"); res.code != 2 {
-		t.Errorf("exit %d, want 2", res.code)
+	for _, args := range [][]string{{"--days", "0"}, {"--top", "-1"}} {
+		if res := run(t, append([]string{"audit", "sessions"}, args...)...); res.code != 2 {
+			t.Errorf("%v: exit %d, want 2", args, res.code)
+		}
 	}
 }

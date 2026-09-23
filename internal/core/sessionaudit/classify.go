@@ -39,10 +39,9 @@ const (
 // is where Claude Code puts them: a refusal is the whole result, and a result
 // that merely contains the sentence is output — a `cat` of this package, say.
 const (
-	markerAutoMode   = "Permission for this action was denied by the Claude Code auto mode classifier"
-	markerUserDeny   = "The user doesn't want to proceed"
-	markerViolations = "<sandbox_violations>"
-	markerEPERM      = "Operation not permitted"
+	markerAutoMode = "Permission for this action was denied by the Claude Code auto mode classifier"
+	markerUserDeny = "The user doesn't want to proceed"
+	markerEPERM    = "Operation not permitted"
 )
 
 var (
@@ -54,6 +53,22 @@ var (
 	// `[Errno 1]`, as in `mkdir: /x: Operation not permitted`.
 	reEPERMLine = regexp.MustCompile(`[:\]]\s*` + markerEPERM)
 )
+
+// denials is the `deny <operation> <target>` entries of a complete
+// `<sandbox_violations>` block, normalized. A block is only evidence when it
+// names something: the bare tag in a result is output that mentions it — a
+// `cat` of a doc — and a block with no entry names nothing to act on.
+func denials(text string) []string {
+	var out []string
+	for _, m := range reViolations.FindAllStringSubmatch(text, -1) {
+		for _, line := range strings.Split(m[1], "\n") {
+			if d := reDenyLine.FindStringSubmatch(strings.TrimSpace(line)); d != nil {
+				out = append(out, d[1]+" "+normalize(d[2]))
+			}
+		}
+	}
+	return out
+}
 
 // epermLines is the result's lines that report an EPERM, as opposed to lines
 // that mention one. The exit status cannot tell them apart — `git push … | tail`
@@ -94,7 +109,7 @@ func classify(tool, text string) (Kind, string) {
 		return KindUserDeny, ""
 	case reRuleDeny.MatchString(lead):
 		return KindRuleDeny, clip(reRuleDeny.FindString(lead), 200)
-	case tool == "Bash" && strings.Contains(text, markerViolations):
+	case tool == "Bash" && len(denials(text)) > 0:
 		return KindSandboxBlock, ""
 	case tool == "Bash" && len(epermLines(text)) > 0:
 		return KindSandboxBlock, ""
@@ -116,15 +131,11 @@ func targets(text string) []string {
 			out = append(out, s)
 		}
 	}
-	if m := reViolations.FindStringSubmatch(text); m != nil {
-		for _, line := range strings.Split(m[1], "\n") {
-			if d := reDenyLine.FindStringSubmatch(strings.TrimSpace(line)); d != nil {
-				add(d[1] + " " + normalize(d[2]))
-			}
+	if ds := denials(text); len(ds) > 0 {
+		for _, d := range ds {
+			add(d)
 		}
-		if len(out) > 0 {
-			return out
-		}
+		return out
 	}
 	for _, line := range epermLines(text) {
 		add(normalize(clip(line, 160)))
@@ -137,7 +148,7 @@ var normalizers = []struct {
 	with string
 }{
 	// The Darwin per-user temp dir: its two random components differ per user.
-	{regexp.MustCompile(`/var/folders/[^/\s]+/[^/\s]+/T/[^\s'":]*`), "$DARWIN_TMPDIR/…"},
+	{regexp.MustCompile(`/var/folders/[^/\s]+/[^/\s]+/T/[^\s'":]*`), "$$DARWIN_TMPDIR/…"},
 	// One worktree of many; the denial is the same whichever it is.
 	{regexp.MustCompile(`\.claude/worktrees/[^/\s'":]+`), ".claude/worktrees/*"},
 	{regexp.MustCompile(`\.git/worktrees/[^/\s'":]+`), ".git/worktrees/*"},
@@ -174,6 +185,43 @@ var verbTools = map[string]bool{
 	"yarn": true, "dotnet": true, "docker": true, "brew": true, "wt": true,
 	"mkit": true, "just": true, "make": true, "cargo": true, "kubectl": true,
 	"az": true, "coderabbit": true, "codex": true,
+}
+
+// reWrites finds what can write or run something unseen whatever the heads say:
+// an output redirection, a substitution, a background job. `cat a > b` writes;
+// `echo $(rm x)` deletes.
+var reWrites = regexp.MustCompile("[>`]|\\$\\(|(?:^|[^&])&(?:[^&]|$)")
+
+// reHarmless is the redirections that only move a read's own output around:
+// stderr onto stdout, or into /dev/null. Nearly every read an agent runs ends
+// in one, and counting it as a write left almost no read-only override.
+var reHarmless = regexp.MustCompile(`\d?>&\d|\d?>\s*/dev/null`)
+
+// reStages splits a command line into the commands it runs.
+var reStages = regexp.MustCompile(`\|\||&&|[|;\n]`)
+
+// isReadOnly reports whether a command only reads: every command in it —
+// pipeline stages and `;`/`&&`/`||` sequences alike — is a read-only one, and
+// nothing but a harmless redirection writes. `cat a; echo ---; cat b` reads;
+// `cat f | tee g` and `git status && rm -rf x` do not.
+func isReadOnly(command string) bool {
+	c := reHarmless.ReplaceAllString(strings.TrimSpace(command), "")
+	if c == "" || reWrites.MatchString(c) {
+		return false
+	}
+	for _, stage := range reStages.Split(c, -1) {
+		stage = strings.TrimSpace(stage)
+		if stage == "" {
+			continue
+		}
+		if f := strings.Fields(stage); f[0] == "cd" {
+			continue
+		}
+		if !readOnly[head(stage)] {
+			return false
+		}
+	}
+	return true
 }
 
 var (
