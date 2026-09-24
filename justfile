@@ -19,3 +19,7 @@ lint:
 # exercise the front-end contract, e.g. `just run version --json`
 run *ARGS:
 	go run ./cmd/mkit {{ARGS}}
+
+# bump, commit, tag and push a release after a confirmation — auto (default), patch|minor|major or X.Y.Z
+release BUMP="auto":
+	tools/release.sh {{BUMP}}
