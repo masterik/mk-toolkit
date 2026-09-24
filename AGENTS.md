@@ -55,8 +55,15 @@ just run facts commit --no-run   # every starting fact, without opening a run di
 just run audit sessions --days 14 # sandbox/permission-gate events across every session
 ```
 
-Release is tag-driven: push `vX.Y.Z` → GoReleaser builds darwin × amd64/arm64 and commits
-the Homebrew **cask** to `masterik/homebrew-tap`. `homebrew_casks`, not `brews` (deprecated in
+Release is tag-driven, and `just release` (`tools/release.sh`) is the whole of it: it picks the
+version (auto: breaking or `feat` → minor pre-1.0, else patch; or pass `patch|minor|major|X.Y.Z`),
+shows it with the PRs since the last tag, and **asks before it pushes** — human-run, it refuses
+without a terminal. Then it bumps `plugin.json`, commits `chore(release): X.Y.Z`, tags and pushes. The tag →
+GoReleaser builds darwin × amd64/arm64, writes the GitHub Release notes from merged PR titles
+(`github-native` — **the Release is the changelog**; `CHANGELOG.md` is frozen at 0.19.0), and
+commits the Homebrew **cask** to `masterik/homebrew-tap`. Releases are lockstep: a plugin-only
+change still gets a tag, so every `plugin.json` version has a Release — the rebuilt binary
+differs only in its version string. `homebrew_casks`, not `brews` (deprecated in
 GoReleaser v2).
 
 ## Binary invariants
@@ -201,8 +208,9 @@ reads as it does:
   one toggles selection, the other edits strings.
 - `internal/buildinfo/` — version/commit/date, injected by `-X` ldflags at release.
 - `tools/` — shell that is not part of the plugin payload; staging for a port, and the home
-  for one-shot maintenance scripts. Empty today — `purge-journal-state.sh` and
-  `migrate-state-layout.sh` both did their jobs (every machine ran them) and were deleted.
+  for one-shot and maintainer scripts. `release.sh` is the one resident (`just release`);
+  `purge-journal-state.sh` and `migrate-state-layout.sh` both did their jobs (every machine ran
+  them) and were deleted.
 
 ### The plugin payload
 - `plugin/` — the plugin payload, shipped from the **GitHub marketplace**
