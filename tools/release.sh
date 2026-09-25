@@ -14,6 +14,13 @@ manifest=plugin/.claude-plugin/plugin.json
 
 die() { echo "release: $*" >&2; exit 1; }
 semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+# below A B: is version A strictly below version B (both X.Y.Z)
+below() {
+  local a1 a2 a3 b1 b2 b3
+  IFS=. read -r a1 a2 a3 <<<"$1"
+  IFS=. read -r b1 b2 b3 <<<"$2"
+  ((a1 < b1 || (a1 == b1 && (a2 < b2 || (a2 == b2 && a3 < b3)))))
+}
 
 cd "$(git rev-parse --show-toplevel)"
 [[ -t 0 ]] || die "needs a terminal to confirm on"
@@ -51,13 +58,16 @@ case $bump in
   patch) version="$major.$minor.$((patch + 1))" ;;
   *)
     [[ $bump =~ $semver ]] || die "bump must be auto, patch, minor, major or X.Y.Z, not '$bump'"
-    IFS=. read -r a b c <<<"$bump"
-    ((a > major || (a == major && (b > minor || (b == minor && c > patch))))) ||
-      die "$bump is not above $last"
+    below "${last#v}" "$bump" || die "$bump is not above $last"
     version=$bump
     ;;
 esac
 ! git rev-parse -q --verify "refs/tags/v$version" >/dev/null || die "tag v$version exists"
+# plugin.json can be ahead of the last tag (bumped by hand, never tagged); never release below it
+manifest_version=$(sed -nE 's/^  "version": "([^"]+)",$/\1/p' "$manifest")
+[[ $manifest_version =~ $semver ]] || die "cannot read the version in $manifest"
+! below "$version" "$manifest_version" ||
+  die "v$version is below $manifest's $manifest_version, which no tag released; run: just release $manifest_version"
 
 # `feat: 3, fix: 5, docs: 2` — what the version was decided from
 counts=$(sed -nE 's/^([a-z]+)(\([^)]*\))?!?:.*/\1/p' <<<"$subjects" |
@@ -73,7 +83,8 @@ read -r -p "release v$version and push to origin? [y/N] " answer
 sed -i '' -E "s/^(  \"version\": \")[^\"]+(\",)$/\1$version\2/" "$manifest"
 grep -q "\"version\": \"$version\"" "$manifest" || die "could not bump $manifest"
 git add "$manifest"
-git commit -q -m "chore(release): $version"
+# --allow-empty: releasing the version plugin.json already carries changes no file
+git commit -q --allow-empty -m "chore(release): $version"
 git tag -a "v$version" -m "v$version"
 git push --atomic origin main "v$version"
 echo "released v$version — notes: https://github.com/masterik/mk-toolkit/releases/tag/v$version"
