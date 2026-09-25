@@ -1,5 +1,9 @@
 # Changelog
 
+**Frozen at 0.19.0.** Later versions' notes are the
+[GitHub Releases](https://github.com/masterik/mk-toolkit/releases), generated from merged PR
+titles by GoReleaser (`changelog.use: github-native`). This file is kept for the history below.
+
 Reconstructed from git history — this project kept no changelog while the versions below
 were cut, so entries were derived from commit messages and `docs/`. Versions are the
 `plugin.json` manifest version, set by the `chore(plugin|release): …` commit that closes

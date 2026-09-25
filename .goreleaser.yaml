@@ -22,6 +22,12 @@ builds:
 archives:
   - formats: [tar.gz]
 
+# Release notes are the merged PRs' titles, via GitHub's generate-notes API — PRs merge with a
+# merge commit, so this is one line per PR rather than every review-fix commit. CHANGELOG.md is
+# frozen at 0.19.0; the GitHub Release is the changelog from then on.
+changelog:
+  use: github-native
+
 homebrew_casks:
   - name: mkit
     repository:
