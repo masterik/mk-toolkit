@@ -246,7 +246,7 @@ const (
 		"used whatever this says."
 	introGate = "The quality gate: the commands commit, review, pr and finish run before work " +
 		"integrates — lint, typecheck, vet, test, build. Each step comes from this repo's own " +
-		"task runner (justfile, Makefile, Taskfile, package.json scripts) where it defines one, " +
+		"task runner (justfile, Makefile, Taskfile, package.json scripts, deno tasks) where it defines one, " +
 		"otherwise the language's standard command. They are pinned as found, so every run uses " +
 		"the same commands; run `mkit init --force` to re-discover."
 	introCleanup = "The cleanup skill deletes branches and worktrees whose work has merged. " +
@@ -267,13 +267,25 @@ func rejected(cfg *repoconfig.Config, key string) string {
 	return ""
 }
 
+// provenanceDescriptions describe an option pick adds because its value is not
+// among the presets — a pinned `subject_max = 64`, say. Every option is described.
+var provenanceDescriptions = map[Provenance]string{
+	Pinned:     "the value the existing config pins",
+	Discovered: "what discovery found in this repo",
+	Default:    "the form's suggestion",
+}
+
 // pick applies pinned → discovered → form default to a Select, tagging the
-// winner's option. Values not already among the options are added.
+// winner's option. Values not already among the options are added. Pinned is
+// tagged first, so a pinned value discovery also finds reads as pinned — the
+// reason it is pre-selected.
 func pick(q *Question, pinned, discovered, def string) {
 	tag := func(v string, p Provenance) {
 		for i := range q.Options {
 			if q.Options[i].Value == v {
-				if q.Options[i].Provenance == "" {
+				// A candidate (a remote's slug) is only a suggestion; being the
+				// pin or the discovered value is the stronger reason.
+				if pv := q.Options[i].Provenance; pv == "" || pv == Suggested {
 					q.Options[i].Provenance = p
 				}
 				return
@@ -284,13 +296,14 @@ func pick(q *Question, pinned, discovered, def string) {
 		for at > 0 && (q.Options[at-1].Value == DontPin || q.Options[at-1].Custom()) {
 			at--
 		}
-		q.Options = slices.Insert(q.Options, at, Option{Value: v, Label: v, Provenance: p})
-	}
-	if discovered != "" {
-		tag(discovered, Discovered)
+		q.Options = slices.Insert(q.Options, at, Option{Value: v, Label: v, Provenance: p,
+			Description: provenanceDescriptions[p]})
 	}
 	if pinned != "" {
 		tag(pinned, Pinned)
+	}
+	if discovered != "" {
+		tag(discovered, Discovered)
 	}
 	switch {
 	case pinned != "":
@@ -430,13 +443,6 @@ func specRef(in Input) Question {
 		disc = v.Value
 	}
 	pick(&q, in.Existing.Spec.Ref, disc, "")
-	// A discovered remote slug is re-tagged: it is what discovery answers, not
-	// merely a candidate.
-	for i := range q.Options {
-		if q.Options[i].Value == disc && disc != "" {
-			q.Options[i].Provenance = Discovered
-		}
-	}
 	return q
 }
 

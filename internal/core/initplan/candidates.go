@@ -29,8 +29,15 @@ func Gather(repo *gitrepo.Repo) Candidates {
 		c.Remotes = append(c.Remotes, Remote{Name: name, URL: repo.RemoteURL(name)})
 	}
 	c.Branches = repo.LocalBranches()
+	// Only a local branch is shown as always kept: a default branch known only
+	// from the remote's HEAD has nothing here for cleanup to delete, and listing
+	// it would present a branch the user cannot see.
 	if def := repo.DefaultBranch(); def != "unknown" {
-		c.Protected = branchscan.ProtectedSet(def, branchscan.Develop(repo, def), nil)
+		for _, b := range branchscan.ProtectedSet(def, branchscan.Develop(repo, def), nil) {
+			if slices.Contains(c.Branches, b) {
+				c.Protected = append(c.Protected, b)
+			}
+		}
 	}
 	c.Dirs = DirCandidates(repo)
 	return c

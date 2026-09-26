@@ -464,3 +464,28 @@ func TestGateReinitSuggestsWhatDiscoveryNowFinds(t *testing.T) {
 		t.Errorf("description %q does not name the suggestion", d)
 	}
 }
+
+// A pinned value discovery also finds is pre-selected because it is pinned, and
+// says so; an off-preset value pick adds is still described.
+func TestPickTagsThePinAndDescribesWhatItAdds(t *testing.T) {
+	p := Build(Input{
+		Existing: &repoconfig.Config{
+			Merge:  repoconfig.Merge{Style: "rebase"},
+			Commit: repoconfig.Commit{SubjectMax: intp(64)},
+			Spec:   repoconfig.Spec{Ref: "o/r"},
+		},
+		Discovered: &profile.Profile{
+			Merge: profile.Value{Value: "rebase", Source: profile.Discovered},
+			Spec:  profile.Spec{Ref: profile.Value{Value: "o/r", Source: profile.Discovered}},
+		},
+		Candidates: Candidates{Remotes: []Remote{{Name: "origin", URL: "git@github.com:o/r.git"}}},
+	})
+	for _, key := range []string{KeyMerge, KeySpecRef} {
+		if _, prov := selected(t, p, key); prov != Pinned {
+			t.Errorf("%s: pre-selection tagged %q, want pinned", key, prov)
+		}
+	}
+	if o := option(t, p, KeySubjectMax, "64"); o.Description == "" || o.Provenance != Pinned {
+		t.Errorf("added option %+v, want a described pin", o)
+	}
+}
