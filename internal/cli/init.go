@@ -4,13 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/masterik/mk-toolkit/internal/core/gitrepo"
+	"github.com/masterik/mk-toolkit/internal/core/initplan"
 	"github.com/masterik/mk-toolkit/internal/core/profile"
 	"github.com/masterik/mk-toolkit/internal/core/repoconfig"
 	tui "github.com/masterik/mk-toolkit/internal/tui/repoinit"
@@ -48,7 +47,13 @@ func newInitCmd() *cobra.Command {
 			"absent, and `mkit init` only removes repeated discovery. It writes nothing\n" +
 			"outside the repo, and is a no-op on a repo that already has a config — pass\n" +
 			"--force to rewrite one.\n\n" +
-			"Interactive on a terminal; every field is also a flag, so a skill can drive it.",
+			"On a terminal it opens a paged form (Gate, Spec, Commit, Review, Merge, Cleanup):\n" +
+			"every answer is a choice with a description, pre-selected from the pinned value,\n" +
+			"then the discovered one, then a form default (merge style `merge`, review mode\n" +
+			"`full`; everything else \"don't pin\"). It ends on the exact file it would write.\n" +
+			"--force opens the form on the existing config.\n\n" +
+			"Every field is also a flag, so a skill can drive it. Any flag, --yes, or no\n" +
+			"terminal means no form and no form default: only what was given is pinned.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts := FromContext(cmd)
 			repo, err := gitrepo.Open("")
@@ -85,11 +90,6 @@ func newInitCmd() *cobra.Command {
 				})
 			}
 
-			p, err := profile.Build(repo)
-			if err != nil {
-				return err
-			}
-
 			cfg := existing
 			if err := applyFlags(cfg, flagValues{
 				gate: gate, specStore: specStore, specRef: specRef,
@@ -104,11 +104,18 @@ func newInitCmd() *cobra.Command {
 				return err
 			}
 
-			// The TUI runs only when there is a terminal and the caller pinned
-			// nothing on the command line. Flags win: a skill driving this must
-			// never find an alt-screen in its pipe.
-			if opts.Interactive && !opts.Yes && cfg.IsZero() {
-				fields, save, err := tui.Run(initFields(p))
+			// The TUI runs only when there is a terminal and the caller gave no
+			// field on the command line. Flags win: a skill driving this must
+			// never find an alt-screen in its pipe. Whether a flag was *given* is
+			// the test, not whether cfg is zero, so `--force` opens the form on the
+			// existing config rather than skipping it.
+			if opts.Interactive && !opts.Yes && !fieldFlagGiven(cmd) {
+				plan := initplan.Build(initplan.Input{
+					Existing:   existing,
+					Discovered: profile.Discover(repo),
+					Candidates: initplan.Gather(repo),
+				})
+				answers, save, err := tui.Run(plan)
 				if err != nil {
 					return err
 				}
@@ -118,7 +125,7 @@ func newInitCmd() *cobra.Command {
 						Detail: "aborted — nothing written",
 					})
 				}
-				if err := applyFields(cfg, fields); err != nil {
+				if cfg, err = initplan.Apply(plan, answers); err != nil {
 					return err
 				}
 			}
@@ -252,106 +259,18 @@ func applyFlags(cfg *repoconfig.Config, f flagValues) error {
 	return nil
 }
 
-// initFields shows the discovered answer beside every field, so the form is a
-// choice to override rather than a blank to fill.
-func initFields(p *profile.Profile) []tui.Field {
-	var gate []string
-	for _, s := range p.Gate.Steps {
-		gate = append(gate, s.Step+"="+s.Command)
-	}
-	return []tui.Field{
-		{Key: "gate", Label: "gate", Discovered: strings.Join(gate, "; "),
-			Help: "step=command, separated by ; — pin when discovery picks the wrong check"},
-		{Key: "spec-store", Label: "spec store", Discovered: p.Spec.Store.Value,
-			Help: "github-issues | gitlab | files | none — where specs and task graphs live"},
-		{Key: "spec-ref", Label: "spec ref", Discovered: p.Spec.Ref.Value,
-			Help: "owner/repo for a tracker, or a path"},
-		{Key: "scopes", Label: "scopes", Discovered: strings.Join(p.Scopes.Values, ", "),
-			Help: "comma-separated conventional-commit scopes"},
-		// No discovered value, ever — that is the key's reason to exist, and an
-		// empty column here says so more honestly than a number lifted off
-		// history would.
-		{Key: "subject-max", Label: "subject max", Discovered: p.SubjectMax.Value,
-			Help: "longest commit subject in characters; not discoverable, so blank means commit's own convention"},
-		{Key: "reviewers", Label: "reviewers", Discovered: strings.Join(p.Review.Values, ", "),
-			Help: "comma-separated; only needed where there is no CODEOWNERS"},
-		{Key: "review-mode", Label: "review mode", Discovered: p.ReviewMode.Value,
-			Help: "full | quick — the roster review opens with when you name none"},
-		{Key: "merge", Label: "merge style", Discovered: p.Merge.Value,
-			Help: "merge | squash | rebase"},
-		// The discovered value is the set cleanup protects today, so the field
-		// reads as "these are already kept, add to them" rather than a blank that
-		// looks like it replaces them.
-		{Key: "keep", Label: "keep branches", Discovered: strings.Join(p.Keep.Values, ", "),
-			Help: "comma-separated branch names cleanup must never delete; " +
-				"added to the default branch, which is kept regardless"},
-	}
-}
+// fieldFlags are the flags that pin a field. Any one of them given means the
+// caller is driving `init` from the command line, and the form stays shut.
+var fieldFlags = []string{"gate", "spec-store", "spec-ref", "scope", "subject-max",
+	"reviewer", "review-mode", "merge", "keep"}
 
-// The form validates the same enumerated fields as the flags. A typed answer is
-// no more trustworthy than a flag, and the file it lands in is committed.
-func applyFields(cfg *repoconfig.Config, fields []tui.Field) error {
-	for _, f := range fields {
-		v := strings.TrimSpace(f.Value)
-		if v == "" {
-			continue
-		}
-		switch f.Key {
-		case "gate":
-			for _, pair := range strings.Split(v, ";") {
-				step, command, ok := strings.Cut(strings.TrimSpace(pair), "=")
-				if !ok || step == "" || command == "" {
-					continue
-				}
-				if cfg.Gate.Commands == nil {
-					cfg.Gate.Commands = map[string]string{}
-				}
-				cfg.Gate.Commands[strings.TrimSpace(step)] = strings.TrimSpace(command)
-			}
-		case "spec-store":
-			if !repoconfig.OneOf(v, specStores) {
-				return fmt.Errorf("spec store %q: expected one of %s", v, strings.Join(specStores, ", "))
-			}
-			cfg.Spec.Store = v
-		case "spec-ref":
-			cfg.Spec.Ref = v
-		case "scopes":
-			cfg.Commit.Scopes = splitList(v)
-		case "subject-max":
-			n, err := strconv.Atoi(v)
-			if err != nil || n <= 0 {
-				return fmt.Errorf("subject max %q: expected %s", v,
-					repoconfig.Rule("commit.subject_max"))
-			}
-			cfg.Commit.SubjectMax = &n
-		case "reviewers":
-			cfg.Review.Reviewers = splitList(v)
-		case "review-mode":
-			if !repoconfig.OneOf(v, reviewModes) {
-				return fmt.Errorf("review mode %q: expected one of %s", v, strings.Join(reviewModes, ", "))
-			}
-			cfg.Review.Mode = v
-		case "merge":
-			if !repoconfig.OneOf(v, mergeStyles) {
-				return fmt.Errorf("merge style %q: expected one of %s", v, strings.Join(mergeStyles, ", "))
-			}
-			cfg.Merge.Style = v
-		case "keep":
-			cfg.Cleanup.Keep = splitList(v)
+func fieldFlagGiven(cmd *cobra.Command) bool {
+	for _, name := range fieldFlags {
+		if cmd.Flags().Changed(name) {
+			return true
 		}
 	}
-	return nil
-}
-
-func splitList(s string) []string {
-	var out []string
-	for _, p := range strings.Split(s, ",") {
-		if p = strings.TrimSpace(p); p != "" {
-			out = append(out, p)
-		}
-	}
-	sort.Strings(out)
-	return out
+	return false
 }
 
 func emitInit(out io.Writer, opts Options, res initResult) error {
