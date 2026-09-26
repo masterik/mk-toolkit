@@ -35,15 +35,19 @@ func initJSON(t *testing.T, args ...string) (map[string]any, result) {
 	return m, res
 }
 
+// Off a TTY no form opens and no form default applies, with or without --json.
+// The test process has no terminal, so this covers the no-TTY gate: --yes cannot
+// be told apart from it here (it only matters on a terminal), and --json forces
+// the same path on its own, which is why the human-output runs are here too.
 func TestInitWithNoFieldsAppliesNoFormDefault(t *testing.T) {
-	for _, args := range [][]string{{"--yes"}, {}} {
+	for _, args := range [][]string{{"--json"}, {"--json", "--yes"}, {}, {"--yes"}} {
 		repo := initRepo(t)
-		m, res := initJSON(t, args...)
+		res := run(t, append([]string{"init"}, args...)...)
 		if res.code != 0 {
 			t.Fatalf("init %v: exit %d %s", args, res.code, res.stderr)
 		}
-		if m["state"] != "nothing-to-pin" || m["written"] != false {
-			t.Errorf("init %v: %v, want nothing-to-pin — a form default leaked off the TTY", args, m)
+		if !strings.Contains(res.stdout, "nothing-to-pin") {
+			t.Errorf("init %v: %q, want nothing-to-pin — a form default leaked off the TTY", args, res.stdout)
 		}
 		if _, err := os.Stat(filepath.Join(repo, ".mkit", "config.toml")); !os.IsNotExist(err) {
 			t.Errorf("init %v wrote a config", args)
