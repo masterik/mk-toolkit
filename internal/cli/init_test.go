@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"golang.org/x/term"
 )
 
 // Issue #31's regression half: the form changed, the non-interactive contract
@@ -36,11 +38,16 @@ func initJSON(t *testing.T, args ...string) (map[string]any, result) {
 }
 
 // Off a TTY no form opens and no form default applies, with or without --json.
-// The test process has no terminal, so this covers the no-TTY gate: --yes cannot
-// be told apart from it here (it only matters on a terminal), and --json forces
-// the same path on its own, which is why the human-output runs are here too.
+// Interactive is decided from the process's own stdout, not the buffer the test
+// wires up: under `go test` on a pipe --yes cannot be told apart from the no-TTY
+// gate, and on a terminal the bare run would open the real wizard and block on
+// stdin — so it is skipped there, and --yes is what keeps the form shut.
 func TestInitWithNoFieldsAppliesNoFormDefault(t *testing.T) {
+	onTTY := term.IsTerminal(int(os.Stdout.Fd()))
 	for _, args := range [][]string{{"--json"}, {"--json", "--yes"}, {}, {"--yes"}} {
+		if len(args) == 0 && onTTY {
+			continue
+		}
 		repo := initRepo(t)
 		res := run(t, append([]string{"init"}, args...)...)
 		if res.code != 0 {
