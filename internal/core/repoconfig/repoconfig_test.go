@@ -304,3 +304,35 @@ func TestParentExcludedMatchesGit(t *testing.T) {
 		}
 	}
 }
+
+// Render is init's review preview, so its bytes must be the file Write puts on
+// disk — for a config whose Version is unset, as init's is, and for an empty one.
+func TestRenderIsExactlyWhatWriteWrites(t *testing.T) {
+	sm := 72
+	for name, c := range map[string]*Config{
+		"empty": {},
+		"full": {
+			Gate:    Gate{Commands: map[string]string{"test": "just test", "e2e": "npm run e2e"}},
+			Spec:    Spec{Store: "files", Ref: "docs/specs"},
+			Commit:  Commit{Scopes: []string{"cli"}, SubjectMax: &sm},
+			Review:  Review{Reviewers: []string{"@a"}, Mode: "quick"},
+			Merge:   Merge{Style: "merge"},
+			Cleanup: Cleanup{Keep: []string{"release"}},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			preview := Render(c)
+			dir := t.TempDir()
+			if err := Write(dir, c); err != nil {
+				t.Fatal(err)
+			}
+			b, err := os.ReadFile(Path(dir))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(b) != preview {
+				t.Errorf("Write wrote\n%s\nRender showed\n%s", b, preview)
+			}
+		})
+	}
+}
