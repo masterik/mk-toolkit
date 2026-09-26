@@ -340,8 +340,13 @@ func (m *Model) advance() tea.Cmd {
 func (m *Model) back() tea.Cmd {
 	m.err = ""
 	if m.review {
-		m.review, m.walk = false, walkMain
+		m.walk = walkMain
 		s := m.steps()
+		// A plan with nothing to walk opens on review and stays there.
+		if len(s) == 0 {
+			return nil
+		}
+		m.review = false
 		m.at = s[len(s)-1].id()
 		return m.enterStep(s[len(s)-1])
 	}
@@ -359,8 +364,14 @@ func (m *Model) back() tea.Cmd {
 
 // open walks an optional page from the review page.
 func (m *Model) open(page int) tea.Cmd {
-	m.review, m.walk, m.err = false, page, ""
+	prev := m.walk
+	m.walk = page
 	s := m.steps()
+	if len(s) == 0 {
+		m.walk = prev
+		return nil
+	}
+	m.review, m.err = false, ""
 	m.at = s[0].id()
 	return m.enterStep(s[0])
 }

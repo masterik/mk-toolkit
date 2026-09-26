@@ -271,18 +271,45 @@ func TestLongListsScrollAroundTheCursor(t *testing.T) {
 	}
 }
 
-func TestEveryLineFitsANarrowTerminal(t *testing.T) {
+// Prose wraps rather than being cut: every word of each page's intro and of the
+// prompt's description is on screen at 40 columns. (View also caps each line at
+// the width, so measuring line widths alone would prove only the cap.)
+func TestProseWrapsOnANarrowTerminal(t *testing.T) {
 	m := New(testPlan())
-	m.Update(tea.WindowSizeMsg{Width: 40, Height: 40})
-	for range 20 {
-		for _, l := range strings.Split(m.View(), "\n") {
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: 80})
+	for range 30 {
+		if m.Current() == "review" {
+			return
+		}
+		s, _, _ := m.current()
+		v := m.View()
+		for _, l := range strings.Split(v, "\n") {
 			if w := lipgloss.Width(l); w > 40 {
 				t.Fatalf("at %s, a line %d wide: %q", m.Current(), w, l)
 			}
 		}
-		if m.Current() == "review" {
-			return
+		flat := strings.Join(strings.Fields(v), " ")
+		for _, text := range []string{m.plan.Pages[s.page].Intro, s.q.Description} {
+			for _, w := range strings.Fields(text) {
+				if !strings.Contains(flat, w) {
+					t.Fatalf("at %s, %q was cut from:\n%s", m.Current(), w, v)
+				}
+			}
 		}
 		press(m, "enter")
+	}
+	t.Fatalf("never reached review; at %s", m.Current())
+}
+
+// A plan with nothing to walk opens on review; Back stays there.
+func TestAnEmptyPlanStaysOnReview(t *testing.T) {
+	m := New(&initplan.Plan{})
+	if m.Current() != "review" {
+		t.Fatalf("at %s, want review", m.Current())
+	}
+	press(m, "esc")
+	reviewTo(t, m, "Back")
+	if m.Current() != "review" || m.Done() {
+		t.Fatalf("at %s done=%v, want still on review", m.Current(), m.Done())
 	}
 }
