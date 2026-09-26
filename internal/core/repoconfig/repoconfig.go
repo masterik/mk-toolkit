@@ -99,9 +99,11 @@ func OneOf(v string, allowed []string) bool {
 // RelPath is the config's path relative to the work tree root.
 const RelPath = ".mkit/config.toml"
 
-// Config is the *pinned remainder*: what inspection cannot establish, and nothing
-// else. Anything discovery can answer authoritatively is deliberately absent here
-// — a pinned copy of a discoverable fact is a staleness surface bought for nothing.
+// Config is what `mkit init` pinned: what inspection cannot establish, plus the
+// gate commands and scopes as discovery found them when init ran — pinned so a
+// run never changes what the gate executes underneath the user, re-discovered
+// only by re-running init (ADR 0001, amendment "init pins what it finds"). Every
+// key is still optional; a command runs with the file absent.
 type Config struct {
 	Version int    `toml:"version"`
 	Gate    Gate   `toml:"gate"`
@@ -536,18 +538,18 @@ func render(c *Config) string {
 	b.WriteString("# mkit — per-repo configuration.\n")
 	b.WriteString("#\n")
 	b.WriteString("# Written by `mkit init`; committed, so a fresh clone inherits it.\n")
-	b.WriteString("# This file pins only what inspection cannot establish. Anything mkit can\n")
-	b.WriteString("# discover is discovered every run and deliberately absent here — see\n")
-	b.WriteString("# `mkit repo profile` for the merged picture, which tags each value\n")
-	b.WriteString("# `discovered` or `pinned`.\n")
+	b.WriteString("# It pins what inspection cannot establish, and what `mkit init` found when\n")
+	b.WriteString("# it ran — so the gate never changes under you between runs. Re-run\n")
+	b.WriteString("# `mkit init --force` to re-discover; `mkit repo profile` shows the merged\n")
+	b.WriteString("# picture, each value tagged `discovered` or `pinned`.\n")
 	b.WriteString("#\n")
 	b.WriteString("# Config is an input, never a permission: every mkit command runs with this\n")
 	b.WriteString("# file absent. Deleting it loses pinned answers, never capability.\n")
 	fmt.Fprintf(&b, "\nversion = %d\n", c.Version)
 
 	if len(c.Gate.Commands) > 0 {
-		b.WriteString("\n# Quality-gate commands, by step. Pin a step when discovery would guess\n")
-		b.WriteString("# wrong — which of three test commands is the real one, what lint means here.\n")
+		b.WriteString("\n# Quality-gate commands, by step: the repo's own task-runner recipe where one\n")
+		b.WriteString("# defines the step, else the language's standard command, or an override.\n")
 		b.WriteString("[gate.commands]\n")
 		for _, k := range sortedKeys(c.Gate.Commands) {
 			fmt.Fprintf(&b, "%s = %s\n", quoteKey(k), quote(c.Gate.Commands[k]))

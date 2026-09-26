@@ -114,14 +114,25 @@ func TestEveryOptionIsDescribed(t *testing.T) {
 	}
 }
 
+// The walk is the four choices a repo has to make; the gate and the keep list
+// are found or defaulted, and optional — opened from the review page.
 func TestPagesAreTheStepsInOrder(t *testing.T) {
-	var got []string
+	var walked, optional []string
 	for _, pg := range Build(Input{}).Pages {
-		got = append(got, pg.Title)
+		if pg.Intro == "" {
+			t.Errorf("page %s has no intro", pg.Title)
+		}
+		if pg.Optional {
+			optional = append(optional, pg.Title)
+		} else {
+			walked = append(walked, pg.Title)
+		}
 	}
-	want := []string{"Gate", "Spec", "Commit", "Review", "Merge", "Cleanup"}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("pages %v, want %v", got, want)
+	if want := []string{"Spec", "Commit", "Review", "Merge"}; !reflect.DeepEqual(walked, want) {
+		t.Errorf("walked pages %v, want %v", walked, want)
+	}
+	if want := []string{"Gate", "Cleanup"}; !reflect.DeepEqual(optional, want) {
+		t.Errorf("optional pages %v, want %v", optional, want)
 	}
 }
 
@@ -138,7 +149,10 @@ func TestRejectedPinFallsThroughWithANote(t *testing.T) {
 	}
 }
 
-func TestAcceptingEveryPreselectionPinsOnlyTheFormDefaults(t *testing.T) {
+// Accepting everything pins what was discovered — the gate's commands and the
+// scopes history uses — plus the two form defaults. Reviewers found in
+// CODEOWNERS are the exception: pinning them would replace pr's per-path match.
+func TestAcceptingEveryPreselectionPinsWhatWasDiscovered(t *testing.T) {
 	p := Build(Input{Discovered: &profile.Profile{
 		Gate:   profile.Gate{Steps: []profile.GateStep{{Step: "test", Command: "go test ./..."}}},
 		Scopes: profile.List{Values: []string{"cli"}, Source: profile.Discovered},
@@ -148,7 +162,12 @@ func TestAcceptingEveryPreselectionPinsOnlyTheFormDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := &repoconfig.Config{Review: repoconfig.Review{Mode: "full"}, Merge: repoconfig.Merge{Style: "merge"}}
+	want := &repoconfig.Config{
+		Gate:   repoconfig.Gate{Commands: map[string]string{"test": "go test ./..."}},
+		Commit: repoconfig.Commit{Scopes: []string{"cli"}},
+		Review: repoconfig.Review{Mode: "full"},
+		Merge:  repoconfig.Merge{Style: "merge"},
+	}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Errorf("config %+v, want %+v", cfg, want)
 	}
@@ -171,8 +190,8 @@ func TestAllDontPinIsAZeroConfig(t *testing.T) {
 
 func TestScopesLeadIn(t *testing.T) {
 	withHistory := &profile.Profile{Scopes: profile.List{Values: []string{"cli"}, Source: profile.Discovered}}
-	if got, prov := selected(t, Build(Input{Discovered: withHistory}), KeyScopesMode); got != ScopesDiscover || prov != Discovered {
-		t.Errorf("with history: %q (%s), want keep discovering", got, prov)
+	if got, prov := selected(t, Build(Input{Discovered: withHistory}), KeyScopesMode); got != ScopesPin || prov != Discovered {
+		t.Errorf("with history: %q (%s), want pin a list (discovered)", got, prov)
 	}
 	if got, _ := selected(t, Build(Input{}), KeyScopesMode); got != ScopesPin {
 		t.Errorf("without history: %q, want pin a list", got)
@@ -210,7 +229,8 @@ func TestScopeListTicksHistoryOffersDirectoriesAndSkipsTypes(t *testing.T) {
 
 func TestScopeListIsIgnoredWhileDiscovering(t *testing.T) {
 	p := Build(Input{Discovered: &profile.Profile{Scopes: profile.List{Values: []string{"cli"}, Source: profile.Discovered}}})
-	a := p.Preselected() // keep discovering, list ticked underneath
+	a := p.Preselected() // list ticked underneath
+	a.Choice[KeyScopesMode] = []string{ScopesDiscover}
 	cfg, err := Apply(p, a)
 	if err != nil {
 		t.Fatal(err)
@@ -308,8 +328,8 @@ func TestGateKeepAndOverride(t *testing.T) {
 		{Step: "test", Command: "go test ./..."}, {Step: "lint", Command: "golangci-lint run"},
 	}}}})
 	q := p.Question(GateStepKey("test"))
-	if got, prov := selected(t, p, GateStepKey("test")); got != DontPin || prov != Discovered {
-		t.Errorf("gate step pre-selects %q (%s), want keep discovered", got, prov)
+	if got, prov := selected(t, p, GateStepKey("test")); got != "go test ./..." || prov != Discovered {
+		t.Errorf("gate step pre-selects %q (%s), want the discovered command pinned", got, prov)
 	}
 	for _, o := range q.Options {
 		if strings.Contains(strings.ToLower(o.Label), "drop") {
@@ -325,9 +345,9 @@ func TestGateKeepAndOverride(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]string{"lint": "just lint", "e2e": "npm run e2e"}
+	want := map[string]string{"test": "go test ./...", "lint": "just lint", "e2e": "npm run e2e"}
 	if !reflect.DeepEqual(cfg.Gate.Commands, want) {
-		t.Errorf("gate %v, want %v — only overrides are pinned", cfg.Gate.Commands, want)
+		t.Errorf("gate %v, want %v", cfg.Gate.Commands, want)
 	}
 	a.Custom[KeyGateNew] = "no-equals"
 	if _, err := Apply(p, a); err == nil {
@@ -424,5 +444,23 @@ func TestCustomSelectValuesAreValidated(t *testing.T) {
 	}
 	if cfg.Spec.Ref != "docs/specs" {
 		t.Errorf("ref %q", cfg.Spec.Ref)
+	}
+}
+
+// Re-init shows a changed discovery beside the pin, and keeps the pin unless the
+// user switches — the tool suggests, the user re-discovers.
+func TestGateReinitSuggestsWhatDiscoveryNowFinds(t *testing.T) {
+	p := Build(Input{
+		Existing:   &repoconfig.Config{Gate: repoconfig.Gate{Commands: map[string]string{"test": "go test ./..."}}},
+		Discovered: &profile.Profile{Gate: profile.Gate{Steps: []profile.GateStep{{Step: "test", Command: "just test"}}}},
+	})
+	if got, prov := selected(t, p, GateStepKey("test")); got != "go test ./..." || prov != Pinned {
+		t.Errorf("pre-selects %q (%s), want the pin kept", got, prov)
+	}
+	if o := option(t, p, GateStepKey("test"), "just test"); o.Provenance != Discovered || !strings.Contains(o.Label, "switch") {
+		t.Errorf("suggestion %+v, want a discovered switch option", o)
+	}
+	if d := p.Question(GateStepKey("test")).Description; !strings.Contains(d, "just test") {
+		t.Errorf("description %q does not name the suggestion", d)
 	}
 }

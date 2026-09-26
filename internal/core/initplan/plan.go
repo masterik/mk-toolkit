@@ -123,8 +123,14 @@ type Question struct {
 
 // Page is one screen of the form, named for the step it affects.
 type Page struct {
-	Title     string
+	Title string
+	// Intro says what the page configures, which step reads it, and when that
+	// matters — the form is read by someone who may not know mkit yet.
+	Intro     string
 	Questions []Question
+	// Optional pages are not walked: their pre-selection is written as it
+	// stands, and the review page offers to open them.
+	Optional bool
 }
 
 // Plan is the whole form.
@@ -213,14 +219,39 @@ func Build(in Input) *Plan {
 		in.Discovered = &profile.Profile{}
 	}
 	return &Plan{Pages: []Page{
-		{Title: "Gate", Questions: gateQuestions(in)},
-		{Title: "Spec", Questions: []Question{specStore(in), specRef(in)}},
-		{Title: "Commit", Questions: append(scopes(in), subjectMax(in))},
-		{Title: "Review", Questions: []Question{reviewMode(in), reviewers(in)}},
-		{Title: "Merge", Questions: []Question{mergeStyle(in)}},
-		{Title: "Cleanup", Questions: []Question{keep(in)}},
+		{Title: "Spec", Intro: introSpec, Questions: []Question{specStore(in), specRef(in)}},
+		{Title: "Commit", Intro: introCommit, Questions: append(scopes(in), subjectMax(in))},
+		{Title: "Review", Intro: introReview, Questions: []Question{reviewMode(in), reviewers(in)}},
+		{Title: "Merge", Intro: introMerge, Questions: []Question{mergeStyle(in)}},
+		{Title: "Gate", Intro: introGate, Questions: gateQuestions(in), Optional: true},
+		{Title: "Cleanup", Intro: introCleanup, Questions: []Question{keep(in)}, Optional: true},
 	}}
 }
+
+// The page intros. Each names what the page is for and which skill reads it.
+const (
+	introSpec = "A spec is the written plan for a change — the problem, the user stories, the " +
+		"decisions — made before the code. This page says where specs are kept, so mkit's " +
+		"spec-driven steps read and write them in one place instead of guessing from " +
+		"docs/agents/issue-tracker.md on every run."
+	introCommit = "The commit skill writes Conventional Commit subjects: `type(scope): subject`, " +
+		"e.g. `fix(cli): refuse an empty ref`. The type (feat, fix, docs…) comes from the " +
+		"convention and is never configured; the scope names the area a change touches, and " +
+		"this page decides which scopes commit may use and how long a subject may be."
+	introReview = "The review skill runs automated reviewers over a branch before it merges; " +
+		"the pr skill opens the pull request and requests human reviewers on GitHub. This page " +
+		"picks the automated roster and, for a repo without CODEOWNERS, the humans."
+	introMerge = "How a finished branch lands on its base: the finish skill merges locally, the pr " +
+		"skill through GitHub. When the GitHub repo allows only one merge method, that one is " +
+		"used whatever this says."
+	introGate = "The quality gate: the commands commit, review, pr and finish run before work " +
+		"integrates — lint, typecheck, vet, test, build. Each step comes from this repo's own " +
+		"task runner (justfile, Makefile, Taskfile, package.json scripts) where it defines one, " +
+		"otherwise the language's standard command. They are pinned as found, so every run uses " +
+		"the same commands; run `mkit init --force` to re-discover."
+	introCleanup = "The cleanup skill deletes branches and worktrees whose work has merged. " +
+		"Branches listed here are never deleted, merged or not; the default branch is always kept."
+)
 
 // discoverOpt is the "don't pin" option of a Select.
 func discoverOpt(what string) Option {
@@ -290,7 +321,7 @@ func gateQuestions(in Input) []Question {
 	}
 	qs = append(qs, Question{
 		Key: KeyGateNew, Kind: Select, Title: "Add a step",
-		Description: "Pin a step discovery does not find at all.",
+		Description: "Pin a step the discovery above did not find — an e2e suite, a schema check.",
 		Options: []Option{
 			{Value: DontPin, Label: "no extra step", Description: "the gate is the steps above"},
 			{Value: CustomValue, Label: "add a step…", Description: "pin one more step as step=command"},
@@ -302,7 +333,10 @@ func gateQuestions(in Input) []Question {
 	return qs
 }
 
-// gateStep offers keep / override for one step. There is no "drop": the schema
+// gateStep offers a step's command. A discovered command is pre-selected as a
+// pin, not as "keep discovering": the config records what the gate runs, and
+// re-discovering is the user's act (`mkit init --force`), where a changed
+// suggestion shows up beside the pinned command. There is no "drop": the schema
 // pins commands by step and has no way to say a step must not run, so the form
 // does not invent one.
 func gateStep(step, discovered, pinned string) Question {
@@ -310,24 +344,42 @@ func gateStep(step, discovered, pinned string) Question {
 		Key: GateStepKey(step), Kind: Select, Title: "Gate step: " + step,
 		CustomTitle: "Command for " + step, CustomPlaceholder: "the command line to run",
 	}
-	if discovered != "" {
-		q.Description = "Discovered: " + discovered
-		q.Options = append(q.Options, Option{Value: DontPin, Label: "keep discovered",
-			Description: "run `" + discovered + "`, re-discovered every run", Provenance: Discovered})
-	} else {
-		q.Description = "Not discovered — only the config names this step."
-		q.Options = append(q.Options, Option{Value: DontPin, Label: "drop the pin",
-			Description: "stop pinning this step; the gate is what discovery finds"})
+	switch {
+	case discovered == "":
+		q.Description = "Only the existing config names this step; discovery does not find it."
+	case pinned == "" || pinned == discovered:
+		q.Description = "Discovered: `" + discovered + "`."
+	default:
+		q.Description = "Pinned: `" + pinned + "`. Discovery now suggests `" + discovered + "`."
 	}
-	if pinned != "" && pinned != discovered {
-		q.Options = append(q.Options, Option{Value: pinned, Label: "keep pinned: " + pinned,
-			Description: "run the pinned command instead of the discovered one", Provenance: Pinned})
+	if pinned != "" {
+		q.Options = append(q.Options, Option{Value: pinned, Label: "pin `" + pinned + "`",
+			Description: "keep the command the config already runs", Provenance: Pinned})
+	}
+	if discovered != "" && discovered != pinned {
+		label := "pin `" + discovered + "`"
+		desc := "run what discovery found, and keep running it until you re-init"
+		if pinned != "" {
+			label = "switch to `" + discovered + "`"
+			desc = "replace the pinned command with discovery's suggestion"
+		}
+		q.Options = append(q.Options, Option{Value: discovered, Label: label, Description: desc,
+			Provenance: Discovered})
 	}
 	q.Options = append(q.Options, Option{Value: CustomValue, Label: "override…",
 		Description: "pin a different command for this step"})
-	q.Selected = []string{DontPin}
-	if pinned != "" && pinned != discovered {
+	if discovered != "" {
+		q.Options = append(q.Options, Option{Value: DontPin, Label: "don't pin",
+			Description: "re-discover the command on every run instead"})
+	} else {
+		q.Options = append(q.Options, Option{Value: DontPin, Label: "drop the pin",
+			Description: "stop running this step; nothing discovers it"})
+	}
+	switch {
+	case pinned != "":
 		q.Selected = []string{pinned}
+	default:
+		q.Selected = []string{discovered}
 	}
 	return q
 }
@@ -341,7 +393,7 @@ var storeDescriptions = map[string]string{
 
 func specStore(in Input) Question {
 	q := Question{Key: KeySpecStore, Kind: Select, Title: "Spec store",
-		Description: "Where specs and task graphs live.",
+		Description: "Where specs, and the task lists split from them, are kept.",
 		Note:        rejected(in.Existing, KeySpecStore)}
 	for _, s := range repoconfig.SpecStores {
 		q.Options = append(q.Options, Option{Value: s, Label: s, Description: storeDescriptions[s]})
@@ -357,7 +409,7 @@ func specStore(in Input) Question {
 
 func specRef(in Input) Question {
 	q := Question{Key: KeySpecRef, Kind: Select, Title: "Spec ref",
-		Description:       "Qualifies the store: owner/repo for a tracker, a path for files.",
+		Description:       "Which project or directory in that store: owner/repo on GitHub, group/project on GitLab, a path for files.",
 		CustomTitle:       "Spec ref",
 		CustomPlaceholder: "owner/repo, or a path such as docs/specs"}
 	seen := map[string]bool{}
@@ -423,29 +475,29 @@ func scopes(in Input) []Question {
 	pinned := in.Existing.Commit.Scopes
 
 	lead := Question{Key: KeyScopesMode, Kind: Select, Title: "Commit scopes",
-		Description: "Pinning freezes the list commit offers; discovery follows history."}
+		Description: "Pin a fixed list commit must choose from, or let it read the scopes the last 200 commits used."}
 	hint := "no scopes in the last 200 commits yet"
 	if len(history) > 0 {
 		hint = "from the last 200 commits: " + strings.Join(history, ", ")
 	}
 	lead.Options = []Option{
-		{Value: ScopesDiscover, Label: "keep discovering from history", Description: hint},
-		{Value: ScopesPin, Label: "pin a list", Description: "choose the scopes commit may use"},
+		{Value: ScopesPin, Label: "pin a list", Description: "choose the scopes commit may use; next, the list"},
+		{Value: ScopesDiscover, Label: "keep discovering from history", Description: hint + "; the list grows as history does"},
 	}
+	// A list found in history is pinned like any discovered value: re-init is
+	// how a later scope joins it.
+	lead.Selected = []string{ScopesPin}
 	switch {
 	case len(pinned) > 0:
-		lead.Options[1].Provenance = Pinned
-		lead.Selected = []string{ScopesPin}
+		lead.Options[0].Provenance = Pinned
 	case len(history) > 0:
 		lead.Options[0].Provenance = Discovered
-		lead.Selected = []string{ScopesDiscover}
 	default:
-		lead.Options[1].Provenance = Default
-		lead.Selected = []string{ScopesPin}
+		lead.Options[0].Provenance = Default
 	}
 
 	list := Question{Key: KeyScopes, Kind: Multi, Title: "Scopes to pin",
-		Description: "Ticked scopes are pinned. None ticked pins nothing.",
+		Description: "Ticked scopes are pinned: those from history are already in use, directories are suggestions. None ticked pins nothing.",
 		ShowIf:      &Condition{Key: KeyScopesMode, Value: ScopesPin},
 		CustomTitle: "More scopes", CustomPlaceholder: "comma-separated, e.g. api, web"}
 	seen := map[string]bool{}
@@ -482,7 +534,7 @@ var SubjectPresets = []int{50, 72, 100}
 
 func subjectMax(in Input) Question {
 	q := Question{Key: KeySubjectMax, Kind: Select, Title: "Subject max",
-		Description: "The longest commit subject this repo accepts. Not discoverable.",
+		Description: "The longest commit subject allowed, in characters; commit rewords anything longer. Nothing in a repo says this, so it is never discovered.",
 		Note:        rejected(in.Existing, KeySubjectMax),
 		CustomTitle: "Subject max", CustomPlaceholder: "a number of characters"}
 	desc := map[int]string{50: "the classic git convention", 72: "fits a standard terminal line",
@@ -503,7 +555,7 @@ func subjectMax(in Input) Question {
 
 func reviewMode(in Input) Question {
 	q := Question{Key: KeyReviewMode, Kind: Select, Title: "Review mode",
-		Description: "The roster review opens with when you name none.",
+		Description: "Which automated reviewers the review skill runs when you name none.",
 		Note:        rejected(in.Existing, KeyReviewMode)}
 	desc := map[string]string{
 		"full":  "CodeRabbit + Codex + Claude — the thorough pass, the most tokens",
@@ -519,7 +571,8 @@ func reviewMode(in Input) Question {
 
 func reviewers(in Input) Question {
 	q := Question{Key: KeyReviewers, Kind: Multi, Title: "Reviewers",
-		Description: "Ticked reviewers are pinned. None ticked keeps reading CODEOWNERS.",
+		Description: "GitHub users or teams the pr skill requests. Leave them unticked when the repo has " +
+			"CODEOWNERS: pr then matches owners to the paths a branch changed, and a pinned list replaces that.",
 		CustomTitle: "More reviewers", CustomPlaceholder: "comma-separated, e.g. @alice, @org/team"}
 	seen := map[string]bool{}
 	for _, r := range in.Existing.Review.Reviewers {
@@ -539,7 +592,7 @@ func reviewers(in Input) Question {
 
 func mergeStyle(in Input) Question {
 	q := Question{Key: KeyMerge, Kind: Select, Title: "Merge style",
-		Description: "How this repo integrates a branch.",
+		Description: "What history looks like after a branch lands.",
 		Note:        rejected(in.Existing, KeyMerge)}
 	desc := map[string]string{
 		"merge":  "a merge commit per PR; every branch commit stays in history",
