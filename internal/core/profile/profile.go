@@ -122,7 +122,17 @@ func Build(repo *gitrepo.Repo) (*Profile, error) {
 	if err != nil {
 		return nil, err
 	}
+	return build(repo, cfg), nil
+}
 
+// Discover is the profile as it would read with no config at all: every value is
+// discovered or unavailable, never pinned. `mkit init` needs the two tiers apart —
+// a pinned list replaces the discovered one in Build, and the form offers both.
+func Discover(repo *gitrepo.Repo) *Profile {
+	return build(repo, &repoconfig.Config{})
+}
+
+func build(repo *gitrepo.Repo, cfg *repoconfig.Config) *Profile {
 	p := &Profile{
 		Toplevel:       repo.Toplevel,
 		Config:         repoconfig.Stat(repo),
@@ -144,7 +154,7 @@ func Build(repo *gitrepo.Repo) (*Profile, error) {
 	p.ReviewMode = reviewMode(cfg)
 	p.Merge = discoverMerge(repo, cfg)
 	p.Keep = discoverKeep(repo, cfg)
-	return p, nil
+	return p
 }
 
 // buildGate reports the quality gate as a tagged sequence.

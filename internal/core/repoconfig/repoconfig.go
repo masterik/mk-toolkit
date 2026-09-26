@@ -522,6 +522,15 @@ func Write(toplevel string, c *Config) error {
 	return os.WriteFile(path, []byte(render(c)), 0o644)
 }
 
+// Render returns exactly the bytes Write would put on disk, without writing. It
+// is what `mkit init`'s review page shows, so the preview cannot drift from the
+// file: one renderer, two callers.
+func Render(c *Config) string {
+	cp := *c
+	cp.Version = Version
+	return render(&cp)
+}
+
 func render(c *Config) string {
 	var b strings.Builder
 	b.WriteString("# mkit — per-repo configuration.\n")
