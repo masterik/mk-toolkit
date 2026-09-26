@@ -103,14 +103,33 @@ func TestPreferRecipesStepByStep(t *testing.T) {
 			[]string{"make vet", "make test"}},
 		{"a runner alone is a chain", nil, []runner{just},
 			[]string{"just lint", "just test", "just build"}},
+		{"clippy is the lint a runner's lint replaces",
+			[]string{"cargo clippy --all-targets -- -D warnings", "cargo test"}, []runner{just},
+			[]string{"just lint", "just test", "just build"}},
+		{"python's lint and test are matched by what they run",
+			[]string{"ruff check .", "pytest -q", "mypy ."}, []runner{just},
+			[]string{"just lint", "just test", "mypy .", "just build"}},
 		{"unnamed steps keep their place",
-			[]string{"cargo clippy --all-targets -- -D warnings", "cargo test"}, []runner{make},
-			[]string{"cargo clippy --all-targets -- -D warnings", "make vet", "make test"}},
+			[]string{"golangci-lint run", "go test ./..."}, []runner{make},
+			[]string{"golangci-lint run", "make vet", "make test"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := preferRecipes(tc.chain, tc.rs); !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("got  %v\nwant %v", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestDenoTasksReadJSONC(t *testing.T) {
+	p := writeFile(t, t.TempDir(), "deno.jsonc", `{
+  // tasks the repo runs
+  "tasks": {
+    "test": "deno test -A", /* block */
+    "lint": "deno lint // not a comment",
+  },
+}`)
+	if got, want := denoTasks(p), []string{"lint", "test"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("tasks = %v, want %v", got, want)
 	}
 }

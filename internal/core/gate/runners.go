@@ -155,7 +155,9 @@ func denoTasks(path string) []string {
 	var cfg struct {
 		Tasks map[string]json.RawMessage `json:"tasks"`
 	}
-	if json.Unmarshal(b, &cfg) != nil {
+	// deno.jsonc allows comments and trailing commas; deno.json does too, in
+	// practice, since Deno reads both the same way.
+	if json.Unmarshal(stripJSONC(b), &cfg) != nil {
 		return nil
 	}
 	var out []string
@@ -163,6 +165,54 @@ func denoTasks(path string) []string {
 		out = append(out, name)
 	}
 	return uniqSorted(out)
+}
+
+// stripJSONC removes `//` and `/* */` comments outside strings, and a comma
+// that closes an object or array, leaving plain JSON.
+func stripJSONC(b []byte) []byte {
+	out := make([]byte, 0, len(b))
+	inStr := false
+	for i := 0; i < len(b); i++ {
+		c := b[i]
+		switch {
+		case inStr:
+			out = append(out, c)
+			if c == '\\' && i+1 < len(b) {
+				i++
+				out = append(out, b[i])
+			} else if c == '"' {
+				inStr = false
+			}
+		case c == '"':
+			inStr = true
+			out = append(out, c)
+		case c == '/' && i+1 < len(b) && b[i+1] == '/':
+			for i < len(b) && b[i] != '\n' {
+				i++
+			}
+			if i < len(b) {
+				out = append(out, '\n')
+			}
+		case c == '/' && i+1 < len(b) && b[i+1] == '*':
+			i += 2
+			for i+1 < len(b) && (b[i] != '*' || b[i+1] != '/') {
+				i++
+			}
+			i++
+		case c == '}' || c == ']':
+			j := len(out) - 1
+			for j >= 0 && (out[j] == ' ' || out[j] == '\t' || out[j] == '\n' || out[j] == '\r') {
+				j--
+			}
+			if j >= 0 && out[j] == ',' {
+				out = append(out[:j], out[j+1:]...)
+			}
+			out = append(out, c)
+		default:
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 func uniqSorted(s []string) []string {
@@ -174,6 +224,41 @@ func uniqSorted(s []string) []string {
 		}
 	}
 	return out
+}
+
+// semantic is the gate step a command performs, for matching it to a recipe.
+// StepName labels by a bare token and keeps a positional name otherwise — a
+// label pins are keyed by, so it does not change — but `pytest -q` is a test
+// run and `ruff check .` a lint whatever their labels say, and a runner that
+// defines `test` must replace the one rather than run beside it.
+func semantic(cmd string, i int) string {
+	f := strings.Fields(cmd)
+	if len(f) > 0 {
+		switch f[0] {
+		case "pytest":
+			return "test"
+		case "ruff", "flake8":
+			return "lint"
+		case "mypy":
+			return "typecheck"
+		case "python", "python3":
+			if len(f) > 2 && f[1] == "-m" {
+				switch f[2] {
+				case "pytest":
+					return "test"
+				case "flake8", "ruff":
+					return "lint"
+				case "mypy":
+					return "typecheck"
+				}
+			}
+		case "cargo":
+			if len(f) > 1 && f[1] == "clippy" {
+				return "lint"
+			}
+		}
+	}
+	return StepName(cmd, i)
 }
 
 func rank(step string) int {
@@ -205,7 +290,7 @@ func preferRecipes(chain []string, rs []runner) []string {
 	var out []string
 	used := map[string]bool{}
 	for i, cmd := range chain {
-		name := StepName(cmd, i)
+		name := semantic(cmd, i)
 		r, ok := recipe[name]
 		switch {
 		case !ok:
@@ -223,7 +308,7 @@ func preferRecipes(chain []string, rs []runner) []string {
 		}
 		at := len(out)
 		for i, cmd := range out {
-			if rk := rank(StepName(cmd, i)); rk > rank(s) {
+			if rk := rank(semantic(cmd, i)); rk > rank(s) {
 				at = i
 				break
 			}
