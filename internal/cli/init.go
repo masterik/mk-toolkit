@@ -47,11 +47,12 @@ func newInitCmd() *cobra.Command {
 			"absent, and `mkit init` only removes repeated discovery. It writes nothing\n" +
 			"outside the repo, and is a no-op on a repo that already has a config — pass\n" +
 			"--force to rewrite one.\n\n" +
-			"On a terminal it opens a paged form (Gate, Spec, Commit, Review, Merge, Cleanup):\n" +
-			"every answer is a choice with a description, pre-selected from the pinned value,\n" +
-			"then the discovered one, then a form default (merge style `merge`, review mode\n" +
-			"`full`; everything else \"don't pin\"). It ends on the exact file it would write.\n" +
-			"--force opens the form on the existing config.\n\n" +
+			"On a terminal it opens a wizard (Spec, Commit, Review, Merge): every answer is a\n" +
+			"choice with a description, pre-selected from the pinned value, then the\n" +
+			"discovered one, then a form default (merge style `merge`, review mode `full`).\n" +
+			"What discovery finds is pinned. The gate and the cleanup keep list are written as\n" +
+			"found and can be changed from the review page, which shows the exact file.\n" +
+			"--force opens the wizard on the existing config and re-discovers beside it.\n\n" +
 			"Every field is also a flag, so a skill can drive it. Any flag, --yes, or no\n" +
 			"terminal means no form and no form default: only what was given is pinned.",
 		RunE: func(cmd *cobra.Command, args []string) error {

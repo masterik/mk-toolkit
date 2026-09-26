@@ -189,3 +189,33 @@ commented template, so nothing depends on a marshaller preserving them.
   changes a gate command yields a different key and cannot produce a false hit.
 - **Decision 3 is unaffected and still governs.** Config is an input, never a permission.
   `config_state=absent` is a normal state, never a note and never a blocker.
+
+## Amendment: init pins what it finds
+
+**Date:** 2026-09-26 · **Amends:** the "pinned remainder" reading of decision 3 · **Context:**
+[#31](https://github.com/masterik/mk-toolkit/issues/31), PR
+[#32](https://github.com/masterik/mk-toolkit/pull/32).
+
+### What changed
+
+The config was the *pinned remainder*: a discoverable fact was deliberately left out, because a
+pinned copy is a staleness surface bought for nothing. In practice the discoverable fact that
+matters most — what the gate runs — is the one a user least wants to change silently: a new
+`justfile` recipe, a renamed script or a second manifest changed the gate on the next run, with
+nothing to review.
+
+**`mkit init` now pins what discovery found when it ran**: the gate commands (the repo's own
+task-runner recipe first, then the language's standard command), the scopes history uses, the
+spec store and ref, the merge style. Re-discovering is a user act — `mkit init --force` — where a
+changed discovery is shown beside the pinned value as a suggestion, and the pin is kept unless the
+user switches. "Don't pin" stays an option on every question.
+
+**Reviewers are the exception.** CODEOWNERS is read by `pr` per changed path; a pinned list is
+flat and replaces that match, so the owners discovery found are offered, never pre-ticked.
+
+### What did not change
+
+Decision 3 stands: config is an input, never a permission. Every command still runs with the file
+absent and still discovers; a flag-driven, `--yes` or non-TTY `mkit init` still pins only what it
+was given. The staleness cost this ADR named is now accepted for the gate and scopes, and bounded
+the same way — `mkit init --force` is where it is paid down, visibly.

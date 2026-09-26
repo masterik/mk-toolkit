@@ -123,13 +123,19 @@ reads as it does:
   - `initplan/` (#31): the `mkit init` form as data. `Build` turns the pinned config, the
     discovered profile (`profile.Discover`, no config applied, so the tiers stay apart) and the
     repo candidates `Gather` collected into pages of questions; `Apply` turns answers back into a
-    config. Pre-selection is **pinned → discovered → form default**, and the only form defaults
-    are `merge.style = merge` and `review.mode = full` — every other field defaults to "don't
-    pin", which leaves the key unset. Custom text is validated by the same `repoconfig` rules as
-    the flags.
+    config. Pre-selection is **pinned → discovered → form default**: what discovery found is
+    pinned (gate commands, history scopes, spec store, merge style) — reviewers excepted, since a
+    pinned list replaces `pr`'s per-path CODEOWNERS match — and the only form defaults are
+    `merge.style = merge` and `review.mode = full`. Pages are walked Spec → Commit → Review →
+    Merge; Gate and Cleanup are `Optional`, written as pre-selected and opened from the review
+    page. Custom text is validated by the same `repoconfig` rules as the flags.
   - `profile/` (M7): merges discovered with pinned, tagging every value. Gate discovery —
     and the pinned-over-discovered merge — belong to `gate.Detect` since M5; the profile
-    consumes the tagged result rather than redoing it.
+    consumes the tagged result rather than redoing it. `gate.Detect` lays the repo's own
+    task-runner recipes (`runners.go`: justfile, Makefile, Taskfile, deno tasks) over the
+    ecosystem chain **per step** — a runner's `test` replaces `go test ./...`, a step it lacks
+    keeps the ecosystem command, and a recipe the ecosystem never proposes (`lint` in a Go repo)
+    joins in `GateSteps` order.
   - `pluginroot/` (M7): locates the payload — `CLAUDE_PLUGIN_ROOT`, `MKIT_PLUGIN_ROOT`, a
     `plugin/` beside the work tree, then the marketplace checkout. Every *searched* candidate is
     identified by the **manifest's own name**, never by path: the checkout is named after the
