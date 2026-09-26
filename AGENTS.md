@@ -120,6 +120,13 @@ reads as it does:
     **one producer** of the shadowed-config sentence, and the shell counterpart it was kept in
     parity with went with `lib/common.sh` in M5. `mkit doctor` and `mkit facts` both read it;
     neither re-words it.
+  - `initplan/` (#31): the `mkit init` form as data. `Build` turns the pinned config, the
+    discovered profile (`profile.Discover`, no config applied, so the tiers stay apart) and the
+    repo candidates `Gather` collected into pages of questions; `Apply` turns answers back into a
+    config. Pre-selection is **pinned → discovered → form default**, and the only form defaults
+    are `merge.style = merge` and `review.mode = full` — every other field defaults to "don't
+    pin", which leaves the key unset. Custom text is validated by the same `repoconfig` rules as
+    the flags.
   - `profile/` (M7): merges discovered with pinned, tagging every value. Gate discovery —
     and the pinned-over-discovered merge — belong to `gate.Detect` since M5; the profile
     consumes the tagged result rather than redoing it.
@@ -204,8 +211,9 @@ reads as it does:
     `mkit_tree_fingerprint`** via `pluginroot.CommonFunc`, never reimplemented, until M5 ports it.
 - `internal/tui/` — Bubble Tea rendering over `core`, one subpackage per command.
   `internal/tui/storageprune/` (M2): the size-sorted tick-list `storage prune --apply` opens on a
-  TTY. `internal/tui/repoinit/` (M7): the `mkit init` form. Neither `Update` holds command logic —
-  one toggles selection, the other edits strings.
+  TTY. `internal/tui/repoinit/` (M7, #31): the `mkit init` form, built with `huh` from an
+  `initplan.Plan`. Neither holds command logic — one toggles selection, the other renders a plan
+  and returns answers.
 - `internal/buildinfo/` — version/commit/date, injected by `-X` ldflags at release.
 - `tools/` — shell that is not part of the plugin payload; staging for a port, and the home
   for one-shot and maintainer scripts. `release.sh` is the one resident (`just release`);
