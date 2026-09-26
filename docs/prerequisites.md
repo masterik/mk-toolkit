@@ -10,7 +10,8 @@ is never a precondition: every command and every skill runs with no config prese
 On a terminal it opens a paged form — Gate, Spec, Commit, Review, Merge, Cleanup — where every
 answer is a choice with a one-line description, pre-selected pinned → discovered → form default
 (`merge` for merge style, `full` for review mode, "don't pin" for the rest), and ends on the exact
-file it would write. Every field is also a flag; with any flag, `--yes`, or no terminal, no form
+file it would write. Enter accepts, Esc or Shift+Tab goes back a prompt, and Esc on the first prompt
+or Ctrl+C anywhere aborts without writing. Every field is also a flag; with any flag, `--yes`, or no terminal, no form
 opens and no form default applies.
 
 The `mkit` **binary** is a separate install (`brew install masterik/tap/mkit`), and since M5 it

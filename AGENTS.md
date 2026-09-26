@@ -211,9 +211,12 @@ reads as it does:
     `mkit_tree_fingerprint`** via `pluginroot.CommonFunc`, never reimplemented, until M5 ports it.
 - `internal/tui/` — Bubble Tea rendering over `core`, one subpackage per command.
   `internal/tui/storageprune/` (M2): the size-sorted tick-list `storage prune --apply` opens on a
-  TTY. `internal/tui/repoinit/` (M7, #31): the `mkit init` form, built with `huh` from an
-  `initplan.Plan`. Neither holds command logic — one toggles selection, the other renders a plan
-  and returns answers.
+  TTY. `internal/tui/repoinit/` (M7, #31): the `mkit init` wizard, a plain Bubble Tea model
+  over an `initplan.Plan` in the clack style (answered prompts collapse to one `◇` line each).
+  Plain Bubble Tea rather than `huh`, for what `huh` could not do: Esc backs up and aborts only on
+  the first prompt, a locked branch is shown but never reachable by the cursor, Back from review
+  lands on the last prompt, and a list scrolls only once its cursor would leave the window.
+  Neither holds command logic — one toggles selection, the other walks a plan and returns answers.
 - `internal/buildinfo/` — version/commit/date, injected by `-X` ldflags at release.
 - `tools/` — shell that is not part of the plugin payload; staging for a port, and the home
   for one-shot and maintainer scripts. `release.sh` is the one resident (`just release`);
