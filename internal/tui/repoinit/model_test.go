@@ -121,18 +121,31 @@ func TestCtrlCAbortsAnywhere(t *testing.T) {
 	}
 }
 
+// reviewTo moves the review page's cursor to the row labelled l and presses Enter.
+func reviewTo(t *testing.T, m *Model, l string) {
+	t.Helper()
+	for i, a := range m.actions() {
+		if strings.HasPrefix(a.label, l) {
+			m.action = i
+			press(m, "enter")
+			return
+		}
+	}
+	t.Fatalf("no review row %q", l)
+}
+
 func TestBackFromReviewReturnsToTheLastPrompt(t *testing.T) {
 	m := New(testPlan())
 	walkTo(t, m, "review")
-	press(m, "down", "enter")
-	if m.Current() != initplan.KeyKeep {
-		t.Fatalf("back from review landed on %s, want %s", m.Current(), initplan.KeyKeep)
+	reviewTo(t, m, "Back")
+	if m.Current() != initplan.KeyMerge {
+		t.Fatalf("back from review landed on %s, want %s", m.Current(), initplan.KeyMerge)
 	}
 	press(m, "enter")
 	if m.Current() != "review" {
 		t.Fatalf("at %s, want review again", m.Current())
 	}
-	press(m, "down", "down", "enter")
+	reviewTo(t, m, "Abort")
 	if !m.Done() || m.Write() {
 		t.Fatalf("abort on review: done=%v write=%v", m.Done(), m.Write())
 	}
@@ -166,9 +179,46 @@ func TestCustomTextIsValidatedBeforeItAdvances(t *testing.T) {
 	}
 }
 
+// The gate and the keep list are not walked: accepting the four pages pins what
+// was found, and review opens either page, returning to review when it is done.
+func TestOptionalPagesOpenFromReviewOnly(t *testing.T) {
+	m := New(testPlan())
+	seen := map[string]bool{}
+	for range 30 {
+		seen[m.Current()] = true
+		if m.Current() == "review" {
+			break
+		}
+		press(m, "enter")
+	}
+	if seen[initplan.GateStepKey("test")] || seen[initplan.KeyKeep] {
+		t.Fatalf("an optional page was walked: %v", seen)
+	}
+	if !strings.Contains(m.View(), "pins test: go test ./...") {
+		t.Errorf("review does not summarise the gate:\n%s", m.View())
+	}
+	reviewTo(t, m, "Change gate")
+	if m.Current() != initplan.GateStepKey("test") {
+		t.Fatalf("change gate opened %s", m.Current())
+	}
+	press(m, "esc")
+	if m.Current() != "review" || m.Done() {
+		t.Fatalf("esc on the gate's first prompt: at %s done=%v, want review", m.Current(), m.Done())
+	}
+	if a := m.actions()[m.action]; a.label != "Change gate" {
+		t.Errorf("review cursor on %q, want back on Change gate", a.label)
+	}
+	reviewTo(t, m, "Change cleanup")
+	press(m, "enter")
+	if m.Current() != "review" {
+		t.Fatalf("after the keep list, at %s, want review", m.Current())
+	}
+}
+
 func TestALockedBranchIsShownButNeverToggled(t *testing.T) {
 	m := New(testPlan())
-	walkTo(t, m, initplan.KeyKeep)
+	walkTo(t, m, "review")
+	reviewTo(t, m, "Change cleanup")
 	if !strings.Contains(m.View(), markTicked+" main  (always kept)") {
 		t.Fatalf("locked main not shown:\n%s", m.View())
 	}
@@ -206,8 +256,9 @@ func TestLongListsScrollAroundTheCursor(t *testing.T) {
 		branches = append(branches, string(rune('a'+i%26))+strings.Repeat("x", i/26))
 	}
 	m := New(initplan.Build(initplan.Input{Candidates: initplan.Candidates{Branches: branches}}))
-	m.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
-	walkTo(t, m, initplan.KeyKeep)
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
+	walkTo(t, m, "review")
+	reviewTo(t, m, "Change cleanup")
 	if !strings.Contains(m.View(), "↓ ") || strings.Contains(m.View(), "↑ ") {
 		t.Fatalf("at the top, want only a below marker:\n%s", m.View())
 	}

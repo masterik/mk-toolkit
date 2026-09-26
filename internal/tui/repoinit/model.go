@@ -9,6 +9,7 @@ package repoinit
 import (
 	"fmt"
 	"slices"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -34,12 +35,23 @@ func (s step) id() string {
 	return s.q.Key
 }
 
-// Review page options.
+// action is one choice on the review page.
+type action struct {
+	kind  int
+	page  int // for actionEdit
+	label string
+	hint  string
+}
+
 const (
 	actionWrite = iota
+	actionEdit
 	actionBack
 	actionAbort
 )
+
+// walkMain is the walk over the pages that are not optional.
+const walkMain = -1
 
 // Model is the wizard. Its values are the answers themselves, so walking back
 // to a prompt opens it on what was already chosen.
@@ -50,6 +62,8 @@ type Model struct {
 	custom map[string]string
 	cursor map[string]int // a multi-select's row cursor
 
+	// walk is walkMain, or the index of the optional page opened from review.
+	walk   int
 	at     string // the current step's id; ignored on the review page
 	review bool
 	action int
@@ -69,7 +83,7 @@ type Model struct {
 // New opens the wizard on the plan's pre-selection.
 func New(p *initplan.Plan) *Model {
 	m := &Model{plan: p, sel: map[string]string{}, multi: map[string][]string{},
-		custom: map[string]string{}, cursor: map[string]int{}, width: 80, height: 24}
+		custom: map[string]string{}, cursor: map[string]int{}, walk: walkMain, width: 80, height: 24}
 	a := p.Preselected()
 	for _, pg := range p.Pages {
 		for _, q := range pg.Questions {
@@ -132,8 +146,12 @@ func (m *Model) steps() []step {
 	a := m.Answers()
 	var out []step
 	for i := range m.plan.Pages {
-		for j := range m.plan.Pages[i].Questions {
-			q := &m.plan.Pages[i].Questions[j]
+		pg := &m.plan.Pages[i]
+		if (m.walk == walkMain && pg.Optional) || (m.walk != walkMain && m.walk != i) {
+			continue
+		}
+		for j := range pg.Questions {
+			q := &pg.Questions[j]
 			if !initplan.Visible(*q, a) {
 				continue
 			}
@@ -180,7 +198,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s, i, _ := m.current()
 		switch msg.String() {
 		case "esc":
-			if i == 0 {
+			if i == 0 && m.walk == walkMain {
 				return m.finish(false)
 			}
 			return m, m.back()
@@ -261,11 +279,12 @@ func (m *Model) updateInput(s step, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) updateReview(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	acts := m.actions()
 	switch msg.String() {
 	case "up", "k":
-		m.action = max(m.action-1, actionWrite)
+		m.action = max(m.action-1, 0)
 	case "down", "j":
-		m.action = min(m.action+1, actionAbort)
+		m.action = min(m.action+1, len(acts)-1)
 	case "pgdown", "ctrl+d", " ":
 		m.scroll += m.previewRows()
 	case "pgup", "ctrl+u":
@@ -273,13 +292,15 @@ func (m *Model) updateReview(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc", "shift+tab":
 		return m, m.back()
 	case "enter":
-		switch m.action {
+		switch a := acts[m.action]; a.kind {
 		case actionWrite:
 			if m.cfgErr != nil {
 				m.err = m.cfgErr.Error()
 				return m, nil
 			}
 			return m.finish(true)
+		case actionEdit:
+			return m, m.open(a.page)
 		case actionBack:
 			return m, m.back()
 		case actionAbort:
@@ -300,7 +321,8 @@ func (m *Model) selIndex(q *initplan.Question) int {
 }
 
 // advance moves to the next prompt, recomputing the walk first: the answer
-// just given may have shown or hidden what follows.
+// just given may have shown or hidden what follows. Past the last prompt of a
+// walk — the main one or an optional page — is the review page.
 func (m *Model) advance() tea.Cmd {
 	m.err = ""
 	s := m.steps()
@@ -313,20 +335,34 @@ func (m *Model) advance() tea.Cmd {
 	return m.enterStep(s[i+1])
 }
 
+// back moves to the previous prompt. From review it is the main walk's last
+// prompt; from an optional page's first prompt it is review again.
 func (m *Model) back() tea.Cmd {
 	m.err = ""
-	s := m.steps()
 	if m.review {
-		m.review = false
+		m.review, m.walk = false, walkMain
+		s := m.steps()
 		m.at = s[len(s)-1].id()
 		return m.enterStep(s[len(s)-1])
 	}
+	s := m.steps()
 	i := m.index(s)
 	if i == 0 {
+		if m.walk != walkMain {
+			m.enterReview()
+		}
 		return nil
 	}
 	m.at = s[i-1].id()
 	return m.enterStep(s[i-1])
+}
+
+// open walks an optional page from the review page.
+func (m *Model) open(page int) tea.Cmd {
+	m.review, m.walk, m.err = false, page, ""
+	s := m.steps()
+	m.at = s[0].id()
+	return m.enterStep(s[0])
 }
 
 func (m *Model) enterStep(s step) tea.Cmd {
@@ -341,9 +377,73 @@ func (m *Model) enterStep(s step) tea.Cmd {
 }
 
 func (m *Model) enterReview() {
-	m.review, m.action, m.scroll, m.err = true, actionWrite, 0, ""
+	back := m.walk
+	m.review, m.walk, m.scroll, m.err = true, walkMain, 0, ""
 	m.input.Blur()
 	m.cfg, m.cfgErr = initplan.Apply(m.plan, m.Answers())
+	// Returning from an optional page lands on that page's row, not on Write.
+	m.action = 0
+	for i, a := range m.actions() {
+		if a.kind == actionEdit && a.page == back {
+			m.action = i
+		}
+	}
+}
+
+// actions are the review page's choices: write, open each optional page, back,
+// abort.
+func (m *Model) actions() []action {
+	write := "Write the file"
+	if m.cfgErr == nil && m.cfg != nil && m.cfg.IsZero() {
+		write = "Finish without writing"
+	}
+	out := []action{{kind: actionWrite, label: write}}
+	for i, pg := range m.plan.Pages {
+		if pg.Optional {
+			out = append(out, action{kind: actionEdit, page: i, label: "Change " + strings.ToLower(pg.Title),
+				hint: m.summary(i)})
+		}
+	}
+	return append(out,
+		action{kind: actionBack, label: "Back — change an answer above"},
+		action{kind: actionAbort, label: "Abort — write nothing"})
+}
+
+// summary is what an optional page currently pins, for its review row.
+func (m *Model) summary(page int) string {
+	if m.cfg == nil {
+		return ""
+	}
+	switch m.plan.Pages[page].Title {
+	case "Gate":
+		if len(m.cfg.Gate.Commands) == 0 {
+			return "nothing pinned; discovered each run"
+		}
+		var names []string
+		for k := range m.cfg.Gate.Commands {
+			names = append(names, k)
+		}
+		sort.Strings(names)
+		for i, k := range names {
+			names[i] = k + ": " + m.cfg.Gate.Commands[k]
+		}
+		return "pins " + strings.Join(names, " · ")
+	case "Cleanup":
+		var keep []string
+		if q := m.plan.Question(initplan.KeyKeep); q != nil {
+			keep = append(keep, q.Locked...)
+		}
+		for _, k := range m.cfg.Cleanup.Keep {
+			if !slices.Contains(keep, k) {
+				keep = append(keep, k)
+			}
+		}
+		if len(keep) == 0 {
+			return "keeps the default branch"
+		}
+		return "keeps " + strings.Join(keep, ", ")
+	}
+	return ""
 }
 
 // ---- rendering ----
@@ -355,21 +455,35 @@ func bar() string { return sDim.Render(markBar) }
 // row is one line under the rule.
 func row(text string) string { return bar() + "  " + text }
 
-// wrap breaks plain text to the column width, one styled row per line.
-func (m *Model) wrap(text string, st lipgloss.Style) []string {
+// wrap breaks plain text to the column width, less indent, one styled row per
+// line.
+func (m *Model) wrap(text string, st lipgloss.Style, indent int) []string {
 	if text == "" {
 		return nil
 	}
-	w := lipgloss.NewStyle().Width(m.inner()).Render(text)
+	w := lipgloss.NewStyle().Width(m.inner() - indent).Render(text)
+	pad := strings.Repeat(" ", indent)
 	var out []string
 	for _, l := range strings.Split(w, "\n") {
-		out = append(out, row(st.Render(strings.TrimRight(l, " "))))
+		out = append(out, row(pad+st.Render(strings.TrimRight(l, " "))))
 	}
 	return out
 }
 
 func (m *Model) progress(page int) string {
-	return fmt.Sprintf("%d/%d · %s", page+1, len(m.plan.Pages), m.plan.Pages[page].Title)
+	if m.plan.Pages[page].Optional {
+		return "optional"
+	}
+	n, at := 0, 0
+	for i, pg := range m.plan.Pages {
+		if !pg.Optional {
+			n++
+			if i == page {
+				at = n
+			}
+		}
+	}
+	return fmt.Sprintf("%d/%d", at, n)
 }
 
 func label(o initplan.Option) string {
@@ -430,7 +544,8 @@ func (m *Model) View() string {
 }
 
 func (m *Model) intro() []string {
-	return []string{sDim.Render(markIntro) + "  " + sTitle.Render("mkit init"), bar()}
+	return []string{sDim.Render(markIntro) + "  " + sTitle.Render("mkit init") +
+		sDim.Render("  pin how this repo works, in "+repoconfig.RelPath), bar()}
 }
 
 // history is one line per answered prompt; a custom option's text stands in
@@ -456,37 +571,49 @@ func (m *Model) history(upto int, s []step) []string {
 
 func (m *Model) viewStep() []string {
 	s, i, all := m.current()
-	lines := append(m.intro(), m.history(i, all)...)
+	lines := m.intro()
+	// History is the page's own when an optional page is open: review is where
+	// the main walk's answers are.
+	lines = append(lines, m.history(i, all)...)
+	pg := m.plan.Pages[s.page]
 	q := s.q
+
+	lines = append(lines, sAccent.Render(markActive)+"  "+sTitle.Render(pg.Title)+
+		sDim.Render("  "+m.progress(s.page)))
+	lines = append(lines, m.wrap(pg.Intro, sDim, 0)...)
+	lines = append(lines, bar())
+
 	title := q.Title
 	if s.custom {
 		title = q.CustomTitle
 	}
-	lines = append(lines, sAccent.Render(markActive)+"  "+sTitle.Render(title)+
-		sDim.Render("  "+m.progress(s.page)))
+	lines = append(lines, row(sFg.Bold(true).Render(title)))
 
 	var help string
 	switch {
 	case s.custom:
-		lines = append(lines, row(m.input.View()))
+		lines = append(lines, row(sAccent.Render(markCursor)+" "+m.input.View()))
 		help = "enter confirm"
 	case q.Kind == initplan.Multi:
-		lines = append(lines, m.wrap(q.Description, sDim)...)
-		lines = append(lines, m.wrap(noteText(q), sWarn)...)
+		lines = append(lines, m.wrap(q.Description, sDim, 0)...)
+		lines = append(lines, m.wrap(noteText(q), sWarn, 0)...)
 		lines = append(lines, m.viewMulti(q)...)
 		help = "↑/↓ move · space toggle · enter confirm"
 	default:
-		lines = append(lines, m.wrap(q.Description, sDim)...)
-		lines = append(lines, m.wrap(noteText(q), sWarn)...)
+		lines = append(lines, m.wrap(q.Description, sDim, 0)...)
+		lines = append(lines, m.wrap(noteText(q), sWarn, 0)...)
 		lines = append(lines, m.viewSelect(q)...)
 		help = "↑/↓ choose · enter confirm"
 	}
 	if m.err != "" {
-		lines = append(lines, m.wrap(markError+" "+m.err, sBad)...)
+		lines = append(lines, m.wrap(markError+" "+m.err, sBad, 0)...)
 	}
-	if i == 0 {
+	switch {
+	case i == 0 && m.walk == walkMain:
 		help += " · esc abort"
-	} else {
+	case i == 0:
+		help += " · esc back to review · ctrl+c abort"
+	default:
 		help += " · esc back · ctrl+c abort"
 	}
 	return append(lines, sDim.Render(markOutro)+"  "+sDim.Render(help))
@@ -499,11 +626,11 @@ func noteText(q *initplan.Question) string {
 	return "! " + q.Note
 }
 
-// window is the slice of rows shown for a list of n with the cursor at c. It
-// starts at the top and moves only once the cursor would leave it, so a
-// pre-selection near the end never hides the options above it that fit.
-func (m *Model) window(n, c int) (int, int) {
-	rows := max(4, m.height-12)
+// window is the slice of rows shown for a list of n with the cursor at c, when
+// rows fit. It starts at the top and moves only once the cursor would leave it,
+// so a pre-selection near the end never hides the options above it that fit.
+func window(n, c, rows int) (int, int) {
+	rows = max(3, rows)
 	if n <= rows {
 		return 0, n
 	}
@@ -514,9 +641,11 @@ func (m *Model) window(n, c int) (int, int) {
 	return from, from + rows
 }
 
+// viewSelect shows every option with its description beneath it: a choice is
+// only a choice when what each one does is on screen.
 func (m *Model) viewSelect(q *initplan.Question) []string {
 	c := m.selIndex(q)
-	from, to := m.window(len(q.Options), c)
+	from, to := window(len(q.Options), c, (m.height-16)/2)
 	var lines []string
 	if from > 0 {
 		lines = append(lines, row(sDim.Render(fmt.Sprintf("↑ %d more", from))))
@@ -526,14 +655,12 @@ func (m *Model) viewSelect(q *initplan.Question) []string {
 		if i == c {
 			lines = append(lines, row(sAccent.Render(markOn)+" "+label(o)))
 		} else {
-			lines = append(lines, row(sDim.Render(markOff+" "+o.Label)))
+			lines = append(lines, row(sDim.Render(markOff)+" "+label(o)))
 		}
+		lines = append(lines, m.wrap(o.Description, sDim, 4)...)
 	}
 	if to < len(q.Options) {
 		lines = append(lines, row(sDim.Render(fmt.Sprintf("↓ %d more", len(q.Options)-to))))
-	}
-	if d := q.Options[c].Description; d != "" {
-		lines = append(lines, m.wrap("↳ "+d, sDim)...)
 	}
 	return lines
 }
@@ -546,7 +673,7 @@ func (m *Model) viewMulti(q *initplan.Question) []string {
 		lines = append(lines, row("  "+sDim.Render(markTicked+" "+l+"  (always kept)")))
 	}
 	c := min(m.cursor[q.Key], len(q.Options)-1)
-	from, to := m.window(len(q.Options), c)
+	from, to := window(len(q.Options), c, m.height-16)
 	if from > 0 {
 		lines = append(lines, row(sDim.Render(fmt.Sprintf("  ↑ %d more", from))))
 	}
@@ -569,7 +696,7 @@ func (m *Model) viewMulti(q *initplan.Question) []string {
 	}
 	if c >= 0 {
 		if d := q.Options[c].Description; d != "" {
-			lines = append(lines, m.wrap("↳ "+d, sDim)...)
+			lines = append(lines, m.wrap("↳ "+d, sDim, 0)...)
 		}
 	}
 	return lines
@@ -588,14 +715,16 @@ func (m *Model) previewLines() []string {
 }
 
 // previewRows is how much of the file fits above the review options.
-func (m *Model) previewRows() int { return max(3, m.height-10) }
+func (m *Model) previewRows() int { return max(3, m.height-8-2*len(m.actions())) }
 
 func (m *Model) viewReview() []string {
 	lines := m.intro()
+	s := m.steps()
+	lines = append(lines, m.history(len(s), s)...)
 	lines = append(lines, sAccent.Render(markActive)+"  "+sTitle.Render("Review")+
-		sDim.Render("  "+repoconfig.RelPath))
+		sDim.Render("  the file below is what Write puts in "+repoconfig.RelPath))
 	if m.cfgErr != nil {
-		lines = append(lines, m.wrap(markError+" "+m.cfgErr.Error(), sBad)...)
+		lines = append(lines, m.wrap(markError+" "+m.cfgErr.Error(), sBad, 0)...)
 	}
 	pl := m.previewLines()
 	from, to := m.scroll, min(m.scroll+m.previewRows(), len(pl))
@@ -614,19 +743,18 @@ func (m *Model) viewReview() []string {
 		lines = append(lines, row(sDim.Render(fmt.Sprintf("↓ %d more lines · pgdn", len(pl)-to))))
 	}
 	lines = append(lines, bar())
-	write := "Write the file"
-	if m.cfgErr == nil && m.cfg.IsZero() {
-		write = "Finish without writing"
-	}
-	for i, o := range []string{write, "Back — change an answer", "Abort — write nothing"} {
+	for i, a := range m.actions() {
+		mark := sDim.Render(markOff)
 		if i == m.action {
-			lines = append(lines, row(sAccent.Render(markOn)+" "+sFg.Render(o)))
-		} else {
-			lines = append(lines, row(sDim.Render(markOff+" "+o)))
+			mark = sAccent.Render(markOn)
+		}
+		lines = append(lines, row(mark+" "+sFg.Render(a.label)))
+		if a.hint != "" {
+			lines = append(lines, m.wrap(a.hint, sDim, 4)...)
 		}
 	}
 	if m.err != "" {
-		lines = append(lines, m.wrap(markError+" "+m.err, sBad)...)
+		lines = append(lines, m.wrap(markError+" "+m.err, sBad, 0)...)
 	}
 	return append(lines, sDim.Render(markOutro)+"  "+
 		sDim.Render("↑/↓ choose · enter confirm · pgup/pgdn scroll · esc back · ctrl+c abort"))
@@ -642,11 +770,16 @@ func (m *Model) viewDone() []string {
 	}
 	lines := append(m.intro(), m.history(upto, s)...)
 	if m.write {
+		for i, pg := range m.plan.Pages {
+			if pg.Optional {
+				lines = append(lines, sDim.Render(markDone)+"  "+pg.Title+sDim.Render(" · "+m.summary(i)))
+			}
+		}
 		end := "writing " + repoconfig.RelPath
 		if m.cfg != nil && m.cfg.IsZero() {
 			end = "nothing to pin"
 		}
-		return append(lines, sDim.Render(markOutro)+"  "+end)
+		return append(lines, bar(), sDim.Render(markOutro)+"  "+end)
 	}
 	return append(lines, sBad.Render(markAbort)+"  "+"aborted — nothing written")
 }
