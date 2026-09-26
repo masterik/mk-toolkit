@@ -11,10 +11,10 @@ A value mkit reads off the repo (history, git config, CODEOWNERS, manifests, tas
 
 **Form default**:
 The option `mkit init` pre-selects when neither a pinned nor a discovered value exists. A suggestion only — it becomes a **Pinned value** when the user accepts it, and "don't pin" is always one of the options.
+_Avoid_: default config
 
 **Optional page**:
 A page of the `mkit init` wizard that is not walked — the gate and the cleanup keep list. Its pre-selection is written as it stands; the review page opens it for a change.
-_Avoid_: default config
 
 **Scope**:
 The area-of-change in a conventional commit's parentheses (`feat(cli): …`). Repo-specific; discovered from history.

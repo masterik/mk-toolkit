@@ -7,6 +7,9 @@ table below, and decision 5's premise. Decisions 1–4 stand.
 something "in M3" is void — M3 was withdrawn.
 **Amended 2026-09-10** — decision 1's config **path** is now settled: `<toplevel>/.mkit/config.toml`.
 See [Amendment: the config path](#amendment-the-config-path) at the end.
+**Amended 2026-09-26** — the "pinned remainder" reading of decision 3 is reversed for the gate and
+scopes: `mkit init` pins what discovery finds, and re-discovering is a user act. See
+[Amendment: init pins what it finds](#amendment-init-pins-what-it-finds) at the end.
 
 ## Context
 
