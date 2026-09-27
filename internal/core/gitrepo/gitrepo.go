@@ -311,3 +311,23 @@ func (r *Repo) hasLocalBranch(name string) bool {
 	_, err := run(r.Toplevel, "show-ref", "--verify", "--quiet", "refs/heads/"+name)
 	return err == nil
 }
+
+// Remotes returns every configured remote name, in git's order. Empty when there
+// is none, which is a normal state.
+func (r *Repo) Remotes() []string {
+	out, err := run(r.Toplevel, "remote")
+	if err != nil || out == "" {
+		return nil
+	}
+	return strings.Split(out, "\n")
+}
+
+// LocalBranches returns every local branch name, sorted by refname. Empty on a
+// repo with no commits yet.
+func (r *Repo) LocalBranches() []string {
+	out, err := run(r.Toplevel, "for-each-ref", "refs/heads", "--format=%(refname:short)")
+	if err != nil || out == "" {
+		return nil
+	}
+	return strings.Split(out, "\n")
+}

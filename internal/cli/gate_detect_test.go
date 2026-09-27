@@ -755,3 +755,18 @@ func fullChain(out string) string {
 	}
 	return strings.Join(c, "|")
 }
+
+// A repo's own task runner answers for the steps it defines: its `test` carries
+// the flags and tools the maintainers chose, which `go test ./...` does not.
+func TestDetectPrefersTheRepoRunnersRecipes(t *testing.T) {
+	repo := detectRepo(t)
+	put(t, repo, "go.mod", "module x\n")
+	put(t, repo, "justfile", "lint:\n\tgolangci-lint run\ntest:\n\tgo test -race ./...\nrelease v:\n\techo\n")
+	res := run(t, "gate", "detect")
+	if got := fullChain(res.stdout); got != "just lint|go vet ./...|just test|go build ./..." {
+		t.Errorf("full = %q", got)
+	}
+	if got := field(res.stdout, "ecosystem"); got != "go,just" {
+		t.Errorf("ecosystem = %q", got)
+	}
+}

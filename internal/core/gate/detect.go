@@ -175,28 +175,21 @@ func Detect(repo *gitrepo.Repo, cfg *repoconfig.Config, opt DetectOptions) (*Det
 		full = append(full, "dotnet build --nologo", "dotnet test --nologo")
 	}
 
-	// --- Make / Just: a documented `check:` target ---------------------------
-	checkTarget := regexp.MustCompile(`(?m)^check:`)
-	for _, f := range []string{"Makefile", "makefile", "GNUmakefile"} {
-		if !exists(root, f) {
-			continue
+	// --- Task runners: the repo's own recipes -------------------------------
+	rs := runners(root)
+	for _, r := range rs {
+		if r.eco != "" {
+			addEco(r.eco)
 		}
-		addEco("make")
-		if fileMatches(filepath.Join(root, f), checkTarget) {
-			d.Documented = "make check"
-		}
-		break
 	}
-	for _, f := range []string{"justfile", "Justfile", ".justfile"} {
-		if !exists(root, f) {
-			continue
+	// A documented `check:` is the first runner's that declares one.
+	for _, r := range rs {
+		if r.has("check") {
+			d.Documented = r.prefix + " check"
+			break
 		}
-		addEco("just")
-		if fileMatches(filepath.Join(root, f), checkTarget) {
-			d.Documented = "just check"
-		}
-		break
 	}
+	full = preferRecipes(full, rs)
 
 	// A repo whose only signal is its own `check:` target still has a gate. The
 	// documented target fills an empty chain rather than replacing a discovered

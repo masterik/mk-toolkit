@@ -5,8 +5,18 @@ No hooks (removed in 0.15.0), nothing to build, and no *machine* setup step: ins
 plugin is a clone. What follows is what the skills, and the `mkit` binary they call, need.
 
 Per **repo** there is now one optional step, `mkit init`, which writes `.mkit/config.toml`
-([ADR 0001](adr/0001-per-repo-config-and-init.md)). It pins what inspection cannot establish and
+([ADR 0001](adr/0001-per-repo-config-and-init.md)). It pins what inspection cannot establish, and what discovery found when it ran, and
 is never a precondition: every command and every skill runs with no config present.
+On a terminal it opens a wizard over four pages — Spec, Commit, Review, Merge — each opening with
+what it configures and which skill reads it, every answer a choice with its description on screen,
+pre-selected pinned → discovered → form default (`merge` for merge style, `full` for review mode).
+What discovery finds is pinned, so the gate never changes between runs; `mkit init --force`
+re-discovers and shows a changed discovery beside the pin. The gate (the repo's own `just`/`make`/
+Taskfile/package.json recipes first, else the language's standard commands) and the cleanup keep
+list are optional pages: written as found, opened from the review page, which shows the exact file.
+Enter accepts, Esc or Shift+Tab goes back a prompt, and Esc on the first prompt or Ctrl+C anywhere
+aborts without writing. Every field is also a flag; with any flag, `--yes`, or no terminal, no form
+opens and no form default applies.
 
 The `mkit` **binary** is a separate install (`brew install masterik/tap/mkit`), and since M5 it
 is **required by every skill** — each one's first call is `mkit facts <skill>`, which opens the run
