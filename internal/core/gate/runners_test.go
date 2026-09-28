@@ -84,37 +84,33 @@ func TestTaskfileTasksAreTheFirstLevelUnderTasks(t *testing.T) {
 func TestPreferRecipesStepByStep(t *testing.T) {
 	just := runner{"just", "just", []string{"build", "lint", "test"}}
 	make := runner{"make", "make", []string{"test", "vet"}}
+	goChain := []link{{"vet", "go vet ./..."}, {"test", "go test ./..."}, {"build", "go build ./..."}}
 	for _, tc := range []struct {
 		name  string
-		chain []string
+		chain []link
 		rs    []runner
 		want  []string
 	}{
-		{"no runner keeps the chain", []string{"go vet ./...", "go test ./..."}, nil,
+		{"no runner keeps the chain", goChain[:2], nil,
 			[]string{"go vet ./...", "go test ./..."}},
-		{"recipes replace by step and add lint in order",
-			[]string{"go vet ./...", "go test ./...", "go build ./..."}, []runner{just},
+		{"recipes replace by step and add lint in order", goChain, []runner{just},
 			[]string{"just lint", "go vet ./...", "just test", "just build"}},
-		{"the first runner wins a step",
-			[]string{"go vet ./...", "go test ./..."}, []runner{just, make},
+		{"the first runner wins a step", goChain[:2], []runner{just, make},
 			[]string{"just lint", "make vet", "just test", "just build"}},
 		{"one recipe answers a polyglot step once",
-			[]string{"npm run test", "go test ./..."}, []runner{make},
+			[]link{{"test", "npm run test"}, {"test", "go test ./..."}}, []runner{make},
 			[]string{"make vet", "make test"}},
 		{"a runner alone is a chain", nil, []runner{just},
 			[]string{"just lint", "just test", "just build"}},
-		{"clippy is the lint a runner's lint replaces",
-			[]string{"cargo clippy --all-targets -- -D warnings", "cargo test"}, []runner{just},
-			[]string{"just lint", "just test", "just build"}},
-		{"python's lint and test are matched by what they run",
-			[]string{"ruff check .", "pytest -q", "mypy ."}, []runner{just},
+		{"a step is matched by its tag, not its command's words",
+			[]link{{"lint", "ruff check ."}, {"test", "pytest -q"}, {"typecheck", "mypy ."}}, []runner{just},
 			[]string{"just lint", "just test", "mypy .", "just build"}},
-		{"unnamed steps keep their place",
-			[]string{"golangci-lint run", "go test ./..."}, []runner{make},
+		{"untagged steps keep their place",
+			[]link{{"", "golangci-lint run"}, {"test", "go test ./..."}}, []runner{make},
 			[]string{"golangci-lint run", "make vet", "make test"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := preferRecipes(tc.chain, tc.rs); !reflect.DeepEqual(got, tc.want) {
+			if got := cmds(preferRecipes(tc.chain, tc.rs)); !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("got  %v\nwant %v", got, tc.want)
 			}
 		})
