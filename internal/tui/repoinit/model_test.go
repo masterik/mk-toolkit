@@ -21,12 +21,12 @@ func testPlan() *initplan.Plan {
 			Gate:   profile.Gate{Steps: []profile.GateStep{{Step: "test", Command: "go test ./..."}}},
 			Scopes: profile.List{Values: []string{"cli"}, Source: profile.Discovered},
 			Review: profile.List{Values: []string{"@a"}, Source: profile.Discovered},
+			Keep:   profile.List{Values: []string{"main"}, Source: profile.Discovered},
 		},
 		Candidates: initplan.Candidates{
-			Remotes:   []initplan.Remote{{Name: "origin", URL: "git@github.com:o/r.git"}},
-			Dirs:      []string{"core"},
-			Branches:  []string{"main", "release"},
-			Protected: []string{"main"},
+			Remotes:  []initplan.Remote{{Name: "origin", URL: "git@github.com:o/r.git"}},
+			Dirs:     []string{"core"},
+			Branches: []string{"main", "release"},
 		},
 	})
 }
