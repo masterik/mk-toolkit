@@ -14,7 +14,9 @@
 package initplan
 
 import (
+	"cmp"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -141,13 +143,53 @@ type Plan struct {
 // Question returns the question with key, or nil.
 func (p *Plan) Question(key string) *Question {
 	for i := range p.Pages {
-		for j := range p.Pages[i].Questions {
-			if p.Pages[i].Questions[j].Key == key {
-				return &p.Pages[i].Questions[j]
-			}
+		if q := p.Pages[i].question(key); q != nil {
+			return q
 		}
 	}
 	return nil
+}
+
+// question returns the page's question with key, or nil.
+func (pg *Page) question(key string) *Question {
+	for i := range pg.Questions {
+		if pg.Questions[i].Key == key {
+			return &pg.Questions[i]
+		}
+	}
+	return nil
+}
+
+// Summary is what an optional page pins in cfg, as one line for its review row.
+// "" for a page with nothing to summarise. Keyed on the page's questions, not
+// its title, so renaming a page cannot silently empty the row.
+func (pg *Page) Summary(cfg *repoconfig.Config) string {
+	if cfg == nil {
+		return ""
+	}
+	if pg.question(KeyGateNew) != nil {
+		if len(cfg.Gate.Commands) == 0 {
+			return "nothing pinned; discovered each run"
+		}
+		var pins []string
+		for _, k := range slices.Sorted(maps.Keys(cfg.Gate.Commands)) {
+			pins = append(pins, k+": "+cfg.Gate.Commands[k])
+		}
+		return "pins " + strings.Join(pins, " · ")
+	}
+	if q := pg.question(KeyKeep); q != nil {
+		keep := slices.Clone(q.Locked)
+		for _, k := range cfg.Cleanup.Keep {
+			if !slices.Contains(keep, k) {
+				keep = append(keep, k)
+			}
+		}
+		if len(keep) == 0 {
+			return "keeps the default branch"
+		}
+		return "keeps " + strings.Join(keep, ", ")
+	}
+	return ""
 }
 
 // Answers is what the form returns: the chosen option values per question, and
@@ -200,8 +242,6 @@ type Candidates struct {
 	Dirs []string
 	// Branches are the local branches.
 	Branches []string
-	// Protected are the branches cleanup keeps regardless of any keep list.
-	Protected []string
 }
 
 // Remote is one git remote.
@@ -327,7 +367,7 @@ func gateQuestions(in Input) []Question {
 		qs = append(qs, gateStep(s.Step, s.Command, pinned[s.Step]))
 	}
 	// A pinned step discovery does not know is still this config's to keep.
-	for _, step := range sortedKeys(pinned) {
+	for _, step := range slices.Sorted(maps.Keys(pinned)) {
 		if !seen[step] {
 			qs = append(qs, gateStep(step, "", pinned[step]))
 		}
@@ -388,12 +428,7 @@ func gateStep(step, discovered, pinned string) Question {
 		q.Options = append(q.Options, Option{Value: DontPin, Label: "drop the pin",
 			Description: "stop running this step; nothing discovers it"})
 	}
-	switch {
-	case pinned != "":
-		q.Selected = []string{pinned}
-	default:
-		q.Selected = []string{discovered}
-	}
+	q.Selected = []string{cmp.Or(pinned, discovered)}
 	return q
 }
 
@@ -471,9 +506,9 @@ func RemoteSlug(url string) string {
 	return u
 }
 
-// CommitTypes are the conventional-commit types. A directory named after one is
+// commitTypes are the conventional-commit types. A directory named after one is
 // not offered as a scope: a type and a scope are different things (CONTEXT.md).
-var CommitTypes = []string{"feat", "fix", "docs", "style", "refactor", "perf", "test",
+var commitTypes = []string{"feat", "fix", "docs", "style", "refactor", "perf", "test",
 	"build", "ci", "chore", "revert"}
 
 func scopes(in Input) []Question {
@@ -526,7 +561,7 @@ func scopes(in Input) []Question {
 		add(s, Discovered, "used in history", len(pinned) == 0)
 	}
 	for _, d := range in.Candidates.Dirs {
-		if !slices.Contains(CommitTypes, d) {
+		if !slices.Contains(commitTypes, d) {
 			add(d, Suggested, "a directory in this repo", false)
 		}
 	}
@@ -535,8 +570,8 @@ func scopes(in Input) []Question {
 	return []Question{lead, list}
 }
 
-// SubjectPresets are the subject-length limits offered as options.
-var SubjectPresets = []int{50, 72, 100}
+// subjectPresets are the subject-length limits offered as options.
+var subjectPresets = []int{50, 72, 100}
 
 func subjectMax(in Input) Question {
 	q := Question{Key: KeySubjectMax, Kind: Select, Title: "Subject max",
@@ -545,7 +580,7 @@ func subjectMax(in Input) Question {
 		CustomTitle: "Subject max", CustomPlaceholder: "a number of characters"}
 	desc := map[int]string{50: "the classic git convention", 72: "fits a standard terminal line",
 		100: "roomy; fits most web views"}
-	for _, n := range SubjectPresets {
+	for _, n := range subjectPresets {
 		q.Options = append(q.Options, Option{Value: strconv.Itoa(n), Label: strconv.Itoa(n), Description: desc[n]})
 	}
 	q.Options = append(q.Options,
@@ -619,8 +654,19 @@ func mergeStyle(in Input) Question {
 
 func keep(in Input) Question {
 	q := Question{Key: KeyKeep, Kind: Multi, Title: "Keep branches",
-		Locked:      slices.Clone(in.Candidates.Protected),
 		CustomTitle: "More branches", CustomPlaceholder: "comma-separated branch names"}
+	// What cleanup protects with nothing pinned is the profile's discovered keep
+	// list — branchscan's one answer. Only a local branch is shown as always
+	// kept: a default branch known only from the remote's HEAD has nothing here
+	// for cleanup to delete, and listing it would present a branch the user
+	// cannot see.
+	if k := in.Discovered.Keep; k.Source == profile.Discovered {
+		for _, b := range k.Values {
+			if slices.Contains(in.Candidates.Branches, b) {
+				q.Locked = append(q.Locked, b)
+			}
+		}
+	}
 	if len(q.Locked) > 0 {
 		q.Description = "Branches cleanup must never delete. Always kept: " +
 			strings.Join(q.Locked, ", ") + "."
@@ -661,14 +707,13 @@ func Validate(key, text string) error {
 	switch {
 	case key == KeySubjectMax:
 		n, err := strconv.Atoi(text)
-		if err != nil || n <= 0 {
-			return fmt.Errorf("a subject length is %s", repoconfig.Rule("commit.subject_max"))
+		if err != nil {
+			n = 0
 		}
+		return repoconfig.CheckSubjectMax(n)
 	case key == KeyGateNew:
-		step, command, ok := strings.Cut(text, "=")
-		if !ok || strings.TrimSpace(step) == "" || strings.TrimSpace(command) == "" {
-			return fmt.Errorf("expected step=command")
-		}
+		_, _, err := repoconfig.ParseGatePin(text)
+		return err
 	case strings.HasPrefix(key, gateStepPre), key == KeySpecRef:
 		if text == "" {
 			return fmt.Errorf("type a value, or go back and choose another option")
@@ -678,9 +723,7 @@ func Validate(key, text string) error {
 			return fmt.Errorf("type at least one name, or untick + add")
 		}
 	default:
-		if allowed := repoconfig.Allowed(key); allowed != nil && !repoconfig.OneOf(text, allowed) {
-			return fmt.Errorf("expected one of %s", strings.Join(allowed, ", "))
-		}
+		return repoconfig.CheckAllowed(key, text)
 	}
 	return nil
 }
@@ -745,15 +788,15 @@ func Apply(p *Plan, a Answers) (*repoconfig.Config, error) {
 				return nil, err
 			}
 			if v != "" {
-				setGate(cfg, strings.TrimPrefix(q.Key, gateStepPre), v)
+				cfg.SetGate(strings.TrimPrefix(q.Key, gateStepPre), v)
 			}
 		}
 	}
 	if v, err := one(KeyGateNew); err != nil {
 		return nil, err
 	} else if v != "" {
-		step, command, _ := strings.Cut(v, "=")
-		setGate(cfg, strings.TrimSpace(step), strings.TrimSpace(command))
+		step, command, _ := repoconfig.ParseGatePin(v) // one() validated it
+		cfg.SetGate(step, command)
 	}
 
 	var err error
@@ -771,10 +814,10 @@ func Apply(p *Plan, a Answers) (*repoconfig.Config, error) {
 		return nil, err
 	}
 	if sm != "" {
-		n, err := strconv.Atoi(sm)
-		if err != nil || n <= 0 {
-			return nil, fmt.Errorf("%s %q: a subject length is %s", KeySubjectMax, sm, repoconfig.Rule("commit.subject_max"))
+		if err := Validate(KeySubjectMax, sm); err != nil {
+			return nil, fmt.Errorf("%s %q: %w", KeySubjectMax, sm, err)
 		}
+		n, _ := strconv.Atoi(sm)
 		cfg.Commit.SubjectMax = &n
 	}
 	if cfg.Review.Reviewers, err = many(KeyReviewers); err != nil {
@@ -807,13 +850,6 @@ func Apply(p *Plan, a Answers) (*repoconfig.Config, error) {
 	return cfg, nil
 }
 
-func setGate(cfg *repoconfig.Config, step, command string) {
-	if cfg.Gate.Commands == nil {
-		cfg.Gate.Commands = map[string]string{}
-	}
-	cfg.Gate.Commands[step] = command
-}
-
 func splitList(s string) []string {
 	var out []string
 	for _, p := range strings.Split(s, ",") {
@@ -822,13 +858,4 @@ func splitList(s string) []string {
 		}
 	}
 	return out
-}
-
-func sortedKeys(m map[string]string) []string {
-	ks := make([]string, 0, len(m))
-	for k := range m {
-		ks = append(ks, k)
-	}
-	slices.Sort(ks)
-	return ks
 }
