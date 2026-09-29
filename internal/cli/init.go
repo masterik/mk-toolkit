@@ -275,6 +275,10 @@ func emitInit(out io.Writer, opts Options, res initResult) error {
 		enc.SetIndent("", "  ")
 		return enc.Encode(res)
 	}
+	if opts.Pretty {
+		prettyInit(out, res)
+		return nil
+	}
 	if res.Written {
 		_, _ = fmt.Fprintf(out, "wrote %s\n", res.Path)
 	} else {

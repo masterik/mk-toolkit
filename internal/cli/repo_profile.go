@@ -35,6 +35,10 @@ func newRepoProfileCmd() *cobra.Command {
 				enc.SetIndent("", "  ")
 				return enc.Encode(p)
 			}
+			if opts.Pretty {
+				prettyProfile(cmd.OutOrStdout(), p)
+				return nil
+			}
 			renderProfile(cmd.OutOrStdout(), p)
 			return nil
 		},

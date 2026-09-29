@@ -47,6 +47,10 @@ func newAuditSessionsCmd() *cobra.Command {
 				enc.SetIndent("", "  ")
 				return enc.Encode(rep)
 			}
+			if FromContext(cmd).Pretty {
+				prettyAudit(cmd.OutOrStdout(), rep, top)
+				return nil
+			}
 			renderAudit(cmd.OutOrStdout(), rep, top)
 			return nil
 		},

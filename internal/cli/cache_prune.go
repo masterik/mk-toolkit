@@ -59,6 +59,11 @@ func renderDryRun(cmd *cobra.Command, opts Options, report *cache.Report) error 
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(report)
 	}
 
+	if opts.Pretty {
+		prettyCache(cmd.OutOrStdout(), report, false, nil)
+		return nil
+	}
+
 	out := cmd.OutOrStdout()
 	_, _ = fmt.Fprintf(out, "mode: DRY-RUN   retention: %dd\n\n", report.Days)
 	for _, p := range report.Providers {
@@ -84,6 +89,11 @@ func applyAndRender(cmd *cobra.Command, opts Options, report *cache.Report, sel 
 
 	if opts.JSON {
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(result)
+	}
+
+	if opts.Pretty {
+		prettyCache(cmd.OutOrStdout(), report, true, result)
+		return nil
 	}
 
 	out := cmd.OutOrStdout()

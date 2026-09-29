@@ -16,7 +16,13 @@ type optionsKey struct{}
 type Options struct {
 	JSON        bool
 	Interactive bool
-	Yes         bool
+	// Pretty is styled, human-facing output: stdout is a terminal, and neither
+	// --json nor --no-tui asked for the machine forms. Distinct from Interactive,
+	// which is a TUI that reads keys — a report is pretty without prompting. A
+	// pipe is never Pretty, which is what keeps the `key=value` text the skills
+	// parse byte-for-byte unchanged.
+	Pretty bool
+	Yes    bool
 }
 
 // FromContext returns the Options resolved for the running command.
@@ -37,13 +43,14 @@ func NewRoot() *cobra.Command {
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			// --json implies non-interactive; so does a piped stdout.
 			interactive := !noTUI && !jsonFlag && term.IsTerminal(int(os.Stdout.Fd()))
-			opts := Options{JSON: jsonFlag, Interactive: interactive, Yes: yes}
+			pretty := !noTUI && !jsonFlag && term.IsTerminal(int(os.Stdout.Fd()))
+			opts := Options{JSON: jsonFlag, Interactive: interactive, Pretty: pretty, Yes: yes}
 			cmd.SetContext(context.WithValue(cmd.Context(), optionsKey{}, opts))
 		},
 	}
 
 	root.PersistentFlags().BoolVar(&jsonFlag, "json", false, "output JSON instead of human-readable text")
-	root.PersistentFlags().BoolVar(&noTUI, "no-tui", false, "disable the interactive TUI even on a terminal")
+	root.PersistentFlags().BoolVar(&noTUI, "no-tui", false, "disable the interactive TUI and styled output, even on a terminal")
 	root.PersistentFlags().BoolVar(&yes, "yes", false, "assume yes to any confirmation")
 
 	root.AddCommand(newVersionCmd())

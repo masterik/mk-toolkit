@@ -92,6 +92,10 @@ func newBranchStatusCmd() *cobra.Command {
 			if FromContext(cmd).JSON {
 				return writeBranchStatusJSON(cmd.OutOrStdout(), s)
 			}
+			if FromContext(cmd).Pretty {
+				prettyBranchStatus(cmd.OutOrStdout(), s)
+				return nil
+			}
 			renderBranchStatus(cmd.OutOrStdout(), s)
 			return nil
 		},

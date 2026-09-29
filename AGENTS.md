@@ -219,6 +219,10 @@ reads as it does:
     read the file cleanly does not rotate.** The fingerprint is **delegated to
     `mkit_tree_fingerprint`** via `pluginroot.CommonFunc`, never reimplemented, until M5 ports it.
 - `internal/tui/` — Bubble Tea rendering over `core`, one subpackage per command.
+  `internal/tui/ui/` is the shared lipgloss styling (palette, status icons, tables, bars) behind the
+  human forms of `doctor`, `repo profile`, `branch status`, `cache prune`, `audit sessions`, `init` and
+  `version`. Those run only when `Options.Pretty` is set — stdout a terminal and neither `--json` nor
+  `--no-tui` given — so a pipe, an agent and every skill still get the unchanged `key=value` text.
   `internal/tui/cacheprune/` (M2): the size-sorted tick-list `cache prune --apply` opens on a
   TTY. `internal/tui/repoinit/` (M7, #31): the `mkit init` wizard, a plain Bubble Tea model
   over an `initplan.Plan` in the clack style (answered prompts collapse to one `◇` line each).
