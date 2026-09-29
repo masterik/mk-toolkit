@@ -239,7 +239,9 @@ Then remove the temp file.
 
 ## Final report (always)
 
-Close with a full report, even if step 1 made no new commits:
+Close with a full report, even if step 1 made no new commits. Open with a one-line bold verdict
+(`**Verdict:** PR opened, ready for review, 2 reviewers requested.`), then the block below; form per
+`../_shared/references/summary-format.md`:
 
 ```
 PR:        <url>
@@ -259,6 +261,10 @@ Commits (<base>..HEAD):
 
 The commit list is step 0's `commits:` block — already in context, and cheap precisely because the diff never
 was. Never just "N commits pushed." Prune with `mkit run prune` on the way out.
+
+After the block, say what the reader still has to do or decide, or "nothing needed from you": CI still
+running, a reviewer that could not be determined, a check served from the ledger as `cached`, a pin that went
+nowhere. Never leave those implied by the block's fields alone.
 
 Then record the run:
 

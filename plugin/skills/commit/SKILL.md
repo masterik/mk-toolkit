@@ -205,7 +205,11 @@ confirm hashes, then report every commit — never skip this, even for one:
   <what/why, 1 sentence>
 ```
 
-One block per commit, in order. Say so if staged changes were deliberately left out.
+One block per commit, in order, under a one-line bold verdict (`**Verdict:** 2 commits, tree clean.`) —
+form per `../_shared/references/summary-format.md`. Say so if staged changes were deliberately left out, and
+**name them** (path, and why) rather than counting them. A commit whose split was forced — a file committed
+whole because two hunks shared lines — gets that said under its block, since the reader would otherwise
+assume the split was clean.
 
 Then one line for what the repo told you, where it told you anything — rule 3, and the shortest form
 that satisfies it:

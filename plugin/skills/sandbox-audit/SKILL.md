@@ -146,7 +146,14 @@ In this order, and nothing else:
 4. **Behaviour** — any CLAUDE.md wording, with the counts behind it.
 5. **Undiagnosed** — buckets you could not attribute, one example command each.
 
-Then ask which changes the user is taking. They paste them; this skill does not.
+Open with a one-line bold verdict (`**Verdict:** 40 blocks, 6 changes proposed, 2 stay blocked.`); form per
+`../_shared/references/summary-format.md` — the headline table keeps short cells, and each diff is a
+fenced JSON block, never a table cell.
+
+Then ask which changes the user is taking, through `AskUserQuestion` where the host has it: one question per
+proposed change (header = a short label of at most 12 characters, the full key in the question text, options **take it** / **decline**, the diff in `preview`),
+numbered-list fallback otherwise. An **exclude** change is presented with `decline` first — it is proposed,
+never recommended. They paste the accepted ones; this skill does not.
 
 ### 5. Update the ledger
 
