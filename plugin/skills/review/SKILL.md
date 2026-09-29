@@ -389,7 +389,8 @@ finding the user could ask "what was that?" about gets a self-contained entry (w
    that was `refined`. This is the one place a finding's body appears; later sections refer to it by id.
 7. **Fixed automatically** — per fix: the id, the file, what changed, and why it was safe to apply unasked.
 8. **Needs your decision** — each risky finding with the question phrased as a choice: the proposed fix, the
-   alternative if there is one, and what happens if left alone.
+   alternative if there is one, and what happens if left alone. The written entry stays in the summary; the
+   ask itself goes through the interactive prompt described below.
 9. **Considered, not changed** — each skipped finding and `immaterial` verdict: id, title, and the concrete
    reason it was left (not "immaterial" alone).
 10. **Open questions** — things the review could not settle: a reviewer's unverified doubt, an assumption about
@@ -404,6 +405,14 @@ finding the user could ask "what was that?" about gets a self-contained entry (w
 Do not repeat a finding's body in a later section — refer to it by id — but do not shrink an entry to a title
 either. End on the decision the user has to make (or "nothing needed from you" if nothing is open) — findings
 without an ask is the middle of the job, not the end.
+
+**Ask through `AskUserQuestion` when the host has it**, after the summary is printed, never instead of it.
+One question per finding needing a decision (batch up to four per call, more in further calls), header = the
+finding id, options = the proposed fix (marked recommended, first), the alternative, and `leave as is`, each
+with a one-line description of its consequence. Put the diff of a proposed fix in an option's `preview` where
+it fits. The question text names the finding and the file, so it reads alone. **No such tool** (another host,
+or a non-interactive run) → end with the same choices as a numbered list per finding, recommended first, and
+ask the user to reply with the numbers. The summary is complete either way; the prompt only collects answers.
 
 **Format it to read the same in the Claude app and in a terminal** — both render Markdown, and a terminal
 does not reflow wide or nested structure:
