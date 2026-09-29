@@ -255,10 +255,14 @@ func applyFlags(cfg *repoconfig.Config, f flagValues) error {
 // is then driving `init` from the command line, and the form stays shut. Every
 // local flag but --force pins a field, so a new field flag is covered without a
 // list to keep in step with the registrations.
+//
+// VisitAll and Changed, not Visit: LocalNonPersistentFlags is a fresh FlagSet
+// built with AddFlag, which records a flag as defined but never as set, so
+// Visit on it walks nothing. The *Flag values are shared, so Changed holds.
 func fieldFlagGiven(cmd *cobra.Command) bool {
 	given := false
-	cmd.LocalNonPersistentFlags().Visit(func(f *pflag.Flag) {
-		if f.Name != "force" {
+	cmd.LocalNonPersistentFlags().VisitAll(func(f *pflag.Flag) {
+		if f.Changed && f.Name != "force" {
 			given = true
 		}
 	})

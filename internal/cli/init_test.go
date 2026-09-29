@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/pflag"
 	"golang.org/x/term"
 )
 
@@ -110,6 +111,32 @@ func TestInitKeepsAnExistingConfigWithoutForce(t *testing.T) {
 	for _, want := range []string{`style = 'squash'`, `mode = 'quick'`} {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("--force rewrite lost or lacks %s:\n%s", want, b)
+		}
+	}
+}
+
+// fieldFlagGiven is what keeps the form shut when a field was given on the
+// command line. The tests above run off a TTY, where the form never opens, so
+// none of them would notice it answering false: this asserts it directly, for
+// every local flag, so a new field flag is covered the day it is registered.
+func TestFieldFlagGivenSeesEveryFieldFlag(t *testing.T) {
+	values := map[string]string{"gate": "e2e=make e2e", "subject-max": "0", "force": "true"}
+	if fieldFlagGiven(newInitCmd()) {
+		t.Error("no flags parsed, but a field flag reads as given")
+	}
+	var names []string
+	newInitCmd().LocalNonPersistentFlags().VisitAll(func(f *pflag.Flag) { names = append(names, f.Name) })
+	for _, name := range names {
+		cmd := newInitCmd()
+		v := values[name]
+		if v == "" {
+			v = "x"
+		}
+		if err := cmd.ParseFlags([]string{"--" + name + "=" + v}); err != nil {
+			t.Fatalf("--%s: %v", name, err)
+		}
+		if got, want := fieldFlagGiven(cmd), name != "force"; got != want {
+			t.Errorf("--%s given: fieldFlagGiven = %v, want %v", name, got, want)
 		}
 	}
 }
