@@ -369,28 +369,61 @@ finding nobody raised. Go back and verify those ids — inline is fine, it is a 
 re-run `report`. Only an id whose verifier cannot be re-run at all is reported unverified, named individually
 and above the counts, never folded into them.
 
-Then the prose, in this order. It is a **decision brief, not a record** — the record is the run directory, so
-name that path once and let it hold the detail.
+Then the prose, in this order. It is a **decision brief**: the reader has not seen the run and must be able to
+tell, from this message alone, what was found, what was done about each finding, and what is still open. The
+record is the run directory — name that path once — but a bare count or a bare title is not a summary. Every
+finding the user could ask "what was that?" about gets a self-contained entry (what, where, why it matters).
 
-1. **Mode** — which mode ran, and which reviewers/lenses were **not run by design**, e.g. "Mode: quick —
+1. **Verdict** — one or two sentences first: how many real findings, how many fixed, how many need a
+   decision, and whether anything is blocking. Then the rest.
+2. **Mode** — which mode ran, and which reviewers/lenses were **not run by design**, e.g. "Mode: quick —
    CodeRabbit + Codex (bugs, impl); architecture/quality/tests/docs/comments and adversarial not run." Word it
-   so it reads distinctly from item 2 below: a deliberate narrower scope, never a partial or degraded full run.
-2. **Completeness first** — sources expected vs reported. A failed source goes above every finding.
-3. **Scope** — range reviewed, shortstat, which reviewers actually ran (and lenses no source carried).
-4. **Counts** — one line, by tag: "2 `[code, major]`, 1 `[docs, minor]`". Never a bare "3 findings".
-5. **Findings** — grouped by severity, each headed `[surface, severity] Title — file:line, conf N`, then
-   trigger, consequence, fix. Mark any finding more than one source raised, and any that was `refined`.
-6. **Fixed automatically** — what changed, why it was safe.
-7. **Needs your decision** — risky findings awaiting approval, with the proposed fix.
-8. **Considered, not changed** — skipped findings and `immaterial` verdicts, one line each.
-9. **Open questions** and **pre-existing** — their own short sections, one line each, out of the counts.
-10. **Run directory** — the `<run-dir>` path, and whether a second round ran (and its result) or was
+   so it reads distinctly from item 3 below: a deliberate narrower scope, never a partial or degraded full run.
+3. **Completeness** — sources expected vs reported. A failed source goes above every finding.
+4. **Scope** — range reviewed, shortstat, which reviewers actually ran (and lenses no source carried).
+5. **Counts** — one line, by tag: "2 `[code, major]`, 1 `[docs, minor]`". Never a bare "3 findings".
+6. **Findings** — a table first, one row per reportable finding: `id | [surface, severity] | file:line |
+   title | status` where status is `fixed`, `needs decision`, `skipped` or `open question`. Then, grouped by
+   severity, each finding headed `F<id> [surface, severity] Title` (the id as it appears in the table) with **trigger, consequence,
+   and what was done or proposed**, in full sentences. Mark any finding more than one source raised, and any
+   that was `refined`. This is the one place a finding's body appears; later sections refer to it by id.
+7. **Fixed automatically** — per fix: the id, the file, what changed, and why it was safe to apply unasked.
+8. **Needs your decision** — each risky finding with the question phrased as a choice: the proposed fix, the
+   alternative if there is one, and what happens if left alone.
+9. **Considered, not changed** — each skipped finding and `immaterial` verdict: id, title, and the concrete
+   reason it was left (not "immaterial" alone).
+10. **Open questions** — things the review could not settle: a reviewer's unverified doubt, an assumption about
+    intent, behaviour that depends on something outside the diff. Each names what is unknown, why it matters,
+    and who or what could answer it. Always print the section; write "none" if empty, so its absence is never
+    ambiguous. Keep **pre-existing** problems in their own separate section, out of the counts, one entry each
+    with file:line.
+11. **Run directory** — the `<run-dir>` path, and whether a second round ran (and its result) or was
     skipped. Say plainly that a fixed tree is unverified here — `review` does not build or test it;
     that check runs at `pr`/`finish`.
 
-A body appears in full where the reader acts on it, and nowhere twice: findings the user must decide on carry
-their full body, the one-line sections stay one line. End on the decision the user has to make — findings
+Do not repeat a finding's body in a later section — refer to it by id — but do not shrink an entry to a title
+either. End on the decision the user has to make (or "nothing needed from you" if nothing is open) — findings
 without an ask is the middle of the job, not the end.
+
+**Format it to read the same in the Claude app and in a terminal** — both render Markdown, and a terminal
+does not reflow wide or nested structure:
+
+- One `##` heading per section, in the order above, with a blank line around it. Open with the verdict under
+  no heading, as a single bold line: `**Verdict:** 3 findings — 2 fixed, 1 needs your decision.`
+- **Tables only for short cells** — the findings table and the counts. Keep each cell to a few words (id,
+  tag, `path:line`, a short title, status); prose never goes in a cell, since a terminal wraps a long row into
+  an unreadable smear. Keep the table under about 100 columns; drop a column before wrapping one.
+- A finding's full entry is a `###` heading (`### F1 [code, major] Title`) followed by a `path:line · conf N`
+  line and three labelled bullets — **Trigger**, **Consequence**, **Fix** — each one or two sentences. No
+  nesting past one level.
+- Code and paths in backticks; a code fence only for a real snippet or diff, never to make text stand out.
+- Use plain text status words (`fixed`, `needs decision`, `skipped`), not colour emoji — they render at
+  different widths and carry no meaning a screen reader or a pipe can keep. A single leading marker such as
+  `✓` or `?` is fine where it saves a word.
+- No HTML, no horizontal rules between every section, no bold on whole sentences. Bold marks the verdict,
+  the bullet labels and the final ask — nothing else.
+- The closing ask is its own short paragraph at the very end, after the run directory line, so it is the last
+  thing on screen.
 
 Then record the run:
 
@@ -424,7 +457,7 @@ one to miss:
   Name the scope: `--assume 'reviewed <range> only; the tree also carried uncommitted changes at this
   fingerprint'`.
 
-Both are the same failure — a fingerprint standing for more than was examined — and both are what item 10 of
+Both are the same failure — a fingerprint standing for more than was examined — and both are what item 11 of
 the summary already says out loud. A record that states its scope lets `finish` match the fingerprint without
 concluding more than the run proved.
 
