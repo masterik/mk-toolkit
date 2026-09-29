@@ -145,6 +145,9 @@ reads as it does:
     being edited is what a report is about, and an installed 0.14.0 answering for a 0.16.0 work
     tree is a wrong answer that looks right.
   - `doctor/` (M7): the checks. Reports; fixes nothing; exit status stays 0 with findings.
+    `orphans.go` is the closed table of paths an older mkit wrote (old `.mkit/work/`, `<git-dir>/mkit`, the
+    hook's `bootstrap.*`), each reported as a `leftovers` warning with the `rm` to run. An entry is dropped
+    once every machine has run a release past the one that stopped writing it.
   - `scratch/` (M5): `<toplevel>/.mkit/` — the scratch root, and the **only** package that writes
     *runtime state* inside a user's work tree. The one other writer there is `repoconfig`, which
     writes the committed `.mkit/config.toml`; both are on `writes_test.go`'s reviewed allowlist,
