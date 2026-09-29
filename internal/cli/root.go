@@ -9,6 +9,15 @@ import (
 	"golang.org/x/term"
 )
 
+// Help groups: what a command is about, not who calls it — most are used by
+// both a person and a skill. Presentation only; no command moves.
+const (
+	groupSetup   = "setup"
+	groupState   = "state"
+	groupReview  = "review"
+	groupCleanup = "cleanup"
+)
+
 type optionsKey struct{}
 
 // Options is the front-end contract every command reads instead of checking
@@ -53,18 +62,27 @@ func NewRoot() *cobra.Command {
 	root.PersistentFlags().BoolVar(&noTUI, "no-tui", false, "disable the interactive TUI and styled output, even on a terminal")
 	root.PersistentFlags().BoolVar(&yes, "yes", false, "assume yes to any confirmation")
 
-	root.AddCommand(newVersionCmd())
-	root.AddCommand(newCacheCmd())
-	root.AddCommand(newRepoCmd())
-	root.AddCommand(newInitCmd())
-	root.AddCommand(newDoctorCmd())
-	root.AddCommand(newFindingsCmd())
-	root.AddCommand(newGateCmd())
-	root.AddCommand(newBranchCmd())
-	root.AddCommand(newFactsCmd())
-	root.AddCommand(newScratchCmd())
-	root.AddCommand(newWorklogCmd())
-	root.AddCommand(newAuditCmd())
+	root.AddGroup(
+		&cobra.Group{ID: groupSetup, Title: "Setup & health:"},
+		&cobra.Group{ID: groupState, Title: "Repo & branch state:"},
+		&cobra.Group{ID: groupReview, Title: "Quality gate & review:"},
+		&cobra.Group{ID: groupCleanup, Title: "Housekeeping & audit:"},
+	)
+	root.SetHelpCommandGroupID(groupSetup)
+	root.SetCompletionCommandGroupID(groupSetup)
+
+	add := func(group string, cmds ...*cobra.Command) {
+		for _, c := range cmds {
+			c.GroupID = group
+			root.AddCommand(c)
+		}
+	}
+	add(groupSetup, newInitCmd(), newDoctorCmd(), newVersionCmd())
+	add(groupState, newFactsCmd(), newRepoCmd(), newBranchCmd(), newWorklogCmd())
+	add(groupReview, newGateCmd(), newFindingsCmd())
+	add(groupCleanup, newScratchCmd(), newCacheCmd(), newAuditCmd())
+
+	installPrettyHelp(root)
 
 	return root
 }

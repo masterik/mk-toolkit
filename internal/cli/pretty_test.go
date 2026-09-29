@@ -125,3 +125,34 @@ func TestPlainOutputHasNoEscapesOffATerminal(t *testing.T) {
 		t.Errorf("plain version form changed: %q", res.stdout)
 	}
 }
+
+func TestPrettyHelpGroupsCommandsAndListsFlags(t *testing.T) {
+	forceColour(t)
+	root := NewRoot()
+	var b bytes.Buffer
+	prettyHelp(&b, root)
+	plain := ansi.ReplaceAllString(b.String(), "")
+	show(t, b.String())
+	for _, want := range []string{"── Setup & health", "── Quality gate & review", "doctor", "── flags", "--json"} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("missing %q in:\n%s", want, plain)
+		}
+	}
+	sub, _, err := root.Find([]string{"branch", "status"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.Reset()
+	prettyHelp(&b, sub)
+	if p := ansi.ReplaceAllString(b.String(), ""); !strings.Contains(p, "--default string") || !strings.Contains(p, "── usage") || !strings.Contains(p, "── global flags") {
+		t.Errorf("subcommand help incomplete:\n%s", p)
+	}
+}
+
+// Off a terminal the stock cobra help is untouched.
+func TestHelpIsStockOffATerminal(t *testing.T) {
+	res := run(t, "--help")
+	if ansi.MatchString(res.stdout) || !strings.Contains(res.stdout, "Available Commands:") && !strings.Contains(res.stdout, "Setup & health:") {
+		t.Errorf("help changed off a terminal:\n%s", res.stdout)
+	}
+}
