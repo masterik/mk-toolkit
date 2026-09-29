@@ -346,7 +346,8 @@ removed.` — or where and why it stopped short); form per `../_shared/reference
 - What merged into what, the resulting base HEAD, and that branch + worktree were removed.
 - Anything left in place on purpose (unmerged commits, dirty tree, a delete the user declined) — say so
   explicitly, each with its path or name and why, or "nothing left behind" so the absence is not ambiguous.
-- Where the run stopped short: what is needed from the user to continue, as the last line.
+- What is needed from the user, as the last line: how to continue where the run stopped short, or
+  "nothing needed from you" when it completed.
 
 Then record the run — from wherever this session ends up, and **only if that is still a work tree with
 this branch's log in it**. `finish` is the one step that usually destroys its own log: the worklog lives in

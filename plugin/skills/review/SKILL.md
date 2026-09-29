@@ -383,7 +383,8 @@ finding the user could ask "what was that?" about gets a self-contained entry (w
 4. **Scope** — range reviewed, shortstat, which reviewers actually ran (and lenses no source carried).
 5. **Counts** — one line, by tag: "2 `[code, major]`, 1 `[docs, minor]`". Never a bare "3 findings".
 6. **Findings** — a table first, one row per reportable finding: `id | [surface, severity] | file:line |
-   title | status` where status is `fixed`, `needs decision`, `skipped` or `open question`. Then, grouped by
+   title | status` where status is `fixed`, `needs decision` or `skipped`. Open questions get no row: they are not
+   findings, and item 10 lists them. Then, grouped by
    severity, each finding headed `F<id> [surface, severity] Title` (the id as it appears in the table) with **trigger, consequence,
    and what was done or proposed**, in full sentences. Mark any finding more than one source raised, and any
    that was `refined`. This is the one place a finding's body appears; later sections refer to it by id.

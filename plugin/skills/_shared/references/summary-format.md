@@ -37,7 +37,9 @@ answers:
 
 - **Host has `AskUserQuestion`** → one question per decision, up to four per call (more in further
   calls). Header = a short id of at most 12 characters (finding id, a truncated branch name or setting); the full name goes in the question text. Options: the recommended action first
-  and marked so, then the alternative, then the do-nothing choice, each with a one-line consequence. A diff
+  and marked so, then the alternative, then the do-nothing choice, each with a one-line consequence. A skill
+  may define its own choice set (`take it` / `decline`); mark a recommendation only where the skill has one,
+  and put the do-nothing choice first when none is recommended. A diff
   or a config snippet goes in `preview`. The question text names the subject, so it reads alone.
 - **No such tool** (another host, or a non-interactive run) → end with the same choices as a numbered list
   per decision, recommended first, and ask the user to reply with the numbers.
