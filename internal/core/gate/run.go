@@ -173,7 +173,7 @@ func Run(repo *gitrepo.Repo, steps []Step, opt RunOptions) (*Result, error) {
 		return nil, err
 	}
 	if fi, err := os.Stat(opt.RunDir); err != nil || !fi.IsDir() {
-		return nil, fmt.Errorf("run directory does not exist: %s (open it with `mkit run open`)", opt.RunDir)
+		return nil, fmt.Errorf("run directory does not exist: %s (open it with `mkit scratch open`)", opt.RunDir)
 	}
 
 	// --- the gate ledger ---------------------------------------------------

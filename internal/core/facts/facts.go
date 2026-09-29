@@ -235,7 +235,7 @@ func Gather(repo *gitrepo.Repo, opt Options) (*Facts, error) {
 	f.RunIgnored = scratch.Ignored(repo)
 	if !f.RunIgnored {
 		f.Notes = append(f.Notes, fmt.Sprintf(
-			"run_ignored=no — .mkit/ is not ignored here, so a staging step would sweep run\n"+
+			"scratch_ignored=no — .mkit/ is not ignored here, so a staging step would sweep run\n"+
 				"  artefacts into a commit and `git worktree remove` would refuse. Do not stage while\n"+
 				"  this says no. Remedy: %s.", scratch.IgnoredRemedy(f.CommonDir)))
 	}
@@ -371,7 +371,7 @@ func (f *Facts) setBranch(repo *gitrepo.Repo) {
 	}
 	f.Remote = firstLine(git(repo, "remote"))
 
-	// Delegated, never re-derived: `mkit branch scan` is handed this answer and
+	// Delegated, never re-derived: `mkit branch status` is handed this answer and
 	// `mkit repo profile` reports the branches it protects, so the resolution
 	// lives in exactly one place.
 	f.DefaultBranch = repo.DefaultBranch()
@@ -388,7 +388,7 @@ func (f *Facts) setBranch(repo *gitrepo.Repo) {
 // excludeScratch keeps mkit's own scratch out of every enumeration of the user's
 // work. The run directory lives *inside* the working directory, so without it the
 // scratch mkit just created is reported back to the skill as the user's own
-// change — and `run_ignored=no` is exactly the session that hits it.
+// change — and `scratch_ignored=no` is exactly the session that hits it.
 //
 // It excludes the scratch *contents* rather than the directory, because
 // `.mkit/config.toml` is committed repo config — the user's own file. Excluding

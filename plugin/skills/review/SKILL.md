@@ -137,7 +137,7 @@ opens a second directory (`output-discipline.md`).
 Then read what already ran on this branch:
 
 ```bash
-mkit work show --json --limit 20
+mkit worklog show --json --limit 20
 ```
 
 **Unconditional, here and everywhere else** (`workflow-contract.md`, "Reading it"). Step 0 already
@@ -438,12 +438,12 @@ does not reflow wide or nested structure:
 Then record the run:
 
 ```bash
-mkit work append --step review --gist '<one line: what this review concluded>' \
+mkit worklog append --step review --gist '<one line: what this review concluded>' \
   --artifact '<run-dir>' [--assume '<what this run derived rather than found>']...
 ```
 
 The run directory is the right `--artifact` here — it is what this step produced — but it is **perishable**:
-step 6 folds in `mkit run prune`, which keeps the newest five per skill and additionally spares anything
+step 6 folds in `mkit scratch prune`, which keeps the newest five per skill and additionally spares anything
 touched in the last 60 minutes, so the path survives an unpredictable number of later reviews and then stops
 existing. That is expected; the gist carries the conclusion. Name the reviewed range in the gist so the record
 still says what it covered once the directory is gone.
@@ -472,7 +472,7 @@ the summary already says out loud. A record that states its scope lets `finish` 
 concluding more than the run proved.
 
 Do not commit unless asked — leave fixes in the working tree for the user to commit (or chain into `commit`).
-Fold `mkit run prune` into step 6's call rather than spending a turn on it.
+Fold `mkit scratch prune` into step 6's call rather than spending a turn on it.
 
 ## Git safety
 

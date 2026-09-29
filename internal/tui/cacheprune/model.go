@@ -1,8 +1,8 @@
-// Package storageprune is the Bubble Tea front end over
-// internal/core/storage for "mkit storage prune --apply" on a terminal.
+// Package cacheprune is the Bubble Tea front end over
+// internal/core/cache for "mkit cache prune --apply" on a terminal.
 // Update holds no prune logic — it only toggles selection state; the
-// confirmed selection goes back to storage.Apply.
-package storageprune
+// confirmed selection goes back to cache.Apply.
+package cacheprune
 
 import (
 	"fmt"
@@ -12,12 +12,12 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/masterik/mk-toolkit/internal/core/storage"
+	"github.com/masterik/mk-toolkit/internal/core/cache"
 )
 
 type row struct {
 	providerName string
-	category     storage.CategoryReport
+	category     cache.CategoryReport
 	selected     bool
 }
 
@@ -28,7 +28,7 @@ type model struct {
 	aborted   bool
 }
 
-func newModel(report *storage.Report) model {
+func newModel(report *cache.Report) model {
 	var rows []row
 	for _, p := range report.Providers {
 		for _, c := range p.Categories {
@@ -109,28 +109,28 @@ func (m model) View() string {
 		}
 
 		kind := "files"
-		if r.category.Kind == storage.KindStaleDirs {
+		if r.category.Kind == cache.KindStaleDirs {
 			kind = "dirs"
 		}
 
 		line := fmt.Sprintf("%s %s %-8s %-38s %4d %s, %s",
-			cursor, mark, r.providerName, r.category.Label, len(r.category.Entries), kind, storage.HumanBytes(r.category.Bytes))
+			cursor, mark, r.providerName, r.category.Label, len(r.category.Entries), kind, cache.HumanBytes(r.category.Bytes))
 		b.WriteString(style.Render(line))
 		b.WriteString("\n")
 	}
 
 	b.WriteString("\n")
-	fmt.Fprintf(&b, "selected: %s\n", storage.HumanBytes(total))
+	fmt.Fprintf(&b, "selected: %s\n", cache.HumanBytes(total))
 	return b.String()
 }
 
 // Run shows the size-sorted tick-list over report and blocks until the
 // user confirms or aborts. ok is false on abort — the caller must delete
 // nothing in that case.
-func Run(report *storage.Report) (sel *storage.Selection, ok bool, err error) {
+func Run(report *cache.Report) (sel *cache.Selection, ok bool, err error) {
 	m := newModel(report)
 	if len(m.rows) == 0 {
-		return storage.NewSelection(), false, nil
+		return cache.NewSelection(), false, nil
 	}
 
 	p := tea.NewProgram(m)
@@ -141,10 +141,10 @@ func Run(report *storage.Report) (sel *storage.Selection, ok bool, err error) {
 
 	fm := final.(model)
 	if fm.aborted || !fm.confirmed {
-		return storage.NewSelection(), false, nil
+		return cache.NewSelection(), false, nil
 	}
 
-	result := storage.NewSelection()
+	result := cache.NewSelection()
 	for _, r := range fm.rows {
 		if !r.selected {
 			continue

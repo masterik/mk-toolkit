@@ -329,12 +329,12 @@ type Cleanup struct {
 	// **It is added to what cleanup protects, never substituted for it.** The
 	// default branch is protected whether or not it appears here — a keep list
 	// that omits it is a mistake, not an instruction — and the union lives in
-	// `branchscan.ProtectedSet`, which is its one producer.
+	// `branchstatus.ProtectedSet`, which is its one producer.
 	//
 	// No enumeration, so `Allowed("cleanup.keep")` is nil and `validate` has
 	// nothing to check: any string is a legal branch name to pin, and a name that
 	// is not a local branch here is not an error either — a keep list travels
-	// with the repo, and `mkit branch scan` reports such a name as `keep_unknown=`
+	// with the repo, and `mkit branch status` reports such a name as `keep_unknown=`
 	// rather than refusing it. A blank entry pins nothing and is dropped by the
 	// same producer.
 	Keep []string `toml:"keep,omitempty"`

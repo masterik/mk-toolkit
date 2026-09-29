@@ -104,7 +104,7 @@ func renderFacts(out io.Writer, f *facts.Facts, opt facts.Options) {
 		f.Toplevel, f.GitDir, f.CommonDir, f.Primary)
 	p("linked=%s\nworktrees=%d\n", yesNo(f.Linked), f.Worktrees)
 	p("tmp=%s\n", f.TMP)
-	p("run_ignored=%s\n", yesNo(f.RunIgnored))
+	p("scratch_ignored=%s\n", yesNo(f.RunIgnored))
 	p("config=%s\nconfig_state=%s\n", f.Config, f.ConfigState)
 	p("user_dir=%s\nuser_dir_writable=%s\n", orNone(f.UserDir), yesNo(f.UserDirOK))
 	p("git_bin=%s\n", f.GitBin)
@@ -206,7 +206,7 @@ type factsJSON struct {
 	Linked         bool                 `json:"linked"`
 	Worktrees      int                  `json:"worktrees"`
 	TMP            string               `json:"tmp"`
-	RunIgnored     bool                 `json:"run_ignored"`
+	RunIgnored     bool                 `json:"scratch_ignored"`
 	UserDir        string               `json:"user_dir"`
 	UserDirOK      bool                 `json:"user_dir_writable"`
 	Config         string               `json:"config"`

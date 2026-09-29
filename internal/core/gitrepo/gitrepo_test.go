@@ -179,7 +179,7 @@ func git(t *testing.T, repo *Repo, args ...string) {
 
 // A stale `origin/HEAD` — or one naming a branch that exists only as a
 // remote-tracking ref — must not beat a local branch that is actually here.
-// `mkit branch scan` refuses a --default absent from refs/heads before it
+// `mkit branch status` refuses a --default absent from refs/heads before it
 // fetches, so returning the non-local name stops the whole of `cleanup` on a
 // branch this checkout has never had.
 func TestDefaultBranchPrefersALocalBranchOverAStaleRemoteHead(t *testing.T) {

@@ -51,12 +51,12 @@ reporting less than was actually found.
 
 ## The worklog
 
-`<toplevel>/.mkit/work/<branch>.jsonl` — append-only, one record per finished step, never committed,
+`<toplevel>/.mkit/worklog/<branch>.jsonl` — append-only, one record per finished step, never committed,
 a linked worktree gets its own. Read and written through the binary; no skill parses it by hand.
 
 ```
-mkit work show --json          # what has run on this branch, and what each concluded
-mkit work append --json ...    # one record, at the end of a step
+mkit worklog show --json          # what has run on this branch, and what each concluded
+mkit worklog append --json ...    # one record, at the end of a step
 ```
 
 A record carries the step, when it ran, the content fingerprint it ran over, a pointer to whatever
@@ -74,7 +74,7 @@ is user-wide, opens no run directory and reads no worklog; its first call, `mkit
 its own dependency check. By the time any step reads the log, there is no missing-binary case left to check for.
 
 ```bash
-mkit work show --json --limit 20
+mkit worklog show --json --limit 20
 ```
 
 What the log itself reports is still **one fewer input, never a stop** — rule 4 above, applied to

@@ -210,10 +210,10 @@ func TestFactsTMPNamesTheEphemeralRoot(t *testing.T) {
 func TestFactsRunIgnored(t *testing.T) {
 	repo := factsRepo(t)
 	res := run(t, "facts", "commit", "--no-run")
-	if got := factsField(res.stdout, "run_ignored"); got != "no" {
-		t.Fatalf("run_ignored = %q", got)
+	if got := factsField(res.stdout, "scratch_ignored"); got != "no" {
+		t.Fatalf("scratch_ignored = %q", got)
 	}
-	for _, want := range []string{"notes:", "run_ignored=no", "Do not stage while", "info/exclude"} {
+	for _, want := range []string{"notes:", "scratch_ignored=no", "Do not stage while", "info/exclude"} {
 		if !strings.Contains(res.stdout, want) {
 			t.Errorf("stdout missing %q:\n%s", want, res.stdout)
 		}
@@ -221,8 +221,8 @@ func TestFactsRunIgnored(t *testing.T) {
 
 	// Opening a run directory is what makes it ignored, and the tree stays clean.
 	res = run(t, "facts", "commit")
-	if got := factsField(res.stdout, "run_ignored"); got != "yes" {
-		t.Errorf("run_ignored = %q after opening a run dir", got)
+	if got := factsField(res.stdout, "scratch_ignored"); got != "yes" {
+		t.Errorf("scratch_ignored = %q after opening a run dir", got)
 	}
 	if strings.Contains(res.stdout, "Do not stage while") {
 		t.Errorf("the remedy survived the fix:\n%s", res.stdout)
@@ -346,7 +346,7 @@ func TestFactsDoesNotReportItsOwnPresence(t *testing.T) {
 
 // The run directory lives *inside* the working directory, so without the
 // exclusion the scratch mkit just created is reported back as the user's own
-// change — and `run_ignored=no` is exactly the session that hits it.
+// change — and `scratch_ignored=no` is exactly the session that hits it.
 func TestFactsAnUnignoredScratchIsNotTheUsersWork(t *testing.T) {
 	repo := factsRepo(t)
 	put(t, repo, ".mkit/review-x/step.log", "step output\n")

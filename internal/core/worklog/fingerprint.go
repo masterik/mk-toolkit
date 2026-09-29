@@ -43,7 +43,7 @@ func Fingerprint(toplevel string) (fp string, cause string) {
 // `.mkit/` makes `git worktree remove` refuse, puts the worklog in reach of
 // `git add -A`, and feeds the gate fingerprint a directory that changes while the
 // gate runs. The worklog needs no rule of its own — `.mkit/*` already covers it —
-// but `mkit work append` can be the **first** thing to write under `.mkit/` in a
+// but `mkit worklog append` can be the **first** thing to write under `.mkit/` in a
 // repo where no skill has ever opened a run directory.
 //
 // Delegated, never reimplemented: which file the rule lands in, which probe
@@ -56,7 +56,7 @@ func Fingerprint(toplevel string) (fp string, cause string) {
 // so failure is the normal case on some machines — and contract rule 4 says a
 // recorded fact is an input, never a permission. An append that refused over an
 // ignore rule would be the worklog gating a step. `mkit facts` already reports
-// the state as `run_ignored=` for skills that need to know.
+// the state as `scratch_ignored=` for skills that need to know.
 func ensureIgnored(toplevel string) {
 	repo, err := gitrepo.Open(toplevel)
 	if err != nil {

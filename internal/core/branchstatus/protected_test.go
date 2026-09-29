@@ -1,4 +1,4 @@
-package branchscan
+package branchstatus
 
 import (
 	"strings"

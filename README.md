@@ -23,7 +23,7 @@ Claude-only for now; other agents (Codex, opencode, …) are a later, thin packa
 `_shared/` is the shared **references** bundle (git safety, Conventional Commits, quality
 gate, worktree detection, branching) that the skills link into — not a triggerable skill.
 The mechanical steps are the binary's: `mkit facts` opens a run directory and returns every
-starting fact, `mkit gate detect|run` detects and runs the quality gate, `mkit branch scan`
+starting fact, `mkit gate detect|run` detects and runs the quality gate, `mkit branch status`
 classifies every local branch and worktree for `cleanup`, `mkit audit sessions` reads past
 transcripts for `sandbox-audit`, and `mkit findings` does the arithmetic
 over a review's findings.

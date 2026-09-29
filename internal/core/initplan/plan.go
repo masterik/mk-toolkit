@@ -656,7 +656,7 @@ func keep(in Input) Question {
 	q := Question{Key: KeyKeep, Kind: Multi, Title: "Keep branches",
 		CustomTitle: "More branches", CustomPlaceholder: "comma-separated branch names"}
 	// What cleanup protects with nothing pinned is the profile's discovered keep
-	// list — branchscan's one answer. Only a local branch is shown as always
+	// list — branchstatus's one answer. Only a local branch is shown as always
 	// kept: a default branch known only from the remote's HEAD has nothing here
 	// for cleanup to delete, and listing it would present a branch the user
 	// cannot see.

@@ -18,7 +18,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/masterik/mk-toolkit/internal/core/branchscan"
+	"github.com/masterik/mk-toolkit/internal/core/branchstatus"
 	"github.com/masterik/mk-toolkit/internal/core/gate"
 	"github.com/masterik/mk-toolkit/internal/core/gitrepo"
 	"github.com/masterik/mk-toolkit/internal/core/pluginroot"
@@ -403,13 +403,13 @@ func discoverMerge(repo *gitrepo.Repo, cfg *repoconfig.Config) Value {
 //
 // The discovered answer is what cleanup already protects with nothing pinned:
 // the default branch, plus the first local one of develop/development/dev. It is
-// read from `branchscan`, the package that actually computes it, rather than
+// read from `branchstatus`, the package that actually computes it, rather than
 // restated here — a profile that advertised a different set than the classifier
 // uses would be worse than reporting nothing.
 //
 // A pinned list **replaces** the reported value the way `commit.scopes` and
 // `reviewers` do, and the tag says which. It does not replace the protection:
-// `branchscan.ProtectedSet` unions the pinned names with the default branch, so the
+// `branchstatus.ProtectedSet` unions the pinned names with the default branch, so the
 // default branch is kept whether or not the list names it. This is a report of
 // what was pinned, not of what will survive.
 func discoverKeep(repo *gitrepo.Repo, cfg *repoconfig.Config) List {
@@ -422,5 +422,5 @@ func discoverKeep(repo *gitrepo.Repo, cfg *repoconfig.Config) List {
 			Cause: "no remote HEAD and no local main/master/trunk, so the default branch " +
 				"cleanup protects cannot be named here"}
 	}
-	return List{Values: branchscan.ProtectedSet(def, branchscan.Develop(repo, def), nil), Source: Discovered}
+	return List{Values: branchstatus.ProtectedSet(def, branchstatus.Develop(repo, def), nil), Source: Discovered}
 }

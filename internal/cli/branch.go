@@ -7,6 +7,6 @@ func newBranchCmd() *cobra.Command {
 		Use:   "branch",
 		Short: "Inspect this repo's local branches",
 	}
-	cmd.AddCommand(newBranchScanCmd())
+	cmd.AddCommand(newBranchStatusCmd())
 	return cmd
 }

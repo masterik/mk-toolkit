@@ -55,7 +55,7 @@ brew install git masterik/tap/mkit
 | Tool | Used by | Degrades to |
 | --- | --- | --- |
 | `rg` (ripgrep) | the `fix-checks` sweep | `grep -E` (same output, slower) |
-| `gh` | `pr`, `mkit facts <skill> --gh`, and `mkit branch scan` (`cleanup`) | `pr` cannot open a PR at all; `mkit facts` prints `pr=gh-missing`; `mkit branch scan` falls back to git-only classification and reports `gh=gh-missing` |
+| `gh` | `pr`, `mkit facts <skill> --gh`, and `mkit branch status` (`cleanup`) | `pr` cannot open a PR at all; `mkit facts` prints `pr=gh-missing`; `mkit branch status` falls back to git-only classification and reports `gh=gh-missing` |
 | `wt` ([worktrunk](https://worktrunk.dev)) | `finish` cleanup, `mkit facts` worktree classification | plain `git worktree remove` |
 
 ```bash
@@ -161,10 +161,10 @@ Each subcommand is its own Bash pattern, so the first run of each asks. Allow th
   "permissions": {
     "allow": [
       "Bash(mkit facts:*)",
-      "Bash(mkit run:*)",
+      "Bash(mkit scratch:*)",
       "Bash(mkit findings:*)",
-      "Bash(mkit work:*)",
-      "Bash(mkit branch scan:*)",
+      "Bash(mkit worklog:*)",
+      "Bash(mkit branch status:*)",
       "Bash(mkit gate detect:*)",
       "Bash(mkit gate run:*)"
     ]
@@ -256,11 +256,11 @@ itself reaches for:
 
 | skill / command | host | for |
 | --- | --- | --- |
-| `pr`, `mkit facts --gh`, `mkit branch scan` | `api.github.com`, `github.com` | `gh pr view`, `gh pr list`, `gh pr create` |
+| `pr`, `mkit facts --gh`, `mkit branch status` | `api.github.com`, `github.com` | `gh pr view`, `gh pr list`, `gh pr create` |
 | `pr`, `finish`, `cleanup` | your remote's host (`git remote -v`) | `fetch`, `push` |
 | `review`'s external reviewers | whatever the `codex` / `coderabbit` CLI calls | those are their own tools; check their docs for the hosts |
 
-`cleanup` and `mkit branch scan` degrade rather than fail when GitHub is unreachable: `fetch=failed`
+`cleanup` and `mkit branch status` degrade rather than fail when GitHub is unreachable: `fetch=failed`
 and `gh=gh-unauthenticated` or `gh=gh-error` — unreachable fails the auth probe first, so which of
 the two you get depends on where the request died — with every branch still classified from git
 alone. `pr` cannot open a PR without

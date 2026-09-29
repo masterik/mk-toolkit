@@ -47,7 +47,7 @@ func NewRoot() *cobra.Command {
 	root.PersistentFlags().BoolVar(&yes, "yes", false, "assume yes to any confirmation")
 
 	root.AddCommand(newVersionCmd())
-	root.AddCommand(newStorageCmd())
+	root.AddCommand(newCacheCmd())
 	root.AddCommand(newRepoCmd())
 	root.AddCommand(newInitCmd())
 	root.AddCommand(newDoctorCmd())
@@ -55,8 +55,8 @@ func NewRoot() *cobra.Command {
 	root.AddCommand(newGateCmd())
 	root.AddCommand(newBranchCmd())
 	root.AddCommand(newFactsCmd())
-	root.AddCommand(newRunCmd())
-	root.AddCommand(newWorkCmd())
+	root.AddCommand(newScratchCmd())
+	root.AddCommand(newWorklogCmd())
 	root.AddCommand(newAuditCmd())
 
 	return root

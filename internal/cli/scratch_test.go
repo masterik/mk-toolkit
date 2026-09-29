@@ -13,7 +13,7 @@ import (
 
 func runOpen(t *testing.T, skill string) string {
 	t.Helper()
-	res := run(t, "run", "open", skill)
+	res := run(t, "scratch", "open", skill)
 	if res.code != 0 {
 		t.Fatalf("exit %d: %s%s", res.code, res.stdout, res.stderr)
 	}
@@ -40,8 +40,8 @@ func TestRunOpen(t *testing.T) {
 		t.Errorf("%q is not absolute", dir)
 	}
 	// Nothing but the path on stdout, so it is safe in a command substitution.
-	if strings.Count(run(t, "run", "open", "review").stdout, "\n") != 1 {
-		t.Error("run open printed more than the path")
+	if strings.Count(run(t, "scratch", "open", "review").stdout, "\n") != 1 {
+		t.Error("scratch open printed more than the path")
 	}
 }
 
@@ -58,14 +58,14 @@ func TestRunOpenTwoRunsGetDistinctDirectories(t *testing.T) {
 
 func TestRunOpenUsage(t *testing.T) {
 	factsRepo(t)
-	if res := run(t, "run", "open", "bad skill"); res.code != 2 {
+	if res := run(t, "scratch", "open", "bad skill"); res.code != 2 {
 		t.Errorf("a name that is not a bare slug: exit = %d, want 2", res.code)
 	}
-	if res := run(t, "run", "open"); res.code != 2 {
+	if res := run(t, "scratch", "open"); res.code != 2 {
 		t.Errorf("no arguments: exit = %d, want 2", res.code)
 	}
 	t.Chdir(t.TempDir())
-	if res := run(t, "run", "open", "review"); res.code != 1 {
+	if res := run(t, "scratch", "open", "review"); res.code != 1 {
 		t.Errorf("outside a repo: exit = %d, want 1", res.code)
 	}
 }
@@ -175,17 +175,17 @@ func TestRunPruneUsage(t *testing.T) {
 	factsRepo(t)
 	// `0` is a perfectly good number and would evict every run directory —
 	// including the live one belonging to the caller doing the pruning.
-	if res := run(t, "run", "prune", "--keep", "0"); res.code != 2 {
+	if res := run(t, "scratch", "prune", "--keep", "0"); res.code != 2 {
 		t.Errorf("--keep 0: exit = %d, want 2", res.code)
 	}
-	if res := run(t, "run", "prune", "--keep", "notanumber"); res.code != 2 {
+	if res := run(t, "scratch", "prune", "--keep", "notanumber"); res.code != 2 {
 		t.Errorf("a non-numeric count: exit = %d, want 2", res.code)
 	}
 }
 
 func TestRunPruneWithNothingToPrune(t *testing.T) {
 	factsRepo(t)
-	res := run(t, "run", "prune")
+	res := run(t, "scratch", "prune")
 	if res.code != 0 {
 		t.Fatalf("exit %d: %s", res.code, res.stderr)
 	}
@@ -203,7 +203,7 @@ func TestRunPruneKeepsTheNewestPerSkill(t *testing.T) {
 	}
 	pr := stale(t, repo, "pr-20250101T000001Z-aaaaaa")
 
-	res := run(t, "run", "prune", "--keep", "2")
+	res := run(t, "scratch", "prune", "--keep", "2")
 	if res.code != 0 {
 		t.Fatalf("exit %d: %s", res.code, res.stderr)
 	}
@@ -232,7 +232,7 @@ func TestRunPruneSkipsALiveDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res := run(t, "run", "prune", "--keep", "1")
+	res := run(t, "scratch", "prune", "--keep", "1")
 	if !strings.Contains(res.stdout, "still active") {
 		t.Errorf("stdout = %q", res.stdout)
 	}
@@ -270,7 +270,7 @@ func TestRunPruneTouchesNothingButRunDirectories(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res := run(t, "run", "prune", "--keep", "1")
+	res := run(t, "scratch", "prune", "--keep", "1")
 	if res.code != 0 {
 		t.Fatalf("exit %d: %s", res.code, res.stderr)
 	}

@@ -182,12 +182,12 @@ the five skills link into via `../_shared/references/…`:
    +
  mkit (Go)                 every mechanical step, one call each
    --json everywhere       the skill-facing contract · no TUI off a TTY · flags reach everything
-   M2 storage prune · M7 profile/init/doctor · M4 findings · M5 the jq consumers (all done)
+   M2 cache prune · M7 profile/init/doctor · M4 findings · M5 the jq consumers (all done)
    facts                   run dir + refs path + branch/status/worktree/stats, in one call
    run open|prune          open a run directory · prune old ones
    gate detect             what this repo's checks are · what the ledger already proved
    gate run                run a gate step: log it, bound it, stop at the first failure
-   branch scan             classify every local branch/worktree for `cleanup` · one gh call
+   branch status             classify every local branch/worktree for `cleanup` · one gh call
    work                    the per-branch worklog: what ran, over what content, concluding what
    plan                    task-graph arithmetic: frontier · blocked · cycles · edge validation
    repo profile            what this repo told us, and what a human pinned — reported apart
@@ -200,8 +200,8 @@ the five skills link into via `../_shared/references/…`:
 
 The commands never *integrate*: no staging, no merging, no `wt merge`, no edits to the user's
 files. They report facts and run commands the skill named. They do write, within the three declared
-locations — `mkit run prune` removes its own old run directories, `mkit gate run` appends to the
-ledger, `mkit branch scan` updates remote-tracking refs with `git fetch --prune`. One of them also *remembers*: `mkit gate run` records that a command
+locations — `mkit scratch prune` removes its own old run directories, `mkit gate run` appends to the
+ledger, `mkit branch status` updates remote-tracking refs with `git fetch --prune`. One of them also *remembers*: `mkit gate run` records that a command
 exited 0 over a fingerprint of the content it read — `<toplevel>/.mkit/gate.jsonl`, beside the run
 directories, never committed, and a linked worktree gets its own. It adds no command: the ledger
 is a side effect of a gate that was running anyway, read back by the detector that already prints
@@ -233,7 +233,7 @@ walked end to end is a workflow that gets abandoned at the first exception, so e
 missing, and names what it assumed.
 
 What makes that cheap rather than merely possible is the **worklog**:
-`<toplevel>/.mkit/work/<branch>.jsonl`, one append-only record per finished step, carrying the gist,
+`<toplevel>/.mkit/worklog/<branch>.jsonl`, one append-only record per finished step, carrying the gist,
 the artifact pointer, and the content fingerprint it ran over. A step reads it to skip work the
 branch has already done — `review` taking the goal `spec` wrote instead of re-deriving it from
 commit messages — and never to decide whether it is allowed to run. It is the gate ledger's rule
@@ -289,9 +289,9 @@ cmd/mkit/               # entrypoint only — build the root command, exit non-z
 internal/
   cli/                  # the cobra tree; root.go owns --json / --no-tui / --yes
   core/                 # data-returning logic — never prints, never assumes a terminal
-    storage/            # M2: provider/category table, Scan, guarded Apply, HumanBytes
+    cache/              # M2: provider/category table, Scan, guarded Apply, HumanBytes
   tui/                  # Bubble Tea rendering over core, one subpackage per command
-    storageprune/       # M2: size-sorted tick-list for `storage prune --apply`
+    cacheprune/       # M2: size-sorted tick-list for `cache prune --apply`
   buildinfo/            # version/commit/date, injected by -X ldflags at release
 .goreleaser.yaml        # darwin × amd64/arm64, plus the homebrew_casks tap entry
 .claude-plugin/
@@ -347,7 +347,7 @@ skills of the same name.
 - **Done — the Go port's shell half.** `mkit`, a single binary with a subcommand tree, took over
   the mechanical layer script by script so that prerequisites and degradation branches went away
   and a TUI became possible. M1 (scaffold, release chain, Homebrew cask) shipped in `v0.12.0`; M2
-  (`mkit storage prune`), M7 (`repo profile`/`init`/`doctor`) and M4 (`mkit findings`) followed;
+  (`mkit cache prune`), M7 (`repo profile`/`init`/`doctor`) and M4 (`mkit findings`) followed;
   M3 was **withdrawn** when the distribution model changed
   ([ADR 0003](adr/0003-two-distribution-channels.md)); **M5 took the last five scripts**, so the
   payload is Markdown. Each script's `.bats` file was the spec for its port, and each script was

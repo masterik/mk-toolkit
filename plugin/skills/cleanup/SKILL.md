@@ -2,7 +2,7 @@
 name: cleanup
 description: >-
   Sweep every local branch and worktree in the repo: auto-delete what's merged (locally or via a closed PR),
-  remove the worktrees that go with them, keep only the branches `mkit branch scan` reports as `protected=`
+  remove the worktrees that go with them, keep only the branches `mkit branch status` reports as `protected=`
   (the default branch, a develop-like branch if one exists locally, and anything the repo config pinned under
   `[cleanup] keep`), then switch to one of those and pull it up to date with the remote. Trigger on
   "cleanup branches", "clean up my branches", "prune stale branches", "remove merged branches", "clean up
@@ -28,7 +28,7 @@ References, read the ones a step calls for: `../_shared/references/worktree.md`,
   `git fetch --prune` is the only network call, and it only updates this repo's own remote-tracking refs
   (`refs/remotes/<remote>/*`) — that is what makes `upstream=gone` mean anything, and it cannot delete anything
   on the remote itself.
-- Keeps exactly what `mkit branch scan` reports as `protected=`, and never re-derives that set: the
+- Keeps exactly what `mkit branch status` reports as `protected=`, and never re-derives that set: the
   **default branch** (`main`/`master`/`trunk`, whichever the repo resolves to); if one exists **as a local
   branch**, the first of `develop`/`development`/`dev`; and every branch name the repo pinned under
   `[cleanup] keep` in `.mkit/config.toml` that exists as a local branch here. A `develop` that exists only as
@@ -36,8 +36,8 @@ References, read the ones a step calls for: `../_shared/references/worktree.md`,
   removes them, and the same rule applies to a pinned name.
 - **The default branch is protected whether or not the keep list names it.** A keep list that omits it is a
   mistake, not an instruction: the pinned names are *added* to what cleanup already protects, never
-  substituted for them. This is decided in `mkit branch scan`, not here.
-- Ends by switching to one of the kept branches and pulling it up to date with the remote `mkit branch scan`
+  substituted for them. This is decided in `mkit branch status`, not here.
+- Ends by switching to one of the kept branches and pulling it up to date with the remote `mkit branch status`
   discovers (never assumed to be named `origin`).
 
 ## Preconditions
@@ -47,7 +47,7 @@ References, read the ones a step calls for: `../_shared/references/worktree.md`,
 
 ```bash
 mkit facts cleanup
-mkit branch scan --default <default_branch from mkit facts>
+mkit branch status --default <default_branch from mkit facts>
 ```
 
 `mkit facts` **is** this skill's dependency check. If it fails with `command not found` **or**
@@ -66,7 +66,7 @@ From `mkit facts`: `branch=` (current branch — cannot be deleted while checked
 worktree dirty right now), `cleanup_path=` (only relevant if this session's own worktree turns out to be one
 of the ones in play — see step 3).
 
-From `mkit branch scan` (add `--json` if any branch name contains a comma — `protected=`, `keep=` and
+From `mkit branch status` (add `--json` if any branch name contains a comma — `protected=`, `keep=` and
 `keep_unknown=` are comma-joined, and only the JSON arrays carry such a name exactly):
 `protected=` (the whole kept set — use it as given, never rebuild it), `develop=`,
 `keep=` (what `[cleanup] keep` pinned, or `none`), `keep_unknown=` (pinned names with no local branch here —
@@ -76,7 +76,7 @@ being treated as one), `config_problems=` (see below), `remote=`, `fetch=` (say 
 on what you have and note it), `gh=` (`ok | skipped | no-remote | gh-missing | gh-unauthenticated | gh-error`;
 say if it is anything but `ok` — some classes below then rest on git alone, while every branch and worktree
 row is still complete), the `branches:` table and the `worktrees:` table. Full column meaning is in
-`mkit branch scan --help`; the short version:
+`mkit branch status --help`; the short version:
 
 **`config_problems=` is the one that stops you — a pin that went nowhere.** It counts the things this repo's
 `.mkit/config.toml` says that mkit could not honour, with a sentence for each in the trailing `notes:` block:
@@ -118,7 +118,7 @@ this repo keeps it. For everything else, sort into:
   with `clean=missing` (the worktree's directory is already gone; `git worktree prune` is the fix, not a
   removal) is noted but never a delete target.
 
-**The `current` row needs one extra step, not a skip.** `mkit branch scan` reports `current` in the `class`
+**The `current` row needs one extra step, not a skip.** `mkit branch status` reports `current` in the `class`
 column *instead of* what the branch would otherwise classify as — the branch you happen to be standing on is
 never exempt from cleanup just because you started there. Before deciding it is out of scope, derive its real
 disposition from its own `upstream` and `merged_into` columns, using the same priority order the command's own
@@ -187,8 +187,8 @@ For every branch approved in step 1, step 2, or just vacated in step 3, in this 
    error, not a real failure worth reporting as one.
 
    **A plain `git worktree remove` that refuses on a worktree reported `clean=yes` is mkit's own scratch,
-   not the user's work.** `mkit branch scan` excludes `.mkit/` from its cleanliness check, but git does not:
-   where `run_ignored=no` — an isolated session, which cannot write the exclude file — an unignored
+   not the user's work.** `mkit branch status` excludes `.mkit/` from its cleanliness check, but git does not:
+   where `scratch_ignored=no` — an isolated session, which cannot write the exclude file — an unignored
    `.mkit/` is enough for git to call the worktree dirty and refuse. Check **both**
    `git -C <path> ls-files -- .mkit` and `git -C <path> ls-tree -r --name-only HEAD -- .mkit` **first** — if
    either names any path, `.mkit/` is tracked, which should never happen and means the exclude pathspec
@@ -206,7 +206,7 @@ For every branch approved in step 1, step 2, or just vacated in step 3, in this 
    that's what makes it `merged-pr` instead of `merged`). State which proof licenses the `-D` as you run it:
    - `merged` → "verified: an ancestor of `<merged_into>`" (the column already named it — cite the actual
      target, not just the label).
-   - `merged-pr` → "verified: GitHub PR `#<n>` merged" (`mkit branch scan` already checked the PR's head commit
+   - `merged-pr` → "verified: GitHub PR `#<n>` merged" (`mkit branch status` already checked the PR's head commit
      against this branch's own content before reporting the class, so there is no separate check to redo here).
    - anything from the **ask** bucket → cite the user's approval itself as the reason, same as before.
 
@@ -216,7 +216,7 @@ force-delete anything you merely suspect is fine.
 
 ### 5. Switch and pull
 
-Bring the kept branches up to date with the **discovered** remote — the one `mkit branch scan` reported as
+Bring the kept branches up to date with the **discovered** remote — the one `mkit branch status` reported as
 `remote=`, never a hardcoded name, since nothing here is safe to assume about a repo you didn't set up:
 
 ```bash
@@ -258,7 +258,7 @@ as the fetch.
 
 ## Final report (always)
 
-Prune with `mkit run prune` folded into step 6's verification call. Form per
+Prune with `mkit scratch prune` folded into step 6's verification call. Form per
 `../_shared/references/summary-format.md`; print the first line below in bold, as the verdict.
 
 ```

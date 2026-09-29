@@ -57,7 +57,7 @@ Then read what ran on this branch before, and what each step concluded — never
 `../_shared/references/workflow-contract.md`, "Reading it".
 
 ```bash
-mkit work show --json --limit 20
+mkit worklog show --json --limit 20
 ```
 
 A `spec` or `implement` gist is the scope hint step 2 splits against — it says what this branch was
@@ -98,7 +98,7 @@ sentence in one line, verbatim, and carry on with what is left. Mind which field
 
 1. **Inspect before staging** — step 0's `mkit facts` returned all of it.
    - Confirm `branch=` is the intended one; matters inside a worktree (`linked=yes`).
-   - **`run_ignored=no` stops this skill before step 3.** mkit's own scratch root is not ignored here,
+   - **`scratch_ignored=no` stops this skill before step 3.** mkit's own scratch root is not ignored here,
      so staging would sweep run artefacts into your commit. Report the `notes:` remedy — it has to be
      applied from the main checkout — and do not stage.
    - Read **both** stats: `unstaged_stat` and `staged_stat`. They are separate because a bare
@@ -196,7 +196,7 @@ mktemp "<tmp>/mkit-patch.XXXXXX"
 
 ## Final report (always)
 
-Prune with `mkit run prune` on the way out, folded into another call.
+Prune with `mkit scratch prune` on the way out, folded into another call.
 After the last commit run `"$git_bin" -C "$toplevel" log --oneline -n <N>` (N = commits made this run) to
 confirm hashes, then report every commit — never skip this, even for one:
 
@@ -225,7 +225,7 @@ profile's `cause` used.
 Then record the run:
 
 ```bash
-mkit work append --step commit --gist '<one line: what this run concluded>' \
+mkit worklog append --step commit --gist '<one line: what this run concluded>' \
   [--artifact '<first-sha>^..<last-sha>'] [--assume '<what this run derived rather than found>']...
 ```
 

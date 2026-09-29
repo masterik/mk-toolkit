@@ -287,7 +287,7 @@ func (r *Repo) AliveCommits(heads []string) map[string]bool {
 // "unknown".
 //
 // **One implementation**: `mkit facts` prints it as `default_branch=`, `mkit
-// branch scan` is handed it rather than re-deriving it, and `mkit repo profile`
+// branch status` is handed it rather than re-deriving it, and `mkit repo profile`
 // needs it to report the branches cleanup protects with nothing pinned. A second
 // resolution here is a second thing to keep true, and the symptom of a
 // disagreement is a cleanup that protects a different branch than the one the
@@ -306,7 +306,7 @@ func (r *Repo) DefaultBranch() string {
 	// The remote's answer wins only when this checkout actually has that branch.
 	// A stale `origin/HEAD`, or one naming a branch that exists only as a
 	// remote-tracking ref, otherwise wins over a perfectly good local `main`:
-	// `mkit branch scan` refuses a `--default` absent from `refs/heads` before it
+	// `mkit branch status` refuses a `--default` absent from `refs/heads` before it
 	// fetches anything, so the whole of `cleanup` stops on a name this repo has
 	// never checked out.
 	if remoteHead != "" && r.hasLocalBranch(remoteHead) {

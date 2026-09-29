@@ -59,7 +59,7 @@ Then read what ran on this branch before, and what each step concluded — never
 `../_shared/references/workflow-contract.md`, "Reading it".
 
 ```bash
-mkit work show --json --limit 20
+mkit worklog show --json --limit 20
 ```
 
 Step 5 drafts the "why" from those gists where they exist, rather than re-deriving intent from the commit
@@ -260,7 +260,7 @@ Commits (<base>..HEAD):
 ```
 
 The commit list is step 0's `commits:` block — already in context, and cheap precisely because the diff never
-was. Never just "N commits pushed." Prune with `mkit run prune` on the way out.
+was. Never just "N commits pushed." Prune with `mkit scratch prune` on the way out.
 
 After the block, say what the reader still has to do or decide, or "nothing needed from you": CI still
 running, a reviewer that could not be determined, a check served from the ledger as `cached`, a pin that went
@@ -269,7 +269,7 @@ nowhere. Never leave those implied by the block's fields alone.
 Then record the run:
 
 ```bash
-mkit work append --step pr --gist '<one line: what this run concluded>' \
+mkit worklog append --step pr --gist '<one line: what this run concluded>' \
   [--artifact '<pr-url>'] [--assume '<what this run derived rather than found>']...
 ```
 

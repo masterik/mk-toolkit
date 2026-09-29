@@ -45,11 +45,11 @@ func newRepo(t *testing.T) string {
 
 func TestWorkShowJSONShape(t *testing.T) {
 	dir := newRepo(t)
-	if _, code := runIn(t, dir, "work", "append", "--step", "spec", "--gist", "the plan"); code != 0 {
+	if _, code := runIn(t, dir, "worklog", "append", "--step", "spec", "--gist", "the plan"); code != 0 {
 		t.Fatalf("append exited %d", code)
 	}
 
-	out, code := runIn(t, dir, "work", "show", "--json")
+	out, code := runIn(t, dir, "worklog", "show", "--json")
 	if code != 0 {
 		t.Fatalf("show exited %d", code)
 	}
@@ -69,7 +69,7 @@ func TestWorkShowJSONShape(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		t.Fatalf("not JSON: %v\n%s", err, out)
 	}
-	if got.Branch != "main" || !strings.Contains(got.Path, filepath.Join(".mkit", "work", "main-")) {
+	if got.Branch != "main" || !strings.Contains(got.Path, filepath.Join(".mkit", "worklog", "main-")) {
 		t.Errorf("branch/path: %+v", got)
 	}
 	if len(got.Records) != 1 || got.Records[0].Step != "spec" || got.Records[0].Gist != "the plan" {
@@ -97,7 +97,7 @@ func TestWorkShowJSONShape(t *testing.T) {
 
 // Being first on a branch is the normal case for an entry-capable step.
 func TestWorkShowOnAnEmptyBranchExitsZero(t *testing.T) {
-	out, code := runIn(t, newRepo(t), "work", "show", "--json")
+	out, code := runIn(t, newRepo(t), "worklog", "show", "--json")
 	if code != 0 {
 		t.Fatalf("exited %d on a branch nothing has run on", code)
 	}
@@ -110,7 +110,7 @@ func TestWorkShowOnAnEmptyBranchExitsZero(t *testing.T) {
 // payload was out of reach in a test repo, so the only observable was the cause —
 // and the port turned that degradation into the ordinary path.
 func TestWorkAppendJSONCarriesTheFingerprint(t *testing.T) {
-	out, code := runIn(t, newRepo(t), "work", "append", "--step", "review", "--gist", "two findings",
+	out, code := runIn(t, newRepo(t), "worklog", "append", "--step", "review", "--gist", "two findings",
 		"--artifact", "https://example.invalid/pr/1", "--assume", "goal from branch name", "--json")
 	if code != 0 {
 		t.Fatalf("exited %d\n%s", code, out)
@@ -131,7 +131,7 @@ func TestWorkAppendJSONCarriesTheFingerprint(t *testing.T) {
 	if got.Cause != "" {
 		t.Errorf("a cause was reported for a fingerprint that succeeds now: %q", got.Cause)
 	}
-	if !strings.Contains(got.Path, filepath.Join(".mkit", "work", "main-")) {
+	if !strings.Contains(got.Path, filepath.Join(".mkit", "worklog", "main-")) {
 		t.Errorf("path: %q", got.Path)
 	}
 	// The record is where the fingerprint has to land: it is what a later reader
@@ -159,10 +159,10 @@ func TestWorkUsageErrorsExitTwo(t *testing.T) {
 		name string
 		args []string
 	}{
-		{"unknown step", []string{"work", "append", "--step", "reviw", "--gist", "x"}},
-		{"missing gist", []string{"work", "append", "--step", "review"}},
-		{"empty gist", []string{"work", "append", "--step", "review", "--gist", ""}},
-		{"whitespace gist", []string{"work", "append", "--step", "review", "--gist", "   "}},
+		{"unknown step", []string{"worklog", "append", "--step", "reviw", "--gist", "x"}},
+		{"missing gist", []string{"worklog", "append", "--step", "review"}},
+		{"empty gist", []string{"worklog", "append", "--step", "review", "--gist", ""}},
+		{"whitespace gist", []string{"worklog", "append", "--step", "review", "--gist", "   "}},
 	} {
 		if _, code := runIn(t, dir, tc.args...); code != 2 {
 			t.Errorf("%s exited %d, want 2", tc.name, code)
@@ -176,8 +176,8 @@ func TestWorkOutsideAWorkTreeExitsOne(t *testing.T) {
 	outside := t.TempDir()
 	t.Setenv("GIT_CEILING_DIRECTORIES", filepath.Dir(outside))
 	for _, args := range [][]string{
-		{"work", "show", "--json"},
-		{"work", "append", "--step", "review", "--gist", "x"},
+		{"worklog", "show", "--json"},
+		{"worklog", "append", "--step", "review", "--gist", "x"},
 	} {
 		if _, code := runIn(t, outside, args...); code != 1 {
 			t.Errorf("%v outside a work tree exited %d, want 1", args, code)
@@ -196,14 +196,14 @@ func TestShowAndAppendAgreeOnThePath(t *testing.T) {
 		t.Fatalf("checkout: %v\n%s", err, out)
 	}
 
-	if _, code := runIn(t, dir, "work", "append", "--step", "commit", "--gist", "on a slashed branch"); code != 0 {
+	if _, code := runIn(t, dir, "worklog", "append", "--step", "commit", "--gist", "on a slashed branch"); code != 0 {
 		t.Fatalf("append exited %d", code)
 	}
-	out, code := runIn(t, dir, "work", "show", "--json")
+	out, code := runIn(t, dir, "worklog", "show", "--json")
 	if code != 0 || !strings.Contains(out, "on a slashed branch") {
 		t.Fatalf("show did not read back what append wrote (exit %d):\n%s", code, out)
 	}
-	if _, err := os.Stat(filepath.Join(dir, ".mkit", "work", "feature")); err == nil {
+	if _, err := os.Stat(filepath.Join(dir, ".mkit", "worklog", "feature")); err == nil {
 		t.Error("a slash in the branch name became a directory")
 	}
 }
@@ -214,7 +214,7 @@ func TestShowAndAppendAgreeOnThePath(t *testing.T) {
 // rendered `(stale)` — an assertion about the tree made from its own absence.
 func TestWorkShowUnknownWhenTreeHasNoFingerprint(t *testing.T) {
 	dir := newRepo(t)
-	if _, code := runIn(t, dir, "work", "append", "--step", "spec", "--gist", "the plan"); code != 0 {
+	if _, code := runIn(t, dir, "worklog", "append", "--step", "spec", "--gist", "the plan"); code != 0 {
 		t.Fatalf("append exited %d", code)
 	}
 
@@ -262,7 +262,7 @@ func TestWorkAppendCrossBranchCarriesNoFingerprint(t *testing.T) {
 		t.Fatalf("git branch: %v\n%s", err, out)
 	}
 
-	out, code := runIn(t, dir, "work", "append", "--step", "spec", "--gist", "x", "--branch", "other", "--json")
+	out, code := runIn(t, dir, "worklog", "append", "--step", "spec", "--gist", "x", "--branch", "other", "--json")
 	if code != 0 {
 		t.Fatalf("append exited %d: %s", code, out)
 	}
@@ -285,7 +285,7 @@ func TestWorkAppendCrossBranchCarriesNoFingerprint(t *testing.T) {
 	// regression that recorded the current tree's hash on a cross-branch record.
 	// So put a payload in reach and prove the same-branch append gets one.
 	t.Setenv("CLAUDE_PLUGIN_ROOT", payloadDir(t))
-	mine, code := runIn(t, dir, "work", "append", "--step", "spec", "--gist", "y", "--json")
+	mine, code := runIn(t, dir, "worklog", "append", "--step", "spec", "--gist", "y", "--json")
 	if code != 0 {
 		t.Fatalf("same-branch append exited %d: %s", code, mine)
 	}
@@ -293,11 +293,11 @@ func TestWorkAppendCrossBranchCarriesNoFingerprint(t *testing.T) {
 		t.Skipf("this machine cannot fingerprint, so the cross-branch guard proves nothing:\n%s", mine)
 	}
 
-	out2, code := runIn(t, dir, "work", "append", "--step", "spec", "--gist", "z", "--branch", "other", "--json")
+	out2, code := runIn(t, dir, "worklog", "append", "--step", "spec", "--gist", "z", "--branch", "other", "--json")
 	if code != 0 {
 		t.Fatalf("append exited %d: %s", code, out2)
 	}
-	recs, _ := runIn(t, dir, "work", "show", "--branch", "other", "--json")
+	recs, _ := runIn(t, dir, "worklog", "show", "--branch", "other", "--json")
 	var shown struct {
 		Records []struct {
 			Fingerprint string `json:"fingerprint"`
@@ -330,7 +330,7 @@ func TestWorkAppendOnDetachedHeadKeepsItsFingerprint(t *testing.T) {
 		t.Fatalf("git checkout --detach: %v\n%s", err, out)
 	}
 
-	out, code := runIn(t, dir, "work", "append", "--step", "spec", "--gist", "x", "--json")
+	out, code := runIn(t, dir, "worklog", "append", "--step", "spec", "--gist", "x", "--json")
 	if code != 0 {
 		t.Fatalf("append exited %d: %s", code, out)
 	}

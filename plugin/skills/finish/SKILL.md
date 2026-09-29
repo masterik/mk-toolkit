@@ -47,7 +47,7 @@ Then read what ran on this branch before, and what each step concluded — never
 `../_shared/references/workflow-contract.md`, "Reading it".
 
 ```bash
-mkit work show --json --limit 20
+mkit worklog show --json --limit 20
 ```
 
 A `review` record whose `fingerprint` matches the tree in front of you says a review already ran over this
@@ -305,7 +305,7 @@ the branch it is keyed on — and a branch name is reusable, which hands a later
 rather than deriving the filename, which carries a digest:
 
 ```bash
-p=$(mkit work show --branch <feature-branch> --path) && rm -f "$p"
+p=$(mkit worklog show --branch <feature-branch> --path) && rm -f "$p"
 ```
 
 Best effort, like every other `mkit work` call here: a path it cannot produce is one line of note. And skip
@@ -332,7 +332,7 @@ nothing to remove and `$toplevel`/the cwd are still correct.
 
 ## Deliverable
 
-Prune with `mkit run prune` on the way out, folded into step 5's
+Prune with `mkit scratch prune` on the way out, folded into step 5's
 verification call. Open with a one-line bold verdict (`**Verdict:** merged into main, branch and worktree
 removed.` — or where and why it stopped short); form per `../_shared/references/summary-format.md`.
 
@@ -356,7 +356,7 @@ doing where the run stopped short — a declined merge, a failed gate, a PR not 
 where the cleanup actually ran. Skipping it is not a degradation to report:
 
 ```bash
-mkit work append --step finish --gist '<one line: what this run concluded>' \
+mkit worklog append --step finish --gist '<one line: what this run concluded>' \
   [--artifact '<merge-sha>'] [--assume '<what this run derived rather than found>']...
 ```
 

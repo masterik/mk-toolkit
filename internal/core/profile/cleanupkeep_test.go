@@ -8,7 +8,7 @@ import (
 )
 
 // With nothing pinned, the reported value is what cleanup already protects —
-// read from `branchscan`, so the profile cannot advertise a set the classifier
+// read from `branchstatus`, so the profile cannot advertise a set the classifier
 // does not use.
 func TestCleanupKeepIsDiscoveredFromWhatCleanupAlreadyProtects(t *testing.T) {
 	repo := newRepo(t)
@@ -40,7 +40,7 @@ func TestCleanupKeepIncludesADevelopLikeBranchWhenOneExistsLocally(t *testing.T)
 
 // A pinned list replaces the *reported* value and is tagged `pinned`, exactly as
 // commit_scopes, reviewers and merge_style are. It does not replace the
-// protection: branchscan.ProtectedSet still unions it with the default branch.
+// protection: branchstatus.ProtectedSet still unions it with the default branch.
 func TestCleanupKeepIsTaggedPinnedWhenTheConfigSaysSo(t *testing.T) {
 	repo := newRepo(t)
 	if err := repoconfig.Write(repo.Toplevel, &repoconfig.Config{
