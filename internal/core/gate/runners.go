@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -21,13 +22,23 @@ type runner struct {
 	recipes []string
 }
 
-func (r runner) has(name string) bool {
-	for _, n := range r.recipes {
-		if n == name {
-			return true
-		}
+func (r runner) has(name string) bool { return slices.Contains(r.recipes, name) }
+
+// link is one command of the chain, tagged with the gate step it performs where
+// it is proposed — the place that knows. The tag is for matching it to a recipe;
+// StepName is still the label a pin is keyed by. "" is a step no recipe stands
+// in for.
+type link struct {
+	step string
+	cmd  string
+}
+
+func cmds(chain []link) []string {
+	out := make([]string, len(chain))
+	for i, l := range chain {
+		out[i] = l.cmd
 	}
-	return false
+	return out
 }
 
 // runners reads the repo's own task runners, most specific first: a justfile or
@@ -226,55 +237,11 @@ func uniqSorted(s []string) []string {
 	return out
 }
 
-// semantic is the gate step a command performs, for matching it to a recipe.
-// StepName labels by a bare token and keeps a positional name otherwise — a
-// label pins are keyed by, so it does not change — but `pytest -q` is a test
-// run and `ruff check .` a lint whatever their labels say, and a runner that
-// defines `test` must replace the one rather than run beside it.
-func semantic(cmd string, i int) string {
-	f := strings.Fields(cmd)
-	if len(f) > 0 {
-		switch f[0] {
-		case "pytest":
-			return "test"
-		case "ruff", "flake8":
-			return "lint"
-		case "mypy":
-			return "typecheck"
-		case "python", "python3":
-			if len(f) > 2 && f[1] == "-m" {
-				switch f[2] {
-				case "pytest":
-					return "test"
-				case "flake8", "ruff":
-					return "lint"
-				case "mypy":
-					return "typecheck"
-				}
-			}
-		case "cargo":
-			if len(f) > 1 && f[1] == "clippy" {
-				return "lint"
-			}
-		}
-	}
-	return StepName(cmd, i)
-}
-
-func rank(step string) int {
-	for i, s := range GateSteps {
-		if s == step {
-			return i
-		}
-	}
-	return -1
-}
-
 // preferRecipes lays the runners' recipes over the ecosystem chain, one step at
 // a time: a step the repo's runner defines runs through the runner, a step it
 // does not keeps the ecosystem's command, and a runner step the ecosystem never
 // proposes (a Go repo's `lint`) joins the chain in GateSteps order.
-func preferRecipes(chain []string, rs []runner) []string {
+func preferRecipes(chain []link, rs []runner) []link {
 	recipe := map[string]string{}
 	for _, s := range GateSteps {
 		for _, r := range rs {
@@ -287,19 +254,18 @@ func preferRecipes(chain []string, rs []runner) []string {
 	if len(recipe) == 0 {
 		return chain
 	}
-	var out []string
+	var out []link
 	used := map[string]bool{}
-	for i, cmd := range chain {
-		name := semantic(cmd, i)
-		r, ok := recipe[name]
+	for _, l := range chain {
+		r, ok := recipe[l.step]
 		switch {
 		case !ok:
-			out = append(out, cmd)
-		case !used[name]:
+			out = append(out, l)
+		case !used[l.step]:
 			// In a polyglot repo `npm run test` and `go test ./...` both name
 			// `test`; the runner's recipe is the one that answers for the repo.
-			out = append(out, r)
-			used[name] = true
+			out = append(out, link{l.step, r})
+			used[l.step] = true
 		}
 	}
 	for _, s := range GateSteps {
@@ -307,13 +273,13 @@ func preferRecipes(chain []string, rs []runner) []string {
 			continue
 		}
 		at := len(out)
-		for i, cmd := range out {
-			if rk := rank(semantic(cmd, i)); rk > rank(s) {
+		for i, l := range out {
+			if slices.Index(GateSteps, l.step) > slices.Index(GateSteps, s) {
 				at = i
 				break
 			}
 		}
-		out = append(out[:at], append([]string{recipe[s]}, out[at:]...)...)
+		out = slices.Insert(out, at, link{s, recipe[s]})
 		used[s] = true
 	}
 	return out

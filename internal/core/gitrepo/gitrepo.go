@@ -99,6 +99,25 @@ func (r *Repo) Excluded(path string) bool {
 	return err == nil
 }
 
+// ExcludedSet is Excluded for many paths in one call: the subset git ignores,
+// keyed by the path as given. Without -v, check-ignore prints only the ignored
+// paths, so the answer is the boolean, not the rule.
+func (r *Repo) ExcludedSet(paths []string) map[string]bool {
+	set := map[string]bool{}
+	if len(paths) == 0 {
+		return set
+	}
+	// Exit 1 means none is ignored; the output is empty then, so it is read
+	// regardless.
+	out, _ := runStdin(r.Toplevel, strings.Join(paths, "\x00")+"\x00", "check-ignore", "-z", "--stdin")
+	for _, p := range strings.Split(out, "\x00") {
+		if p != "" {
+			set[p] = true
+		}
+	}
+	return set
+}
+
 // CommonDir is the absolute `--git-common-dir`: the repository storage shared by
 // every linked worktree. It is where the one file mkit writes outside its own
 // three locations lives — `info/exclude`.

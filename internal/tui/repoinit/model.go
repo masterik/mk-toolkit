@@ -9,7 +9,6 @@ package repoinit
 import (
 	"fmt"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -56,9 +55,10 @@ const walkMain = -1
 // Model is the wizard. Its values are the answers themselves, so walking back
 // to a prompt opens it on what was already chosen.
 type Model struct {
-	plan   *initplan.Plan
-	sel    map[string]string
-	multi  map[string][]string
+	plan *initplan.Plan
+	// choice is every question's chosen values, as initplan.Answers holds them:
+	// one for a Select, any number for a Multi.
+	choice map[string][]string
 	custom map[string]string
 	cursor map[string]int // a multi-select's row cursor
 
@@ -70,6 +70,7 @@ type Model struct {
 	scroll int // the review preview's first line
 	cfg    *repoconfig.Config
 	cfgErr error
+	file   []string // cfg rendered, one line each; set with cfg
 
 	input  textinput.Model
 	err    string // why the current prompt refused Enter
@@ -82,17 +83,12 @@ type Model struct {
 
 // New opens the wizard on the plan's pre-selection.
 func New(p *initplan.Plan) *Model {
-	m := &Model{plan: p, sel: map[string]string{}, multi: map[string][]string{},
-		custom: map[string]string{}, cursor: map[string]int{}, walk: walkMain, width: 80, height: 24}
-	a := p.Preselected()
+	m := &Model{plan: p, choice: p.Preselected().Choice, custom: map[string]string{},
+		cursor: map[string]int{}, walk: walkMain, width: 80, height: 24}
 	for _, pg := range p.Pages {
 		for _, q := range pg.Questions {
-			if q.Kind == initplan.Multi {
-				m.multi[q.Key] = slices.Clone(a.Choice[q.Key])
-			} else if ch := a.Choice[q.Key]; len(ch) > 0 {
-				m.sel[q.Key] = ch[0]
-			} else {
-				m.sel[q.Key] = initplan.DontPin
+			if q.Kind == initplan.Select && len(m.choice[q.Key]) == 0 {
+				m.choice[q.Key] = []string{initplan.DontPin}
 			}
 		}
 	}
@@ -109,10 +105,7 @@ func New(p *initplan.Plan) *Model {
 // Answers reads the current values back.
 func (m *Model) Answers() initplan.Answers {
 	a := initplan.Answers{Choice: map[string][]string{}, Custom: map[string]string{}}
-	for k, v := range m.sel {
-		a.Choice[k] = []string{v}
-	}
-	for k, v := range m.multi {
+	for k, v := range m.choice {
 		if len(v) > 0 {
 			a.Choice[k] = slices.Clone(v)
 		} else {
@@ -125,6 +118,14 @@ func (m *Model) Answers() initplan.Answers {
 		}
 	}
 	return a
+}
+
+// selected is a Select's one chosen value.
+func (m *Model) selected(q *initplan.Question) string {
+	if ch := m.choice[q.Key]; len(ch) > 0 {
+		return ch[0]
+	}
+	return initplan.DontPin
 }
 
 // Done reports whether the wizard finished, and Write whether it finished by
@@ -239,10 +240,10 @@ func (m *Model) updateChoice(s step, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case " ", "x":
 			if n > 0 {
 				v := q.Options[c].Value
-				if i := slices.Index(m.multi[q.Key], v); i >= 0 {
-					m.multi[q.Key] = slices.Delete(m.multi[q.Key], i, i+1)
+				if i := slices.Index(m.choice[q.Key], v); i >= 0 {
+					m.choice[q.Key] = slices.Delete(m.choice[q.Key], i, i+1)
 				} else {
-					m.multi[q.Key] = append(m.multi[q.Key], v)
+					m.choice[q.Key] = append(m.choice[q.Key], v)
 				}
 			}
 		case "enter", "tab":
@@ -253,9 +254,9 @@ func (m *Model) updateChoice(s step, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	c := m.selIndex(q)
 	switch msg.String() {
 	case "up", "k":
-		m.sel[q.Key] = q.Options[max(c-1, 0)].Value
+		m.choice[q.Key] = []string{q.Options[max(c-1, 0)].Value}
 	case "down", "j":
-		m.sel[q.Key] = q.Options[min(c+1, n-1)].Value
+		m.choice[q.Key] = []string{q.Options[min(c+1, n-1)].Value}
 	case "enter", "tab":
 		return m, m.advance()
 	}
@@ -313,7 +314,7 @@ func (m *Model) updateReview(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *Model) selIndex(q *initplan.Question) int {
 	for i, o := range q.Options {
-		if o.Value == m.sel[q.Key] {
+		if o.Value == m.selected(q) {
 			return i
 		}
 	}
@@ -340,7 +341,6 @@ func (m *Model) advance() tea.Cmd {
 func (m *Model) back() tea.Cmd {
 	m.err = ""
 	if m.review {
-		m.walk = walkMain
 		s := m.steps()
 		// A plan with nothing to walk opens on review and stays there.
 		if len(s) == 0 {
@@ -392,6 +392,10 @@ func (m *Model) enterReview() {
 	m.review, m.walk, m.scroll, m.err = true, walkMain, 0, ""
 	m.input.Blur()
 	m.cfg, m.cfgErr = initplan.Apply(m.plan, m.Answers())
+	m.file = nil
+	if m.cfgErr == nil {
+		m.file = strings.Split(strings.TrimRight(repoconfig.Render(m.cfg), "\n"), "\n")
+	}
 	// Returning from an optional page lands on that page's row, not on Write.
 	m.action = 0
 	for i, a := range m.actions() {
@@ -412,49 +416,12 @@ func (m *Model) actions() []action {
 	for i, pg := range m.plan.Pages {
 		if pg.Optional {
 			out = append(out, action{kind: actionEdit, page: i, label: "Change " + strings.ToLower(pg.Title),
-				hint: m.summary(i)})
+				hint: pg.Summary(m.cfg)})
 		}
 	}
 	return append(out,
 		action{kind: actionBack, label: "Back — change an answer above"},
 		action{kind: actionAbort, label: "Abort — write nothing"})
-}
-
-// summary is what an optional page currently pins, for its review row.
-func (m *Model) summary(page int) string {
-	if m.cfg == nil {
-		return ""
-	}
-	switch m.plan.Pages[page].Title {
-	case "Gate":
-		if len(m.cfg.Gate.Commands) == 0 {
-			return "nothing pinned; discovered each run"
-		}
-		var names []string
-		for k := range m.cfg.Gate.Commands {
-			names = append(names, k)
-		}
-		sort.Strings(names)
-		for i, k := range names {
-			names[i] = k + ": " + m.cfg.Gate.Commands[k]
-		}
-		return "pins " + strings.Join(names, " · ")
-	case "Cleanup":
-		var keep []string
-		if q := m.plan.Question(initplan.KeyKeep); q != nil {
-			keep = append(keep, q.Locked...)
-		}
-		for _, k := range m.cfg.Cleanup.Keep {
-			if !slices.Contains(keep, k) {
-				keep = append(keep, k)
-			}
-		}
-		if len(keep) == 0 {
-			return "keeps the default branch"
-		}
-		return "keeps " + strings.Join(keep, ", ")
-	}
-	return ""
 }
 
 // ---- rendering ----
@@ -513,11 +480,11 @@ func (m *Model) answer(s step) string {
 	if q.Kind == initplan.Multi {
 		var ls []string
 		for _, o := range q.Options {
-			if slices.Contains(m.multi[q.Key], o.Value) && !o.Custom() {
+			if slices.Contains(m.choice[q.Key], o.Value) && !o.Custom() {
 				ls = append(ls, o.Label)
 			}
 		}
-		if slices.Contains(m.multi[q.Key], initplan.CustomValue) && m.custom[q.Key] != "" {
+		if slices.Contains(m.choice[q.Key], initplan.CustomValue) && m.custom[q.Key] != "" {
 			ls = append(ls, m.custom[q.Key])
 		}
 		if len(ls) == 0 {
@@ -569,7 +536,8 @@ func (m *Model) history(upto int, s []step) []string {
 			continue
 		}
 		v := m.answer(st)
-		if m.sel[st.q.Key] == initplan.CustomValue && i+1 < upto && m.custom[st.q.Key] != "" {
+		if st.q.Kind == initplan.Select && m.selected(st.q) == initplan.CustomValue &&
+			i+1 < upto && m.custom[st.q.Key] != "" {
 			v = m.custom[st.q.Key]
 		}
 		out = append(out, sDim.Render(markDone)+"  "+st.q.Title+sDim.Render(" · "+v))
@@ -691,7 +659,7 @@ func (m *Model) viewMulti(q *initplan.Question) []string {
 	for i := from; i < to; i++ {
 		o := q.Options[i]
 		mark := sDim.Render(markUnticked)
-		if slices.Contains(m.multi[q.Key], o.Value) {
+		if slices.Contains(m.choice[q.Key], o.Value) {
 			mark = sAccent.Render(markTicked)
 		}
 		lead := "  "
@@ -722,7 +690,7 @@ func (m *Model) previewLines() []string {
 			"Nothing to pin — every answer is \"don't pin\", so discovery already answers "+
 				"everything and nothing will be written.")), "\n")
 	}
-	return strings.Split(strings.TrimRight(repoconfig.Render(m.cfg), "\n"), "\n")
+	return m.file
 }
 
 // previewRows is how much of the file fits above the review options.
@@ -781,9 +749,9 @@ func (m *Model) viewDone() []string {
 	}
 	lines := append(m.intro(), m.history(upto, s)...)
 	if m.write {
-		for i, pg := range m.plan.Pages {
+		for _, pg := range m.plan.Pages {
 			if pg.Optional {
-				lines = append(lines, sDim.Render(markDone)+"  "+pg.Title+sDim.Render(" · "+m.summary(i)))
+				lines = append(lines, sDim.Render(markDone)+"  "+pg.Title+sDim.Render(" · "+pg.Summary(m.cfg)))
 			}
 		}
 		end := "writing " + repoconfig.RelPath

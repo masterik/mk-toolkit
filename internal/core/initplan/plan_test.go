@@ -289,7 +289,10 @@ func TestSubjectMaxCustomIsValidated(t *testing.T) {
 }
 
 func TestKeepLocksTheProtectedBranches(t *testing.T) {
-	in := Input{Candidates: Candidates{Branches: []string{"main", "release", "wip"}, Protected: []string{"main"}}}
+	in := Input{
+		Discovered: &profile.Profile{Keep: profile.List{Values: []string{"main"}, Source: profile.Discovered}},
+		Candidates: Candidates{Branches: []string{"main", "release", "wip"}},
+	}
 	p := Build(in)
 	q := p.Question(KeyKeep)
 	if !reflect.DeepEqual(q.Locked, []string{"main"}) {

@@ -14,15 +14,26 @@ import (
 // spec. They exercise the interface the skills call — argv in, stdout, exit code,
 // the run directory's logs and the ledger out.
 
+// testGitEnv keeps a test's git away from the developer's config and stops it
+// leaving work behind. `commit` and `merge` may start `maintenance --auto` (or
+// `gc --auto`) detached, and one still writing into .git when the test ends
+// fails t.TempDir's cleanup with "directory not empty" — measured in CI on
+// TestScanMergedBranch, a test whose assertions had all passed.
+var testGitEnv = []string{
+	"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null", "GIT_CONFIG_NOSYSTEM=1",
+	"GIT_CONFIG_COUNT=2",
+	"GIT_CONFIG_KEY_0=maintenance.auto", "GIT_CONFIG_VALUE_0=false",
+	"GIT_CONFIG_KEY_1=gc.auto", "GIT_CONFIG_VALUE_1=0",
+}
+
 func gateGit(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(),
+	cmd.Env = append(append(os.Environ(),
 		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.com",
 		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com",
-		"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null",
-	)
+	), testGitEnv...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)

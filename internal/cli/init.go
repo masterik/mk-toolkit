@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/masterik/mk-toolkit/internal/core/gitrepo"
 	"github.com/masterik/mk-toolkit/internal/core/initplan"
@@ -169,14 +169,9 @@ func newInitCmd() *cobra.Command {
 // `--merge sqaush` buys a typo a long life; failing at the flag is where it costs
 // least.
 //
-// The allowed sets live in `repoconfig` because `repoconfig.Load` validates the
-// same fields on read — the file is committed and hand-edited, and a second copy
-// of the vocabulary here is a second thing to keep true.
-var (
-	specStores  = repoconfig.SpecStores
-	mergeStyles = repoconfig.MergeStyles
-	reviewModes = repoconfig.ReviewModes
-)
+// The rules live in `repoconfig` because `repoconfig.Load` validates the same
+// fields on read — the file is committed and hand-edited, and a second copy of
+// the vocabulary here is a second thing to keep true.
 
 // flagValues is every pinnable field as `init` received it. A struct rather than
 // a tenth positional parameter: the list grows with the schema, and a caller that
@@ -201,18 +196,15 @@ func applyFlags(cfg *repoconfig.Config, f flagValues) error {
 	gate, store, ref := f.gate, f.specStore, f.specRef
 	scopes, reviewers, merge, keep := f.scopes, f.reviewers, f.merge, f.keep
 	for _, g := range gate {
-		step, command, ok := strings.Cut(g, "=")
-		if !ok || step == "" || command == "" {
-			return fmt.Errorf("--gate %q: expected step=command", g)
+		step, command, err := repoconfig.ParseGatePin(g)
+		if err != nil {
+			return fmt.Errorf("--gate %q: %w", g, err)
 		}
-		if cfg.Gate.Commands == nil {
-			cfg.Gate.Commands = map[string]string{}
-		}
-		cfg.Gate.Commands[step] = command
+		cfg.SetGate(step, command)
 	}
 	if store != "" {
-		if !repoconfig.OneOf(store, specStores) {
-			return fmt.Errorf("--spec-store %q: expected one of %s", store, strings.Join(specStores, ", "))
+		if err := repoconfig.CheckAllowed("spec.store", store); err != nil {
+			return fmt.Errorf("--spec-store %q: %w", store, err)
 		}
 		cfg.Spec.Store = store
 	}
@@ -228,9 +220,8 @@ func applyFlags(cfg *repoconfig.Config, f flagValues) error {
 	// a positive number of characters, no upper bound — and Load enforces the
 	// same one on read, because the file is hand-edited too.
 	if f.subjectMaxSet {
-		if f.subjectMax <= 0 {
-			return fmt.Errorf("--subject-max %d: a subject length is %s", f.subjectMax,
-				repoconfig.Rule("commit.subject_max"))
+		if err := repoconfig.CheckSubjectMax(f.subjectMax); err != nil {
+			return fmt.Errorf("--subject-max %d: %w", f.subjectMax, err)
 		}
 		n := f.subjectMax
 		cfg.Commit.SubjectMax = &n
@@ -239,14 +230,14 @@ func applyFlags(cfg *repoconfig.Config, f flagValues) error {
 		cfg.Review.Reviewers = reviewers
 	}
 	if f.reviewMode != "" {
-		if !repoconfig.OneOf(f.reviewMode, reviewModes) {
-			return fmt.Errorf("--review-mode %q: expected one of %s", f.reviewMode, strings.Join(reviewModes, ", "))
+		if err := repoconfig.CheckAllowed("review.mode", f.reviewMode); err != nil {
+			return fmt.Errorf("--review-mode %q: %w", f.reviewMode, err)
 		}
 		cfg.Review.Mode = f.reviewMode
 	}
 	if merge != "" {
-		if !repoconfig.OneOf(merge, mergeStyles) {
-			return fmt.Errorf("--merge %q: expected one of %s", merge, strings.Join(mergeStyles, ", "))
+		if err := repoconfig.CheckAllowed("merge.style", merge); err != nil {
+			return fmt.Errorf("--merge %q: %w", merge, err)
 		}
 		cfg.Merge.Style = merge
 	}
@@ -260,18 +251,22 @@ func applyFlags(cfg *repoconfig.Config, f flagValues) error {
 	return nil
 }
 
-// fieldFlags are the flags that pin a field. Any one of them given means the
-// caller is driving `init` from the command line, and the form stays shut.
-var fieldFlags = []string{"gate", "spec-store", "spec-ref", "scope", "subject-max",
-	"reviewer", "review-mode", "merge", "keep"}
-
+// fieldFlagGiven reports whether any flag that pins a field was given: the caller
+// is then driving `init` from the command line, and the form stays shut. Every
+// local flag but --force pins a field, so a new field flag is covered without a
+// list to keep in step with the registrations.
+//
+// VisitAll and Changed, not Visit: LocalNonPersistentFlags is a fresh FlagSet
+// built with AddFlag, which records a flag as defined but never as set, so
+// Visit on it walks nothing. The *Flag values are shared, so Changed holds.
 func fieldFlagGiven(cmd *cobra.Command) bool {
-	for _, name := range fieldFlags {
-		if cmd.Flags().Changed(name) {
-			return true
+	given := false
+	cmd.LocalNonPersistentFlags().VisitAll(func(f *pflag.Flag) {
+		if f.Changed && f.Name != "force" {
+			given = true
 		}
-	}
-	return false
+	})
+	return given
 }
 
 func emitInit(out io.Writer, opts Options, res initResult) error {

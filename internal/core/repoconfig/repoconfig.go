@@ -96,6 +96,42 @@ func OneOf(v string, allowed []string) bool {
 	return false
 }
 
+// CheckAllowed refuses a value outside an enumerated key's set, and accepts
+// anything for a key with no enumeration. It is the one producer of the
+// "expected one of" sentence the flags and the form both show.
+func CheckAllowed(key, v string) error {
+	if allowed := Allowed(key); allowed != nil && !OneOf(v, allowed) {
+		return fmt.Errorf("expected one of %s", strings.Join(allowed, ", "))
+	}
+	return nil
+}
+
+// CheckSubjectMax refuses a subject length Load would refuse on read.
+func CheckSubjectMax(n int) error {
+	if n <= 0 {
+		return fmt.Errorf("a subject length is %s", Rule("commit.subject_max"))
+	}
+	return nil
+}
+
+// ParseGatePin splits a `step=command` pin, trimmed, refusing either half empty.
+func ParseGatePin(s string) (step, command string, err error) {
+	step, command, ok := strings.Cut(s, "=")
+	step, command = strings.TrimSpace(step), strings.TrimSpace(command)
+	if !ok || step == "" || command == "" {
+		return "", "", fmt.Errorf("expected step=command")
+	}
+	return step, command, nil
+}
+
+// SetGate pins command for step.
+func (c *Config) SetGate(step, command string) {
+	if c.Gate.Commands == nil {
+		c.Gate.Commands = map[string]string{}
+	}
+	c.Gate.Commands[step] = command
+}
+
 // RelPath is the config's path relative to the work tree root.
 const RelPath = ".mkit/config.toml"
 

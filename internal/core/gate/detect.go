@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -104,7 +105,7 @@ func Detect(repo *gitrepo.Repo, cfg *repoconfig.Config, opt DetectOptions) (*Det
 	root := repo.Toplevel
 	d := &Detection{ScriptsState: scriptsNA}
 
-	var full []string
+	var full []link
 	addEco := func(name string) { d.Ecosystems = append(d.Ecosystems, name) }
 
 	// --- Node / Bun / Deno -------------------------------------------------
@@ -124,36 +125,30 @@ func Detect(repo *gitrepo.Repo, cfg *repoconfig.Config, opt DetectOptions) (*Det
 			d.Scripts = scripts
 			d.Workspaces = workspaces
 		}
-		has := func(s string) bool {
-			for _, got := range d.Scripts {
-				if got == s {
-					return true
-				}
-			}
-			return false
-		}
 		// lint -> typecheck -> test -> build, whichever exist, in that order.
 		for _, s := range []string{"lint", "typecheck", "test", "build"} {
-			if has(s) {
-				full = append(full, run+" "+s)
+			if slices.Contains(d.Scripts, s) {
+				full = append(full, link{s, run + " " + s})
 			}
 		}
 	}
 	if exists(root, "deno.json") || exists(root, "deno.jsonc") {
 		addEco("deno")
-		full = append(full, "deno lint", "deno test")
+		full = append(full, link{"lint", "deno lint"}, link{"test", "deno test"})
 	}
 
 	// --- Rust ---------------------------------------------------------------
 	if exists(root, "Cargo.toml") {
 		addEco("rust")
-		full = append(full, "cargo clippy --all-targets -- -D warnings", "cargo test", "cargo build")
+		full = append(full, link{"lint", "cargo clippy --all-targets -- -D warnings"},
+			link{"test", "cargo test"}, link{"build", "cargo build"})
 	}
 
 	// --- Go -----------------------------------------------------------------
 	if exists(root, "go.mod") {
 		addEco("go")
-		full = append(full, "go vet ./...", "go test ./...", "go build ./...")
+		full = append(full, link{"vet", "go vet ./..."}, link{"test", "go test ./..."},
+			link{"build", "go build ./..."})
 	}
 
 	// --- Python -------------------------------------------------------------
@@ -163,16 +158,16 @@ func Detect(repo *gitrepo.Repo, cfg *repoconfig.Config, opt DetectOptions) (*Det
 		if _, err := exec.LookPath("ruff"); err == nil {
 			linter = "ruff check ."
 		}
-		full = append(full, linter, "pytest -q")
+		full = append(full, link{"lint", linter}, link{"test", "pytest -q"})
 		if exists(root, "pyproject.toml") && fileMatches(filepath.Join(root, "pyproject.toml"), regexp.MustCompile(`\[tool\.mypy\]`)) {
-			full = append(full, "mypy .")
+			full = append(full, link{"typecheck", "mypy ."})
 		}
 	}
 
 	// --- .NET ---------------------------------------------------------------
 	if glob(root, "*.sln") || glob(root, "*.csproj") {
 		addEco("dotnet")
-		full = append(full, "dotnet build --nologo", "dotnet test --nologo")
+		full = append(full, link{"build", "dotnet build --nologo"}, link{"test", "dotnet test --nologo"})
 	}
 
 	// --- Task runners: the repo's own recipes -------------------------------
@@ -189,15 +184,15 @@ func Detect(repo *gitrepo.Repo, cfg *repoconfig.Config, opt DetectOptions) (*Det
 			break
 		}
 	}
-	full = preferRecipes(full, rs)
+	chain := cmds(preferRecipes(full, rs))
 
 	// A repo whose only signal is its own `check:` target still has a gate. The
 	// documented target fills an empty chain rather than replacing a discovered
 	// one: a `check:` that lints and nothing else would otherwise silently drop
 	// this repo's tests and build, and a gate is never half-capable.
 	origin := Discovered
-	if len(full) == 0 && d.Documented != "" {
-		full, origin = []string{d.Documented}, Documented
+	if len(chain) == 0 && d.Documented != "" {
+		chain, origin = []string{d.Documented}, Documented
 		d.Documented = ""
 	}
 
@@ -205,7 +200,7 @@ func Detect(repo *gitrepo.Repo, cfg *repoconfig.Config, opt DetectOptions) (*Det
 	// step contract, so `cmd=` would stop naming the command. Reported as a step
 	// whose command is refused rather than printed wrongly.
 	seen := map[string]int{}
-	for i, cmd := range full {
+	for i, cmd := range chain {
 		name := StepName(cmd, i)
 		// A label is a log filename and a pin key, so it has to be unique. In a
 		// polyglot repo `npm run test` and `go test ./...` both want `test`:

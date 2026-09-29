@@ -5,7 +5,6 @@ import (
 	"regexp"
 	"slices"
 
-	"github.com/masterik/mk-toolkit/internal/core/branchscan"
 	"github.com/masterik/mk-toolkit/internal/core/gitrepo"
 )
 
@@ -29,16 +28,6 @@ func Gather(repo *gitrepo.Repo) Candidates {
 		c.Remotes = append(c.Remotes, Remote{Name: name, URL: repo.RemoteURL(name)})
 	}
 	c.Branches = repo.LocalBranches()
-	// Only a local branch is shown as always kept: a default branch known only
-	// from the remote's HEAD has nothing here for cleanup to delete, and listing
-	// it would present a branch the user cannot see.
-	if def := repo.DefaultBranch(); def != "unknown" {
-		for _, b := range branchscan.ProtectedSet(def, branchscan.Develop(repo, def), nil) {
-			if slices.Contains(c.Branches, b) {
-				c.Protected = append(c.Protected, b)
-			}
-		}
-	}
 	c.Dirs = DirCandidates(repo)
 	return c
 }
@@ -64,6 +53,8 @@ func DirCandidates(repo *gitrepo.Repo) []string {
 	return out
 }
 
+// subdirs lists rel's directories usable as a scope, asking git once for the
+// whole listing which of them are ignored.
 func subdirs(repo *gitrepo.Repo, rel string) []string {
 	dir := repo.Toplevel
 	if rel != "" {
@@ -73,21 +64,25 @@ func subdirs(repo *gitrepo.Repo, rel string) []string {
 	if err != nil {
 		return nil
 	}
-	var out []string
+	var names, paths []string
 	for _, e := range entries {
 		name := e.Name()
 		if !e.IsDir() || name[0] == '.' || name[0] == '_' ||
 			slices.Contains(dirNoise, name) || !scopeName.MatchString(name) {
 			continue
 		}
-		path := name
+		path := name + "/"
 		if rel != "" {
-			path = rel + "/" + name
+			path = rel + "/" + path
 		}
-		if ignored, _ := repo.Ignored(path + "/"); ignored {
-			continue
+		names, paths = append(names, name), append(paths, path)
+	}
+	ignored := repo.ExcludedSet(paths)
+	var out []string
+	for i, name := range names {
+		if !ignored[paths[i]] {
+			out = append(out, name)
 		}
-		out = append(out, name)
 	}
 	return out
 }

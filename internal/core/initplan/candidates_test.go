@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/masterik/mk-toolkit/internal/core/gitrepo"
+	"github.com/masterik/mk-toolkit/internal/core/profile"
 )
 
 // A throwaway repo under $TMPDIR — never the developer's own.
@@ -62,16 +63,23 @@ func TestDirCandidatesAreTopLevelPlusOneUnderParents(t *testing.T) {
 	}
 }
 
+// locked is the keep question's always-kept list, planned from the repo as
+// `mkit init` plans it.
+func locked(repo *gitrepo.Repo) []string {
+	return Build(Input{Discovered: profile.Discover(repo), Candidates: Gather(repo)}).Question(KeyKeep).Locked
+}
+
 func TestGatherReadsRemotesBranchesAndProtected(t *testing.T) {
-	c := Gather(tempRepo(t))
+	repo := tempRepo(t)
+	c := Gather(repo)
 	if len(c.Remotes) != 1 || RemoteSlug(c.Remotes[0].URL) != "o/r" {
 		t.Errorf("remotes %+v", c.Remotes)
 	}
 	if !reflect.DeepEqual(c.Branches, []string{"main", "release"}) {
 		t.Errorf("branches %v", c.Branches)
 	}
-	if !reflect.DeepEqual(c.Protected, []string{"main"}) {
-		t.Errorf("protected %v, want [main]", c.Protected)
+	if got := locked(repo); !reflect.DeepEqual(got, []string{"main"}) {
+		t.Errorf("locked %v, want [main]", got)
 	}
 }
 
@@ -91,8 +99,7 @@ func TestGatherLocksOnlyALocalDefaultBranch(t *testing.T) {
 	git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk")
 	git("checkout", "-q", "release")
 	git("branch", "-q", "-D", "main")
-	c := Gather(repo)
-	if len(c.Protected) != 0 {
-		t.Errorf("protected %v, want none — trunk exists only on the remote", c.Protected)
+	if got := locked(repo); len(got) != 0 {
+		t.Errorf("locked %v, want none — trunk exists only on the remote", got)
 	}
 }
