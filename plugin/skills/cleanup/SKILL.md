@@ -152,9 +152,11 @@ Left alone:
 
 Auto-delete branches need no further confirmation beyond this plan (unless the user already gave standing
 authorization to skip even this). For the **ask** group: with four or fewer distinct decisions, use
-**AskUserQuestion** — one option per branch or per small cluster of branches sharing the same reason, framed
-as "delete" vs "keep". With more than that, ask once in plain text for the whole group rather than forcing
-everything through a 4-option tool. Never assume "ask" means "delete" — no response, or an unclear one, means
+**AskUserQuestion** — one question per branch or per small cluster of branches sharing the same reason,
+header = the branch name cut to 12 characters (the full name goes in the question text), options `delete` and
+`keep` (`keep` is the recommended, first option unless the reason is conclusive), each with a one-line
+consequence. With more than four decisions, ask in further calls of up to four, or cluster branches that share a
+reason. Without the tool, one numbered list for the whole group (`../_shared/references/summary-format.md`). Never assume "ask" means "delete" — no response, or an unclear one, means
 that branch is left alone and named in the final report.
 
 ### 3. Leave the current branch first, if it's in scope
@@ -256,7 +258,8 @@ as the fetch.
 
 ## Final report (always)
 
-Prune with `mkit run prune` folded into step 6's verification call.
+Prune with `mkit run prune` folded into step 6's verification call. Form per
+`../_shared/references/summary-format.md`; print the first line below in bold, as the verdict.
 
 ```
 Cleanup done — <n> local branch(es) removed, only <protected list> remain.
@@ -276,7 +279,8 @@ Note: <branch> is N commits behind origin/<branch> — <why it couldn't be fast-
 Note: `[cleanup] keep` pins <name>, which is not a local branch in this checkout — nothing to protect here.
 ```
 
-Omit any section with nothing in it. Never report a branch as deleted that the user did not either fall into
+Omit any section with nothing in it, except **Left alone**, which prints "none" when empty. End on what the
+user still has to decide (a branch left alone that they may want gone), or "nothing needed from you". Never report a branch as deleted that the user did not either fall into
 the merged auto-delete bucket or explicitly approve.
 
 ## Git safety

@@ -31,7 +31,7 @@ steps name them by bare filename:
 | `triage-reconcile.md` | **this session** | read at step 3 |
 | `triage-verify.md` | each verifier subagent — or **this session**, on a handful | handed over in step 4, or read there |
 | `fix-checks.md` | **this session** | read at step 5, before the first fix |
-| `output-discipline.md`, `agent-delegation.md`, `git-safety.md` | — | background rationale; the rules this run needs are restated below |
+| `output-discipline.md`, `agent-delegation.md`, `git-safety.md`, `summary-format.md` | — | background rationale; the rules this run needs are restated below (step 6 is the fullest instance of `summary-format.md`) |
 
 The one piece of reviewer vocabulary this session uses throughout is the finding tag. Every finding carries
 `[surface, severity]`: surface is `code` · `comments` · `docs` · `tests` · `config`/`build`; severity is

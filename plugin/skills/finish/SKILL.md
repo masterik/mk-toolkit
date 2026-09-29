@@ -113,7 +113,9 @@ suggested fix. The log stays on disk.
 ### 3. Show the plan and confirm
 
 Before merging or deleting anything, print a one-screen summary and get a go-ahead (unless the user already
-said "finish and clean up" or gave standing authorization). Step 0's `commits:` block predates step 1, so if
+said "finish and clean up" or gave standing authorization). Collect the go-ahead through `AskUserQuestion`
+where the host has it — two options, **merge and clean up** (recommended) and **stop here** — with the
+numbered-list fallback in `../_shared/references/summary-format.md`. Step 0's `commits:` block predates step 1, so if
 step 1 committed, re-read the log (`"$git_bin" -C "$toplevel" log --oneline <base>..HEAD` — pinned, per
 `../_shared/references/git-safety.md`) first — approving a plan that omits the
 commits the merge actually carries is worse than asking twice.
@@ -331,7 +333,8 @@ nothing to remove and `$toplevel`/the cwd are still correct.
 ## Deliverable
 
 Prune with `mkit run prune` on the way out, folded into step 5's
-verification call.
+verification call. Open with a one-line bold verdict (`**Verdict:** merged into main, branch and worktree
+removed.` — or where and why it stopped short); form per `../_shared/references/summary-format.md`.
 
 - Which path ran — local merge, or GitHub PR merge (name the PR URL and method used), and **where the
   method came from**: pinned, discovered, or asked. Plus, only when there was something to say: a pinned
@@ -342,7 +345,8 @@ verification call.
 - The gate verdict, naming any step served from the ledger as `cached` and how old that proof was.
 - What merged into what, the resulting base HEAD, and that branch + worktree were removed.
 - Anything left in place on purpose (unmerged commits, dirty tree, a delete the user declined) — say so
-  explicitly.
+  explicitly, each with its path or name and why, or "nothing left behind" so the absence is not ambiguous.
+- Where the run stopped short: what is needed from the user to continue, as the last line.
 
 Then record the run — from wherever this session ends up, and **only if that is still a work tree with
 this branch's log in it**. `finish` is the one step that usually destroys its own log: the worklog lives in
