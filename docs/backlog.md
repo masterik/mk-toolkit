@@ -207,7 +207,7 @@ be flipped from private to public — an unauthenticated `brew install` can't re
 release assets.
 
 ### M2 — `mkit cache prune` — done
-Ported `tools/storage-prune.sh` to `internal/core/cache/` + `internal/cli/storage*.go` +
+Ported `tools/storage-prune.sh` to `internal/core/cache/` + `internal/cli/cache*.go` +
 `internal/tui/cacheprune/`. Eliminates the per-file `stat` and per-category `find` *subprocess
 forks* the shell version paid for `sum_size`/`prune_files`/`prune_stale_dirs` — not a syscall
 saving: on macOS `readdir` carries no size, so `DirEntry.Info()` still issues an `lstat` per file,
@@ -322,7 +322,7 @@ layer in.
 **Done:** `jq`, `shasum` and `bats-core` are gone from [`prerequisites.md`](prerequisites.md);
 `just shtest` and `tests/` are gone; every skill's first call is `mkit facts <skill>`.
 
-### M6 — `mkit work` + the workflow contract — done
+### M6 — `mkit worklog` + the workflow contract — done
 The substrate the seven steps stand on, landed before any of the new skills, so the back half
 starts recording immediately and the front half has something to read.
 
@@ -337,7 +337,7 @@ it. What was missing was the link from the four skills, and the command itself.
   The fingerprint is reached through `pluginroot`'s `CommonFunc` — one producer until M5 ports it,
   the same delegation M7 used for gate discovery. An unavailable one is `""` plus a named cause,
   never a failed append.
-  `work append` **errors** on a failed write, unlike the gate ledger's best-effort appends: it is a
+  `worklog append` **errors** on a failed write, unlike the gate ledger's best-effort appends: it is a
   command someone invoked. The best-effort half lives in the skills, which append after their report
   and treat a failure as one line of note — rule 4 says a recorded fact is an input, never a
   permission. Exit codes follow M4's vocabulary rather than adding one: `usageErr` (2) for a

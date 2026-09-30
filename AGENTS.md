@@ -13,7 +13,7 @@ the skills orchestrate `git`, `gh`, `wt`, and code-review tools — no new git l
 **M7 (`mkit repo profile`/`init`/`doctor`) done** — repo config is `<toplevel>/.mkit/config.toml`,
 committed ([ADR 0001's config-path amendment](docs/adr/0001-per-repo-config-and-init.md#amendment-the-config-path)).
 **M4 (`mkit findings`) done** — `internal/core/findings/` + `internal/cli/findings.go`.
-**M6 (`mkit work`) done** — the per-branch worklog under `<toplevel>/.mkit/worklog/`, read and written
+**M6 (`mkit worklog`) done** — the per-branch worklog under `<toplevel>/.mkit/worklog/`, read and written
 by all four skills; what it reports is **one fewer input, never a stop**.
 **M5 (the `jq` consumers) done** — `mkit facts`, `mkit gate detect|run`, `mkit branch status` and
 `mkit scratch open|prune` replaced the last five scripts, and **the payload is Markdown only**: no
@@ -84,7 +84,7 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
 ## The port, and what it left behind
 
 **The shell layer is gone** (M5). The rules that got it there are kept because they govern the
-milestones that are left (M6 `mkit work`, M8 `mkit plan`) and because they explain why the code
+milestones that are left (M6 `mkit worklog`, M8 `mkit plan`) and because they explain why the code
 reads as it does:
 
 - The deleted `.bats` file **was the spec** for each script — the `go test` beside each package is

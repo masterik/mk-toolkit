@@ -49,7 +49,7 @@ Homebrew ships the binary, and the two version independently
 `mkit facts <skill>` (`review` runs a one-line `mkit findings` compatibility probe just before it;
 `sandbox-audit`, which is user-wide, starts with `mkit audit sessions`), so a missing binary stops a skill at step 0 with a `brew` remedy rather than
 degrading. Presence only, with no declared minimum on either side. All four skills also read and
-write a per-branch **worklog** through `mkit work` (M6) — what ran on this branch and what it
+write a per-branch **worklog** through `mkit worklog` (M6) — what ran on this branch and what it
 concluded — which is an optional *input*: a worklog a step cannot read costs it one input and never
 stops it. Beyond `git` and `bash`, `rg`, `gh` and `wt` are recommended — see
 [Prerequisites](docs/prerequisites.md).

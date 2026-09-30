@@ -184,11 +184,11 @@ the five skills link into via `../_shared/references/…`:
    --json everywhere       the skill-facing contract · no TUI off a TTY · flags reach everything
    M2 cache prune · M7 profile/init/doctor · M4 findings · M5 the jq consumers (all done)
    facts                   run dir + refs path + branch/status/worktree/stats, in one call
-   run open|prune          open a run directory · prune old ones
+   scratch open|prune      open a run directory · prune old ones
    gate detect             what this repo's checks are · what the ledger already proved
    gate run                run a gate step: log it, bound it, stop at the first failure
-   branch status             classify every local branch/worktree for `cleanup` · one gh call
-   work                    the per-branch worklog: what ran, over what content, concluding what
+   branch status           classify every local branch/worktree for `cleanup` · one gh call
+   worklog                 the per-branch worklog: what ran, over what content, concluding what
    plan                    task-graph arithmetic: frontier · blocked · cycles · edge validation
    repo profile            what this repo told us, and what a human pinned — reported apart
    init                    write the repo config (the one command that writes it)

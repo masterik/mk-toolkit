@@ -308,7 +308,7 @@ rather than deriving the filename, which carries a digest:
 p=$(mkit worklog show --branch <feature-branch> --path) && rm -f "$p"
 ```
 
-Best effort, like every other `mkit work` call here: a path it cannot produce is one line of note. And skip
+Best effort, like every other `mkit worklog` call here: a path it cannot produce is one line of note. And skip
 the append on this path — the record would go straight into the file being retired.
 
 ### 5. Verify the cleanup

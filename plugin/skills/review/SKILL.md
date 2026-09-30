@@ -144,7 +144,7 @@ mkit worklog show --json --limit 20
 stopped the run if the binary was missing, and since M5 every other skill's first call does the same —
 so no skill has a missing-binary case left to check for.
 
-What step 0 did *not* establish is that this binary knows `work` — it proved `findings` — and a binary from
+What step 0 did *not* establish is that this binary knows `worklog` — it proved `findings` — and a binary from
 before the worklog landed answers one and not the other. So the second half of the shared rule still holds:
 **a nonzero exit is not a stop**, carry on without the log and say so in step 6. Read what it printed before
 naming the cause: an unknown subcommand is that skew, while a log it found and could not read is a different

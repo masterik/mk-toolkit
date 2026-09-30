@@ -78,7 +78,7 @@ mkit worklog show --json --limit 20
 ```
 
 What the log itself reports is still **one fewer input, never a stop** — rule 4 above, applied to
-the record: an empty log, an unreadable one, or a binary that knows `facts` but not `work` all leave
+the record: an empty log, an unreadable one, or a binary that knows `facts` but not `worklog` all leave
 a step less informed rather than blocked. That is what separates this call from `review`'s step-0 `mkit findings` probe: without the
 findings arithmetic there is no review, and without the worklog there is a slightly less informed
 one. What each step does with what it reads is the step's own business, and stays in its `SKILL.md`.

@@ -256,7 +256,7 @@ itself reaches for:
 
 | skill / command | host | for |
 | --- | --- | --- |
-| `pr`, `mkit facts --gh`, `mkit branch status` | `api.github.com`, `github.com` | `gh pr view`, `gh pr list`, `gh pr create` |
+| `pr`, `mkit facts <skill> --gh`, `mkit branch status` | `api.github.com`, `github.com` | `gh pr view`, `gh pr list`, `gh pr create` |
 | `pr`, `finish`, `cleanup` | your remote's host (`git remote -v`) | `fetch`, `push` |
 | `review`'s external reviewers | whatever the `codex` / `coderabbit` CLI calls | those are their own tools; check their docs for the hosts |
 
