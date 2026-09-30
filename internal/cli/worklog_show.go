@@ -12,7 +12,7 @@ import (
 	"github.com/masterik/mk-toolkit/internal/core/worklog"
 )
 
-func newWorkShowCmd() *cobra.Command {
+func newWorklogShowCmd() *cobra.Command {
 	var branch string
 	var pathOnly bool
 	var steps []string

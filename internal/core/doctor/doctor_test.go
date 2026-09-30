@@ -211,3 +211,74 @@ func TestEveryNonOKCheckSaysWhat(t *testing.T) {
 		}
 	}
 }
+
+// Orphans are found by their known location and reported with an rm the user
+// runs; doctor itself removes nothing.
+func TestOrphansAreReportedAndLeftInPlace(t *testing.T) {
+	isolate(t)
+	repo := newRepo(t)
+	old := filepath.Join(repo.Toplevel, ".mkit", "work")
+	writeFile(t, old, "main.jsonl", "{}\n")
+	writeFile(t, os.Getenv("MKIT_HOME"), "bootstrap.state", "x")
+
+	r := Run(Options{Repo: repo})
+	c := find(t, r, "old worklog directory")
+	if c.Status != Warn || c.Remedy != "rm -r '"+old+"'" {
+		t.Errorf("worklog orphan = %+v", c)
+	}
+	if find(t, r, "bootstrap.state").Status != Warn {
+		t.Error("user-dir orphan not reported")
+	}
+	if _, err := os.Stat(old); err != nil {
+		t.Errorf("doctor must not remove anything: %v", err)
+	}
+}
+
+func TestNoOrphansIsOneOKRow(t *testing.T) {
+	isolate(t)
+	repo := newRepo(t)
+	if c := find(t, Run(Options{Repo: repo}), "old-version leftovers"); c.Status != OK {
+		t.Errorf("status = %q, want ok", c.Status)
+	}
+}
+
+// A path with a quote must survive being pasted into a shell.
+func TestShellQuote(t *testing.T) {
+	if got := shellQuote("a b'c"); got != `'a b'\''c'` {
+		t.Errorf("got %s", got)
+	}
+}
+
+// `.mkit` may be a symlink out of the repo. The leftover is still reported, but
+// no `rm -r` is offered: it would delete wherever the link points.
+func TestOrphanBehindASymlinkedAncestorGetsNoRemedy(t *testing.T) {
+	isolate(t)
+	repo := newRepo(t)
+	outside := t.TempDir()
+	writeFile(t, outside, "work/main.jsonl", "{}\n")
+	if err := os.Symlink(outside, filepath.Join(repo.Toplevel, ".mkit")); err != nil {
+		t.Fatal(err)
+	}
+
+	c := find(t, Run(Options{Repo: repo}), "old worklog directory")
+	if c.Status != Warn || c.Remedy != "" {
+		t.Errorf("want a warning with no remedy, got %+v", c)
+	}
+	if !strings.Contains(c.Detail, "symlink") {
+		t.Errorf("detail must say why: %q", c.Detail)
+	}
+}
+
+// An MKIT_HOME with a trailing slash or redundant components is an ordinary
+// value; it must not be mistaken for a symlink escape and lose its remedy.
+func TestOrphanRemedySurvivesAnUnnormalisedUserDir(t *testing.T) {
+	isolate(t)
+	home := filepath.Join(t.TempDir(), ".mkit")
+	writeFile(t, home, "bootstrap.state", "x")
+	t.Setenv("MKIT_HOME", home+string(filepath.Separator)+".")
+
+	c := find(t, Run(Options{}), "bootstrap.state")
+	if c.Remedy == "" {
+		t.Errorf("remedy dropped for an unnormalised MKIT_HOME: %+v", c)
+	}
+}

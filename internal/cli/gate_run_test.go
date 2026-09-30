@@ -247,7 +247,7 @@ func TestGateRunRejectsARunDirectoryThatDoesNotExist(t *testing.T) {
 	if res.code != 2 {
 		t.Fatalf("exit = %d, want 2", res.code)
 	}
-	if !strings.Contains(res.stderr, "mkit run open") {
+	if !strings.Contains(res.stderr, "mkit scratch open") {
 		t.Errorf("the remedy must name the command that opens one: %q", res.stderr)
 	}
 }

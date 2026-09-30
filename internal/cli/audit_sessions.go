@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/masterik/mk-toolkit/internal/core/cache"
 	"github.com/masterik/mk-toolkit/internal/core/sessionaudit"
-	"github.com/masterik/mk-toolkit/internal/core/storage"
 )
 
 func newAuditSessionsCmd() *cobra.Command {
@@ -34,7 +34,7 @@ func newAuditSessionsCmd() *cobra.Command {
 			if top < 0 {
 				return usageErr("--top must be 0 (all) or positive")
 			}
-			claude, _ := storage.ByName("claude")
+			claude, _ := cache.ByName("claude")
 			rep, err := sessionaudit.Scan(sessionaudit.Options{Home: claude.ResolveHome(), Days: days})
 			if err != nil {
 				return err
@@ -46,6 +46,10 @@ func newAuditSessionsCmd() *cobra.Command {
 				enc := json.NewEncoder(cmd.OutOrStdout())
 				enc.SetIndent("", "  ")
 				return enc.Encode(rep)
+			}
+			if FromContext(cmd).Pretty {
+				prettyAudit(cmd.OutOrStdout(), rep, top)
+				return nil
 			}
 			renderAudit(cmd.OutOrStdout(), rep, top)
 			return nil

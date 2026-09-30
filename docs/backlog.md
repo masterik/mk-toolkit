@@ -19,7 +19,7 @@ live in [`ideas/`](ideas/README.md).
   which Homebrew refuses to install on Linux — so a linux archive would have had no `brew` path
   to reach a user through. Adding a `goos` back is one line whenever someone needs it; carrying
   an untested OS in the matrix is a support claim nobody verifies.
-- **One binary, subcommand tree.** `mkit storage prune`, `mkit gate run`, `mkit status`.
+- **One binary, subcommand tree.** `mkit cache prune`, `mkit gate run`, `mkit status`.
 - **Dual front-end.** Rich TUI when interactive; flags + `--json` when driven by a skill.
 - **Two channels; Homebrew carries only the binary.** The plugin payload ships from the GitHub
   marketplace — `/plugin marketplace add masterik/mk-toolkit`, which works today — and the cask
@@ -123,7 +123,7 @@ a config nothing reads.
   independent of the port line — **all four are done**: config validation (issue #19), `[cleanup]
   keep` (issue #20, a sixth section), `commit.scopes` + `review.reviewers` (issue #18), and
   `merge.style` → `finish` (issue #17). `commit`, `pr` and `finish` are the first *skills* to call
-  `repo profile`, and `mkit branch scan` the first command outside `repo profile` and
+  `repo profile`, and `mkit branch status` the first command outside `repo profile` and
   `gate detect` to read a pinned value:
 
   - ~~**`merge.style` → `finish`.**~~ **Done** (issue #17). `finish` step 4 opens with `mkit repo profile --json` and
@@ -173,12 +173,12 @@ a config nothing reads.
     `Version`'s doc comment.
   - ~~**`[cleanup] keep`.**~~ **Done** (issue #20). The one candidate that survived the schema's own
     filter — *pin only what inspection cannot establish*: branch protection is a network call on an
-    otherwise local classifier, and being wrong here **deletes a branch**. `branchscan.ProtectedSet`
+    otherwise local classifier, and being wrong here **deletes a branch**. `branchstatus.ProtectedSet`
     is the one producer of the kept set, unioning the pinned names with the default branch and a
     develop-like one; **the default branch is in it whether or not the list names it**, because a
     keep list that omits it is a mistake, not an instruction. Names, not patterns. A pinned name
     with no local branch is reported as `keep_unknown=`, never refused — a keep list travels with
-    the repo. `mkit branch scan` surfaces `protected=`/`keep=`/`keep_unknown=` (and the same in
+    the repo. `mkit branch status` surfaces `protected=`/`keep=`/`keep_unknown=` (and the same in
     `--json`), `mkit repo profile` tags the value `pinned`/`discovered`, and `cleanup` reads
     `protected=` as given rather than re-deriving it. No enumeration, so `repoconfig.Allowed`
     returns nil for it and #19's validation has nothing to check beyond the strict decode that
@@ -206,9 +206,9 @@ and an auto-committed Homebrew cask formula (`brews` is deprecated in GoReleaser
 be flipped from private to public — an unauthenticated `brew install` can't reach private-repo
 release assets.
 
-### M2 — `mkit storage prune` — done
-Ported `tools/storage-prune.sh` to `internal/core/storage/` + `internal/cli/storage*.go` +
-`internal/tui/storageprune/`. Eliminates the per-file `stat` and per-category `find` *subprocess
+### M2 — `mkit cache prune` — done
+Ported `tools/storage-prune.sh` to `internal/core/cache/` + `internal/cli/cache*.go` +
+`internal/tui/cacheprune/`. Eliminates the per-file `stat` and per-category `find` *subprocess
 forks* the shell version paid for `sum_size`/`prune_files`/`prune_stale_dirs` — not a syscall
 saving: on macOS `readdir` carries no size, so `DirEntry.Info()` still issues an `lstat` per file,
 same as the script's `stat -f%z`. The win is process elimination.
@@ -279,7 +279,7 @@ failing at step 3.
 
 ### M5 — the `jq` consumers — done
 Ported `gate-run.sh`, `gate-detect.sh`, `branch-scan.sh`, `facts.sh` and `run-open.sh` to
-`mkit gate run`, `mkit gate detect`, `mkit branch scan`, `mkit facts` and `mkit run open|prune`.
+`mkit gate run`, `mkit gate detect`, `mkit branch status`, `mkit facts` and `mkit scratch open|prune`.
 **Five scripts, not four**: `facts.sh` opened the run directory by calling `run-open.sh`, and a Go
 `facts` reaching back into the payload for a core operation is exactly the dependency this
 milestone existed to remove — so Go needed a run-directory implementation either way, and keeping
@@ -322,7 +322,7 @@ layer in.
 **Done:** `jq`, `shasum` and `bats-core` are gone from [`prerequisites.md`](prerequisites.md);
 `just shtest` and `tests/` are gone; every skill's first call is `mkit facts <skill>`.
 
-### M6 — `mkit work` + the workflow contract — done
+### M6 — `mkit worklog` + the workflow contract — done
 The substrate the seven steps stand on, landed before any of the new skills, so the back half
 starts recording immediately and the front half has something to read.
 
@@ -330,14 +330,14 @@ starts recording immediately and the front half has something to read.
 [`workflow-contract.md`](../plugin/skills/_shared/references/workflow-contract.md) already shipped,
 ahead of the command it documents — so this milestone made the contract true rather than writing
 it. What was missing was the link from the four skills, and the command itself.
-- `mkit work show|append`, `--json`. `<toplevel>/.mkit/work/<branch>.jsonl`, append-only, rotated
+- `mkit worklog show|append`, `--json`. `<toplevel>/.mkit/worklog/<branch>.jsonl`, append-only, rotated
   like `gate.jsonl`, never committed, per-worktree. A record carries step, timestamp, content
   fingerprint (reusing `mkit_tree_fingerprint`'s successor), artifact pointer, one-line gist, and
   assumptions. Appending is bookkeeping; **reading it is judgement and stays in the skills.**
   The fingerprint is reached through `pluginroot`'s `CommonFunc` — one producer until M5 ports it,
   the same delegation M7 used for gate discovery. An unavailable one is `""` plus a named cause,
   never a failed append.
-  `work append` **errors** on a failed write, unlike the gate ledger's best-effort appends: it is a
+  `worklog append` **errors** on a failed write, unlike the gate ledger's best-effort appends: it is a
   command someone invoked. The best-effort half lives in the skills, which append after their report
   and treat a failure as one line of note — rule 4 says a recorded fact is an input, never a
   permission. Exit codes follow M4's vocabulary rather than adding one: `usageErr` (2) for a
@@ -354,7 +354,7 @@ it. What was missing was the link from the four skills, and the command itself.
 - Retrofit the back half: `commit`, `review`, `pr`, `finish` each append one record and each read
   the log for a goal before deriving one. `review`'s step 1 goal derivation is the model — it
   already degrades correctly, so this generalises an existing behaviour rather than inventing one.
-**Done when:** a branch that ran `commit` then `review` shows both in `mkit work show --json`, and
+**Done when:** a branch that ran `commit` then `review` shows both in `mkit worklog show --json`, and
 `review` invoked cold on that branch takes its goal from the log instead of the branch name. `show`
 reports the **current** tree's fingerprint in the same envelope — a record's fingerprint answers
 nothing on its own.
@@ -453,7 +453,7 @@ no conversation context, working from the artifact and the worklog alone.
   The recipe works and is the right thing to ship first; a command earns its place by removing the
   `@@`-block editing an agent currently does by hand, not by unbreaking anything. Separate from
   invariant 6, since which hunks go in which commit stays a judgement in the skill.
-- `mkit cleanup` TUI — multi-select over `mkit branch scan`'s classification.
+- `mkit cleanup` TUI — multi-select over `mkit branch status`'s classification.
 - `mkit review` TUI — live parallel reviewer progress.
 - Codex installer target (`~/.codex/`).
 - Other platforms. Deliberately out (see Decision). Reversing it means adding the `goos` entry,

@@ -243,7 +243,7 @@ func applyFlags(cfg *repoconfig.Config, f flagValues) error {
 	}
 	// No validation, because there is nothing to validate against: any string is
 	// a legal branch name to pin, and a name with no branch here is not an error
-	// (`mkit branch scan` reports it as `keep_unknown=`). `repoconfig.Allowed`
+	// (`mkit branch status` reports it as `keep_unknown=`). `repoconfig.Allowed`
 	// returns nil for this key for the same reason, so flags and file agree.
 	if len(keep) > 0 {
 		cfg.Cleanup.Keep = keep
@@ -274,6 +274,10 @@ func emitInit(out io.Writer, opts Options, res initResult) error {
 		enc := json.NewEncoder(out)
 		enc.SetIndent("", "  ")
 		return enc.Encode(res)
+	}
+	if opts.Pretty {
+		prettyInit(out, res)
+		return nil
 	}
 	if res.Written {
 		_, _ = fmt.Fprintf(out, "wrote %s\n", res.Path)

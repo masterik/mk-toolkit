@@ -1,4 +1,4 @@
-package storage
+package cache
 
 import (
 	"fmt"
@@ -150,10 +150,10 @@ func deleteEntry(home string, cat CategoryReport, e Entry, cutoff time.Time, res
 
 func guardHome(home, userHome string) error {
 	if home == "" || home == "." || home == "/" {
-		return fmt.Errorf("storage: refusing to operate on provider home %q", home)
+		return fmt.Errorf("cache: refusing to operate on provider home %q", home)
 	}
 	if userHome != "" && home == filepath.Clean(userHome) {
-		return fmt.Errorf("storage: refusing to operate on $HOME (%s)", home)
+		return fmt.Errorf("cache: refusing to operate on $HOME (%s)", home)
 	}
 	return nil
 }

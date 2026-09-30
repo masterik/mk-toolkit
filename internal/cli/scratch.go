@@ -10,22 +10,22 @@ import (
 	"github.com/masterik/mk-toolkit/internal/core/scratch"
 )
 
-func newRunCmd() *cobra.Command {
+func newScratchCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "run",
+		Use:   "scratch",
 		Short: "Open and prune mkit's per-run scratch directories",
 	}
-	cmd.AddCommand(newRunOpenCmd(), newRunPruneCmd())
+	cmd.AddCommand(newScratchOpenCmd(), newScratchPruneCmd())
 	return cmd
 }
 
-func newRunOpenCmd() *cobra.Command {
+func newScratchOpenCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "open <skill>",
 		Short: "Open a fresh run directory and print its absolute path",
 		Long: "Open a fresh mkit run directory under <toplevel>/.mkit/ and print its absolute\n" +
 			"path — nothing else, so it is safe in a command substitution.\n\n" +
-			"  mkit run open review  ->  /repo/.mkit/review-20260819T111347Z-RPfCbj\n\n" +
+			"  mkit scratch open review  ->  /repo/.mkit/review-20260819T111347Z-RPfCbj\n\n" +
 			"The directory is unique (two runs in one second cannot merge and clobber each\n" +
 			"other's logs), absolute (the path is handed to subagents and reused across\n" +
 			"shells), inside the work tree (a linked worktree gets its own), and mkit's\n" +
@@ -51,7 +51,7 @@ func newRunOpenCmd() *cobra.Command {
 	}
 }
 
-func newRunPruneCmd() *cobra.Command {
+func newScratchPruneCmd() *cobra.Command {
 	var keep int
 	cmd := &cobra.Command{
 		Use:   "prune",

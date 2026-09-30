@@ -186,7 +186,7 @@ func TestAppendAgainstAnotherBranchRecordsThatBranchesHead(t *testing.T) {
 func TestPathIsPerWorkTree(t *testing.T) {
 	repo := newRepo(t)
 	log := Open(repo, "main")
-	want := filepath.Join(repo.Toplevel, ".mkit", "work", FileName("main"))
+	want := filepath.Join(repo.Toplevel, ".mkit", "worklog", FileName("main"))
 	if log.Path() != want {
 		t.Errorf("Path() = %q, want %q", log.Path(), want)
 	}
@@ -282,7 +282,7 @@ func TestFileNameStaysWithinNameMax(t *testing.T) {
 	}
 }
 
-// `mkit work append` can be the first thing ever to write under `.mkit/` — no skill
+// `mkit worklog append` can be the first thing ever to write under `.mkit/` — no skill
 // has to have opened a run directory first. Unignored, that scratch makes
 // `git worktree remove` refuse and puts the worklog in reach of `git add -A`.
 func TestAppendEstablishesTheIgnoreRule(t *testing.T) {

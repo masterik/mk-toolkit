@@ -50,7 +50,7 @@ func TestAKeepListAloneIsNotAZeroConfig(t *testing.T) {
 
 // `[cleanup] keep` has no enumeration, so it fits #19's validation machinery by
 // having nothing in it: any string is a legal branch name to pin. A name with no
-// local branch is reported by `mkit branch scan` as `keep_unknown=`, never
+// local branch is reported by `mkit branch status` as `keep_unknown=`, never
 // rejected on read — config is an input, and the list travels with the repo.
 func TestCleanupKeepHasNoEnumerationAndIsNeverRejected(t *testing.T) {
 	if got := Allowed("cleanup.keep"); got != nil {

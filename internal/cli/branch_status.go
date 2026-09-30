@@ -8,17 +8,17 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/masterik/mk-toolkit/internal/core/branchscan"
+	"github.com/masterik/mk-toolkit/internal/core/branchstatus"
 	"github.com/masterik/mk-toolkit/internal/core/gitrepo"
 	"github.com/masterik/mk-toolkit/internal/core/repoconfig"
 )
 
-func newBranchScanCmd() *cobra.Command {
+func newBranchStatusCmd() *cobra.Command {
 	var def string
 	var noFetch, noGH bool
 
 	cmd := &cobra.Command{
-		Use:   "scan --default <branch>",
+		Use:   "status --default <branch>",
 		Short: "Classify every local branch and worktree for a repo-wide cleanup",
 		Long: "Classify every local branch and worktree: which are merged (locally, or via a PR\n" +
 			"git's own merge-base cannot see because of a squash merge), which still have an\n" +
@@ -54,7 +54,7 @@ func newBranchScanCmd() *cobra.Command {
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if def == "" {
-				return usageErr("usage: mkit branch scan --default <branch> [--no-fetch] [--no-gh]")
+				return usageErr("usage: mkit branch status --default <branch> [--no-fetch] [--no-gh]")
 			}
 			repo, err := gitrepo.Open("")
 			if err != nil {
@@ -82,7 +82,7 @@ func newBranchScanCmd() *cobra.Command {
 			for _, pb := range cfg.Problems {
 				problems = append(problems, pb.Detail)
 			}
-			s, err := branchscan.Run(repo, branchscan.Options{
+			s, err := branchstatus.Run(repo, branchstatus.Options{
 				Default: def, Keep: cfg.Cleanup.Keep, ConfigProblems: problems,
 				NoFetch: noFetch, NoGH: noGH,
 			})
@@ -90,9 +90,13 @@ func newBranchScanCmd() *cobra.Command {
 				return &ExitError{Code: 2, Msg: err.Error()}
 			}
 			if FromContext(cmd).JSON {
-				return writeBranchScanJSON(cmd.OutOrStdout(), s)
+				return writeBranchStatusJSON(cmd.OutOrStdout(), s)
 			}
-			renderBranchScan(cmd.OutOrStdout(), s)
+			if FromContext(cmd).Pretty {
+				prettyBranchStatus(cmd.OutOrStdout(), s)
+				return nil
+			}
+			renderBranchStatus(cmd.OutOrStdout(), s)
 			return nil
 		},
 	}
@@ -103,7 +107,7 @@ func newBranchScanCmd() *cobra.Command {
 	return cmd
 }
 
-func renderBranchScan(out io.Writer, s *branchscan.Scan) {
+func renderBranchStatus(out io.Writer, s *branchstatus.Scan) {
 	_, _ = fmt.Fprintf(out, "default=%s\n", s.Default)
 	_, _ = fmt.Fprintf(out, "develop=%s\n", s.Develop)
 	_, _ = fmt.Fprintf(out, "protected=%s\n", strings.Join(s.Protected, ","))
@@ -186,7 +190,7 @@ type worktreeScanJSON struct {
 	Clean  string `json:"clean"`
 }
 
-func writeBranchScanJSON(out io.Writer, s *branchscan.Scan) error {
+func writeBranchStatusJSON(out io.Writer, s *branchstatus.Scan) error {
 	j := branchScanJSON{
 		Default: s.Default, Develop: s.Develop, Protected: s.Protected,
 		Keep: nonNil(s.Keep), KeepUnknown: nonNil(s.KeepUnknown),

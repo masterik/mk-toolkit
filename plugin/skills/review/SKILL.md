@@ -137,14 +137,14 @@ opens a second directory (`output-discipline.md`).
 Then read what already ran on this branch:
 
 ```bash
-mkit work show --json --limit 20
+mkit worklog show --json --limit 20
 ```
 
 **Unconditional, here and everywhere else** (`workflow-contract.md`, "Reading it"). Step 0 already
 stopped the run if the binary was missing, and since M5 every other skill's first call does the same —
 so no skill has a missing-binary case left to check for.
 
-What step 0 did *not* establish is that this binary knows `work` — it proved `findings` — and a binary from
+What step 0 did *not* establish is that this binary knows `worklog` — it proved `findings` — and a binary from
 before the worklog landed answers one and not the other. So the second half of the shared rule still holds:
 **a nonzero exit is not a stop**, carry on without the log and say so in step 6. Read what it printed before
 naming the cause: an unknown subcommand is that skew, while a log it found and could not read is a different
@@ -438,12 +438,12 @@ does not reflow wide or nested structure:
 Then record the run:
 
 ```bash
-mkit work append --step review --gist '<one line: what this review concluded>' \
+mkit worklog append --step review --gist '<one line: what this review concluded>' \
   --artifact '<run-dir>' [--assume '<what this run derived rather than found>']...
 ```
 
 The run directory is the right `--artifact` here — it is what this step produced — but it is **perishable**:
-step 6 folds in `mkit run prune`, which keeps the newest five per skill and additionally spares anything
+step 6 folds in `mkit scratch prune`, which keeps the newest five per skill and additionally spares anything
 touched in the last 60 minutes, so the path survives an unpredictable number of later reviews and then stops
 existing. That is expected; the gist carries the conclusion. Name the reviewed range in the gist so the record
 still says what it covered once the directory is gone.
@@ -472,7 +472,7 @@ the summary already says out loud. A record that states its scope lets `finish` 
 concluding more than the run proved.
 
 Do not commit unless asked — leave fixes in the working tree for the user to commit (or chain into `commit`).
-Fold `mkit run prune` into step 6's call rather than spending a turn on it.
+Fold `mkit scratch prune` into step 6's call rather than spending a turn on it.
 
 ## Git safety
 

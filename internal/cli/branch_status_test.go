@@ -96,7 +96,7 @@ func noGH(t *testing.T) {
 
 func scan(t *testing.T, args ...string) result {
 	t.Helper()
-	return run(t, append([]string{"branch", "scan"}, args...)...)
+	return run(t, append([]string{"branch", "status"}, args...)...)
 }
 
 func TestScanRejectsADefaultThatDoesNotExist(t *testing.T) {

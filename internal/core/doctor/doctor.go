@@ -114,6 +114,7 @@ func Run(opts Options) *Report {
 		r.add(Check{Group: "repo", Name: "work tree", Status: Unknown,
 			Detail: "not inside a git repository — the repo checks were skipped"})
 	}
+	r.orphans(opts.Repo)
 	r.writableSet(toplevel)
 	r.allowlist(toplevel)
 	return r

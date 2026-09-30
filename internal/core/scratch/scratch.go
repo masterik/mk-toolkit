@@ -123,7 +123,7 @@ func EnsureIgnored(repo *gitrepo.Repo) bool {
 //     `git worktree remove`, `git add -A`, the gate fingerprint — sees run
 //     artefacts. Best effort: the write lands in the main checkout's exclude
 //     file, which a worktree-isolated session cannot reach, so the answer is
-//     reported (`run_ignored=`) rather than enforced. Opening the run directory
+//     reported (`scratch_ignored=`) rather than enforced. Opening the run directory
 //     is every skill's first call and may not fail over an ignore rule.
 func RunDir(repo *gitrepo.Repo, skill string) (string, error) {
 	if err := CheckSlug(skill); err != nil {

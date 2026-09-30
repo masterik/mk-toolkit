@@ -171,7 +171,7 @@ func ShellQuote(s string) string {
 //
 // It has to name `commonDir` rather than a fixed path: under a linked worktree
 // the exclude file lives in the main checkout, which is exactly the session that
-// cannot reach it. Both callers — `mkit facts`' `run_ignored=no` note and `mkit
+// cannot reach it. Both callers — `mkit facts`' `scratch_ignored=no` note and `mkit
 // doctor`'s scratch check — read this rather than wording it again; the pair of
 // lines is the rule, and a caller that wrote only `.mkit/*` would hide repo
 // config from `git add`.

@@ -12,7 +12,7 @@ import (
 	"github.com/masterik/mk-toolkit/internal/core/worklog"
 )
 
-func newWorkAppendCmd() *cobra.Command {
+func newWorklogAppendCmd() *cobra.Command {
 	var branch, step, gist, artifact string
 	var assume []string
 

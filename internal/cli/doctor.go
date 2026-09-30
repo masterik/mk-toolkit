@@ -34,6 +34,10 @@ func newDoctorCmd() *cobra.Command {
 				enc.SetIndent("", "  ")
 				return enc.Encode(report)
 			}
+			if opts.Pretty {
+				prettyDoctor(cmd.OutOrStdout(), report)
+				return nil
+			}
 			renderDoctor(cmd.OutOrStdout(), report)
 			return nil
 		},

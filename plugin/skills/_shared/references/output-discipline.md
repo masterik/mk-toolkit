@@ -16,7 +16,7 @@ A skill's first act is `mkit facts <skill>`. It opens this run's directory
 - **`run=`** — this run's directory: unique, absolute, `<toplevel>/.mkit/<skill>-…`, its
   own per worktree. Every log and run file lives in it.
 - **`tmp=`** — where a file that dies with the command goes. See "Where a write may land".
-- **`run_ignored=` `user_dir=` `user_dir_writable=` `git_bin=`** — the four facts about what this
+- **`scratch_ignored=` `user_dir=` `user_dir_writable=` `git_bin=`** — the four facts about what this
   machine will let you write and how to call git. See below, and `git-safety.md`.
 - **`refs=`** — the resolved path of this bundle. Hand subagents *that*; `../_shared/references/…` means
   nothing without the calling skill loaded.
@@ -36,7 +36,7 @@ A skill's first act is `mkit facts <skill>`. It opens this run's directory
   masterik/tap/mkit`); never `mkdir` a substitute for the run directory.
 
 Then, for the rest of the run: write only inside `run=`; name it in the final summary (it is the record,
-which is what lets the summary stay short); prune with `mkit run prune` at the **end**, never the
+which is what lets the summary stay short); prune with `mkit scratch prune` at the **end**, never the
 start — a concurrent run may be reading the older directories.
 
 ## Where a write may land
@@ -66,7 +66,7 @@ the same fallback `mkit_tmpfile` uses, so a session with `$TMPDIR` unset still l
 
 Two facts to act on before you stage anything:
 
-- **`run_ignored=no`** — `.mkit/` is not ignored in this repo, so `git add -A` would sweep run
+- **`scratch_ignored=no`** — `.mkit/` is not ignored in this repo, so `git add -A` would sweep run
   artefacts into a commit and `git worktree remove` would refuse. **Do not run a staging step.** The
   `notes:` block names the remedy; it has to be applied from the main checkout.
 - **`user_dir_writable=no`** — mkit cannot record what it has already told the user. Report it with

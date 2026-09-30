@@ -1,4 +1,4 @@
-// Package branchscan classifies every local branch and worktree for a repo-wide
+// Package branchstatus classifies every local branch and worktree for a repo-wide
 // cleanup: which branches are merged (locally, or via a PR git's own merge-base
 // cannot see because of a squash merge), which still have an open PR, which were
 // never pushed, and which worktree each one owns.
@@ -8,7 +8,7 @@
 // updates this repo's own remote-tracking refs.
 //
 // Layering: returns data, never prints, never assumes a terminal.
-package branchscan
+package branchstatus
 
 import (
 	"encoding/json"
@@ -110,7 +110,7 @@ type Scan struct {
 	Worktrees []Worktree
 }
 
-// Options are `branch scan`'s knobs.
+// Options are `branch status`'s knobs.
 type Options struct {
 	// Default is the branch `facts.sh` already resolved. This package never
 	// re-derives it, so there is exactly one place that logic lives.

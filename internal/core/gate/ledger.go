@@ -116,7 +116,7 @@ func (l *Ledger) Append(rec Record) {
 	if err != nil {
 		return
 	}
-	// Before the mkdir, in case a gate run — not `run open` — is what creates
+	// Before the mkdir, in case a gate run — not `scratch open` — is what creates
 	// `.mkit/` in this repo. An unignored scratch root feeds the fingerprint a
 	// directory that changes while the gate runs, which is a run invalidating
 	// its own cache entry. Best effort, like everything on this path.
@@ -328,7 +328,7 @@ func (l *Ledger) trim() {
 
 // acquireLock takes the trim lock, breaking one nothing could still be holding.
 // A trim killed mid-rewrite leaves the directory behind, and rotation would then
-// be off forever, silently — the same 60-minute liveness heuristic `run prune`
+// be off forever, silently — the same 60-minute liveness heuristic `scratch prune`
 // uses for a run directory.
 func acquireLock(lock string) bool {
 	if err := os.Mkdir(lock, 0o755); err == nil {

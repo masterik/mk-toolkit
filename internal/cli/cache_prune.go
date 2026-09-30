@@ -7,11 +7,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/masterik/mk-toolkit/internal/core/storage"
-	tui "github.com/masterik/mk-toolkit/internal/tui/storageprune"
+	"github.com/masterik/mk-toolkit/internal/core/cache"
+	tui "github.com/masterik/mk-toolkit/internal/tui/cacheprune"
 )
 
-func newStoragePruneCmd() *cobra.Command {
+func newCachePruneCmd() *cobra.Command {
 	var days int
 	var provider string
 	var apply bool
@@ -22,7 +22,7 @@ func newStoragePruneCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts := FromContext(cmd)
 
-			report, err := storage.Scan(storage.Options{Days: days, Provider: provider})
+			report, err := cache.Scan(cache.Options{Days: days, Provider: provider})
 			if err != nil {
 				return err
 			}
@@ -43,7 +43,7 @@ func newStoragePruneCmd() *cobra.Command {
 				return applyAndRender(cmd, opts, report, sel)
 			}
 
-			return applyAndRender(cmd, opts, report, storage.SelectAll(report))
+			return applyAndRender(cmd, opts, report, cache.SelectAll(report))
 		},
 	}
 
@@ -54,9 +54,14 @@ func newStoragePruneCmd() *cobra.Command {
 	return cmd
 }
 
-func renderDryRun(cmd *cobra.Command, opts Options, report *storage.Report) error {
+func renderDryRun(cmd *cobra.Command, opts Options, report *cache.Report) error {
 	if opts.JSON {
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(report)
+	}
+
+	if opts.Pretty {
+		prettyCache(cmd.OutOrStdout(), report, false, nil)
+		return nil
 	}
 
 	out := cmd.OutOrStdout()
@@ -66,7 +71,7 @@ func renderDryRun(cmd *cobra.Command, opts Options, report *storage.Report) erro
 	}
 
 	total := report.TotalBytes()
-	_, _ = fmt.Fprintf(out, "total reclaimable: %s\n", storage.HumanBytes(total))
+	_, _ = fmt.Fprintf(out, "total reclaimable: %s\n", cache.HumanBytes(total))
 	if total > 0 {
 		_, _ = fmt.Fprintln(out, "(dry run — re-run with --apply to delete)")
 	}
@@ -76,8 +81,8 @@ func renderDryRun(cmd *cobra.Command, opts Options, report *storage.Report) erro
 	return nil
 }
 
-func applyAndRender(cmd *cobra.Command, opts Options, report *storage.Report, sel *storage.Selection) error {
-	result, err := storage.Apply(report, sel)
+func applyAndRender(cmd *cobra.Command, opts Options, report *cache.Report, sel *cache.Selection) error {
+	result, err := cache.Apply(report, sel)
 	if err != nil {
 		return err
 	}
@@ -86,13 +91,18 @@ func applyAndRender(cmd *cobra.Command, opts Options, report *storage.Report, se
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(result)
 	}
 
+	if opts.Pretty {
+		prettyCache(cmd.OutOrStdout(), report, true, result)
+		return nil
+	}
+
 	out := cmd.OutOrStdout()
 	_, _ = fmt.Fprintf(out, "mode: APPLY   retention: %dd\n\n", report.Days)
 	for _, p := range report.Providers {
 		renderProvider(out, p, report.Days)
 	}
 
-	_, _ = fmt.Fprintf(out, "total reclaimed: %s\n", storage.HumanBytes(result.Bytes))
+	_, _ = fmt.Fprintf(out, "total reclaimed: %s\n", cache.HumanBytes(result.Bytes))
 	if len(result.Skipped) > 0 {
 		_, _ = fmt.Fprintf(out, "%d paths skipped\n", len(result.Skipped))
 	}
@@ -102,9 +112,9 @@ func applyAndRender(cmd *cobra.Command, opts Options, report *storage.Report, se
 	return nil
 }
 
-func renderProvider(out io.Writer, p storage.ProviderReport, days int) {
+func renderProvider(out io.Writer, p cache.ProviderReport, days int) {
 	name := p.Name
-	if prov, ok := storage.ByName(p.Name); ok {
+	if prov, ok := cache.ByName(p.Name); ok {
 		name = prov.DisplayName
 	}
 	_, _ = fmt.Fprintf(out, "%s (%s):\n", name, p.Home)
@@ -114,24 +124,24 @@ func renderProvider(out io.Writer, p storage.ProviderReport, days int) {
 	_, _ = fmt.Fprintln(out)
 }
 
-func renderCategory(out io.Writer, c storage.CategoryReport, days int) {
+func renderCategory(out io.Writer, c cache.CategoryReport, days int) {
 	switch c.Kind {
-	case storage.KindFiles:
+	case cache.KindFiles:
 		if len(c.Entries) == 0 {
 			_, _ = fmt.Fprintf(out, "  %-38s nothing older than %dd\n", c.Label, days)
 			return
 		}
-		_, _ = fmt.Fprintf(out, "  %-38s %4d files, %s\n", c.Label, len(c.Entries), storage.HumanBytes(c.Bytes))
-	case storage.KindStaleDirs:
+		_, _ = fmt.Fprintf(out, "  %-38s %4d files, %s\n", c.Label, len(c.Entries), cache.HumanBytes(c.Bytes))
+	case cache.KindStaleDirs:
 		if len(c.Entries) == 0 {
 			_, _ = fmt.Fprintf(out, "  %-38s nothing stale\n", c.Label)
 			return
 		}
-		_, _ = fmt.Fprintf(out, "  %-38s %4d dirs,  %s\n", c.Label, len(c.Entries), storage.HumanBytes(c.Bytes))
+		_, _ = fmt.Fprintf(out, "  %-38s %4d dirs,  %s\n", c.Label, len(c.Entries), cache.HumanBytes(c.Bytes))
 	}
 }
 
-func reportErrorCount(report *storage.Report) int {
+func reportErrorCount(report *cache.Report) int {
 	var n int
 	for _, p := range report.Providers {
 		for _, c := range p.Categories {

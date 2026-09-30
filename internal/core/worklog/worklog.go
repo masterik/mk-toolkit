@@ -1,6 +1,6 @@
 // Package worklog is the per-branch record of what each workflow step concluded.
 //
-// `<toplevel>/.mkit/work/<branch>.jsonl` — append-only, one record per finished
+// `<toplevel>/.mkit/worklog/<branch>.jsonl` — append-only, one record per finished
 // step, never committed, and a linked worktree gets its own. It is the mechanism
 // behind the workflow contract's fourth rule: a step records for the next one and
 // never gates on the last one. A later step reads the log to be cheaper and better
@@ -63,7 +63,7 @@ func Open(repo *gitrepo.Repo, branch string) *Log {
 func (l *Log) Branch() string { return l.branch }
 
 // Dir is the directory holding every branch's log in this work tree.
-func Dir(toplevel string) string { return filepath.Join(toplevel, ".mkit", "work") }
+func Dir(toplevel string) string { return filepath.Join(toplevel, ".mkit", "worklog") }
 
 // Path is the absolute path of this log.
 func (l *Log) Path() string { return filepath.Join(Dir(l.repo.Toplevel), FileName(l.branch)) }
@@ -134,7 +134,7 @@ func FileName(branch string) string {
 // Append writes one record and then rotates.
 //
 // Deliberately *not* best-effort, which is where it parts company with the gate
-// ledger: `mkit work append` is a command someone invoked, so a write it could not
+// ledger: `mkit worklog append` is a command someone invoked, so a write it could not
 // perform is an error with the path and the cause. The best-effort half lives in the
 // skills, which append after their report is produced and treat a failure as one line
 // of note — contract rule 4 says a recorded fact is an input, never a permission, so
@@ -165,7 +165,7 @@ func (l *Log) Append(rec Record) error {
 	}
 	path := l.Path()
 	// Before the MkdirAll, never after — the same ordering, for the same reasons,
-	// as run-open.sh's. A standalone `mkit work append` may be the first thing ever
+	// as run-open.sh's. A standalone `mkit worklog append` may be the first thing ever
 	// to write under `.mkit/` in this repo.
 	ensureIgnored(l.repo.Toplevel)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

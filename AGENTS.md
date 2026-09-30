@@ -9,14 +9,14 @@ bundle; the binary owns every mechanical step those skills take. Composition ove
 the skills orchestrate `git`, `gh`, `wt`, and code-review tools — no new git logic.
 
 **Current phase: the Go port.** M1 (scaffold + release chain) done at `v0.12.0`; M2
-(`mkit storage prune`) done; **M3 withdrawn** ([ADR 0003](docs/adr/0003-two-distribution-channels.md));
+(`mkit cache prune`) done; **M3 withdrawn** ([ADR 0003](docs/adr/0003-two-distribution-channels.md));
 **M7 (`mkit repo profile`/`init`/`doctor`) done** — repo config is `<toplevel>/.mkit/config.toml`,
 committed ([ADR 0001's config-path amendment](docs/adr/0001-per-repo-config-and-init.md#amendment-the-config-path)).
 **M4 (`mkit findings`) done** — `internal/core/findings/` + `internal/cli/findings.go`.
-**M6 (`mkit work`) done** — the per-branch worklog under `<toplevel>/.mkit/work/`, read and written
+**M6 (`mkit worklog`) done** — the per-branch worklog under `<toplevel>/.mkit/worklog/`, read and written
 by all four skills; what it reports is **one fewer input, never a stop**.
-**M5 (the `jq` consumers) done** — `mkit facts`, `mkit gate detect|run`, `mkit branch scan` and
-`mkit run open|prune` replaced the last five scripts, and **the payload is Markdown only**: no
+**M5 (the `jq` consumers) done** — `mkit facts`, `mkit gate detect|run`, `mkit branch status` and
+`mkit scratch open|prune` replaced the last five scripts, and **the payload is Markdown only**: no
 `plugin/scripts/`, no `lib/common.sh`, no `tests/`. That makes `mkit` a **hard requirement for
 every skill** — each one's first call is `mkit facts <skill>` (`review` alone runs a one-line
 compatibility probe before it, because its later steps need `mkit findings` too; `sandbox-audit`,
@@ -49,7 +49,7 @@ just build / vet / test          # go build|vet|test ./...
 just lint                        # golangci-lint run (CI pins v2.12, brew install golangci-lint)
 just run version --json          # exercise the front-end contract
 just run doctor                  # prerequisites, sandbox writability, plugin state
-just run work show --json        # this branch's worklog: what ran, and what it concluded
+just run worklog show --json        # this branch's worklog: what ran, and what it concluded
 just run repo profile --json     # how this repo works: discovered|pinned|unavailable
 just run facts commit --no-run   # every starting fact, without opening a run dir
 just run audit sessions --days 14 # sandbox/permission-gate events across every session
@@ -84,7 +84,7 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
 ## The port, and what it left behind
 
 **The shell layer is gone** (M5). The rules that got it there are kept because they govern the
-milestones that are left (M6 `mkit work`, M8 `mkit plan`) and because they explain why the code
+milestones that are left (M6 `mkit worklog`, M8 `mkit plan`) and because they explain why the code
 reads as it does:
 
 - The deleted `.bats` file **was the spec** for each script — the `go test` beside each package is
@@ -105,7 +105,7 @@ reads as it does:
   context. Read it via `cli.FromContext(cmd)` — never re-check a flag or call `term.IsTerminal`
   inside a command.
 - `internal/core/` — data-returning logic. Never prints, never assumes a terminal.
-  - `storage/` (M2): `provider.go` (the provider/category table), `scan.go` (read-only),
+  - `cache/` (M2): `provider.go` (the provider/category table), `scan.go` (read-only),
     `apply.go` (deletes only what `Scan` named, home-containment guarded), `size.go`
     (`HumanBytes`).
   - `gitrepo/` (M7): the few git questions the config surfaces ask. **`Ignored` runs
@@ -145,6 +145,9 @@ reads as it does:
     being edited is what a report is about, and an installed 0.14.0 answering for a 0.16.0 work
     tree is a wrong answer that looks right.
   - `doctor/` (M7): the checks. Reports; fixes nothing; exit status stays 0 with findings.
+    `orphans.go` is the closed table of paths an older mkit wrote (old `.mkit/work/`, `<git-dir>/mkit`, the
+    hook's `bootstrap.*`), each reported as a `leftovers` warning with the `rm` to run. An entry is dropped
+    once every machine has run a release past the one that stopped writing it.
   - `scratch/` (M5): `<toplevel>/.mkit/` — the scratch root, and the **only** package that writes
     *runtime state* inside a user's work tree. The one other writer there is `repoconfig`, which
     writes the committed `.mkit/config.toml`; both are on `writes_test.go`'s reviewed allowlist,
@@ -165,7 +168,7 @@ reads as it does:
     unresolvable `--range`, which used to print an empty range and exit 0, a result a skill
     cannot tell from a range with nothing in it. A git query that fails is never reported as
     an empty answer: a `git status` that cannot run is an error, not `clean=yes`.
-  - `branchscan/` (M5): `cleanup`'s classifier — every local branch's merge/upstream/PR
+  - `branchstatus/` (M5): `cleanup`'s classifier — every local branch's merge/upstream/PR
     state and every worktree's origin/cleanliness. One batched `gh` call, never a per-branch
     round trip. `--default` is never re-derived, `$default`/`$develop` are tested directly
     rather than by splitting a joined string (a branch name may contain a comma), and a
@@ -200,7 +203,7 @@ reads as it does:
     itself. Every order-bearing sort is `sort.SliceStable`; ids come from a sort with ties. Writes the run
     directory's artefacts, prints nothing.
   - `worklog/` (M6): the per-branch record of what each step concluded,
-    `<toplevel>/.mkit/work/<branch>.jsonl`. `FileName` is the branch→file mapping **both verbs go
+    `<toplevel>/.mkit/worklog/<branch>.jsonl`. `FileName` is the branch→file mapping **both verbs go
     through** — one that `show` and `append` derive separately is one they eventually disagree
     about, and the symptom is an empty log rather than an error. It escapes to `%XX` and then
     appends the **full** SHA-256 of the exact branch to **every** name: macOS is
@@ -216,7 +219,11 @@ reads as it does:
     read the file cleanly does not rotate.** The fingerprint is **delegated to
     `mkit_tree_fingerprint`** via `pluginroot.CommonFunc`, never reimplemented, until M5 ports it.
 - `internal/tui/` — Bubble Tea rendering over `core`, one subpackage per command.
-  `internal/tui/storageprune/` (M2): the size-sorted tick-list `storage prune --apply` opens on a
+  `internal/tui/ui/` is the shared lipgloss styling (palette, status icons, tables, bars) behind the
+  human forms of `doctor`, `repo profile`, `branch status`, `cache prune`, `audit sessions`, `init` and
+  `version`. Those run only when `Options.Pretty` is set — stdout a terminal and neither `--json` nor
+  `--no-tui` given — so a pipe, an agent and every skill still get the unchanged `key=value` text.
+  `internal/tui/cacheprune/` (M2): the size-sorted tick-list `cache prune --apply` opens on a
   TTY. `internal/tui/repoinit/` (M7, #31): the `mkit init` wizard, a plain Bubble Tea model
   over an `initplan.Plan` in the clack style (answered prompts collapse to one `◇` line each).
   Plain Bubble Tea rather than `huh`, for what `huh` could not do: Esc backs up and aborts only on
@@ -268,7 +275,7 @@ reads as it does:
   `_shared/`; there is no `scripts/`, no `lib/common.sh`, and nothing in it is run. `mkit facts
   <skill>` is every repo-scoped skill's first call — it opens the run directory under `<toplevel>/.mkit/` and
   returns every starting fact, including the three that say what this machine will let a skill do:
-  `run_ignored=`, `user_dir_writable=` and `git_bin=` (the absolute git path, for any call whose
+  `scratch_ignored=`, `user_dir_writable=` and `git_bin=` (the absolute git path, for any call whose
   output a skill parses — an output-reshaping hook can hand it a summarized status that reads
   exactly like the tree). A cause needing a sentence goes in the trailing `notes:` block, never on
   a `key=value` line, since several of those pack more than one pair.
@@ -279,7 +286,7 @@ reads as it does:
   reporter for them. `mkit facts`' `user_dir_writable=` and `config_state=` starting facts
   are what a *skill* reads, since `doctor` is for a human.
 - `<toplevel>/.mkit/` — the scratch root, owned by `internal/core/scratch`: per-run directories plus `gate.jsonl` (the gate
-  ledger, append-only, rotated back to the newest 200 records once it passes 400) and `work/`
+  ledger, append-only, rotated back to the newest 200 records once it passes 400) and `worklog/`
   (M6's worklog, one `<branch>.jsonl` per branch, same append-only shape and same rotation) — **and one
   committed file, `config.toml`**, the repo config `mkit init` writes
   ([ADR 0001](docs/adr/0001-per-repo-config-and-init.md#amendment-the-config-path)). That is why
@@ -295,8 +302,8 @@ reads as it does:
   rule in the common dir's `info/exclude` **before** the first write, which is load-bearing rather
   than tidy: unignored, `git worktree remove` refuses, `git add -A` would commit run artefacts, and
   the gate fingerprint sees a directory that changes while the gate runs. `mkit facts` reports
-  `run_ignored=` because an isolated session cannot write that file. `mkit run prune` only removes
-  `<skill>-*` **directories**, which keeps `gate.jsonl` and `work/` out of its range. The worklog
+  `scratch_ignored=` because an isolated session cannot write that file. `mkit scratch prune` only removes
+  `<skill>-*` **directories**, which keeps `gate.jsonl` and `worklog/` out of its range. The worklog
   needs **no ignore rule of its own** — `.mkit/*` already covers it, and a second rule would be a
   second thing to keep true.
 - `~/.mkit/` — the declared home for state outside a repo, overridable with `MKIT_HOME` (the tests
