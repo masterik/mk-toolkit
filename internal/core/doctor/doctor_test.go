@@ -268,3 +268,17 @@ func TestOrphanBehindASymlinkedAncestorGetsNoRemedy(t *testing.T) {
 		t.Errorf("detail must say why: %q", c.Detail)
 	}
 }
+
+// An MKIT_HOME with a trailing slash or redundant components is an ordinary
+// value; it must not be mistaken for a symlink escape and lose its remedy.
+func TestOrphanRemedySurvivesAnUnnormalisedUserDir(t *testing.T) {
+	isolate(t)
+	home := filepath.Join(t.TempDir(), ".mkit")
+	writeFile(t, home, "bootstrap.state", "x")
+	t.Setenv("MKIT_HOME", home+string(filepath.Separator)+".")
+
+	c := find(t, Run(Options{}), "bootstrap.state")
+	if c.Remedy == "" {
+		t.Errorf("remedy dropped for an unnormalised MKIT_HOME: %+v", c)
+	}
+}

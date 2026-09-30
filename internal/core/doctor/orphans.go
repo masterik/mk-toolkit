@@ -121,7 +121,14 @@ func (r *Report) orphans(repo *gitrepo.Repo) {
 func leavesAnchor(p string, a orphanAnchors) bool {
 	var anchor string
 	for _, c := range []string{a.toplevel, a.commonDir, a.userDir} {
-		if c != "" && (p == c || strings.HasPrefix(p, c+string(filepath.Separator))) {
+		if c == "" {
+			continue
+		}
+		// p was built with filepath.Join, so it is already clean; an anchor is not
+		// — MKIT_HOME may carry a trailing slash or a `./` — and a raw prefix test
+		// against it would call a perfectly ordinary path a symlink escape.
+		c = filepath.Clean(c)
+		if p == c || strings.HasPrefix(p, c+string(filepath.Separator)) {
 			anchor = c
 			break
 		}
