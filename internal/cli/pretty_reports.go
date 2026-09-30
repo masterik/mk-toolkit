@@ -103,6 +103,21 @@ func prettyAudit(out io.Writer, r *sessionaudit.Report, top int) {
 		s.Dim(fmt.Sprintf("last %dd · %d transcripts · %d with events", r.Days, r.Transcripts, r.WithEvents)))
 	_, _ = fmt.Fprintln(out, s.Dim("  "+r.Root))
 
+	// Unreadable transcripts first: every count below is a lower bound, and a scan
+	// that read nothing must not look like an audit that found nothing.
+	if len(r.Unreadable) > 0 {
+		_, _ = fmt.Fprintf(out, "\n%s %s\n", s.Icon("warn"),
+			s.Warn(fmt.Sprintf("%d transcripts unreadable — the counts below are lower bounds", len(r.Unreadable))))
+		for _, p := range r.Unreadable {
+			_, _ = fmt.Fprintf(out, "  %s\n", s.Dim(p))
+		}
+		if r.Transcripts == 0 {
+			_, _ = fmt.Fprintf(out, "\n%s\n", s.Dim("nothing could be read, so there is no audit to show"))
+			return
+		}
+		_, _ = fmt.Fprintln(out)
+	}
+
 	const lw = 22
 	_, _ = fmt.Fprintln(out, s.Panel(
 		s.KV("sandbox blocks", count(s, c.SandboxBlocks, s.Warn), lw),
@@ -149,13 +164,6 @@ func prettyAudit(out io.Writer, r *sessionaudit.Report, top int) {
 				}
 				return s.Style()
 			}))
-	}
-
-	if len(r.Unreadable) > 0 {
-		_, _ = fmt.Fprintf(out, "\n%s %s\n", s.Icon("warn"), s.Warn(fmt.Sprintf("%d transcripts unreadable", len(r.Unreadable))))
-		for _, p := range r.Unreadable {
-			_, _ = fmt.Fprintf(out, "  %s\n", s.Dim(p))
-		}
 	}
 }
 

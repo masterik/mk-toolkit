@@ -21,12 +21,12 @@ type Options struct {
 // touched.
 func Scan(opts Options) (*Report, error) {
 	if opts.Days < 0 {
-		return nil, fmt.Errorf("storage: days must be non-negative, got %d", opts.Days)
+		return nil, fmt.Errorf("cache: days must be non-negative, got %d", opts.Days)
 	}
 	switch opts.Provider {
 	case "claude", "codex", "all":
 	default:
-		return nil, fmt.Errorf("storage: provider must be claude, codex, or all, got %q", opts.Provider)
+		return nil, fmt.Errorf("cache: provider must be claude, codex, or all, got %q", opts.Provider)
 	}
 
 	now := time.Now()

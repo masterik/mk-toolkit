@@ -3,6 +3,7 @@ package doctor
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/masterik/mk-toolkit/internal/core/gitrepo"
 	"github.com/masterik/mk-toolkit/internal/core/scratch"
@@ -95,6 +96,14 @@ func (r *Report) orphans(repo *gitrepo.Repo) {
 			continue
 		}
 		found++
+		// The `rm` is only offered for a path that really lives under its anchor.
+		// Lstat above looks at the last element only; a symlinked ancestor —
+		// `.mkit` pointing elsewhere — would aim `rm -r` outside the repo.
+		if leavesAnchor(p, a) {
+			r.add(Check{Group: leftoverGroup, Name: o.name, Status: Warn,
+				Detail: p + " — " + o.why + "; it is reached through a symlink, so no rm is offered: check where it points first"})
+			continue
+		}
 		r.add(Check{Group: leftoverGroup, Name: o.name, Status: Warn,
 			Detail: p + " — " + o.why,
 			Remedy: "rm -r " + shellQuote(p)})
@@ -103,6 +112,33 @@ func (r *Report) orphans(repo *gitrepo.Repo) {
 		r.add(Check{Group: leftoverGroup, Name: "old-version leftovers", Status: OK,
 			Detail: "none found in this repo or the user directory"})
 	}
+}
+
+// leavesAnchor reports whether p, with every symlink in its parent chain
+// resolved, falls outside the (resolved) anchor directory it was derived from.
+// A path whose anchor cannot be resolved counts as leaving: no remedy is safer
+// than one aimed somewhere unverified.
+func leavesAnchor(p string, a orphanAnchors) bool {
+	var anchor string
+	for _, c := range []string{a.toplevel, a.commonDir, a.userDir} {
+		if c != "" && (p == c || strings.HasPrefix(p, c+string(filepath.Separator))) {
+			anchor = c
+			break
+		}
+	}
+	if anchor == "" {
+		return true
+	}
+	root, err := filepath.EvalSymlinks(anchor)
+	if err != nil {
+		return true
+	}
+	dir, err := filepath.EvalSymlinks(filepath.Dir(p))
+	if err != nil {
+		return true
+	}
+	rel, err := filepath.Rel(root, dir)
+	return err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // shellQuote single-quotes a path for the remedy line, so a path with a space

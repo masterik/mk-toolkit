@@ -248,3 +248,23 @@ func TestShellQuote(t *testing.T) {
 		t.Errorf("got %s", got)
 	}
 }
+
+// `.mkit` may be a symlink out of the repo. The leftover is still reported, but
+// no `rm -r` is offered: it would delete wherever the link points.
+func TestOrphanBehindASymlinkedAncestorGetsNoRemedy(t *testing.T) {
+	isolate(t)
+	repo := newRepo(t)
+	outside := t.TempDir()
+	writeFile(t, outside, "work/main.jsonl", "{}\n")
+	if err := os.Symlink(outside, filepath.Join(repo.Toplevel, ".mkit")); err != nil {
+		t.Fatal(err)
+	}
+
+	c := find(t, Run(Options{Repo: repo}), "old worklog directory")
+	if c.Status != Warn || c.Remedy != "" {
+		t.Errorf("want a warning with no remedy, got %+v", c)
+	}
+	if !strings.Contains(c.Detail, "symlink") {
+		t.Errorf("detail must say why: %q", c.Detail)
+	}
+}

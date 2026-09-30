@@ -218,6 +218,7 @@ func prettyBranchStatus(out io.Writer, sc *branchstatus.Scan) {
 		s.KV("fetch", state(sc.Fetch, "ok"), lw),
 		s.KV("gh", state(sc.GH, "ok"), lw),
 		s.KV("protected", s.Violet(strings.Join(sc.Protected, "  ")), lw),
+		s.KV("keep", orNone(strings.Join(sc.Keep, "  ")), lw),
 	))
 	if len(sc.KeepUnknown) > 0 {
 		_, _ = fmt.Fprintf(out, "%s %s\n", s.Icon("warn"),

@@ -13,7 +13,7 @@ import (
 	"github.com/masterik/mk-toolkit/internal/core/worklog"
 )
 
-// runIn is findings_test.go's run, with a working directory: `work` answers about
+// runIn is findings_test.go's run, with a working directory: `worklog` answers about
 // the repository the process is standing in, so the test has to stand somewhere.
 func runIn(t *testing.T, dir string, args ...string) (stdout string, code int) {
 	t.Helper()
