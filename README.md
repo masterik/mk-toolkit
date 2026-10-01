@@ -18,14 +18,14 @@ Claude-only for now; other agents (Codex, opencode, …) are a later, thin packa
 | `finish` | Commit → merge the branch back into its base → delete branch / remove worktree (local, no PR). |
 | `pr` | Commit → push → open a GitHub PR → assign reviewers (remote review path). |
 | `cleanup` | Sweep every local branch and worktree: delete what's merged, keep only the default branch and a local `develop`-like one, switch to one and pull it current. Local-only — never touches a remote branch. |
-| `sandbox-audit` | Scan every project's recent sessions for sandbox blocks, sandbox-disabled calls and auto-mode/rule/user denials, and propose a paste-ready settings diff plus the guards that should stay. Report-only — never edits a settings file. |
+| `sandbox-audit` | Scan every project's recent sessions for sandbox blocks, sandbox-disabled calls and auto-mode/rule/user denials, and propose a paste-ready settings diff plus the guards that should stay. Report-only — never edits a settings file. **Slash-only**: run it as `/mkit:sandbox-audit`; it is never triggered by a phrase. |
 
 `_shared/` is the shared **references** bundle (git safety, Conventional Commits, quality
 gate, worktree detection, branching) that the skills link into — not a triggerable skill.
 The mechanical steps are the binary's: `mkit facts` opens a run directory and returns every
 starting fact, `mkit gate detect|run` detects and runs the quality gate, `mkit branch status`
-classifies every local branch and worktree for `cleanup`, `mkit audit sessions` reads past
-transcripts for `sandbox-audit`, and `mkit findings` does the arithmetic
+classifies every local branch and worktree for `cleanup`, `mkit audit sandbox` reads past
+transcripts and the settings that govern them for `sandbox-audit`, and `mkit findings` does the arithmetic
 over a review's findings.
 
 ## Install
@@ -47,7 +47,7 @@ Nothing to build either way, and **both steps are required** — the marketplace
 Homebrew ships the binary, and the two version independently
 ([ADR 0003](docs/adr/0003-two-distribution-channels.md)). Since M5 every repo-scoped skill's first call is
 `mkit facts <skill>` (`review` runs a one-line `mkit findings` compatibility probe just before it;
-`sandbox-audit`, which is user-wide, starts with `mkit audit sessions`), so a missing binary stops a skill at step 0 with a `brew` remedy rather than
+`sandbox-audit`, which is user-wide, starts with `mkit audit sandbox`), so a missing binary stops a skill at step 0 with a `brew` remedy rather than
 degrading. Presence only, with no declared minimum on either side. All four skills also read and
 write a per-branch **worklog** through `mkit worklog` (M6) — what ran on this branch and what it
 concluded — which is an optional *input*: a worklog a step cannot read costs it one input and never

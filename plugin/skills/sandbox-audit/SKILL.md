@@ -1,13 +1,9 @@
 ---
 name: sandbox-audit
+disable-model-invocation: true
 description: >-
-  Scan recent Claude Code sessions, user-wide, for sandbox and auto-mode friction — what the OS sandbox
-  blocked, what ran with the sandbox disabled, what the auto-mode classifier, a permission rule or the user
-  refused — and propose paste-ready settings changes (network allowlist, filesystem allowWrite, env,
-  excludedCommands, permission and autoMode rules) plus the guards that should stay. Trigger on "sandbox
-  audit", "audit my sandbox", "scan sessions for sandbox issues", "why does the sandbox keep blocking",
-  "update my allowlist from recent sessions", "review my auto mode denials", "reduce sandbox overrides".
-  Report-only: it never edits a settings file.
+  Turn recent sandbox and auto-mode friction, user-wide, into a paste-ready settings diff and the guards
+  that should stay. Run it as /mkit:sandbox-audit; report-only, it never edits a settings file.
 ---
 
 # Audit the sandbox and permission gate across sessions
@@ -20,7 +16,7 @@ References: `../_shared/references/output-discipline.md` (bounded output, where 
 
 ## What this does and does not touch
 
-- Reads transcripts (through `mkit audit sessions`) and settings files. Nothing else.
+- Reads transcripts and settings (both through `mkit audit sandbox`), and `CLAUDE.md` when the report says one exists. Nothing else.
 - **Never writes a settings file.** `~/.claude/settings.json` and every `.claude/settings*.json` are
   sandbox-protected, and a changed permission is the user's decision to make, file by file. The output is a
   paste-ready diff.
@@ -33,14 +29,14 @@ References: `../_shared/references/output-discipline.md` (bounded output, where 
 not start with `mkit facts`; the command it needs *is* the probe:
 
 ```bash
-mkit audit sessions --days <N, default 14>
+mkit audit sandbox --days <N, default 14>
 ```
 
 The default `--top 10` per grouping keeps this bounded; a long tail of one-off targets is step 1's
 JSON drill-down, never a reason to print everything here.
 
-If it fails with `command not found` **or** `unknown command "audit"` — absent and too old are the same
-answer — **stop** and say:
+If it fails with `command not found` **or** `unknown command` (`"audit"`, or `"sandbox"` on a binary that
+only has the older `audit sessions`) — absent and too old are the same answer — **stop** and say:
 
 > This skill runs on the `mkit` binary. Install it with `brew install masterik/tap/mkit` (or upgrade
 > with `brew upgrade mkit`), then run it again.
@@ -64,11 +60,12 @@ Read `${MKIT_HOME:-$HOME/.mkit}/sandbox-audit.md` if it exists: the last run's d
 ### 1. Read the report
 
 The human output is the summary: headline counts as `key=value`, then four groupings — sandbox blocks by
-target, by command, overrides by command, auto-mode denials by reason — then a per-project table. Pull the
+target, by command, overrides by command, auto-mode denials by reason — then a per-project table, then the
+config (step 2). Pull the
 JSON only when a bucket needs drilling into:
 
 ```bash
-f=$(mktemp "${TMPDIR:?}/sandbox-audit.XXXXXX") && mkit audit sessions --days <N> --json --events > "$f" && echo "$f"
+f=$(mktemp "${TMPDIR:?}/sandbox-audit.XXXXXX") && mkit audit sandbox --days <N> --json --events > "$f" && echo "$f"
 ```
 
 Carry the printed path as a literal into every later call — a shell variable does not survive to the next
@@ -76,12 +73,6 @@ one — query the file with a short script, never by reading it whole, and `rm` 
 `mktemp` with an explicit template under `$TMPDIR` is what keeps two concurrent runs from sharing a file.
 Keep the `sandbox-audit.` name: the command skips any call that names it, which is what stops the next
 audit counting these queries' output — EPERM lines, quoted — as fresh sandbox blocks.
-
-`projects[].paths` is every working directory a project's sessions ran in — a checkout, a linked
-worktree, or a subdirectory of either. Resolve each to its root with
-`git -C <path> rev-parse --show-toplevel` (keep the path as given when it is not a work tree), and read
-settings from the root: a session started in `repo/packages/web` still loads `repo/.claude/`. A path that
-no longer exists is a removed worktree; skip it.
 
 Know what the counts mean before reasoning from them:
 
@@ -99,11 +90,19 @@ Know what the counts mean before reasoning from them:
 
 ### 2. Read the current config
 
-The user config directory is **`$CLAUDE_CONFIG_DIR`** when it is set, else `~/.claude` — resolve it once
-and use it for every user-level read below. Read `<config dir>/settings.json`, and `.claude/settings.json` +
-`.claude/settings.local.json` under each resolved project root that has events. Note `sandbox.*`, `permissions.*` (`allow`, `ask`, `deny`,
-`additionalDirectories`), `autoMode.*`, `env`. Also `<config dir>/CLAUDE.md`, for step 3's
-behaviour rules.
+The report's trailing config section is what is set, read by the command: `config_dir=`, then per project
+root its `settings=` files (scope `user`, `project`, `local`) with `allowed_domains`, `allow_write`,
+`excluded_commands`, the `permissions` lists, `autoMode` and `env`, each under the file it came from. Do not
+read the settings files yourself. Three things to take from it:
+
+- A sandbox-block target carrying **`covered=<file>:<entry>`** matches an existing entry *by the command's
+  reading* of the pattern — wildcards are only partly documented, so confirm one before calling it a regression.
+- **`protected=yes`** is a path in Claude Code's own region; an allowlist entry there is inert.
+- **`config_unreadable:`** lists settings files it could not read or parse. What is configured there is
+  **unknown**, not empty: never propose a change that file might already hold, and say so at the top of the
+  report. `unknown_keys` under a file are keys outside the command's table — a misspelling Claude Code ignores
+  silently, or a key newer than the table; check each against the docs. With `claude_md=yes`, read
+  `<config_dir>/CLAUDE.md` for step 3's behaviour rules; otherwise there is none.
 
 Before recommending any key, **check its exact name and semantics against the current docs** —
 `https://code.claude.com/docs/en/sandboxing` and `…/settings-reference`. Settings keys change between
@@ -118,7 +117,7 @@ one disposition, preferring them in this order:
 
 | disposition | when | the change |
 | --- | --- | --- |
-| **covered** | the current config already handles it | none — but a covered finding still occurring is a regression worth one line |
+| **covered** | the report marks it `covered=` | none — but a covered finding still occurring is a regression worth one line |
 | **stop the traffic** | telemetry or analytics the task never needed (`telemetry.*`, `analytics.*`, `posthog`) | an `env` opt-out (`DO_NOT_TRACK`, `HOMEBREW_NO_ANALYTICS`, the tool's own) — never allowlist a tracker |
 | **allowlist** | a host or a path a tool legitimately needs | `sandbox.network.allowedDomains`, `sandbox.filesystem.allowWrite`, or an `env` redirect of a temp or cache dir into a writable one |
 | **pre-approve** | the classifier refused something routine the user always approves | a narrow `permissions.allow` rule, or an `autoMode.allow` sentence scoped to the exact operation |
