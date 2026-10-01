@@ -1,6 +1,10 @@
 package sessionaudit
 
-import "sort"
+import (
+	"sort"
+
+	"github.com/masterik/mk-toolkit/internal/core/claudecfg"
+)
 
 // examplesPerBucket bounds the sample commands a bucket carries: enough for a
 // reader to recognise the pattern, few enough that a report stays a summary.
@@ -30,6 +34,10 @@ type Report struct {
 	OverrideHeads []Bucket        `json:"override_heads"`
 	Projects      []ProjectCounts `json:"projects"`
 
+	// Config is what the settings say, set by AttachConfig; nil when the caller
+	// did not ask for it.
+	Config *claudecfg.Result `json:"config,omitempty"`
+
 	// Events is every event behind the counts, each transcript's in order.
 	Events []Event `json:"events,omitempty"`
 }
@@ -52,6 +60,11 @@ type Bucket struct {
 	Count    int      `json:"count"`
 	Projects []string `json:"projects"`
 	Examples []string `json:"examples"`
+	// CoveredBy and Protected are set by AttachConfig, on sandbox-block targets
+	// only: the settings entry that already matches the target, or that the
+	// target is in the region no allowlist entry can open.
+	CoveredBy *claudecfg.Cover `json:"covered_by,omitempty"`
+	Protected bool             `json:"protected,omitempty"`
 }
 
 // ProjectCounts is the headline numbers for one project, worktrees folded in.

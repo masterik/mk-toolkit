@@ -210,12 +210,15 @@ func TestWindowWorktreesAndSubagents(t *testing.T) {
 }
 
 func TestOwnReportIsNotReadBack(t *testing.T) {
-	home := t.TempDir()
-	writeTranscript(t, home, "-p-app/s1.jsonl", 0,
-		turn{tool: "Bash", input: bash("go build ./... && ./mkit audit sessions --top 0", false),
-			result: "sandbox blocks by target\n  9  error: could not lock config file .git/config: Operation not permitted"})
-	if rep := scan(t, home); len(rep.Events) != 0 {
-		t.Errorf("events = %v, want none", kinds(rep.Events))
+	// Both names: `sessions` is the hidden alias an older plugin still calls.
+	for _, name := range []string{"sandbox", "sessions"} {
+		home := t.TempDir()
+		writeTranscript(t, home, "-p-app/s1.jsonl", 0,
+			turn{tool: "Bash", input: bash("go build ./... && ./mkit audit "+name+" --top 0", false),
+				result: "sandbox blocks by target\n  9  error: could not lock config file .git/config: Operation not permitted"})
+		if rep := scan(t, home); len(rep.Events) != 0 {
+			t.Errorf("audit %s: events = %v, want none", name, kinds(rep.Events))
+		}
 	}
 }
 
