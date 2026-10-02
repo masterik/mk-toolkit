@@ -39,4 +39,12 @@ homebrew_casks:
     homepage: "https://github.com/masterik/mk-toolkit"
     description: "Coding-workflow skills for Claude Code — Go CLI plus a shared Claude Code plugin."
     license: "MIT"
+    # The binary is not notarized, so Gatekeeper blocks a quarantined download on first run.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr",
+                           args: ["-dr", "com.apple.quarantine", "#{staged_path}/mkit"]
+          end
     commit_msg_template: "brew cask update for {{ .ProjectName }} version {{ .Tag }}"
