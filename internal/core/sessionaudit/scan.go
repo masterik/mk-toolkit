@@ -245,10 +245,12 @@ func resultEvents(base Event, ts string, c call, text string, isError, blockedBe
 	}
 
 	// This command's own report quotes every denial it found; reading it back in
-	// the next scan would count each of them again — and so would the skill's
+	// the next scan would count each of them again (both names: the old one is
+	// a hidden alias for one release) — and so would the skill's
 	// queries of the report it saved, which name its file. Matched anywhere in
 	// the command, since a build-then-run chain puts it after a `&&`.
-	if strings.Contains(c.input.Command, "mkit audit sessions") || strings.Contains(c.input.Command, ReportFilePrefix) {
+	if strings.Contains(c.input.Command, "mkit audit sandbox") ||
+		strings.Contains(c.input.Command, "mkit audit sessions") || strings.Contains(c.input.Command, ReportFilePrefix) {
 		return nil
 	}
 

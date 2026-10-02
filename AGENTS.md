@@ -20,7 +20,7 @@ by all four skills; what it reports is **one fewer input, never a stop**.
 `plugin/scripts/`, no `lib/common.sh`, no `tests/`. That makes `mkit` a **hard requirement for
 every skill** — each one's first call is `mkit facts <skill>` (`review` alone runs a one-line
 compatibility probe before it, because its later steps need `mkit findings` too; `sandbox-audit`,
-which is not repo-scoped and opens no run directory, starts with `mkit audit sessions` instead), and a
+which is not repo-scoped and opens no run directory, starts with `mkit audit sandbox` instead), and a
 binary that is absent *or too old* is its stop condition with a `brew` remedy: `command not found` and
 `unknown command "facts"` are the same answer. Presence only, no declared minimum on either side: a subcommand
 that does not exist *is* the too-old signal. Milestones and the full invariant list:
@@ -52,7 +52,7 @@ just run doctor                  # prerequisites, sandbox writability, plugin st
 just run worklog show --json        # this branch's worklog: what ran, and what it concluded
 just run repo profile --json     # how this repo works: discovered|pinned|unavailable
 just run facts commit --no-run   # every starting fact, without opening a run dir
-just run audit sessions --days 14 # sandbox/permission-gate events across every session
+just run audit sandbox --days 14 # sandbox/permission-gate events across every session, against the current settings
 ```
 
 Release is tag-driven, and `just release` (`tools/release.sh`) is the whole of it: it picks the
@@ -180,7 +180,7 @@ reads as it does:
     rotate) and `Run` (step execution, full log, bounded excerpt). The two `gate run` call forms
     execute the same string but **normalize the ledger key differently**, and that seam is what
     makes a `review` → `finish` cache hit possible at all.
-  - `sessionaudit/`: `mkit audit sessions` — reads `<claude home>/projects/**/*.jsonl` (the
+  - `sessionaudit/`: `mkit audit sandbox` (the old `sessions` is a hidden alias for one release: a plugin one release behind still opens with it) — reads `<claude home>/projects/**/*.jsonl` (the
     storage package's `CLAUDE_HOME` rule, not a second one) and classifies every tool result the
     sandbox or the permission gate had a say in. **Each result is matched against its own call**, paired
     by `tool_use_id`, never by substring over a transcript: that counted every `cat` of a doc quoting
@@ -192,7 +192,16 @@ reads as it does:
     in one turn return in any order. The window is each event's own timestamp, the file's mtime only a
     prefilter: a session resumed today still holds last month's events. Its own runs are skipped, and so
     are queries of the report the skill saves (`sandbox-audit.*`), or each scan would re-count the last
-    one's output. Read-only; the `sandbox-audit` skill holds the judgement.
+    one's output. Read-only; the `sandbox-audit` skill holds the judgement. `AttachConfig` then marks each
+    sandbox-block target `covered`/`protected` from `claudecfg`.
+  - `claudecfg/`: the settings the audit reasons about — user `settings.json` under the same `CLAUDE_HOME`
+    rule, plus `.claude/settings{,.local}.json` of every project root. **A file that is absent is no entry;
+    one that cannot be read or parsed is `unreadable`, never an empty config** — "nothing allowlisted" and
+    "could not look" lead to opposite advice. `Roots` resolves a working directory to its work tree top
+    (a linked worktree stays its own; a removed path is skipped). `Judge` matches a target against
+    `allowedDomains`/`allowWrite`/`additionalDirectories` and refuses protected paths (`settings*.json`,
+    hooks, skills, plugins): an entry there is inert. The closed key table in `keys.go` only flags
+    unknown keys under `sandbox`/`permissions`/`autoMode`; it can lag the docs, so it prompts a look, not a verdict.
   - `findings/` (M4): the review-run arithmetic — validate, similarity, reconcile, group, report.
     Records are an **order-preserving `Record`**, not a struct: `reconciled.jsonl` and `final.jsonl`
     re-serialize wholesale, and a struct would silently drop `fix`, `also` or anything a reviewer
@@ -220,7 +229,7 @@ reads as it does:
     `mkit_tree_fingerprint`** via `pluginroot.CommonFunc`, never reimplemented, until M5 ports it.
 - `internal/tui/` — Bubble Tea rendering over `core`, one subpackage per command.
   `internal/tui/ui/` is the shared lipgloss styling (palette, status icons, tables, bars) behind the
-  human forms of `doctor`, `repo profile`, `branch status`, `cache prune`, `audit sessions`, `init` and
+  human forms of `doctor`, `repo profile`, `branch status`, `cache prune`, `audit sandbox`, `init` and
   `version`. Those run only when `Options.Pretty` is set — stdout a terminal and neither `--json` nor
   `--no-tui` given — so a pipe, an agent and every skill still get the unchanged `key=value` text.
   `internal/tui/cacheprune/` (M2): the size-sorted tick-list `cache prune --apply` opens on a

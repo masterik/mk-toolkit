@@ -70,7 +70,7 @@ tells it whether the gist still describes the tree in front of it.
 `mkit_bin=` fact, because the binary was optional and the log was a bonus; since M5 the binary is a
 hard requirement and every repo-scoped skill's first call is `mkit facts` (`review` probes
 `mkit findings` just before it), which stops the run when it is absent or too old. `sandbox-audit`
-is user-wide, opens no run directory and reads no worklog; its first call, `mkit audit sessions`, is
+is user-wide, opens no run directory and reads no worklog; its first call, `mkit audit sandbox`, is
 its own dependency check. By the time any step reads the log, there is no missing-binary case left to check for.
 
 ```bash

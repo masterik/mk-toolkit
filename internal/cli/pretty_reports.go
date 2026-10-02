@@ -3,12 +3,14 @@ package cli
 import (
 	"fmt"
 	"io"
+	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/masterik/mk-toolkit/internal/core/cache"
+	"github.com/masterik/mk-toolkit/internal/core/claudecfg"
 	"github.com/masterik/mk-toolkit/internal/core/sessionaudit"
 	"github.com/masterik/mk-toolkit/internal/tui/ui"
 )
@@ -99,7 +101,7 @@ func count(s *ui.S, n int, tone func(string) string) string {
 func prettyAudit(out io.Writer, r *sessionaudit.Report, top int) {
 	s := ui.New(out)
 	c := r.Counts
-	_, _ = fmt.Fprintf(out, "%s  %s\n", s.Title("mkit audit sessions", ""),
+	_, _ = fmt.Fprintf(out, "%s  %s\n", s.Title("mkit audit sandbox", ""),
 		s.Dim(fmt.Sprintf("last %dd · %d transcripts · %d with events", r.Days, r.Transcripts, r.WithEvents)))
 	_, _ = fmt.Fprintln(out, s.Dim("  "+r.Root))
 
@@ -112,6 +114,8 @@ func prettyAudit(out io.Writer, r *sessionaudit.Report, top int) {
 			_, _ = fmt.Fprintf(out, "  %s\n", s.Dim(p))
 		}
 		if r.Transcripts == 0 {
+			// The settings were read independently of the transcripts.
+			prettyConfig(out, s, r.Config)
 			_, _ = fmt.Fprintf(out, "\n%s\n", s.Dim("nothing could be read, so there is no audit to show"))
 			return
 		}
@@ -165,6 +169,7 @@ func prettyAudit(out io.Writer, r *sessionaudit.Report, top int) {
 				return s.Style()
 			}))
 	}
+	prettyConfig(out, s, r.Config)
 }
 
 func prettyBuckets(out io.Writer, s *ui.S, title string, bs []sessionaudit.Bucket, top int) {
@@ -187,7 +192,49 @@ func prettyBuckets(out io.Writer, s *ui.S, title string, bs []sessionaudit.Bucke
 		if max > 0 {
 			frac = float64(b.Count) / float64(max)
 		}
-		_, _ = fmt.Fprintf(out, "  %s  %s  %s  %s\n", s.Bold(fmt.Sprintf("%5d", b.Count)), s.Bar(frac, 10), b.Key,
-			s.Dim("["+strings.Join(b.Projects, ", ")+"]"))
+		mark := ""
+		switch {
+		case b.CoveredBy != nil:
+			mark = "  " + s.Good("covered by "+filepath.Base(b.CoveredBy.File)+": "+b.CoveredBy.Entry)
+		case b.Protected:
+			mark = "  " + s.Warn("protected path")
+		}
+		_, _ = fmt.Fprintf(out, "  %s  %s  %s  %s%s\n", s.Bold(fmt.Sprintf("%5d", b.Count)), s.Bar(frac, 10), b.Key,
+			s.Dim("["+strings.Join(b.Projects, ", ")+"]"), mark)
+	}
+}
+
+func prettyConfig(out io.Writer, s *ui.S, c *claudecfg.Result) {
+	if c == nil {
+		return
+	}
+	_, _ = fmt.Fprintf(out, "\n%s\n", s.Section("config"))
+	_, _ = fmt.Fprintf(out, "  %s\n", s.Dim(c.Home+" · CLAUDE.md "+yesNo(c.ClaudeMD)))
+	if len(c.Unreadable) > 0 {
+		_, _ = fmt.Fprintf(out, "%s %s\n", s.Icon("warn"),
+			s.Warn(fmt.Sprintf("%d settings files unreadable — what is configured there is unknown", len(c.Unreadable))))
+		for _, p := range c.Unreadable {
+			_, _ = fmt.Fprintf(out, "  %s\n", s.Dim(p))
+		}
+	}
+	rows := [][]string{}
+	for _, f := range c.Files() {
+		rows = append(rows, []string{f.Scope, f.Path,
+			fmt.Sprint(len(f.AllowedDomains)), fmt.Sprint(len(f.AllowWrite)), fmt.Sprint(len(f.ExcludedCommands)),
+			fmt.Sprint(len(f.Allow) + len(f.Ask) + len(f.Deny)), strings.Join(f.UnknownKeys, ", ")})
+	}
+	if len(rows) == 0 {
+		_, _ = fmt.Fprintf(out, "  %s\n", s.Dim("no readable settings files found"))
+		return
+	}
+	_, _ = fmt.Fprintln(out, s.Table([]string{"SCOPE", "FILE", "DOMAINS", "WRITE", "EXCL", "RULES", "UNKNOWN KEYS"}, rows,
+		func(_, _ int, _ string) lipgloss.Style { return s.Style() }))
+	// The values themselves, as the plain form lists them: a count says a file
+	// has entries, not which.
+	for _, f := range c.Files() {
+		_, _ = fmt.Fprintf(out, "\n  %s\n", s.Bold(f.Path))
+		for _, kv := range configLists(f) {
+			_, _ = fmt.Fprintf(out, "    %s  %s\n", s.Dim(kv.key+":"), strings.Join(kv.vals, s.Dim(" | ")))
+		}
 	}
 }
