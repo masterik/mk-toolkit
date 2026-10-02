@@ -1,13 +1,9 @@
 ---
 name: cleanup
+disable-model-invocation: true
 description: >-
-  Sweep every local branch and worktree in the repo: auto-delete what's merged (locally or via a closed PR),
-  remove the worktrees that go with them, keep only the branches `mkit branch status` reports as `protected=`
-  (the default branch, a develop-like branch if one exists locally, and anything the repo config pinned under
-  `[cleanup] keep`), then switch to one of those and pull it up to date with the remote. Trigger on
-  "cleanup branches", "clean up my branches", "prune stale branches", "remove merged branches", "clean up
-  worktrees", "tidy up local branches", "get rid of old branches". Local-only: it never deletes, force-pushes
-  to, or otherwise touches a branch on the remote — only this checkout's own local branches and worktrees.
+  Delete merged local branches and their worktrees, keep the `protected=` ones, then switch to one and pull.
+  Run it as /mkit:cleanup. Local-only: never touches remote branches.
 model: sonnet
 ---
 

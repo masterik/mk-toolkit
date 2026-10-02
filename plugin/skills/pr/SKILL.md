@@ -1,9 +1,8 @@
 ---
 name: pr
 description: >-
-  Commit, push, and open a GitHub PR with description and reviewers. Trigger on "create a PR", "open a PR",
-  "make a PR", "submit for review", "push a branch for merge". Remote review path — local merge is
-  finish.
+  Commit, push, and open a GitHub PR with description and reviewers. Trigger on "create/open/make a PR",
+  "submit for review", "push a branch for merge". Remote path — local merge is finish.
 model: sonnet
 ---
 

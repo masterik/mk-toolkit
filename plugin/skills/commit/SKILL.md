@@ -1,9 +1,8 @@
 ---
 name: commit
 description: >-
-  Stage and split local changes into logical Conventional Commits. Trigger on "commit", "make a commit",
-  "split into commits", or what the commit message should be. Commits only — merge is finish, PR
-  is pr.
+  Stage and split local changes into logical Conventional Commits. Trigger on "commit", "split into
+  commits", or a commit-message question. Commits only — merge is finish, PR is pr.
 model: sonnet
 ---
 
