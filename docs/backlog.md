@@ -453,6 +453,9 @@ no conversation context, working from the artifact and the worklog alone.
   The recipe works and is the right thing to ship first; a command earns its place by removing the
   `@@`-block editing an agent currently does by hand, not by unbreaking anything. Separate from
   invariant 6, since which hunks go in which commit stays a judgement in the skill.
+- `mkit session show` — read the current transcript's earlier turns back, so `explain` can cover an
+  answer the context has since compacted away. Mechanical (`sessionaudit` already parses the
+  transcripts), so it fits the binary; `explain` says "not in this session" until then (issue #43).
 - `mkit cleanup` TUI — multi-select over `mkit branch status`'s classification.
 - `mkit review` TUI — live parallel reviewer progress.
 - Codex installer target (`~/.codex/`).

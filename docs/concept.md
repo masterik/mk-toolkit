@@ -137,6 +137,8 @@ and you pick the finisher by **destination** — merge it yourself locally, or p
 | **`finish`** | Commit → merge the branch back into its base → delete branch / remove worktree. **Local**, no PR. | "finish this feature", "merge back and clean up" |
 | **`pr`** | Commit → push → open a GitHub PR → assign reviewers. **Remote review** path. | "create a PR", "open a pull request", "submit for review" |
 | **`cleanup`** | Classify every local branch (merged, PR'd, unpushed, gone), delete/keep by that classification, remove the worktrees that go with them, keep only the default branch and a local `develop`-like one, then switch and pull. **Local only** — never touches a remote branch. | "clean up branches", "prune stale branches", "tidy up worktrees" |
+| **`explain`** | Reading aid, outside the line. The last answer or one session item (a term, finding, error, or a decision with what it rejected), said again in plain English, with a diagram where a picture helps. No binary: it does no mechanical work. | "wait what", "explain that simply", "eli5 the gate ledger" |
+| **`recap`** | Reading aid, outside the line. The branch's status in plain English (done, changed, left, waiting on you) from the session, the worklog and git. Read-only; records nothing. | "where are we", "catch me up", "what's left" |
 
 ### Shared references — `skills/_shared/`
 `_shared/` is **not** a triggerable skill (it has no `SKILL.md`); it is the shared library
@@ -173,7 +175,7 @@ the five skills link into via `../_shared/references/…`:
    │   loads plugin skills (via .claude-plugin/plugin.json) — no hooks, deliberately
    ▼
  brainstorm · spec · implement · commit · review · pr · finish   ← SKILL.md (when & how)
- cleanup                                    (the seven steps, plus repo-wide gardening)
+ cleanup · explain · recap                  (the seven steps, plus gardening and reading aids)
    │   all link into
    ▼
  _shared/references/*.md   (safety · conventions · quality gate · worktree · branching
