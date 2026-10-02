@@ -32,20 +32,25 @@ TUI, no prompts. `add` and `remove` mutate; that is a deliberate exception to "c
 run, never edit", scoped to this group and recorded in `AGENTS.md`.
 
 **2. One path rule, in repo config.** `[worktree] path` in `.mkit/config.toml`, a template over
-`{branch}` (sanitized) and `{repo}`; default `.claude/worktrees/{branch}`. `branchstatus` derives
-the `claude-code` origin from the same producer instead of a literal. mkit does **not** read
+`{branch}` (sanitized) and `{repo}`; default `.claude/worktrees/{branch}`. `branchstatus` and `facts`
+(`setWorktreeOrigin`) derive the `claude-code` origin from the same producer instead of a literal
+each — otherwise a moved location makes `cleanup_path` read `git-worktree` and `finish` skips
+`ExitWorktree`. mkit does **not** read
 `wt`'s config: two sources would drift, and a user keeping `wt` simply does not enable its plugin.
 
 **3. Safe by construction.** `add` calls `scratch.EnsureIgnored` and excludes the worktree
 location before the first create. `remove` refuses a dirty tree, reusing `branchstatus`'s `Clean`
 check (`error` is never `yes`), and never deletes a branch. No force flag in the first cut.
 
-**4. Out of scope, permanently.** Hooks, approvals, template language beyond the two variables,
+**4. Out of scope, permanently.** Installing or managing hooks (mkit never writes settings or hook
+manifests; the `hook create|remove` stdin/stdout entrypoint stays in scope), approvals, template language beyond the two variables,
 `merge`, `step`, LLM commit messages, CI status, statusline, shell integration, and any `wt`
 config import. This is helpers, not parity.
 
 **5. Skills drop `wt`.** `finish` and `cleanup` call `mkit worktree …`. `mkit doctor` stops
-treating `wt` as a prerequisite and may report it as optional.
+treating `wt` as a prerequisite and may report it as optional. `finish`'s local merge falls back to
+plain git, so a user's `wt merge` config and hooks no longer apply on that path — accepted, since
+`merge` stays out of `mkit` (decision 4); a user who wants them keeps running `wt merge` themselves.
 
 ## Consequences
 
