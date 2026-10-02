@@ -57,10 +57,12 @@ brew install git masterik/tap/mkit
 | `rg` (ripgrep) | the `fix-checks` sweep | `grep -E` (same output, slower) |
 | `gh` | `pr`, `mkit facts <skill> --gh`, and `mkit branch status` (`cleanup`) | `pr` cannot open a PR at all; `mkit facts` prints `pr=gh-missing`; `mkit branch status` falls back to git-only classification and reports `gh=gh-missing` |
 | `wt` ([worktrunk](https://worktrunk.dev)) | `finish` cleanup, `mkit facts` worktree classification | plain `git worktree remove` |
+| `gh stack` ([github/gh-stack](https://github.com/github/gh-stack), a `gh` extension) | `pr` and `finish` on a GitHub stacked PR: create, merge, sync | a stacked PR cannot be merged or created by the skills; ordinary PRs are unaffected |
 
 ```bash
 brew install ripgrep gh worktrunk/tap/worktrunk
 gh auth login
+gh extension install github/gh-stack
 ```
 
 ## Dev only — running the tests
@@ -121,6 +123,7 @@ it if you have one.
 for t in git bash rg gh wt coderabbit codex mkit; do
 	printf '%-12s %s\n' "$t" "$(command -v "$t" || echo '— not found')"
 done
+gh extension list | grep gh-stack || echo 'gh stack  — not installed'
 git --version; mkit version
 ```
 

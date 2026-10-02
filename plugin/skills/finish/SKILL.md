@@ -17,7 +17,8 @@ merges locally, no remote round trip. Either way this skill never *opens* a PR f
 References, read the ones a step calls for: `../_shared/references/worktree.md`,
 `../_shared/references/quality-gate.md`, `../_shared/references/conventional-commits.md`,
 `../_shared/references/git-safety.md`, `../_shared/references/branching.md`,
-`../_shared/references/output-discipline.md`, `../_shared/references/workflow-contract.md`.
+`../_shared/references/output-discipline.md`, `../_shared/references/workflow-contract.md`,
+`../_shared/references/stacked-prs.md` (only when the PR is part of a stack).
 
 ## When NOT to use this
 
@@ -74,6 +75,10 @@ the first. Check four things in what it printed:
    PR with the branch still around usually just needs cleanup; a closed one may mean the user changed
    their mind, worth a check before merging anything. `pr_draft=true` also routes to the local path unless
    the user asks to mark it ready first (`gh pr ready <url>`) — GitHub refuses to merge a draft.
+   **Stacked?** On the PR path, check whether the PR is part of a GitHub stack
+   (`../_shared/references/stacked-prs.md`, "Detect"). Optional: a failed or empty probe means not stacked.
+   A stacked PR changes step 4's merge call (**`gh stack merge`, never `gh pr merge`**) and what step 3
+   must say: every unmerged PR below this one merges with it.
 
 ## Workflow
 
@@ -143,6 +148,13 @@ After merge:      delete branch <feature-branch> (local + remote) + remove workt
                    switch to <base-branch> and pull
 ```
 
+**Stacked PR** — add one line, and list the PRs, because the go-ahead covers all of them:
+
+```
+Stack:            #<n> of <size> — also merges (atomically) the <k> unmerged PRs below: #<a>, #<b>
+                   PRs above stay open; GitHub rebases and retargets them
+```
+
 ### 4. Merge back + clean up
 
 **Both paths start here: ask the repo how it merges.** One call, and it is **optional enrichment,
@@ -202,7 +214,18 @@ announce — and it is why the two conditions are written as things to look for 
 
    **Stop here and show step 3's PR-path confirmation block, filled in with the method just picked. Get
    the go-ahead before continuing** — nothing below this point runs without it.
-3. **Merge:**
+3. **Merge.** **Stacked PR → `gh stack merge <pr-number> --yes --<method>` instead of `gh pr merge`**
+   (`../_shared/references/stacked-prs.md`, "Merge"). It needs the `gh stack` extension: absent → stop
+   with the install line from that file, nothing merged. **Signed commits first:** GitHub's rebase of the
+   layers above is unsigned, so if the base branch requires signed commits, stop before merging and
+   report that the stack needs a local `gh stack rebase` + `gh stack push` (stacked-prs.md, "Why the
+   normal merge path breaks"). Success continues to item 4; a refusal or `enqueued` stops here (report it
+   verbatim; no local-merge fallback; nothing deleted). The server does not delete branches, so item 5
+   removes remote and local by hand — **for every PR the merge carried** (the lower layers' head
+   branches too, listed in step 3's `Stack:` line), each only after its own `state=MERGED` check
+   (`git push <remote> --delete <branch>`). Auto-merge is unsupported for stacks — never offer it.
+
+   Not stacked:
    ```bash
    gh pr merge <pr-url> --squash --delete-branch   # or --merge / --rebase, whichever the previous item picked
    ```
@@ -245,6 +268,11 @@ announce — and it is why the two conditions are written as things to look for 
      shows it, `git branch -D <feature-branch>`, then `git worktree prune`.
    - `none`: if `git branch --list <feature-branch>` still shows it, `git branch -D <feature-branch>`,
      then retire the worklog per **Retiring the worklog** below.
+
+   **Stacked: sync what is left.** The PRs above this one were rebased and retargeted on GitHub; the
+   local branches for them are behind. If a local stack is tracked, ask before running `gh stack sync` (it force-pushes the rebased branches), then run it (from the surviving root, after the cleanup above); otherwise tell the user
+   those branches need a fetch and rebase. Leave them and their worktrees in place — they are not this
+   run's to remove. Name them in the deliverable under "left behind".
 
 **Local path** (no open PR) — by `cleanup_path`
 
@@ -341,6 +369,8 @@ removed.` — or where and why it stopped short); form per `../_shared/reference
   `unavailable` whose `cause` names the config file), or a `wt merge` whose output shows the user's
   worktrunk config overrode the pin. Silence when the profile simply had no answer — that is not a
   degradation.
+- Stacked PR: which PRs merged together (all of them, by number), the `gh stack merge` outcome, and the
+  PRs still open above.
 - The gate verdict, naming any step served from the ledger as `cached` and how old that proof was.
 - What merged into what, the resulting base HEAD, and that branch + worktree were removed.
 - Anything left in place on purpose (unmerged commits, dirty tree, a delete the user declined) — say so

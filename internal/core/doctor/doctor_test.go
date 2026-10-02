@@ -282,3 +282,13 @@ func TestOrphanRemedySurvivesAnUnnormalisedUserDir(t *testing.T) {
 		t.Errorf("remedy dropped for an unnormalised MKIT_HOME: %+v", c)
 	}
 }
+
+func TestHasExtensionMatchesTheExactRepo(t *testing.T) {
+	list := "gh stack\tgithub/gh-stack\tv0.1.1\ngh dash\tdlvhdr/gh-dash\tv4.25.2\n"
+	if !hasExtension(list, "github/gh-stack") {
+		t.Fatal("exact repo not found")
+	}
+	if hasExtension("gh stack\tgithub/gh-stack-fork\tv1\n", "github/gh-stack") {
+		t.Fatal("a fork matched")
+	}
+}

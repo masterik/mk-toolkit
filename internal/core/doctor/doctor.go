@@ -230,6 +230,37 @@ func (r *Report) prerequisites() {
 		r.add(Check{Group: t.group, Name: t.name, Status: t.status,
 			Detail: "not on PATH — needed for " + t.what, Remedy: t.remedy})
 	}
+	r.ghStack()
+}
+
+// hasExtension reports whether `gh extension list` output names repo exactly —
+// a substring match would accept a fork such as github/gh-stack-fork.
+func hasExtension(list, repo string) bool {
+	for _, l := range strings.Split(list, "\n") {
+		for _, f := range strings.Fields(l) {
+			if f == repo {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ghStack reports the `gh stack` extension. It is a gh extension, not a PATH
+// binary, so LookPath cannot see it; `gh extension list` is the question. Skipped
+// when gh itself is missing — that row already says so.
+func (r *Report) ghStack() {
+	if _, err := exec.LookPath("gh"); err != nil {
+		return
+	}
+	out, err := exec.Command("gh", "extension", "list").Output()
+	if err == nil && hasExtension(string(out), "github/gh-stack") {
+		r.add(Check{Group: "prerequisites", Name: "gh stack", Status: OK, Detail: "gh extension github/gh-stack"})
+		return
+	}
+	r.add(Check{Group: "prerequisites", Name: "gh stack", Status: Warn,
+		Detail: "gh extension not installed — needed for stacked PRs in pr and finish",
+		Remedy: "gh extension install github/gh-stack"})
 }
 
 // userDirCheck is a constant because a check's name is its identity: a report

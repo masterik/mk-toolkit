@@ -14,7 +14,8 @@ with no review use `finish`.
 References: `../_shared/references/conventional-commits.md`, `../_shared/references/quality-gate.md`,
 `../_shared/references/worktree.md`, `../_shared/references/git-safety.md`,
 `../_shared/references/branching.md`, `../_shared/references/output-discipline.md`,
-`../_shared/references/agent-delegation.md`, `../_shared/references/workflow-contract.md`.
+`../_shared/references/agent-delegation.md`, `../_shared/references/workflow-contract.md`,
+`../_shared/references/stacked-prs.md` (only for a stacked PR).
 
 ## Goal
 
@@ -29,7 +30,8 @@ A PR that is easy to review and safe to merge:
 
 ## Confirm if missing
 
-- **Base branch** — default `main`; ask if unclear.
+- **Base branch** — default `main`; ask if unclear. If it is another unmerged feature branch (this
+  branch is a layer on top of it), this is a **stacked PR** — see "Stacked PRs" below.
 - **Draft?** — draft if the work isn't ready for review.
 - **Area prefix** — scoped to one package → prefix the title `[area]` (`[api]`, `[ui]`).
 - **Reviewers** — step 6: pinned in the repo config, from `CODEOWNERS`, or ask.
@@ -235,6 +237,25 @@ Then remove the temp file.
 - Add reviewers/labels afterwards if not set at creation:
   `gh pr edit <url> --add-reviewer <handle> --add-label <label>`.
 - Mention CI will run automatically if applicable.
+
+## Stacked PRs
+
+GitHub-native stacks (`../_shared/references/stacked-prs.md`). Applies only when the base is another open
+feature branch, or the base PR's `.stack` is non-null (`stacked-prs.md`, "Detect").
+Otherwise skip this section; never ask about stacks on an ordinary PR.
+
+- **Step 2** — the gate and pre-flight are unchanged; run them on this layer only.
+- **Step 3** — the base branch must already be pushed (GitHub rejects a PR against a missing base). Never
+  force-push a lower layer to "fix" the stack.
+- **Step 7** — add a `Stack:` line to the preview: position, size, and the PR below
+  (`#<n> of <size>, on top of #<below>`). Say that merging this PR later also merges everything below it.
+- **Step 8** — needs the `gh stack` extension (`gh extension list`); absent → stop with its install line
+  (`../_shared/references/stacked-prs.md`). Open this PR with `gh pr create --base <lower-branch>` as
+  usual, then `gh stack link` (or `gh stack submit` when the stack is tracked locally) to put it in the
+  stack. Same-repo only. A failed link leaves a plain PR on a non-default base: say so — it reviews fine,
+  it just will not merge as a unit.
+- **Report** — name the stack number and position; the commit list is still `<base>..HEAD` of this layer.
+  Merge is `finish` (`gh stack merge`, not `gh pr merge`).
 
 ## Final report (always)
 
