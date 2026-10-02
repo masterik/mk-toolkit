@@ -233,6 +233,19 @@ func (r *Report) prerequisites() {
 	r.ghStack()
 }
 
+// hasExtension reports whether `gh extension list` output names repo exactly —
+// a substring match would accept a fork such as github/gh-stack-fork.
+func hasExtension(list, repo string) bool {
+	for _, l := range strings.Split(list, "\n") {
+		for _, f := range strings.Fields(l) {
+			if f == repo {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // ghStack reports the `gh stack` extension. It is a gh extension, not a PATH
 // binary, so LookPath cannot see it; `gh extension list` is the question. Skipped
 // when gh itself is missing — that row already says so.
@@ -241,7 +254,7 @@ func (r *Report) ghStack() {
 		return
 	}
 	out, err := exec.Command("gh", "extension", "list").Output()
-	if err == nil && strings.Contains(string(out), "github/gh-stack") {
+	if err == nil && hasExtension(string(out), "github/gh-stack") {
 		r.add(Check{Group: "prerequisites", Name: "gh stack", Status: OK, Detail: "gh extension github/gh-stack"})
 		return
 	}

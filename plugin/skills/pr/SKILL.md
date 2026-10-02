@@ -241,7 +241,7 @@ Then remove the temp file.
 ## Stacked PRs
 
 GitHub-native stacks (`../_shared/references/stacked-prs.md`). Applies only when the base is another open
-feature branch, or `gh pr view <base-pr> --json` / the stacks API shows the base PR is already in a stack.
+feature branch, or the base PR's `.stack` is non-null (`stacked-prs.md`, "Detect").
 Otherwise skip this section; never ask about stacks on an ordinary PR.
 
 - **Step 2** — the gate and pre-flight are unchanged; run them on this layer only.

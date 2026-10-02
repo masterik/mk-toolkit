@@ -216,11 +216,14 @@ announce — and it is why the two conditions are written as things to look for 
    the go-ahead before continuing** — nothing below this point runs without it.
 3. **Merge.** **Stacked PR → `gh stack merge <pr-number> --yes --<method>` instead of `gh pr merge`**
    (`../_shared/references/stacked-prs.md`, "Merge"). It needs the `gh stack` extension: absent → stop
-   with the install line from that file, nothing merged. Success continues to item 4; a refusal or
-   `enqueued` stops here (report it verbatim; no local-merge fallback; nothing deleted). The server does
-   not delete the branch, so item 5 removes remote and local by hand
-   (`git push <remote> --delete <feature-branch>`, after the `state=MERGED` check). Auto-merge is
-   unsupported for stacks — never offer it.
+   with the install line from that file, nothing merged. **Signed commits first:** GitHub's rebase of the
+   layers above is unsigned, so if the base branch requires signed commits, stop before merging and
+   report that the stack needs a local `gh stack rebase` + `gh stack push` (stacked-prs.md, "Why the
+   normal merge path breaks"). Success continues to item 4; a refusal or `enqueued` stops here (report it
+   verbatim; no local-merge fallback; nothing deleted). The server does not delete branches, so item 5
+   removes remote and local by hand — **for every PR the merge carried** (the lower layers' head
+   branches too, listed in step 3's `Stack:` line), each only after its own `state=MERGED` check
+   (`git push <remote> --delete <branch>`). Auto-merge is unsupported for stacks — never offer it.
 
    Not stacked:
    ```bash

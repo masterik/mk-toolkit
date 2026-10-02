@@ -82,7 +82,8 @@ After the merge, the layers above are rebased and retargeted **on GitHub**; loca
 gh stack sync          # fetch, ff trunk, cascade-rebase, push (--force-with-lease --atomic), relink
 ```
 
-Run it when the user has a local stack tracked (`gh stack view` exits 2 when there is none — then tell
+**Sync force-pushes** the rebased branches (`--force-with-lease --atomic`), so it needs the user's explicit
+OK per `git-safety.md` — ask before running it, naming the branches. Run it when the user has a local stack tracked (`gh stack view` exits 2 when there is none — then tell
 them the upper branches need `git fetch` + a rebase onto the new base). Exit 3 = rebase conflict (state is
 restored; resolve with `gh stack rebase`). Sync never opens PRs.
 
