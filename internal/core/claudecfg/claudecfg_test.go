@@ -264,7 +264,7 @@ func TestNullIsMalformedNotEmpty(t *testing.T) {
 	write(t, filepath.Join(home, "settings.json"), `{"sandbox":null,"env":null,"permissions":{"allow":null}}`)
 	got := Load(home, "/h", nil).User.UnknownKeys
 	want := []string{"sandbox (not an object)", "env (not an object)", "permissions.allow (not a list of strings)"}
-	if len(got) != 3 {
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("unknown = %v, want %v", got, want)
 	}
 }
