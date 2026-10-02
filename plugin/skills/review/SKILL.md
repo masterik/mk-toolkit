@@ -1,11 +1,10 @@
 ---
 name: review
 description: >-
-  Multi-source review of local uncommitted changes or recent commits — CodeRabbit, Codex and Claude in
-  parallel, findings verified, worthwhile fixes applied. Full mode (default) runs all three reviewers; quick
-  mode runs CodeRabbit + Codex on bugs/impl only. Trigger on "review my changes", "review the diff", "quick
-  review", "review last N commits", "run codex and coderabbit", or before a commit/PR. Local work only — for a
-  GitHub PR use the PR review tools.
+  Review local uncommitted changes or recent commits with CodeRabbit, Codex and Claude in parallel; verify
+  findings, apply worthwhile fixes. Full (default) or quick (CodeRabbit + Codex). Trigger on "review my
+  changes", "review the diff", "quick review", "review last N commits", "run codex and coderabbit", or before a
+  commit/PR. Local work only — not for GitHub PRs.
 argument-hint: "[quick|full]"
 model: opus
 ---

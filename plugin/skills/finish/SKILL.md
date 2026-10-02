@@ -1,10 +1,9 @@
 ---
 name: finish
 description: >-
-  Commit, merge a feature branch into base (usually main), delete the branch, remove the worktree. Merges an
-  existing open PR on GitHub if one exists for the branch, otherwise merges locally. Trigger on "finish this
-  feature", "merge back and clean up", "merge into main and clean up", "done with this feature". For opening a
-  new PR for review, use pr instead.
+  Commit, merge a feature branch into base, delete the branch, remove the worktree. Merges the open PR if
+  one exists, else locally. Trigger on "finish this feature", "merge back and clean up", "merge into main
+  and clean up", "done with this feature". To open a PR, use pr.
 model: sonnet
 ---
 
