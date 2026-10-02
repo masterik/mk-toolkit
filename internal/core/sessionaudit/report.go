@@ -65,6 +65,11 @@ type Bucket struct {
 	// target is in the region no allowlist entry can open.
 	CoveredBy *claudecfg.Cover `json:"covered_by,omitempty"`
 	Protected bool             `json:"protected,omitempty"`
+
+	// cwds is every working directory an event of this bucket ran in, so
+	// AttachConfig judges it against the settings of the roots it actually
+	// occurred in, not every worktree of its project.
+	cwds map[string]bool
 }
 
 // ProjectCounts is the headline numbers for one project, worktrees folded in.
@@ -170,6 +175,12 @@ func (g *grouper) add(key string, e Event) {
 		g.order = append(g.order, key)
 	}
 	b.Count++
+	if e.Cwd != "" {
+		if b.cwds == nil {
+			b.cwds = map[string]bool{}
+		}
+		b.cwds[e.Cwd] = true
+	}
 	g.projs[key][e.Project] = true
 	if len(b.Examples) < examplesPerBucket {
 		b.Examples = append(b.Examples, clip(e.Command, 160))

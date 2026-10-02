@@ -14,13 +14,10 @@ import (
 // settings and the files of the roots it occurred in — not another project's.
 // What the match means for a remedy is the skill's call: this only reports it.
 func (r *Report) AttachConfig(home string) {
-	rootsOf := map[string][]string{}
 	seen := map[string]bool{}
 	var all []string
 	for _, p := range r.Projects {
-		roots := claudecfg.Roots(p.Paths)
-		rootsOf[p.Project] = roots
-		for _, root := range roots {
+		for _, root := range claudecfg.Roots(p.Paths) {
 			if !seen[root] {
 				seen[root] = true
 				all = append(all, root)
@@ -31,28 +28,52 @@ func (r *Report) AttachConfig(home string) {
 	cfg := claudecfg.Load(home, "", all)
 	r.Config = cfg
 
+	rootOf := map[string]string{} // cwd -> project root; "" = no longer exists
 	for i := range r.BlockTargets {
 		b := &r.BlockTargets[i]
-		b.CoveredBy, b.Protected = judgeBucket(cfg, b, rootsOf)
+		b.CoveredBy, b.Protected = judgeBucket(cfg, b, rootOf)
 	}
 }
 
-// judgeBucket: a bucket is covered only when every project it occurred in is —
-// one project's local settings covering a target says nothing about another
-// project still hitting it, and "covered" tells the skill to propose nothing.
-// Protected is a property of the path, so any project's verdict stands for it.
-func judgeBucket(cfg *claudecfg.Result, b *Bucket, rootsOf map[string][]string) (*claudecfg.Cover, bool) {
+// judgeBucket: a bucket is covered only when every root it occurred in is —
+// one worktree's local settings covering a target says nothing about another
+// still hitting it, and "covered" tells the skill to propose nothing. Protected
+// is a property of the path, so any root's verdict stands for it.
+func judgeBucket(cfg *claudecfg.Result, b *Bucket, rootOf map[string]string) (*claudecfg.Cover, bool) {
+	cwds := make([]string, 0, len(b.cwds))
+	for c := range b.cwds {
+		cwds = append(cwds, c)
+	}
+	sort.Strings(cwds)
+	seen := map[string]bool{}
+	var roots []string
+	for _, c := range cwds {
+		root, ok := rootOf[c]
+		if !ok {
+			if rs := claudecfg.Roots([]string{c}); len(rs) == 1 {
+				root = rs[0]
+			}
+			rootOf[c] = root
+		}
+		if root != "" && !seen[root] {
+			seen[root] = true
+			roots = append(roots, root)
+		}
+	}
+	if len(roots) == 0 {
+		v := cfg.Judge(b.Key, nil) // the user's settings alone
+		return v.Covered, v.Protected
+	}
 	var cover *claudecfg.Cover
-	for _, p := range b.Projects {
-		v := cfg.Judge(b.Key, rootsOf[p])
+	for i, root := range roots {
+		v := cfg.Judge(b.Key, []string{root})
 		if v.Protected {
 			return nil, true
 		}
 		if v.Covered == nil {
-			cover = nil
-			break
+			return nil, false
 		}
-		if cover == nil {
+		if i == 0 {
 			cover = v.Covered
 		}
 	}

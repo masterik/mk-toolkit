@@ -70,3 +70,30 @@ func writeTranscriptCwd(t *testing.T, home, rel, cwd, result string) {
 		t.Fatal(err)
 	}
 }
+
+// Two checkouts of one project: a target hit in both, covered by one's local
+// settings only, is not covered.
+func TestCoverageIsPerRootNotPerProject(t *testing.T) {
+	tmp := t.TempDir()
+	a, b := filepath.Join(tmp, "a"), filepath.Join(tmp, "b")
+	for _, d := range []string{a, b} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	settings(t, a, `{"sandbox":{"network":{"allowedDomains":["h.test"]}}}`)
+	block := "<sandbox_violations>\ndeny network-outbound h.test:443 (x)\n</sandbox_violations>"
+	home := t.TempDir()
+	writeTranscriptCwd(t, home, "-p-same/s1.jsonl", a, block)
+	rep := scan(t, home)
+	rep.AttachConfig(filepath.Join(tmp, "ch"))
+	if rep.BlockTargets[0].CoveredBy == nil {
+		t.Fatalf("hit only in a, which covers it: %+v", rep.BlockTargets)
+	}
+	writeTranscriptCwd(t, home, "-p-same/s2.jsonl", b, block)
+	rep = scan(t, home)
+	rep.AttachConfig(filepath.Join(tmp, "ch"))
+	if rep.BlockTargets[0].CoveredBy != nil {
+		t.Errorf("also hit in b, which does not: %+v", rep.BlockTargets)
+	}
+}

@@ -45,9 +45,15 @@ func (r *Result) Judge(target string, roots []string) Verdict {
 		if f.Scope != ScopeUser {
 			base = projectOf(f.Path)
 		}
-		for _, list := range [][]string{f.AllowWrite, f.AdditionalDirs} {
-			for _, e := range list {
-				if r.contains(e, base, p) {
+		// additionalDirectories grants access inside a directory, not the
+		// directory's own creation, so only a descendant counts for it;
+		// allowWrite names the path itself too.
+		for _, l := range []struct {
+			entries []string
+			proper  bool
+		}{{f.AllowWrite, false}, {f.AdditionalDirs, true}} {
+			for _, e := range l.entries {
+				if r.contains(e, base, p, l.proper) {
 					return Verdict{Covered: &Cover{File: f.Path, Entry: e}}
 				}
 			}
@@ -103,7 +109,7 @@ func hostMatches(entry, host string) bool {
 // contains is whether the allowed directory entry holds p. A relative entry is
 // read against the project root of the file it came from, and has no meaning in
 // the user file, where it matches nothing.
-func (r *Result) contains(entry, base, p string) bool {
+func (r *Result) contains(entry, base, p string, proper bool) bool {
 	e := r.expand(entry)
 	if !filepath.IsAbs(e) {
 		if base == "" {
@@ -112,7 +118,10 @@ func (r *Result) contains(entry, base, p string) bool {
 		e = filepath.Join(base, e)
 	}
 	e = filepath.Clean(e)
-	return p == e || strings.HasPrefix(p, e+string(filepath.Separator))
+	if p == e {
+		return !proper
+	}
+	return strings.HasPrefix(p, e+string(filepath.Separator))
 }
 
 func isPath(s string) bool {

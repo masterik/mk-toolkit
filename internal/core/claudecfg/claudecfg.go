@@ -34,16 +34,18 @@ type File struct {
 	Path  string `json:"path"`
 	Scope string `json:"scope"`
 
-	AllowedDomains   []string          `json:"allowed_domains,omitempty"`
-	AllowWrite       []string          `json:"allow_write,omitempty"`
-	ExcludedCommands []string          `json:"excluded_commands,omitempty"`
-	Allow            []string          `json:"allow,omitempty"`
-	Ask              []string          `json:"ask,omitempty"`
-	Deny             []string          `json:"deny,omitempty"`
-	AdditionalDirs   []string          `json:"additional_directories,omitempty"`
-	AutoModeAllow    []string          `json:"automode_allow,omitempty"`
-	AutoModeSoftDeny []string          `json:"automode_soft_deny,omitempty"`
-	Env              map[string]string `json:"env,omitempty"`
+	AllowedDomains   []string `json:"allowed_domains,omitempty"`
+	AllowWrite       []string `json:"allow_write,omitempty"`
+	ExcludedCommands []string `json:"excluded_commands,omitempty"`
+	Allow            []string `json:"allow,omitempty"`
+	Ask              []string `json:"ask,omitempty"`
+	Deny             []string `json:"deny,omitempty"`
+	AdditionalDirs   []string `json:"additional_directories,omitempty"`
+	AutoModeAllow    []string `json:"automode_allow,omitempty"`
+	AutoModeSoftDeny []string `json:"automode_soft_deny,omitempty"`
+	// Env is the variable names only: values are routinely secrets, and the
+	// audit reasons about which variables are set, never what they hold.
+	Env []string `json:"env,omitempty"`
 
 	// UnknownKeys are dotted key paths under the sections read here that are
 	// not in mkit's table. A misspelled key is silently ignored by Claude Code,
@@ -150,6 +152,10 @@ func parse(data []byte) (*File, error) {
 	if err := json.Unmarshal(data, &top); err != nil {
 		return nil, err
 	}
+	// `null` decodes into a nil map without an error; it is not a settings file.
+	if top == nil {
+		return nil, errors.New("settings file is not a JSON object")
+	}
 	f := &File{}
 	sections := map[string]map[string]json.RawMessage{}
 	for _, name := range []string{"sandbox", "permissions", "autoMode"} {
@@ -158,28 +164,23 @@ func parse(data []byte) (*File, error) {
 			continue
 		}
 		var m map[string]json.RawMessage
-		if err := json.Unmarshal(raw, &m); err != nil {
+		if err := json.Unmarshal(raw, &m); err != nil || isNull(raw) {
 			f.UnknownKeys = append(f.UnknownKeys, name+" (not an object)")
 			continue
 		}
 		sections[name] = m
 	}
 	if raw, ok := top["env"]; ok {
-		var env map[string]any
-		if err := json.Unmarshal(raw, &env); err != nil {
+		var env map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &env); err != nil || isNull(raw) {
 			f.UnknownKeys = append(f.UnknownKeys, "env (not an object)")
 		} else {
-			f.Env = map[string]string{}
-			for k, v := range env {
-				if s, ok := v.(string); ok {
-					f.Env[k] = s
-				}
-			}
+			f.Env = sortedKeys(env)
 		}
 	}
 
 	list := func(dst *[]string, key string, raw json.RawMessage) {
-		if err := json.Unmarshal(raw, dst); err != nil {
+		if err := json.Unmarshal(raw, dst); err != nil || isNull(raw) {
 			f.UnknownKeys = append(f.UnknownKeys, key+" (not a list of strings)")
 		}
 	}
@@ -190,7 +191,7 @@ func parse(data []byte) (*File, error) {
 			list(&f.ExcludedCommands, "sandbox."+k, raw)
 		case "network", "filesystem":
 			var sub map[string]json.RawMessage
-			if json.Unmarshal(raw, &sub) != nil {
+			if json.Unmarshal(raw, &sub) != nil || isNull(raw) {
 				f.UnknownKeys = append(f.UnknownKeys, "sandbox."+k+" (not an object)")
 				continue
 			}
@@ -243,6 +244,8 @@ func parse(data []byte) (*File, error) {
 	}
 	return f, nil
 }
+
+func isNull(raw json.RawMessage) bool { return strings.TrimSpace(string(raw)) == "null" }
 
 func sortedKeys[V any](m map[string]V) []string {
 	keys := make([]string, 0, len(m))

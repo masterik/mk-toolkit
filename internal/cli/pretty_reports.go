@@ -224,7 +224,7 @@ func prettyConfig(out io.Writer, s *ui.S, c *claudecfg.Result) {
 			fmt.Sprint(len(f.Allow) + len(f.Ask) + len(f.Deny)), strings.Join(f.UnknownKeys, ", ")})
 	}
 	if len(rows) == 0 {
-		_, _ = fmt.Fprintf(out, "  %s\n", s.Dim("no settings files found"))
+		_, _ = fmt.Fprintf(out, "  %s\n", s.Dim("no readable settings files found"))
 		return
 	}
 	_, _ = fmt.Fprintln(out, s.Table([]string{"SCOPE", "FILE", "DOMAINS", "WRITE", "EXCL", "RULES", "UNKNOWN KEYS"}, rows,

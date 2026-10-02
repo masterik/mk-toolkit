@@ -92,7 +92,7 @@ func TestLoadTagsFilesAndExtractsKeys(t *testing.T) {
 		!reflect.DeepEqual(u.ExcludedCommands, []string{"docker *"}) ||
 		!reflect.DeepEqual(u.AdditionalDirs, []string{"/data"}) ||
 		!reflect.DeepEqual(u.AutoModeSoftDeny, []string{"y"}) ||
-		!reflect.DeepEqual(u.Env, map[string]string{"A": "1"}) {
+		!reflect.DeepEqual(u.Env, []string{"A", "N"}) {
 		t.Errorf("extracted = %+v", u)
 	}
 	if len(res.Projects) != 1 || len(res.Projects[0].Files) != 2 {
@@ -213,6 +213,7 @@ func TestJudgePath(t *testing.T) {
 		{"file-write-create ~/.mkit/x", nil, "~/.mkit", false}, // the scan normalizes the home prefix to ~
 		{"file-write-create /home/u/.mkitx/x", nil, "", false}, // containment, not string prefix
 		{"file-write-create /data/out/f", nil, "/data", false},
+		{"file-write-create /data", nil, "", false}, // additionalDirectories does not grant the directory's own creation
 		{"file-write-create /r/app/build/o", []string{"/r/app"}, "build", false},
 		{"file-write-create /r/app/build/o", nil, "", false},
 		{"file-write-create /elsewhere/f", nil, "", false},
@@ -249,5 +250,31 @@ func TestJudgeIgnoresUnnamedTargets(t *testing.T) {
 	r := fixture()
 	if v := r.Judge("EPERM: operation not permitted", nil); v.Covered != nil || v.Protected {
 		t.Errorf("a target that names neither host nor path judged: %+v", v)
+	}
+}
+
+func TestNullIsMalformedNotEmpty(t *testing.T) {
+	tmp := t.TempDir()
+	home := filepath.Join(tmp, "claude")
+	write(t, filepath.Join(home, "settings.json"), `null`)
+	res := Load(home, "/h", nil)
+	if res.User != nil || len(res.Unreadable) != 1 {
+		t.Errorf("top-level null: user=%+v unreadable=%v", res.User, res.Unreadable)
+	}
+	write(t, filepath.Join(home, "settings.json"), `{"sandbox":null,"env":null,"permissions":{"allow":null}}`)
+	got := Load(home, "/h", nil).User.UnknownKeys
+	want := []string{"sandbox (not an object)", "env (not an object)", "permissions.allow (not a list of strings)"}
+	if len(got) != 3 {
+		t.Errorf("unknown = %v, want %v", got, want)
+	}
+}
+
+func TestEnvValuesAreNeverKept(t *testing.T) {
+	tmp := t.TempDir()
+	home := filepath.Join(tmp, "claude")
+	write(t, filepath.Join(home, "settings.json"), `{"env":{"TOKEN":"s3cret"}}`)
+	f := Load(home, "/h", nil).User
+	if !reflect.DeepEqual(f.Env, []string{"TOKEN"}) {
+		t.Errorf("env = %v", f.Env)
 	}
 }

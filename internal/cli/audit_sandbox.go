@@ -237,12 +237,7 @@ func configLists(f claudecfg.File) []configList {
 		}
 	}
 	if len(f.Env) > 0 {
-		keys := make([]string, 0, len(f.Env))
-		for k := range f.Env {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		out = append(out, configList{"env", keys})
+		out = append(out, configList{"env", f.Env})
 	}
 	if len(f.UnknownKeys) > 0 {
 		out = append(out, configList{"unknown_keys", f.UnknownKeys})
