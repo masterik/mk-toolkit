@@ -270,7 +270,7 @@ announce — and it is why the two conditions are written as things to look for 
      then retire the worklog per **Retiring the worklog** below.
 
    **Stacked: sync what is left.** The PRs above this one were rebased and retargeted on GitHub; the
-   local branches for them are behind. If a local stack is tracked, run `gh stack sync` (from the surviving root, after the cleanup above); otherwise tell the user
+   local branches for them are behind. If a local stack is tracked, ask before running `gh stack sync` (it force-pushes the rebased branches), then run it (from the surviving root, after the cleanup above); otherwise tell the user
    those branches need a fetch and rebase. Leave them and their worktrees in place — they are not this
    run's to remove. Name them in the deliverable under "left behind".
 
