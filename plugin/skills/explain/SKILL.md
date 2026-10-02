@@ -28,8 +28,9 @@ How the answer reads (levels, writing rules, visuals, words used, the closing li
 
 ## 1. Parse the argument
 
-Strip a level word first (`simpler`, `eli5`, `deeper`, with or without `--`). What's left decides the
-mode:
+The request is the skill's argument or, when a phrase triggered the skill ("what does X mean", "why did
+you do that"), the user's own message. Strip a level word first (`simpler`, `eli5`, `deeper`, with or
+without `--`). What's left decides the mode:
 
 - **Empty:** the **last response.** That's the most recent assistant answer before this request, not this
   skill's own output.
@@ -57,8 +58,10 @@ Follow `plain-english.md` at the chosen level. The shape:
 1. **One line:** the whole point, as one sentence a reader could stop after.
 2. **The explanation.** For the **last response**: its key points in order, with whatever the user must
    do or decide listed first. For an **item**: what it is, why it matters *here*, and what it affects in
-   this session. For a **decision**, add what was chosen, why, what was rejected, and why not. A decision
-   explained without its alternatives is just a restated conclusion.
+   this session. For a **decision**, add what was chosen, why, what was rejected, and why not, **as far as the
+   session states them**. A decision explained without its alternatives is just a restated conclusion,
+   but invented alternatives are worse. If the session never gave the reason or the options, say that
+   plainly instead of filling the gap.
 3. **A visual,** only when it shows a flow, structure, before/after or comparison (`plain-english.md`,
    Visuals).
 4. **Words used,** if the answer defined any terms.

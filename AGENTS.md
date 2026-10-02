@@ -311,7 +311,7 @@ reads as it does:
   `.gitignore`; the remedy names whichever file git reported. **Inside the
   working directory, not `<git-dir>/mkit`** ([ADR 0002](docs/adr/0002-state-locations-under-a-sandbox.md)):
   under a shared `.git` it resolved into the main checkout, where the worktree-isolation guard
-  refuses every write, and `mkit facts` opens it as every skill's first call. `--show-toplevel`, so a
+  refuses every write, and `mkit facts` opens it as every repo-scoped skill's first call. `--show-toplevel`, so a
   linked worktree still gets its own. Scratch is never committed — `scratch.EnsureIgnored` puts the
   rule in the common dir's `info/exclude` **before** the first write, which is load-bearing rather
   than tidy: unignored, `git worktree remove` refuses, `git add -A` would commit run artefacts, and

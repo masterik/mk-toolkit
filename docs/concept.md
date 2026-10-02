@@ -12,7 +12,8 @@ It's a *workflow* toolkit, not just a git one: `review` drives CodeRabbit/Codex/
 dev loop the agent runs, git-centric but not git-limited.
 
 Nothing installs into the repo's own toolchain, but the plugin is **not standalone**: since M5
-every skill's first call is `mkit facts`, so the binary is a required companion
+every repo-scoped skill's first call is `mkit facts` (`explain`, which does no mechanical work, makes no
+`mkit` call), so the binary is a required companion
 (`brew install masterik/tap/mkit`) and the two ship over separate channels
 ([ADR 0003](adr/0003-two-distribution-channels.md)). The plugin is essentially
 **knowledge + procedure**: each skill tells Claude *when* it applies and *how* to drive the

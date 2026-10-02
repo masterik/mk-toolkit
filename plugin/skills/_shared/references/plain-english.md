@@ -17,7 +17,7 @@ subject.
 |---|---|---|
 | plain (default) | none | Short sentences, common words. Jargon stays, but each term is defined once, the first time it appears. |
 | simpler | `simpler`, `eli5` | No jargon at all. Use a comparison to something from everyday life, and say where the comparison stops working. |
-| deeper | `deeper` | Plain register, plus how it works underneath: the mechanism, the edge cases, and the file or function that does it. |
+| deeper | `deeper` | Plain register, plus how it works underneath: the mechanism, the edge cases, and the file or function that does it, when the session named one. |
 
 ## Writing rules
 

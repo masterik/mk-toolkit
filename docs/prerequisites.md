@@ -19,7 +19,7 @@ aborts without writing. Every field is also a flag; with any flag, `--yes`, or n
 opens and no form default applies.
 
 The `mkit` **binary** is a separate install (`brew install masterik/tap/mkit`), and since M5 it
-is **required by every skill** — each one's first call is `mkit facts <skill>`, which opens the run
+is **required by every skill but `explain`** — each repo-scoped skill's first call is `mkit facts <skill>`, which opens the run
 directory and returns every starting fact. Presence only, with no declared minimum on either side: a
 subcommand that does not exist *is* the too-old signal. Absorbing the script layer deleted rows from
 this page as it went — `node` left with `findings.mjs` (M4), `shasum` and `jq` with the gate and
@@ -44,7 +44,7 @@ in any case.
 | --- | --- | --- |
 | `git` ≥ 2.30 | everything | `--absolute-git-dir`, `worktree list --porcelain`, `diff --shortstat` |
 | `bash` ≥ 3.2 | `mkit gate run` | gate steps run as `bash -c '<command>'`, so `-- sh -c 'a && b'` keeps meaning what it says. macOS ships `/bin/bash` 3.2 and nothing here needs 4.x |
-| `mkit` | every skill | the run directory, the starting facts, the gate, the branch classifier, the findings arithmetic |
+| `mkit` | every skill but `explain` | the run directory, the starting facts, the gate, the branch classifier, the findings arithmetic |
 
 ```bash
 brew install git masterik/tap/mkit

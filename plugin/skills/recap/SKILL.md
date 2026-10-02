@@ -20,11 +20,10 @@ How the answer reads (levels, writing rules, visuals, words used, the closing li
 
 ## Preconditions
 
-**Two calls, sent in the same message.** Neither depends on the other:
+**First call, on its own:**
 
 ```bash
 mkit facts recap --no-run
-mkit worklog show --json --limit 20
 ```
 
 `mkit facts` **is** this skill's dependency check. If it fails with `command not found` **or**
@@ -36,26 +35,45 @@ mkit worklog show --json --limit 20
 If it exits 1 because this isn't a git work tree, stop and say that recap reports on a repository's
 branch, so it needs to run inside one. `/mkit:explain` covers the session alone.
 
+Once it has succeeded, read the branch's worklog:
+
+```bash
+mkit worklog show --json --limit 20
+```
+
 What the worklog reports is **one fewer input, never a stop**
 (`../_shared/references/workflow-contract.md`, "Reading it"). An empty log, an unreadable one, or a binary
 without `worklog` means the recap rests on the session and git alone. Say so in one line.
 
-From `mkit facts`: `branch=`, `default_branch=`, `detached=`, `upstream=`, `pushed=`, `clean=`, the
-`staged= unstaged= untracked= conflicted=` counts, `status:`, and `git_bin=` for the one call below.
+From `mkit facts`: `branch=`, `default_branch=`, `detached=`, `upstream=`, `pushed=`, `ahead=`/`behind=`,
+`clean=`, the `staged= unstaged= untracked= conflicted=` counts, `status:`, and `git_bin=` for the call below.
+**`pushed=yes` only means an upstream exists.** Commits are published only when `ahead=0`. With `ahead=2`,
+say two commits are still local.
 
-Unless the branch **is** `default_branch` or `detached=yes`, list what this branch has committed, with the
+**The base this branch is measured against** is `default_branch`, unless the session or the worklog says
+the branch is stacked on another one. Then use that parent, because measuring from the default would list
+the parent's commits as this branch's work. Skip this step when the branch **is** the base, when
+`detached=yes`, or when `default_branch=unknown`. Otherwise list what this branch has committed, with the
 git it named (bounded, so a long-lived branch can't flood the context):
 
 ```bash
-<git_bin> log --oneline --no-decorate -n 30 <default_branch>..HEAD
+<git_bin> log --oneline --no-decorate -n 30 <base>..HEAD
 ```
+
+If that fails (a base that exists only on the remote, for instance), or the step was skipped, say in one
+line that there was no base to compare against. Then build "Done" from the worklog and the session alone.
 
 ## Build the recap
 
 Merge three sources, and when they disagree, trust them in this order: **git** (what is actually true
-now), then the **worklog** (what each step concluded, with the commit it recorded), then the **session**
+now), then the **worklog** (what each step concluded), then the **session**
 (what was said, intended and decided). When the session claims something git contradicts (for example "I
 committed that" while the change is still unstaged), report what git shows and name the gap.
+
+**A worklog record is current only while the tree is the one it ran over.** Compare each record's
+`fingerprint` with the envelope's own `fingerprint`, which is the tree right now. A record that matches is
+present-tense evidence. A record that doesn't describes an older tree: report it in the past tense ("review
+passed before the last changes") and never as the current state.
 
 ## Shape
 
