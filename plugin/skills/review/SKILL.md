@@ -3,8 +3,8 @@ name: review
 description: >-
   Review local uncommitted changes or recent commits with CodeRabbit, Codex and Claude in parallel; verify
   findings, apply worthwhile fixes. Full (default) or quick (CodeRabbit + Codex). Trigger on "review my
-  changes", "review the diff", "quick review", "review last N commits", or before a commit/PR. Local work
-  only — not for GitHub PRs.
+  changes", "review the diff", "quick review", "review last N commits", "run codex and coderabbit", or before a
+  commit/PR. Local work only — not for GitHub PRs.
 argument-hint: "[quick|full]"
 model: opus
 ---
