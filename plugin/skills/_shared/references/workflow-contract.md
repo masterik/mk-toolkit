@@ -10,6 +10,8 @@ brainstorm → spec → implement → commit → review → pr ──┐
 
 cleanup         repo-wide gardening, not a step in the line
 sandbox-audit   user-wide: past sessions' sandbox and gate events → a proposed settings diff
+explain         reading aid: the last answer or one session item, in plain English (no binary)
+recap           reading aid: the branch's status in plain English (read-only, records nothing)
 ```
 
 The arrows are the **common** path, not a required one. Each step is **entry-capable**: it runs as
@@ -71,7 +73,8 @@ tells it whether the gist still describes the tree in front of it.
 hard requirement and every repo-scoped skill's first call is `mkit facts` (`review` probes
 `mkit findings` just before it), which stops the run when it is absent or too old. `sandbox-audit`
 is user-wide, opens no run directory and reads no worklog; its first call, `mkit audit sandbox`, is
-its own dependency check. By the time any step reads the log, there is no missing-binary case left to check for.
+its own dependency check. `explain` reads the session only and makes no `mkit` call; `recap` reads the
+worklog after `mkit facts recap --no-run` and never appends to it. By the time any step reads the log, there is no missing-binary case left to check for.
 
 ```bash
 mkit worklog show --json --limit 20
