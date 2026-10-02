@@ -1,7 +1,7 @@
 {
   "name": "mkit",
   "description": "Coding-workflow skills for Claude Code that move work from edits \u2192 committed \u2192 reviewed \u2192 integrated: commit, review, finish, pr \u2014 plus cleanup for repo-wide branch/worktree gardening and sandbox-audit (slash-only: /mkit:sandbox-audit) for turning past sessions' sandbox and auto-mode friction into settings changes \u2014 over a shared git-safety + Conventional Commits reference bundle.",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "author": {
     "name": "Malik Amurlayev",
     "email": "malik.amurlayev@gmail.com"
