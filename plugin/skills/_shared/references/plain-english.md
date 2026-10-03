@@ -17,7 +17,7 @@ subject.
 |---|---|---|
 | plain (default) | none | Short sentences, common words. Jargon stays, but each term is defined once, the first time it appears. |
 | simpler | `simpler`, `eli5` | No jargon at all. Use a comparison to something from everyday life, and say where the comparison stops working. |
-| deeper | `deeper` | Plain register, plus how it works underneath: the mechanism, the edge cases, and the file or function that does it, when the session named one. |
+| deeper | `deeper` | Plain register, plus how it works underneath: the mechanism, the edge cases, and the file or function that does it, as far as the session (or a file it names) shows them. Where it doesn't, say what is not known rather than filling it in. |
 
 ## Writing rules
 
@@ -53,12 +53,12 @@ Narrow the subject instead.
 
 ## Words used
 
-End the answer with a short **Words used** list: each term the answer defined, one line each. Leave it out
-when the answer defined nothing. The list is for looking back, so the definitions there match the ones in
-the text.
+Just before the closing line, add a short **Words used** list: each term the answer defined, one line each.
+Leave it out when the answer defined nothing. It is a deliberate reference for looking back, so it is the
+one exception to "define a term once", and its definitions match the ones in the text.
 
 ## Ending
 
-The last line offers the other levels in one sentence, naming only the ones that would actually change the
+The last line, after Words used, offers the other levels in one sentence, naming only the ones that would actually change the
 answer, for example: "Say `simpler` for no jargon, or `deeper` for how it works inside." Never end with a
 question the agent could answer itself.

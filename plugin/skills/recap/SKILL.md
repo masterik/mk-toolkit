@@ -47,8 +47,9 @@ without `worklog` means the recap rests on the session and git alone. Say so in 
 
 From `mkit facts`: `branch=`, `default_branch=`, `detached=`, `upstream=`, `pushed=`, `ahead=`/`behind=`,
 `clean=`, the `staged= unstaged= untracked= conflicted=` counts, `status:`, and `git_bin=` for the call below.
-**`pushed=yes` only means an upstream exists.** Commits are published only when `ahead=0`. With `ahead=2`,
-say two commits are still local.
+**`pushed=` only says whether an upstream is set.** With an upstream, commits are published only when
+`ahead=0`; with `ahead=2`, say two commits are still local. With `upstream=none`, say no upstream is set,
+so whether the branch was pushed is unknown — never "not pushed".
 
 **The base this branch is measured against** is `default_branch`, unless the session or the worklog says
 the branch is stacked on another one. Then use that parent, because measuring from the default would list
@@ -72,7 +73,8 @@ committed that" while the change is still unstaged), report what git shows and n
 
 **A worklog record is current only while the tree is the one it ran over.** Compare each record's
 `fingerprint` with the envelope's own `fingerprint`, which is the tree right now. A record that matches is
-present-tense evidence. A record that doesn't describes an older tree: report it in the past tense ("review
+present-tense evidence. Call a record stale only when both fingerprints are present and differ; an empty
+one means the record can't be dated, so report it as "recorded, current state unknown". A stale record describes an older tree: report it in the past tense ("review
 passed before the last changes") and never as the current state.
 
 ## Shape

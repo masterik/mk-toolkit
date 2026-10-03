@@ -10,7 +10,7 @@ Scale, on a *small* markdown-only branch: `git diff <base>` 57 KB · `--stat` 57
 
 ## One call to start
 
-A repo-scoped skill's first act is `mkit facts <skill>` (`explain` makes no `mkit` call). It opens this run's directory
+A repo-scoped skill's first act is `mkit facts <skill>` (`explain` makes no `mkit` call). Unless called with `--no-run`, as `recap` does, it opens this run's directory
 **and** returns every read-only fact the skill starts from, as `key=value` lines:
 
 - **`run=`** — this run's directory: unique, absolute, `<toplevel>/.mkit/<skill>-…`, its
