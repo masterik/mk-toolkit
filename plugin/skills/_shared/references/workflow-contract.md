@@ -10,6 +10,8 @@ brainstorm → spec → implement → commit → review → pr ──┐
 
 cleanup         repo-wide gardening, not a step in the line
 sandbox-audit   user-wide: past sessions' sandbox and gate events → a proposed settings diff
+explain         reading aid: the last answer or one session item, in plain English (no binary)
+recap           reading aid: the branch's status in plain English (read-only, records nothing)
 ```
 
 The arrows are the **common** path, not a required one. Each step is **entry-capable**: it runs as
@@ -37,7 +39,8 @@ result has lied by omission.
 when it finishes — with one exception, and it is the shape of the rule rather than a hole in it:
 `finish` usually destroys its own log, since the worklog lives in the worktree it removes and is
 keyed on the branch it deletes. So `finish` records where it stopped short and skips where the
-cleanup ran, and that skip is not a degradation to report.
+cleanup ran, and that skip is not a degradation to report. `explain` and `recap` are reading aids, not
+steps: they conclude nothing a later step acts on, so they record nothing.
 
 The exception has its own exception: on `cleanup_path=none` there is no worktree to remove, so the
 log outlives the branch — and a branch name is reusable, which would hand a later `review` on a
@@ -71,7 +74,8 @@ tells it whether the gist still describes the tree in front of it.
 hard requirement and every repo-scoped skill's first call is `mkit facts` (`review` probes
 `mkit findings` just before it), which stops the run when it is absent or too old. `sandbox-audit`
 is user-wide, opens no run directory and reads no worklog; its first call, `mkit audit sandbox`, is
-its own dependency check. By the time any step reads the log, there is no missing-binary case left to check for.
+its own dependency check. `explain` works from the session (reading a file only to confirm what it names) and makes no `mkit` call; `recap` reads the
+worklog after `mkit facts recap --no-run` and never appends to it. By the time any step reads the log, there is no missing-binary case left to check for.
 
 ```bash
 mkit worklog show --json --limit 20

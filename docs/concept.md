@@ -12,7 +12,8 @@ It's a *workflow* toolkit, not just a git one: `review` drives CodeRabbit/Codex/
 dev loop the agent runs, git-centric but not git-limited.
 
 Nothing installs into the repo's own toolchain, but the plugin is **not standalone**: since M5
-every skill's first call is `mkit facts`, so the binary is a required companion
+every repo-scoped skill's first facts-gathering call is `mkit facts` (`review` probes `mkit findings` just
+before it; `explain`, which does no mechanical work, makes no `mkit` call), so the binary is a required companion
 (`brew install masterik/tap/mkit`) and the two ship over separate channels
 ([ADR 0003](adr/0003-two-distribution-channels.md)). The plugin is essentially
 **knowledge + procedure**: each skill tells Claude *when* it applies and *how* to drive the
@@ -112,9 +113,10 @@ are plain Markdown, so support for another agent is a thin packaging step, not a
   anyway. amd64 + arm64 is the whole matrix. Other platforms stay out until someone needs one.
 
 ## The Skills
-Eight skills. Seven are **steps** in one workflow — think it through, write it down, build it,
-record it, check it, ship it — and `cleanup` sits outside the line: repo-wide gardening that
-doesn't touch code, sweeping every branch and worktree the steps leave behind.
+Ten skills. Seven are **steps** in one workflow — think it through, write it down, build it,
+record it, check it, ship it — and three sit outside the line: `cleanup`, repo-wide gardening that
+doesn't touch code, sweeping every branch and worktree the steps leave behind; and `explain` and
+`recap`, reading aids that put an answer or the branch's state into plain English.
 
 The steps are **composable, not sequential**. Any one of them runs as the only thing in a session,
 in any order, with any subset of the others skipped; a step that can't find what an earlier step
@@ -137,10 +139,12 @@ and you pick the finisher by **destination** — merge it yourself locally, or p
 | **`finish`** | Commit → merge the branch back into its base → delete branch / remove worktree. **Local**, no PR. | "finish this feature", "merge back and clean up" |
 | **`pr`** | Commit → push → open a GitHub PR → assign reviewers. **Remote review** path. | "create a PR", "open a pull request", "submit for review" |
 | **`cleanup`** | Classify every local branch (merged, PR'd, unpushed, gone), delete/keep by that classification, remove the worktrees that go with them, keep only the default branch and a local `develop`-like one, then switch and pull. **Local only** — never touches a remote branch. | "clean up branches", "prune stale branches", "tidy up worktrees" |
+| **`explain`** | Reading aid, outside the line. The last answer or one session item (a term, finding, error, or a decision with what it rejected), said again in plain English, with a diagram where a picture helps. No binary: it does no mechanical work. | "wait what", "explain that simply", "eli5 the gate ledger" |
+| **`recap`** | Reading aid, outside the line. The branch's status in plain English (done, changed, left, waiting on you) from the session, the worklog and git. Read-only; records nothing. | "where are we", "catch me up", "what's left" |
 
 ### Shared references — `skills/_shared/`
 `_shared/` is **not** a triggerable skill (it has no `SKILL.md`); it is the shared library
-the five skills link into via `../_shared/references/…`:
+the skills link into via `../_shared/references/…`:
 
 - `git-safety.md` — the non-negotiable git safety protocol (no force-push, no config edits,
   no AI attribution, don't skip hooks, …).
@@ -166,6 +170,8 @@ the five skills link into via `../_shared/references/…`:
 - `output-discipline.md` — bounding command output: gate logs written to a file and read by
   their tail, `--stat` before any diff, never a full branch diff to write prose — plus what
   must never be capped.
+- `plain-english.md` — how `explain` and `recap` read: the plain/simpler/deeper levels, writing
+  rules, when to draw, the Words used list.
 
 ## Architecture
 ```
@@ -173,7 +179,7 @@ the five skills link into via `../_shared/references/…`:
    │   loads plugin skills (via .claude-plugin/plugin.json) — no hooks, deliberately
    ▼
  brainstorm · spec · implement · commit · review · pr · finish   ← SKILL.md (when & how)
- cleanup                                    (the seven steps, plus repo-wide gardening)
+ cleanup · explain · recap                  (the seven steps, plus gardening and reading aids)
    │   all link into
    ▼
  _shared/references/*.md   (safety · conventions · quality gate · worktree · branching

@@ -18,9 +18,10 @@ by all four skills; what it reports is **one fewer input, never a stop**.
 **M5 (the `jq` consumers) done** — `mkit facts`, `mkit gate detect|run`, `mkit branch status` and
 `mkit scratch open|prune` replaced the last five scripts, and **the payload is Markdown only**: no
 `plugin/scripts/`, no `lib/common.sh`, no `tests/`. That makes `mkit` a **hard requirement for
-every skill** — each one's first call is `mkit facts <skill>` (`review` alone runs a one-line
+every skill but `explain`** — each one's first call is `mkit facts <skill>` (`review` alone runs a one-line
 compatibility probe before it, because its later steps need `mkit findings` too; `sandbox-audit`,
-which is not repo-scoped and opens no run directory, starts with `mkit audit sandbox` instead), and a
+which is not repo-scoped and opens no run directory, starts with `mkit audit sandbox` instead; `explain`,
+which does no mechanical work, makes no `mkit` call at all), and a
 binary that is absent *or too old* is its stop condition with a `brew` remedy: `command not found` and
 `unknown command "facts"` are the same answer. Presence only, no declared minimum on either side: a subcommand
 that does not exist *is* the too-old signal. Milestones and the full invariant list:
@@ -267,11 +268,15 @@ reads as it does:
   at the **plugin root** in `hooks/hooks.json` (not `.claude-plugin/`), is auto-discovered, and
   takes no `matcher` — a mistyped matcher is a hook that silently never runs.
 - `plugin/skills/<name>/SKILL.md` — the triggerable skills. The workflow is **seven steps**
-  (`brainstorm` → `spec` → `implement` → `commit` → `review` → `pr`/`finish`) plus two outside the
-  line: `cleanup` (repo-wide branch/worktree gardening) and `sandbox-audit` (user-wide: every
+  (`brainstorm` → `spec` → `implement` → `commit` → `review` → `pr`/`finish`) plus four outside the
+  line: `cleanup` (repo-wide branch/worktree gardening), `sandbox-audit` (user-wide: every
   session's sandbox and permission-gate events, turned into a proposed settings diff — report-only,
-  never edits a settings file). **Six exist today** — `commit`, `review`, `pr`, `finish`, `cleanup`,
-  `sandbox-audit`; the front half is designed and unbuilt (`backlog.md`,
+  never edits a settings file), and two reading aids, `explain` (the last answer or one session item,
+  re-said in plain English — **the one skill with no binary dependency**, since it does no mechanical
+  work) and `recap` (the branch's status in plain English from session, worklog and git — read-only,
+  `mkit facts recap --no-run`, writes no worklog record). Both share
+  `_shared/references/plain-english.md`. **Eight exist today** — `commit`, `review`, `pr`, `finish`,
+  `cleanup`, `sandbox-audit`, `explain`, `recap`; the front half is designed and unbuilt (`backlog.md`,
   M6–M8), so don't describe `brainstorm`/`spec`/`implement` as shipping.
   The steps are **composable, not sequential**: each is entry-capable, runs alone in any order with
   any subset skipped, derives the thin version of what it can't find, and names what it assumed.
@@ -306,7 +311,7 @@ reads as it does:
   `.gitignore`; the remedy names whichever file git reported. **Inside the
   working directory, not `<git-dir>/mkit`** ([ADR 0002](docs/adr/0002-state-locations-under-a-sandbox.md)):
   under a shared `.git` it resolved into the main checkout, where the worktree-isolation guard
-  refuses every write, and `mkit facts` opens it as every skill's first call. `--show-toplevel`, so a
+  refuses every write, and `mkit facts` opens it as every repo-scoped skill's first call. `--show-toplevel`, so a
   linked worktree still gets its own. Scratch is never committed — `scratch.EnsureIgnored` puts the
   rule in the common dir's `info/exclude` **before** the first write, which is load-bearing rather
   than tidy: unignored, `git worktree remove` refuses, `git add -A` would commit run artefacts, and
