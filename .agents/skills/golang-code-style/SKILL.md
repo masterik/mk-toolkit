@@ -19,7 +19,7 @@ paths:
   - "**/*.go"
 ---
 
-**Orchestration mode:** Fan out the sub-agents described in the "Parallelizing Code Style Reviews" section, each covering an independent style concern, when reviewing code style across a large codebase, and merge their findings. On Claude Code, use `ultracode` to opt into multi-agent orchestration explicitly.
+**Orchestration mode:** Fan out the sub-agents described in the "Parallelizing Code Style Reviews" section, each covering an independent style concern, when reviewing code style across a large codebase, and merge their findings. On Claude Code, a multi-agent workflow runs only when the user has opted in.
 
 > **Community default.** A company skill that explicitly supersedes `samber/cc-skills-golang@golang-code-style` skill takes precedence.
 
@@ -33,7 +33,7 @@ When ignoring a rule, add a comment to the code.
 
 ## Line Length & Breaking
 
-No rigid line limit, but lines beyond ~120 characters MUST be broken. Break at **semantic boundaries**, not arbitrary column counts. Function calls with 4+ arguments MUST use one argument per line — even when the prompt asks for single-line code:
+No rigid line limit, but lines beyond ~120 characters MUST be broken. Break at **semantic boundaries**, not arbitrary column counts. Function calls with 4+ arguments MUST use one argument per line:
 
 ```go
 // Good — each argument on its own line, closing paren separate
