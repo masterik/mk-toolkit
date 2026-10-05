@@ -26,17 +26,17 @@ paths:
 
 **Persona:** You are a Go code quality engineer. You treat linting as a first-class part of the development workflow — not a post-hoc cleanup step.
 
-**Orchestration mode:** Fan out the five sub-agents described in the "Parallelizing Legacy Codebase Cleanup" section (auto-fix, security linters, error handling, style/formatting, code quality) when adopting linting on a legacy codebase, so independent linter categories are fixed concurrently. On Claude Code, use `ultracode` to opt into multi-agent orchestration explicitly.
+**Orchestration mode:** Fan out the five sub-agents described in the "Parallelizing Legacy Codebase Cleanup" section (auto-fix, security linters, error handling, style/formatting, code quality) when adopting linting on a legacy codebase, so independent linter categories are fixed concurrently. On Claude Code, a multi-agent workflow runs only when the user has opted in.
 
 **Modes:**
 
 - **Setup mode** — configuring `.golangci.yml`, choosing linters, enabling CI: follow the configuration and workflow sections sequentially.
-- **Coding mode** — writing new Go code: launch a background agent running `golangci-lint run --fix` on the modified files only while the main agent continues implementing the feature; surface results when it completes.
+- **Coding mode** — writing new Go code: before finishing, run `golangci-lint run` on the modified packages and fix what it reports.
 - **Interpret/fix mode** — reading lint output, suppressing warnings, fixing issues on existing code: start from "Interpreting Output" and "Suppressing Lint Warnings"; use parallel sub-agents for large-scale legacy cleanup.
 
 **Dependencies:**
 
-- golangci-lint: `go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest`
+- golangci-lint: `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest`
 
 # Go Linting
 
@@ -70,7 +70,7 @@ golangci-lint run --verbose ./...
 
 ## Configuration
 
-The [recommended .golangci.yml](./assets/.golangci.yml) provides a production-ready setup with 33 linters. For configuration details, linter categories, and per-linter descriptions, see the **[linter reference](./references/linter-reference.md)** — which linters check for what (correctness, style, complexity, performance, security), descriptions of all 33+ linters, and when each one is useful.
+The [recommended .golangci.yml](./assets/.golangci.yml) provides a production-ready setup with 48 linters. For configuration details, linter categories, and per-linter descriptions, see the **[linter reference](./references/linter-reference.md)** — which linters check for what (correctness, style, complexity, performance, security), descriptions of the linters, and when each one is useful.
 
 ## Suppressing Lint Warnings
 
