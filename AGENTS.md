@@ -2,19 +2,19 @@
 
 This file provides guidance to agents when working with code in this repository.
 
-**mkit** — a **Go binary (`mkit`) plus a Claude Code plugin**, shipped together by Homebrew
-(`brew install masterik/tap/mkit`). The plugin packages the agent coding-workflow skills
-(`commit`, `review`, `finish`, `pr`, `cleanup`) plus the shared `_shared/references/`
+**mkit** — a **Go binary (`mkit`) plus a Claude Code plugin**: the binary ships by Homebrew
+(`brew install masterik/tap/mkit`), the plugin from the GitHub marketplace (see *The plugin payload*).
+The plugin packages the agent coding-workflow skills plus the shared `_shared/references/`
 bundle; the binary owns every mechanical step those skills take. Composition over replacement:
 the skills orchestrate `git`, `gh`, `wt`, and code-review tools — no new git logic.
 
-**Current phase: the Go port.** M1 (scaffold + release chain) done at `v0.12.0`; M2
+**Current phase: M8** (`mkit plan` + the `spec` and `implement` skills); the Go port finished with M5. M1 (scaffold + release chain) done at `v0.12.0`; M2
 (`mkit cache prune`) done; **M3 withdrawn** ([ADR 0003](docs/adr/0003-two-distribution-channels.md));
 **M7 (`mkit repo profile`/`init`/`doctor`) done** — repo config is `<toplevel>/.mkit/config.toml`,
 committed ([ADR 0001's config-path amendment](docs/adr/0001-per-repo-config-and-init.md#amendment-the-config-path)).
 **M4 (`mkit findings`) done** — `internal/core/findings/` + `internal/cli/findings.go`.
-**M6 (`mkit worklog`) done** — the per-branch worklog under `<toplevel>/.mkit/worklog/`, read and written
-by all four skills; what it reports is **one fewer input, never a stop**.
+**M6 (`mkit worklog`) done** — the per-branch worklog under `<toplevel>/.mkit/worklog/`, written
+by `commit`, `review`, `pr` and `finish`, and read by those and `recap`; what it reports is **one fewer input, never a stop**.
 **M5 (the `jq` consumers) done** — `mkit facts`, `mkit gate detect|run`, `mkit branch status` and
 `mkit scratch open|prune` replaced the last five scripts, and **the payload is Markdown only**: no
 `plugin/scripts/`, no `lib/common.sh`, no `tests/`. That makes `mkit` a **hard requirement for
@@ -85,7 +85,7 @@ Not preferences — breaking one is a design error, not a trade-off. Full list: 
 ## The port, and what it left behind
 
 **The shell layer is gone** (M5). The rules that got it there are kept because they govern the
-milestones that are left (M6 `mkit worklog`, M8 `mkit plan`) and because they explain why the code
+milestone that is left (M8 `mkit plan`) and because they explain why the code
 reads as it does:
 
 - The deleted `.bats` file **was the spec** for each script — the `go test` beside each package is
@@ -100,7 +100,7 @@ reads as it does:
 ## Layout
 
 ### The binary
-- `cmd/mkit/main.go` — entrypoint only: build the root, print the error, exit 1. No logic.
+- `cmd/mkit/main.go` — entrypoint only: build the root, exit with `cli.Fail`'s status (1, or 2 for a usage error). No logic.
 - `internal/cli/` — the cobra tree. `root.go` owns the **front-end contract**: `--json`,
   `--no-tui`, `--yes` resolved once in `PersistentPreRun` into an `Options` on the command
   context. Read it via `cli.FromContext(cmd)` — never re-check a flag or call `term.IsTerminal`
@@ -117,9 +117,8 @@ reads as it does:
     `tracked|untracked|shadowed|absent`; **shadowed** is a repo carrying the legacy
     directory-only `.mkit/` rule, where a written config would silently never travel.
     `Write` renders a **commented template** rather than marshalling — the file is committed and
-    read in a diff, and no Go TOML marshaller preserves comments. `ShadowedRemedy` is the one
-    **one producer** of the shadowed-config sentence, and the shell counterpart it was kept in
-    parity with went with `lib/common.sh` in M5. `mkit doctor` and `mkit facts` both read it;
+    read in a diff, and no Go TOML marshaller preserves comments. `ShadowedRemedy` is the
+    **one producer** of the shadowed-config sentence. `mkit doctor` and `mkit facts` both read it;
     neither re-words it.
   - `initplan/` (#31): the `mkit init` form as data. `Build` turns the pinned config, the
     discovered profile (`profile.Discover`, no config applied, so the tiers stay apart) and the
@@ -155,9 +154,8 @@ reads as it does:
     which counts the write sites per file so adding one to a listed file still fails the test. `EnsureIgnored` puts the `.mkit/*` + `!.mkit/config.toml`
     pair in the common dir's `info/exclude` before the first create; `Ignored` probes **two**
     paths, because an unrelated `*.jsonl` rule hides the ledger while leaving every run
-    directory untracked. `TestWriteSitesAreOnTheReviewedAllowlist` is the Go half of what
-    `payload.bats` asserted over the shell: three write locations, chosen by lifetime, asserted
-    by shape against a list a human reviewed. It also owns `~/.mkit` (`MKIT_HOME`) and the one
+    directory untracked. `TestWriteSitesAreOnTheReviewedAllowlist` asserts the three write
+    locations, chosen by lifetime, by shape against a list a human reviewed. It also owns `~/.mkit` (`MKIT_HOME`) and the one
     remedy sentence for an unwritable one — `mkit doctor` and `mkit facts` both read that producer
     rather than wording it twice.
   - `facts/` (M5): every starting fact a skill reads, gathered in one call. `cd` to the toplevel
@@ -182,7 +180,7 @@ reads as it does:
     execute the same string but **normalize the ledger key differently**, and that seam is what
     makes a `review` → `finish` cache hit possible at all.
   - `sessionaudit/`: `mkit audit sandbox` (the old `sessions` is a hidden alias for one release: a plugin one release behind still opens with it) — reads `<claude home>/projects/**/*.jsonl` (the
-    storage package's `CLAUDE_HOME` rule, not a second one) and classifies every tool result the
+    `cache` package's `CLAUDE_HOME` rule, not a second one) and classifies every tool result the
     sandbox or the permission gate had a say in. **Each result is matched against its own call**, paired
     by `tool_use_id`, never by substring over a transcript: that counted every `cat` of a doc quoting
     the markers. The three refusals are **anchored at the start of the result**, where Claude Code puts
@@ -223,11 +221,11 @@ reads as it does:
     longer than a filename may be, the name is budgeted against `NAME_MAX` and the **readable
     half** is what gets cut to fit, never the digest — injectivity was never carried by the
     readable half, and an unbudgeted name would not degrade but fail outright, `open` returning
-    ENAMETOOLONG so the branch could not record at all. Rotation mirrors `gate-run.sh`'s
-    `ledger_trim` down to the constant (`Keep = 200`, trim past `Keep*2`, dead heads first, mkdir
+    ENAMETOOLONG so the branch could not record at all. Rotation matches the gate ledger's
+    down to the constant (`Keep = 200`, trim past `Keep*2`, dead heads first, mkdir
     lock with the 60-minute staleness break) — including its hardest rule: **a rotation that cannot
-    read the file cleanly does not rotate.** The fingerprint is **delegated to
-    `mkit_tree_fingerprint`** via `pluginroot.CommonFunc`, never reimplemented, until M5 ports it.
+    read the file cleanly does not rotate.** The fingerprint is
+    **`gate.Fingerprint`**, never reimplemented.
 - `internal/tui/` — Bubble Tea rendering over `core`, one subpackage per command.
   `internal/tui/ui/` is the shared lipgloss styling (palette, status icons, tables, bars) behind the
   human forms of `doctor`, `repo profile`, `branch status`, `cache prune`, `audit sandbox`, `init` and
@@ -242,9 +240,7 @@ reads as it does:
   Neither holds command logic — one toggles selection, the other walks a plan and returns answers.
 - `internal/buildinfo/` — version/commit/date, injected by `-X` ldflags at release.
 - `tools/` — shell that is not part of the plugin payload; staging for a port, and the home
-  for one-shot and maintainer scripts. `release.sh` is the one resident (`just release`);
-  `purge-journal-state.sh` and `migrate-state-layout.sh` both did their jobs (every machine ran
-  them) and were deleted.
+  for one-shot and maintainer scripts. `release.sh` is the one resident (`just release`).
 
 ### The plugin payload
 - `plugin/` — the plugin payload, shipped from the **GitHub marketplace**
@@ -277,7 +273,7 @@ reads as it does:
   `mkit facts recap --no-run`, writes no worklog record). Both share
   `_shared/references/plain-english.md`. **Eight exist today** — `commit`, `review`, `pr`, `finish`,
   `cleanup`, `sandbox-audit`, `explain`, `recap`; the front half is designed and unbuilt (`backlog.md`,
-  M6–M8), so don't describe `brainstorm`/`spec`/`implement` as shipping.
+  M8), so don't describe `brainstorm`/`spec`/`implement` as shipping.
   The steps are **composable, not sequential**: each is entry-capable, runs alone in any order with
   any subset skipped, derives the thin version of what it can't find, and names what it assumed.
   Never write a skill that tells the user to run another skill first, or that runs a step
@@ -330,9 +326,8 @@ reads as it does:
   region is sandbox-*protected*, where an allowlist entry is inert, so it was a path no remedy could
   point at; here, one `permissions.additionalDirectories` entry works.
 - `$TMPDIR` for anything that dies with the command. The division is by lifetime, not by caller.
-  Go's own temp-file API honours `$TMPDIR`; the shell forms that did not (`mktemp` bare or `-t`,
-  which resolve the Darwin per-user temp directory and fail outright under the sandbox — that is
-  what took out 49 of 190 shell tests) are gone with the shell.
+  Go's own temp-file API honours `$TMPDIR`; the Darwin per-user temp directory fails outright
+  under the sandbox.
   `internal/core/scratch`'s `TestWriteSitesAreOnTheReviewedAllowlist` asserts the write set
   statically, since it has no behavioral seam: every file that writes is on a list a human
   reviewed.
