@@ -5,9 +5,10 @@ skills that take work from **edits → committed → reviewed → integrated**. 
 replacement: the skills orchestrate `git`, GitHub CLI (`gh`), Worktrunk (`wt`), and code-review
 tools (CodeRabbit/Codex); they don't reimplement them.
 
-The skills are the product; the binary is the mechanical layer beneath them. As of M5 it is all
-of it — [the payload's shell layer is gone](docs/backlog.md) and `plugin/` is Markdown.
-Claude-only for now; other agents (Codex, opencode, …) are a later, thin packaging step.
+The skills are the product; the binary is the mechanical layer beneath them — `plugin/` is
+Markdown only, and every mechanical step is a `mkit` subcommand.
+**macOS only** and **Claude Code only** for now; other platforms and agents are tracked as
+later work ([backlog](docs/backlog.md)).
 
 ## Skills
 
@@ -47,11 +48,11 @@ brew install masterik/tap/mkit
 
 Nothing to build either way, and **both steps are required** — the marketplace ships the skills,
 Homebrew ships the binary, and the two version independently
-([ADR 0003](docs/adr/0003-two-distribution-channels.md)). Since M5 every repo-scoped skill's first call is
+([ADR 0003](docs/adr/0003-two-distribution-channels.md)). Every repo-scoped skill's first call is
 `mkit facts <skill>` (`review` runs a one-line `mkit findings` compatibility probe just before it;
 `sandbox-audit`, which is user-wide, starts with `mkit audit sandbox`; `explain` makes no `mkit` call at all), so a missing binary stops a skill at step 0 with a `brew` remedy rather than
-degrading. Presence only, with no declared minimum on either side. All four skills also read and
-write a per-branch **worklog** through `mkit worklog` (M6) — what ran on this branch and what it
+degrading. Presence only, with no declared minimum on either side. `commit`, `review`, `pr` and
+`finish` also write a per-branch **worklog** through `mkit worklog` (`recap` reads it) — what ran on this branch and what it
 concluded — which is an optional *input*: a worklog a step cannot read costs it one input and never
 stops it. Beyond `git` and `bash`, `rg`, `gh` and `wt` are recommended — see
 [Prerequisites](docs/prerequisites.md).
@@ -72,12 +73,24 @@ and `--no-ledger` to stop writing it. Details:
 
 ## Testing
 
-`go build ./... && go vet ./... && go test ./...` — that is what CI runs, and since M5 it is the
-whole suite: the shell layer's bats tests were ported into the Go tests beside the packages that
-replaced it. Dev-only — see [Prerequisites](docs/prerequisites.md#dev-only--running-tests).
+`just ci` (or `go build ./... && go vet ./... && go test ./... && golangci-lint run`) — what CI
+runs. Tests live beside their packages and build throwaway repos under `$TMPDIR`; none touch your
+home directory. Dev-only — see [Prerequisites](docs/prerequisites.md#dev-only--running-tests).
 
 ## Docs
 
 - [Concept](docs/concept.md) — direction and design principles
-- [Backlog](docs/backlog.md) — the Go-binary migration: ordered milestones and their invariants
+- [Backlog](docs/backlog.md) — ordered milestones and their invariants
 - [Prerequisites](docs/prerequisites.md) — required tooling, setup, permission allowlist
+- [ADRs](docs/adr/) — decisions that were hard to reverse
+- [AGENTS.md](AGENTS.md) — architecture and conventions, for contributors and coding agents
+
+## Contributing
+
+Issues and PRs welcome — [GitHub Issues](https://github.com/masterik/mk-toolkit/issues). Commits
+follow [Conventional Commits](https://www.conventionalcommits.org/); run `just ci` before opening a PR.
+
+## License
+
+[MIT](LICENSE). The vendored Go skills under `.agents/skills/` are MIT-licensed by
+[samber/cc-skills-golang](https://github.com/samber/cc-skills-golang).

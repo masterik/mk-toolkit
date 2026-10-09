@@ -199,7 +199,7 @@ prefix runs a command outside the sandbox:
 ```
 
 Skipping this and adding only the grant below gets you
-`mkdir: /Users/mk/.mkit: Operation not permitted` at the first write — measured, and the reason
+`mkdir: /Users/you/.mkit: Operation not permitted` at the first write — measured, and the reason
 this section is two steps instead of one.
 
 **2. Grant it:**

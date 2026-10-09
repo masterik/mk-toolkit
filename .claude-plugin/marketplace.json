@@ -7,7 +7,7 @@
     {
       "name": "mkit",
       "source": "./plugin",
-      "description": "Coding-workflow skills for Claude Code: commit, review, finish, pr, over a shared git-safety + Conventional Commits reference bundle."
+      "description": "Coding-workflow skills for Claude Code: commit, review, pr, finish, cleanup, sandbox-audit, explain and recap, over a shared git-safety + Conventional Commits reference bundle. Needs the mkit binary: brew install masterik/tap/mkit."
     }
   ]
 }
