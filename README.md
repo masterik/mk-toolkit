@@ -6,7 +6,8 @@ replacement: the skills orchestrate `git`, GitHub CLI (`gh`), Worktrunk (`wt`), 
 tools (CodeRabbit/Codex); they don't reimplement them.
 
 The skills are the product; the binary is the mechanical layer beneath them — `plugin/` is
-Markdown only, and every mechanical step is a `mkit` subcommand.
+Markdown only. `mkit` owns the shared mechanical invariants (starting facts, the quality gate,
+branch classification, review-finding arithmetic); the skills run `git`, `gh` and `wt` themselves.
 **macOS only** and **Claude Code only** for now; other platforms and agents are tracked as
 later work ([backlog](docs/backlog.md)).
 
