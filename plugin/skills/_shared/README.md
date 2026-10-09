@@ -1,7 +1,7 @@
 # _shared — reference bundle
 
 The **shared library** for mkit's skills. **Not a triggerable skill** — no `SKILL.md`.
-`commit`, `review`, `finish`, `pr` and `cleanup` link into `references/` via relative paths
+Every skill links into `references/` via relative paths
 (`../_shared/references/…`), so safety rules and conventions live in exactly one place.
 
 The workflow is seven steps plus `cleanup`; `brainstorm`, `spec` and `implement` are designed and

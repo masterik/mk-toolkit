@@ -31,7 +31,8 @@ Breaking one is a design error, not a trade-off.
 4. **Commands report and run — they never integrate.** No staging, merging, pushing or editing the
    user's files. Their writes are bounded: `scratch prune` removes old run directories, `gate run`
    appends to `.mkit/gate.jsonl`, `worklog append` to the worklog, `branch status` runs
-   `git fetch --prune`, and `init` writes `.mkit/config.toml` — the one command that writes config.
+   `git fetch --prune`, `init` writes `.mkit/config.toml` (the one command that writes config), and
+   `cache prune --apply` deletes stale Claude Code / Codex storage — only with `--apply`.
 5. **Judgement stays in Markdown.** The binary owns mechanical invariants only; where the line is
    unclear it reports candidates and the skill chooses.
 6. **Skills stay as files** — Markdown in this repo, served from the marketplace checkout, never
@@ -40,8 +41,8 @@ Breaking one is a design error, not a trade-off.
    names what it assumed, never sends the user to another step
    ([`workflow-contract.md`](../plugin/skills/_shared/references/workflow-contract.md)).
 8. **Three write locations, by lifetime:** `$TMPDIR`, `<toplevel>/.mkit/`, `~/.mkit/` — plus one
-   named exception, the common dir's `info/exclude`, so `.mkit/` stays ignored. Never `~/.claude`,
-   never the user's files. Asserted by `TestWriteSitesAreOnTheReviewedAllowlist`
+   named exception, the common dir's `info/exclude`, so `.mkit/` stays ignored. State is never kept
+   in `~/.claude` or the user's files; `cache prune --apply` only deletes there. Asserted by `TestWriteSitesAreOnTheReviewedAllowlist`
    ([ADR 0002](adr/0002-state-locations-under-a-sandbox.md)).
 9. **Degradation is named, never hit.** A path the sandbox would deny is reported with a remedy
    that works, or the command says it is human-run. Each such sentence has exactly one producer.
@@ -59,7 +60,8 @@ The workflow's front half. `brainstorm` needs no binary support and can land any
 - `spec` — synthesise what was discussed into a spec plus a task graph; never re-interview.
   Publish to the store the repo profile names, falling back to the run directory.
 - `implement` — work the frontier one slice at a time, full gate between slices (the ledger makes
-  unchanged steps `cached`). Sequential in place by default; parallel worktrees behind a pinned
+  unchanged steps `cached`). Sequential in place by default — `wt` is sandbox-fragile (observed failing to `mktemp`) and two
+  editors over one tree collide; parallel worktrees behind a pinned
   `[implement] worktrees = true`.
 
 **Done when** a spec written by `spec` can be implemented by `implement` in a fresh session from
@@ -70,7 +72,7 @@ the artifact and the worklog alone.
 - **Worktree helpers in the binary** — [ADR 0004](adr/0004-worktree-helpers-in-the-binary.md),
   [#37](https://github.com/masterik/mk-toolkit/issues/37).
 - **Sign and notarize release binaries** — [#28](https://github.com/masterik/mk-toolkit/issues/28);
-  until then Gatekeeper quarantines every download ([workaround](prerequisites.md#gatekeeper-blocks-the-binary)).
+  the cask strips the quarantine flag on install meanwhile ([if Gatekeeper still blocks it](prerequisites.md#gatekeeper-blocks-the-binary)).
 
 ## Later
 

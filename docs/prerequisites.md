@@ -23,9 +23,10 @@ Then check everything at once:
 mkit doctor
 ```
 
-`doctor` reports tool presence on `PATH`, the sandbox writable set, plugin state and permission
-allowlist gaps. It reports only — it never changes anything — and it checks presence, not versions
-or `gh` auth.
+`doctor` reports tool presence on `PATH`, plugin state (including plugin/binary version drift), the
+sandbox writable set, and missing `additionalDirectories` grants for the tools mkit composes. It
+reports only — it never changes anything. It doesn't check tool minimum versions, `gh` auth, or your
+Bash allow rules (see [Fewer permission prompts](#fewer-permission-prompts)).
 
 ## Required
 
@@ -64,12 +65,13 @@ scopes, spec store, merge style) so runs stop re-discovering, plus what discover
 stays discovered per path unless you pin a list. On a terminal it's a short wizard (Spec → Commit → Review → Merge);
 every field is also a flag. Nothing requires it — every skill runs with no config
 ([ADR 0001](adr/0001-per-repo-config-and-init.md)). `mkit repo profile` shows what's discovered vs
-pinned.
+pinned; `mkit init --force` re-discovers and reopens the wizard on an existing config.
 
 ## Gatekeeper blocks the binary
 
-Release binaries aren't signed or notarized yet ([#28](https://github.com/masterik/mk-toolkit/issues/28)),
-so macOS quarantines each download. After every `brew install` / `brew upgrade`:
+Release binaries aren't signed or notarized yet ([#28](https://github.com/masterik/mk-toolkit/issues/28)).
+The Homebrew cask clears the quarantine flag on install, so this should not happen; if macOS still
+blocks `mkit` (an older cask, or a binary fetched another way), clear it yourself:
 
 ```bash
 xattr -d com.apple.quarantine "$(which mkit)"
@@ -145,11 +147,12 @@ export GOCACHE="$TMPDIR/go-build" GOMODCACHE="$TMPDIR/go-mod" GOLANGCI_LINT_CACH
 
 | Skill / command | Hosts |
 | --- | --- |
-| `pr`, `cleanup`, `mkit branch status`, `mkit facts <skill> --gh` | `api.github.com`, `github.com` |
+| `pr`, `finish`, `cleanup`, `mkit branch status`, `mkit facts <skill> --gh` | `api.github.com`, `github.com` |
 | `pr`, `finish`, `cleanup` | your remote's host |
 | `review`'s external reviewers | whatever `codex` / `coderabbit` call |
 
-`cleanup` degrades when GitHub is unreachable (`fetch=failed`, `gh=gh-error`) and still classifies
+`cleanup` degrades when GitHub is unreachable (`fetch=failed`, and `gh=gh-unauthenticated` or
+`gh=gh-error` depending on where the request died) and still classifies
 from git; `pr` cannot open a PR without `api.github.com`.
 
 ### Gotchas

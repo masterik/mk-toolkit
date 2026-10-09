@@ -35,7 +35,9 @@ once, with the safety rules attached, and moves the deterministic parts into a t
 - **Composition over replacement.** Orchestrate `git`, `gh`, `wt`, CodeRabbit and Codex; never
   reimplement them. The binary reports and runs; it never integrates — no staging, merging,
   pushing or editing your files. Its writes are bounded to its own state (run directories, the gate
-  ledger, the worklog) and to `.mkit/config.toml`, which only `mkit init` writes.
+  ledger, the worklog), one `info/exclude` line that keeps `.mkit/` ignored, remote-tracking refs
+  (`git fetch --prune`), and `.mkit/config.toml`, which only `mkit init` writes. The one exception
+  is `mkit cache prune --apply`, which deletes stale Claude Code / Codex storage on request.
 - **A recorded fact is an input, never a permission.** The gate ledger and the worklog remember
   what earlier runs proved. A skill may use that to skip work, but always says so (`cached`), and
   never treats a missing record as a reason to stop.
@@ -116,7 +118,10 @@ Three write locations, chosen by lifetime, and nowhere else:
 | `<toplevel>/.mkit/` | run directories, the gate ledger (`gate.jsonl`), the per-branch worklog — git-ignored; plus `config.toml`, committed | across steps and sessions |
 | `~/.mkit/` (`MKIT_HOME`) | user-scoped state — today only the `sandbox-audit` ledger | across repos |
 
-Never `~/.claude` (sandbox-protected, so no allowlist entry can open it), never the user's own files.
+Plus one line in the common dir's `info/exclude`, so `.mkit/` stays ignored. State is never kept in
+`~/.claude` (sandbox-protected, so no allowlist entry can open it) or the user's own files;
+`mkit cache prune --apply` is the one command that reaches into `~/.claude` and `~/.codex`, and only
+to delete stale storage you asked it to.
 
 ## Workflow model
 
@@ -129,7 +134,7 @@ cleanup · sandbox-audit · explain · recap   (outside the line)
 
 The arrows are the common path, never a required one. Real work enters in the middle — a bug fix
 starts at `implement`, someone else's branch starts at `review`, most changes are just `commit`.
-The **worklog** (`.mkit/worklog/<branch>.jsonl`) is what makes that cheap: each step appends what it
+The **worklog** (one file per branch under `.mkit/worklog/`) is what makes that cheap: each step appends what it
 concluded and over which content, so the next step can reuse a goal or a gate result instead of
 re-deriving it.
 
