@@ -33,7 +33,9 @@ once, with the safety rules attached, and moves the deterministic parts into a t
   gate, classifies branches, does arithmetic over review findings. Where the line is unclear the
   binary reports candidates and the skill picks.
 - **Composition over replacement.** Orchestrate `git`, `gh`, `wt`, CodeRabbit and Codex; never
-  reimplement them. The binary reports and runs — it never stages, merges, pushes or edits.
+  reimplement them. The binary reports and runs; it never integrates — no staging, merging,
+  pushing or editing your files. Its writes are bounded to its own state (run directories, the gate
+  ledger, the worklog) and to `.mkit/config.toml`, which only `mkit init` writes.
 - **A recorded fact is an input, never a permission.** The gate ledger and the worklog remember
   what earlier runs proved. A skill may use that to skip work, but always says so (`cached`), and
   never treats a missing record as a reason to stop.
@@ -99,8 +101,9 @@ lenses, finding triage, agent delegation, output discipline, plain-English writi
  git · gh · wt · coderabbit · codex
 ```
 
-Every skill but `explain` starts with `mkit facts <skill>`; a missing or too-old binary stops it
-with a `brew` remedy. There is no version range on either side — a subcommand that doesn't exist
+Every repo-scoped skill starts with `mkit facts <skill>` — `review` first probes `mkit findings`,
+`sandbox-audit` (user-wide) starts with `mkit audit sandbox` instead, and `explain` calls no `mkit`
+at all. A missing or too-old binary stops the skill with a `brew` remedy. There is no version range on either side — a subcommand that doesn't exist
 *is* the too-old signal.
 
 ## State

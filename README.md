@@ -59,7 +59,8 @@ brew install masterik/tap/mkit
 /plugin install mkit@masterik
 ```
 
-Both are required — the plugin is Markdown and its skills call the binary. Then run `mkit doctor`.
+Both are required — the plugin is Markdown, and every skill but `explain` calls the binary. Then run
+`mkit doctor`.
 `gh` and `wt` are recommended; sandbox setup, the Gatekeeper workaround for the unsigned binary,
 and a permission allowlist are in [Prerequisites](docs/prerequisites.md).
 

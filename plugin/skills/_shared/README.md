@@ -6,7 +6,7 @@ The **shared library** for mkit's skills. **Not a triggerable skill** — no `SK
 
 The workflow is seven steps plus `cleanup`; `brainstorm`, `spec` and `implement` are designed and
 not yet built ([`backlog.md`](../../../docs/backlog.md), M8), so the table below lists the step
-skills that exist today. `references/workflow-contract.md` is what all seven are held to.
+skills that exist today, plus `cleanup`. `references/workflow-contract.md` is what all seven are held to.
 
 > Keep those `../_shared/references/…` links intact — sibling-relative paths are what make the bundle
 > portable if it is lifted into another repo.

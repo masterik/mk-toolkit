@@ -58,9 +58,10 @@ says so; it never reports a partial review as clean.
 
 ## Optional — repo config
 
-`mkit init` writes a committed `.mkit/config.toml` pinning what discovery can't establish: spec
-store, commit scopes and subject length, reviewers, review mode, merge style, gate commands, and
-branches `cleanup` must keep. On a terminal it's a short wizard (Spec → Commit → Review → Merge);
+`mkit init` writes a committed `.mkit/config.toml`: it pins what it discovers (gate commands, commit
+scopes, spec store, merge style) so runs stop re-discovering, plus what discovery can't establish
+(subject length, review mode, branches `cleanup` must keep). Reviewers are the exception — CODEOWNERS
+stays discovered per path unless you pin a list. On a terminal it's a short wizard (Spec → Commit → Review → Merge);
 every field is also a flag. Nothing requires it — every skill runs with no config
 ([ADR 0001](adr/0001-per-repo-config-and-init.md)). `mkit repo profile` shows what's discovered vs
 pinned.
@@ -144,7 +145,7 @@ export GOCACHE="$TMPDIR/go-build" GOMODCACHE="$TMPDIR/go-mod" GOLANGCI_LINT_CACH
 
 | Skill / command | Hosts |
 | --- | --- |
-| `pr`, `cleanup`, `mkit branch status`, `mkit facts --gh` | `api.github.com`, `github.com` |
+| `pr`, `cleanup`, `mkit branch status`, `mkit facts <skill> --gh` | `api.github.com`, `github.com` |
 | `pr`, `finish`, `cleanup` | your remote's host |
 | `review`'s external reviewers | whatever `codex` / `coderabbit` call |
 

@@ -13,8 +13,8 @@ open work is tracked in [GitHub Issues](https://github.com/masterik/mk-toolkit/i
   on Linux anyway. Adding a platform is a `goos` line plus a distribution channel — done when
   someone needs it, not carried untested.
 - **Two channels.** Homebrew ships the binary only; the GitHub marketplace ships the plugin
-  ([ADR 0003](adr/0003-two-distribution-channels.md)). No installer command: adding a marketplace
-  and a cask are two lines a human runs once.
+  ([ADR 0003](adr/0003-two-distribution-channels.md)). No installer command: `brew install` for the
+  binary, and adding the marketplace plus enabling the plugin, are steps a human runs once.
 - **Presence, not versions.** Neither side declares a compatible range. A skill calls the
   subcommand it needs; `unknown command` is the too-old signal, answered with `brew upgrade mkit`.
 
@@ -25,10 +25,13 @@ Breaking one is a design error, not a trade-off.
 1. **Layering.** `internal/core` returns data and never prints or assumes a terminal; `internal/cli`
    formats; `internal/tui` renders. No logic in a Bubble Tea `Update`.
 2. **No TUI off a TTY.** stdout not a terminal → no ANSI, no alt-screen. Skills pipe this binary.
-3. **Every command reachable non-interactively**, and **`--json` on every command.** The
-   fact-reporting commands' `key=value` text is what skills parse today; `--json` is where they
-   migrate.
-4. **Commands report and run.** No staging, merging, pushing or editing the user's files.
+3. **Every command reachable non-interactively**, and **`--json` on every command.** Two contracts
+   are live: skills parse the fact-reporting commands' `key=value` text, and `review` reads
+   `mkit findings --json`. `--json` is where the rest migrate.
+4. **Commands report and run — they never integrate.** No staging, merging, pushing or editing the
+   user's files. Their writes are bounded: `scratch prune` removes old run directories, `gate run`
+   appends to `.mkit/gate.jsonl`, `worklog append` to the worklog, `branch status` runs
+   `git fetch --prune`, and `init` writes `.mkit/config.toml` — the one command that writes config.
 5. **Judgement stays in Markdown.** The binary owns mechanical invariants only; where the line is
    unclear it reports candidates and the skill chooses.
 6. **Skills stay as files** — Markdown in this repo, served from the marketplace checkout, never
