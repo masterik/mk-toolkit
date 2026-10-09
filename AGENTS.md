@@ -2,31 +2,23 @@
 
 This file provides guidance to agents when working with code in this repository.
 
-**mkit** — a **Go binary (`mkit`) plus a Claude Code plugin**: the binary ships by Homebrew
-(`brew install masterik/tap/mkit`), the plugin from the GitHub marketplace (see *The plugin payload*).
-The plugin packages the agent coding-workflow skills plus the shared `_shared/references/`
-bundle; the binary owns every mechanical step those skills take. Composition over replacement:
-the skills orchestrate `git`, `gh`, `wt`, and code-review tools — no new git logic.
+**mkit** — a personal toolkit for agentic coding: a **Go binary (`mkit`) plus a Claude Code plugin**.
+The binary ships by Homebrew (`brew install masterik/tap/mkit`), the plugin from the GitHub
+marketplace (see *The plugin payload*). The plugin packages the skills plus the shared
+`_shared/references/` bundle; the binary owns the mechanical invariants those skills rely on.
+Composition over replacement: the skills orchestrate `git`, `gh`, `wt`, and code-review tools — no
+new git logic.
 
-**Current phase: M8** (`mkit plan` + the `spec` and `implement` skills); the Go port finished with M5. M1 (scaffold + release chain) done at `v0.12.0`; M2
-(`mkit cache prune`) done; **M3 withdrawn** ([ADR 0003](docs/adr/0003-two-distribution-channels.md));
-**M7 (`mkit repo profile`/`init`/`doctor`) done** — repo config is `<toplevel>/.mkit/config.toml`,
-committed ([ADR 0001's config-path amendment](docs/adr/0001-per-repo-config-and-init.md#amendment-the-config-path)).
-**M4 (`mkit findings`) done** — `internal/core/findings/` + `internal/cli/findings.go`.
-**M6 (`mkit worklog`) done** — the per-branch worklog under `<toplevel>/.mkit/worklog/`, written
-by `commit`, `review`, `pr` and `finish`, and read by those and `recap`; what it reports is **one fewer input, never a stop**.
-**M5 (the `jq` consumers) done** — `mkit facts`, `mkit gate detect|run`, `mkit branch status` and
-`mkit scratch open|prune` replaced the last five scripts, and **the payload is Markdown only**: no
-`plugin/scripts/`, no `lib/common.sh`, no `tests/`. That makes `mkit` a **hard requirement for
-every skill but `explain`** — each one's first call is `mkit facts <skill>` (`review` alone runs a one-line
-compatibility probe before it, because its later steps need `mkit findings` too; `sandbox-audit`,
-which is not repo-scoped and opens no run directory, starts with `mkit audit sandbox` instead; `explain`,
-which does no mechanical work, makes no `mkit` call at all), and a
-binary that is absent *or too old* is its stop condition with a `brew` remedy: `command not found` and
-`unknown command "facts"` are the same answer. Presence only, no declared minimum on either side: a subcommand
-that does not exist *is* the too-old signal. Milestones and the full invariant list:
-[`backlog.md`](docs/backlog.md). Direction and rationale: [`concept.md`](docs/concept.md) — the
-place for *why*, so this file can stay operative.
+**Next: M8** (`mkit plan` + the `spec` and `implement` skills); M1–M7 are done (M3 withdrawn). The
+payload is **Markdown only** — no scripts, no hooks, no `tests/`. `mkit` is a **hard requirement for
+every skill but `explain`**: each one's first call is `mkit facts <skill>` (`review` first probes
+`mkit findings`; `sandbox-audit`, not repo-scoped, starts with `mkit audit sandbox`; `explain` makes no
+`mkit` call). A binary that is absent *or too old* is the stop condition, with a `brew` remedy:
+`command not found` and `unknown command "facts"` are the same answer. Presence only, no declared
+minimum on either side. The per-branch worklog (`<toplevel>/.mkit/worklog/`) is written by `commit`,
+`review`, `pr` and `finish` and read by those and `recap`; what it reports is **one fewer input, never
+a stop**. Milestones and invariants: [`backlog.md`](docs/backlog.md). Direction and rationale:
+[`concept.md`](docs/concept.md) — the place for *why*, so this file can stay operative.
 
 ## Rules
 

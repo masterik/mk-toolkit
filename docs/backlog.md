@@ -1,516 +1,106 @@
 # mkit — Backlog
 
-Migration from a shell-script plugin to a **Go binary + plugin**, over **two deliberately
-independent distribution channels**: the binary via Homebrew, the plugin payload via the GitHub
-marketplace ([ADR 0003](adr/0003-two-distribution-channels.md)).
-Direction and rationale: [`concept.md`](concept.md). This file is the ordered work list.
-Researched but unscheduled ideas — deliberately off this list —
-live in [`ideas/`](ideas/README.md).
+The ordered work list and the rules every change must hold. Direction and rationale:
+[`concept.md`](concept.md). Researched-but-unscheduled ideas live in [`ideas/`](ideas/README.md);
+open work is tracked in [GitHub Issues](https://github.com/masterik/mk-toolkit/issues).
 
-## Decision
-- **Language: Go.** Chosen for a single static binary with no C toolchain, a stdlib that covers
-  the entire workload (`os/exec`, `encoding/json`, `crypto/sha256`, `filepath.WalkDir`), the Charm
-  TUI stack, and GoReleaser's Homebrew tap generation. Rejected: Rust (slower edit→test loop, for
-  no gain on subprocess-orchestration work), Zig (pre-1.0, breaking releases, no TUI ecosystem).
-  Cross-compilation is a property Go gives away, **not** a requirement here — see the platform
-  decision below.
-- **Platform: macOS only.** `.goreleaser.yaml` builds `darwin` × amd64/arm64 and nothing else.
-  This matches the script layer rather than diverging from it, and the tap publishes a *cask*,
-  which Homebrew refuses to install on Linux — so a linux archive would have had no `brew` path
-  to reach a user through. Adding a `goos` back is one line whenever someone needs it; carrying
-  an untested OS in the matrix is a support claim nobody verifies.
-- **One binary, subcommand tree.** `mkit cache prune`, `mkit gate run`, `mkit status`.
-- **Dual front-end.** Rich TUI when interactive; flags + `--json` when driven by a skill.
-- **Two channels; Homebrew carries only the binary.** The plugin payload ships from the GitHub
-  marketplace — `/plugin marketplace add masterik/mk-toolkit`, which works today — and the cask
-  installs one executable and nothing else. This **dissolved** both packaging blockers M3 was
-  stuck on rather than solving them: no `files:` entry in the archive, no cask-vs-formula
-  rework, no version-pinned Caskroom path to register, and no write to
-  `~/.claude/settings.json`, which is inside the sandbox's protected region *and* explicitly
-  denied, so no allowlist entry could ever have lifted it. The cost is that the two artifacts
-  version independently — see M4, which settled what that costs: presence only, no declared
-  range on either side
-  ([ADR 0003](adr/0003-two-distribution-channels.md)).
-- **Installation is manual in this phase.** No `mkit install`, and no `install.sh`. Adding a
-  marketplace and enabling a plugin are two lines a human runs once; a command that wraps them
-  buys nothing while it cannot write the file it would need to write. Silencing the
-  `SessionStart` hook is likewise manual — the tombstone is a file, and creating it is the whole
-  operation. `install`/`uninstall` get re-specified later, from whatever the binary actually
-  needs by then rather than from what the shell script happened to do.
+## Decisions
+
+- **Go, one binary, subcommand tree.** Single static binary, a stdlib that covers the workload
+  (`os/exec`, `encoding/json`, `crypto/sha256`), the Charm TUI stack, GoReleaser's Homebrew
+  support. Rust and Zig were considered and rejected for this kind of subprocess orchestration.
+- **macOS only.** `.goreleaser.yaml` builds darwin amd64 + arm64; the Homebrew cask can't install
+  on Linux anyway. Adding a platform is a `goos` line plus a distribution channel — done when
+  someone needs it, not carried untested.
+- **Two channels.** Homebrew ships the binary only; the GitHub marketplace ships the plugin
+  ([ADR 0003](adr/0003-two-distribution-channels.md)). No installer command: adding a marketplace
+  and a cask are two lines a human runs once.
+- **Presence, not versions.** Neither side declares a compatible range. A skill calls the
+  subcommand it needs; `unknown command` is the too-old signal, answered with `brew upgrade mkit`.
 
 ## Invariants
-Rules that must hold through every milestone. A change that breaks one is a design error,
-not a trade-off.
 
-1. **Layering.** `internal/core` returns data and never prints or assumes a terminal. `cmd/`
-   formats. `internal/tui/` renders. Both front-ends stay thin; logic never lives in a
-   Bubble Tea `Update`.
-2. **No TUI off a TTY.** stdout not a terminal → non-interactive, no ANSI, no alt-screen.
-   Skills shell out to this binary; a TUI on a pipe is corruption, not cosmetics.
-3. **Every command reachable non-interactively.** Anything the TUI can do, flags can do.
-4. **`--json` on every command.** Present output stays the default human form; `--json` is
-   the skill-facing contract, replacing today's ad-hoc `key=value` parsing.
-5. **Scripts still report and run.** No staging, merging, pushing or editing — carried over
-   from the shell layer unchanged.
-6. **Judgement stays in Markdown.** The binary owns mechanical invariants only. Where the
-   line is unclear, report candidates and let the skill choose.
-7. **Skills stay as files.** Authored as Markdown in this repo and served from the marketplace
-   checkout Claude Code maintains. Not embedded via `embed.FS`, and not carried by the cask —
-   they must stay diffable and reviewable, and the binary must never be what makes a skill
-   available.
-8. **Every workflow step is entry-capable.** Any of the seven runs as the only thing in a session,
-   in any order, with any subset of the others skipped. A step discovers what it needs, derives the
-   thin version of what is missing, names what it assumed, and completes. It never sends the user
-   to another step, and never runs one downstream of itself. Full contract:
-   [`workflow-contract.md`](../plugin/skills/_shared/references/workflow-contract.md).
-9. **State is repo-scoped.** `<toplevel>/.mkit/` by default — run directories, the gate ledger, the
-   worklog; inside the working directory, so the sandbox, the auto-mode classifier and the
-   worktree-isolation guard all permit it with no configuration. One file in there is **committed**
-   and not scratch: `config.toml`, the repo config, which is why the ignore rule is the pair
-   `.mkit/*` + `!.mkit/config.toml` rather than a directory-only line. User scope (`~/.mkit/`, overridable
-   with `MKIT_HOME`) holds only what must outlive every repo — the binary writes nothing there today: its two files, the
-   hook tombstone and its once-per-tool messages, went with the hook in 0.15.0, and the one file in it
-   is the `sandbox-audit` skill's ledger, written by the agent. Not `~/.claude/…`: that is a *protected* region where an allowlist entry
-   is inert, so it is a path no remedy sentence can point at
+Breaking one is a design error, not a trade-off.
+
+1. **Layering.** `internal/core` returns data and never prints or assumes a terminal; `internal/cli`
+   formats; `internal/tui` renders. No logic in a Bubble Tea `Update`.
+2. **No TUI off a TTY.** stdout not a terminal → no ANSI, no alt-screen. Skills pipe this binary.
+3. **Every command reachable non-interactively**, and **`--json` on every command.** The
+   fact-reporting commands' `key=value` text is what skills parse today; `--json` is where they
+   migrate.
+4. **Commands report and run.** No staging, merging, pushing or editing the user's files.
+5. **Judgement stays in Markdown.** The binary owns mechanical invariants only; where the line is
+   unclear it reports candidates and the skill chooses.
+6. **Skills stay as files** — Markdown in this repo, served from the marketplace checkout, never
+   embedded in the binary.
+7. **Every workflow step is entry-capable** — runs alone, in any order, derives what's missing,
+   names what it assumed, never sends the user to another step
+   ([`workflow-contract.md`](../plugin/skills/_shared/references/workflow-contract.md)).
+8. **Three write locations, by lifetime:** `$TMPDIR`, `<toplevel>/.mkit/`, `~/.mkit/` — plus one
+   named exception, the common dir's `info/exclude`, so `.mkit/` stays ignored. Never `~/.claude`,
+   never the user's files. Asserted by `TestWriteSitesAreOnTheReviewedAllowlist`
    ([ADR 0002](adr/0002-state-locations-under-a-sandbox.md)).
-10. **Sandbox degradation is named, never hit.** A command that would write a sandbox-denied path
-    reports which path *and a remedy that works*, rather than surfacing `Operation not permitted`.
-    `mkit doctor` reports the writable set as a first-class fact. Same rule as a missing
-    prerequisite, one axis over.
-11. **Ephemeral files go to `$TMPDIR`, always with an explicit `mktemp` template.** The division is
-    by lifetime, not by caller: a file that dies with the command uses `$TMPDIR`, a file a later
-    step or a later session reads uses the run directory. The bare and `-t` forms of `mktemp` are
-    banned outright — on macOS they resolve the Darwin per-user temp directory and *ignore*
-    `$TMPDIR`, so they are unfixable by environment. Asserted statically over the payload; it has no
-    behavioral seam, since a test cannot create an OS sandbox.
-12. **The writable set is a property of the payload.** No shipped script writes outside the run
-    directory, `$TMPDIR` and the user-scoped root — plus one named exception, the common dir's
-    `info/exclude`, one line, so `.mkit/` stays out of `git status`. Nothing is ever written to the
-    user's own files: `.mkit/` is inside a working tree by design, and is the only thing that is.
-    Asserted statically, by shape: every write target is a shell parameter on a reviewed allowlist,
-    never a literal path.
-13. **Config is an input, never a permission.** Every command and every step runs with no config
-    present. `mkit init` removes repeated discovery and captures what inspection cannot establish;
-    it never becomes a precondition, and a pinned value cheap to verify gets verified
-    ([ADR 0001](adr/0001-per-repo-config-and-init.md)).
+9. **Degradation is named, never hit.** A path the sandbox would deny is reported with a remedy
+   that works, or the command says it is human-run. Each such sentence has exactly one producer.
+10. **Config is an input, never a permission.** Everything runs with no `.mkit/config.toml`; a
+    problem in it is reported, never fatal ([ADR 0001](adr/0001-per-repo-config-and-init.md)).
 
-## Near-term, outside the port line
+## Next
 
-None of these is a port, and none waits on a milestone. The first two follow from
-[ADR 0002](adr/0002-state-locations-under-a-sandbox.md) landing and
-[ADR 0003](adr/0003-two-distribution-channels.md) being taken; the third follows from M7 landing
-a config nothing reads.
+### M8 — `mkit plan` + the `spec` and `implement` skills ([#9](https://github.com/masterik/mk-toolkit/issues/9))
 
-- ~~**Delete `plugin/install.sh`.**~~ **Done (0.15.0)**, together with the `SessionStart` hook —
-  `hooks/hooks.json`, `scripts/hooks/session-bootstrap.sh`, both `.bats` suites, and the
-  `mkit_prereq_rows` / `mkit_state_*` / `mkit_json_escape` helpers in `lib/common.sh`. Prerequisite
-  reporting moves to the binary rather than being reimplemented in shell.
-  - **The tombstone is gone, not manual.** With no hook to silence, `~/.mkit/bootstrap.disabled`
-    signals nothing; `prerequisites.md` says to delete a leftover one.
-  - **Unprompted prerequisite detection stays lost after M7.** A missing tool surfaces only as a
-    thinner `mkit facts` block or a `pr=gh-missing` annotation until someone runs `doctor`.
-    `doctor` restored the human-run report and cannot restore the unprompted one, and cannot
-    report a missing `mkit` at all — see the note under "Staying in bash, permanently" below. Do
-    not re-add a shell reporter for either gap.
-  - **`mkit facts`' `user_dir_writable=` survives**, so no skill lost information. `~/.mkit/` is
-    empty but still the declared home for user-scoped state.
+The workflow's front half. `brainstorm` needs no binary support and can land any time.
 
-- **Giving the config its consumers.** M7 landed `mkit init`, `config.toml` and
-  `mkit repo profile --json`, and nothing read the answer: no skill called `repo profile`, and
-  `mkit facts` reported `config=` and `config_state=` but no pinned *value*. Of the five sections
-  M7's `init` wrote, `spec.*` gets its consumer at M8 and `gate.commands` got one at M5 (both
-  below); the other three were written and read by nobody. Four items, none of them a port, all
-  independent of the port line — **all four are done**: config validation (issue #19), `[cleanup]
-  keep` (issue #20, a sixth section), `commit.scopes` + `review.reviewers` (issue #18), and
-  `merge.style` → `finish` (issue #17). `commit`, `pr` and `finish` are the first *skills* to call
-  `repo profile`, and `mkit branch status` the first command outside `repo profile` and
-  `gate detect` to read a pinned value:
+- `mkit plan frontier|blocked|validate --json` — pure arithmetic over a task graph: unblocked
+  slices, what blocks the rest, cycles, dangling edges. Never picks or sizes a slice.
+- `spec` — synthesise what was discussed into a spec plus a task graph; never re-interview.
+  Publish to the store the repo profile names, falling back to the run directory.
+- `implement` — work the frontier one slice at a time, full gate between slices (the ledger makes
+  unchanged steps `cached`). Sequential in place by default; parallel worktrees behind a pinned
+  `[implement] worktrees = true`.
 
-  - ~~**`merge.style` → `finish`.**~~ **Done** (issue #17). `finish` step 4 opens with `mkit repo profile --json` and
-    takes `merge_style` on `pinned` or `discovered` instead of asking; `unavailable`, or a binary
-    too old to know `repo`, falls through to exactly the old question — the profile is **optional
-    enrichment, never a prerequisite** (invariant 8), so it is not probed at step 0 and is not
-    mentioned when it has nothing to say. A pinned style the remote does not allow is **reported,
-    never silently substituted** (invariant 13). The `wt merge` question is decided in
-    `_shared/references/worktree.md`, "A pinned merge style vs. worktrunk's own config": the pin
-    wins wherever a flag can carry it (`rebase` → `--no-squash`, `merge` → `--no-squash --no-ff`),
-    and `wt merge`'s flags being **negative only** — with `--config-set` swallowing a mistyped key
-    silently, so it is no forcing device — means a repo pinned to `squash` against a user's
-    `merge.squash = false` is reported rather than forced. `cleanup` was checked and left alone: a
-    pinned style says *why* a merged branch's SHAs differ, never *whether* the PR merged, so
-    `merged-pr` still needs the same `gh` call and the same `headRefOid` check.
-  - ~~**`commit.scopes` + `review.reviewers` → `commit` and `pr`.**~~ **Done** (issue #18). Both
-    skills read `mkit repo profile --json` in their step-0 block and name a pinned value as pinned
-    (workflow-contract rule 3); `pr` step 6 takes a pinned reviewer list **instead of** the
-    `CODEOWNERS` read, and keeps that read for the `discovered` case, where the profile's
-    pattern-less owner list is the worse answer. **The decision it carried, and settled:** the
-    profile is *optional enrichment*, not a prerequisite. M4 made `mkit` a hard requirement for
-    `review` because the arithmetic has no fallback — here the fallback is exactly today's
-    discovery, so no step-0 presence probe was added, nothing stops on it, and neither skill
-    mentions the binary when it has nothing to say. One thing it does say: a pin that went
-    nowhere — a `config_problems` entry, or an `unavailable` whose cause names the config file —
-    is surfaced in one line, because a rejected pin is not the same answer as no answer, and
-    making that visible is what #19 exists for.
+**Done when** a spec written by `spec` can be implemented by `implement` in a fresh session from
+the artifact and the worklog alone.
 
-    Two keys landed with it, both **not discoverable**, which is the schema's own filter:
-    `[commit] subject_max` (the other half of the line `commit` already promised to honour —
-    history shows what past subjects *happened to be*, not what the repo requires) and
-    `[review] mode` (`full` | `quick`). `mode` was folded in rather than split out because it cost
-    exactly one key: it joins `ReviewModes` beside `SpecStores`/`MergeStyles`, is validated by
-    #19's existing machinery, and `review` step 1 reads it as a default that `$ARGUMENTS` still
-    overrides. `subject_max` is an `*int`, so `subject_max = 0` is distinguishable from absent and
-    reported as an invalid value rather than silently read as unset; there is **no upper bound**,
-    because 500 is a silly limit but an operable one, and refusing it would pin a house style into
-    the schema instead of catching a mistake.
-  - ~~**Config validation.**~~ **Done** (issue #19). `repoconfig.Load` decodes strictly and
-    collects *every* unknown key, validates `spec.store` and `merge.style` against the sets
-    `mkit init` now consumes from `repoconfig` rather than keeping its own copy, and clears a
-    rejected value while recording a `repoconfig.Problem`. Nothing it finds fails a command —
-    config is an input, never a permission — so `repo profile` reports the affected value as
-    `unavailable` with a cause naming the key and the file instead of falling through to
-    `discovered`, and `mkit doctor` warns once per problem with exit status still 0. **A
-    `version` higher than `repoconfig.Version` is reported, never refused**: the reasoning is in
-    `Version`'s doc comment.
-  - ~~**`[cleanup] keep`.**~~ **Done** (issue #20). The one candidate that survived the schema's own
-    filter — *pin only what inspection cannot establish*: branch protection is a network call on an
-    otherwise local classifier, and being wrong here **deletes a branch**. `branchstatus.ProtectedSet`
-    is the one producer of the kept set, unioning the pinned names with the default branch and a
-    develop-like one; **the default branch is in it whether or not the list names it**, because a
-    keep list that omits it is a mistake, not an instruction. Names, not patterns. A pinned name
-    with no local branch is reported as `keep_unknown=`, never refused — a keep list travels with
-    the repo. `mkit branch status` surfaces `protected=`/`keep=`/`keep_unknown=` (and the same in
-    `--json`), `mkit repo profile` tags the value `pinned`/`discovered`, and `cleanup` reads
-    `protected=` as given rather than re-deriving it. No enumeration, so `repoconfig.Allowed`
-    returns nil for it and #19's validation has nothing to check beyond the strict decode that
-    already catches a misspelled table. Deliberately *not* pinned alongside it: the base branch
-    (`origin/HEAD` answers it), PR labels and commit types — a pinned copy of a discoverable fact
-    is a staleness surface bought for nothing.
+### Also open
 
-## Milestones
+- **Worktree helpers in the binary** — [ADR 0004](adr/0004-worktree-helpers-in-the-binary.md),
+  [#37](https://github.com/masterik/mk-toolkit/issues/37).
+- **Sign and notarize release binaries** — [#28](https://github.com/masterik/mk-toolkit/issues/28);
+  until then Gatekeeper quarantines every download ([workaround](prerequisites.md#gatekeeper-blocks-the-binary)).
 
-**Order.** `mkit init` was the priority, so **M7 went first**, ahead of the remaining ports; it is
-done, and **M4 followed**, then **M6** — the worklog is what the front half will read, so it was
-worth having before any of the new skills exist — then **M5**, which finished the port. **M8 is
-next.** M3 is withdrawn. The M-numbers are stable
-identities referenced from `concept.md` and `AGENTS.md`, so nothing is renumbered when the order
-changes.
+## Later
 
-### M1 — Repo reorg + scaffold + release chain — done
-Repo renamed to `mk-toolkit`, tree reorganized (payload under `plugin/`, docs under `docs/`),
-Go module (`github.com/masterik/mk-toolkit`), cobra root with the front-end contract, GoReleaser
-config, `masterik/homebrew-tap`. No behavior beyond `mkit version`.
-Step-by-step plan (local, gitignored): `.claude/plans/2026-08-26-mkit-m1-go-scaffold.md`.
-Tagged `v0.12.0` → GitHub Release with an archive per `goos`/`goarch` in the config, checksums,
-and an auto-committed Homebrew cask formula (`brews` is deprecated in GoReleaser v2; used
-`homebrew_casks` instead). `brew install masterik/tap/mkit` verified end to end. The repo had to
-be flipped from private to public — an unauthenticated `brew install` can't reach private-repo
-release assets.
+- `mkit stage hunks` — replace `commit`'s Markdown patch-staging recipe: cut a per-file diff, drop
+  named hunks, `git apply --cached`, verify ([#11](https://github.com/masterik/mk-toolkit/issues/11)).
+- `mkit session show` — read earlier transcript turns back so `explain` can cover compacted context.
+- TUIs for `cleanup` and `review` ([#12](https://github.com/masterik/mk-toolkit/issues/12),
+  [#13](https://github.com/masterik/mk-toolkit/issues/13)).
+- `install`/`uninstall`, only if a job appears that manual steps can't do
+  ([#10](https://github.com/masterik/mk-toolkit/issues/10)).
+- Other agents (Codex, …) and other platforms ([#14](https://github.com/masterik/mk-toolkit/issues/14),
+  [#15](https://github.com/masterik/mk-toolkit/issues/15)).
 
-### M2 — `mkit cache prune` — done
-Ported `tools/storage-prune.sh` to `internal/core/cache/` + `internal/cli/cache*.go` +
-`internal/tui/cacheprune/`. Eliminates the per-file `stat` and per-category `find` *subprocess
-forks* the shell version paid for `sum_size`/`prune_files`/`prune_stale_dirs` — not a syscall
-saving: on macOS `readdir` carries no size, so `DirEntry.Info()` still issues an `lstat` per file,
-same as the script's `stat -f%z`. The win is process elimination.
-Differential check against the script (`.claude/plans/2026-08-27-mkit-m2-storage-prune.md`, step
-4) showed a clean diff except at the retention-boundary days, exactly as the plan's single-cutoff
-deviation (mtime strictly before `now - N*24h`, vs. the script's `-mtime +N`/`-mtime -N` split)
-predicts.
-**Done when:** dry-run output matches the shell version's categories and totals outside the
-boundary case; `--apply` deletes the same set; a TUI mode offers a size-sorted tick-list before
-applying. All met.
+## Done
 
-### M3 — withdrawn
+Milestone numbers are stable identities referenced from code comments and `AGENTS.md`. Details
+live in the linked issues, the [Releases](https://github.com/masterik/mk-toolkit/releases) and
+[`CHANGELOG.md`](../CHANGELOG.md) (frozen at 0.19.0).
 
-Was `mkit install` / `status` / `uninstall`, and it never started. It sat blocked on two
-packaging gaps found by inspecting the shipped `v0.12.0` cask — the payload was not in the
-archive, and a cask has no stable path to register (Caskroom is version-pinned and there is no
-`opt/` symlink). [ADR 0003](adr/0003-two-distribution-channels.md) removed the premise instead
-of the blockers: the plugin ships from GitHub, so there is no Homebrew-provided payload to
-register and no marketplace entry for a command to write.
+| | What | Notes |
+| --- | --- | --- |
+| M1 | Scaffold + release chain | Go module, cobra root, GoReleaser, Homebrew cask (`v0.12.0`). |
+| M2 | `mkit cache prune` | Ported from shell; TUI tick-list on `--apply`. |
+| M3 | ~~`install`/`status`/`uninstall`~~ | Withdrawn by [ADR 0003](adr/0003-two-distribution-channels.md); `status` folded into `doctor`. |
+| M4 | `mkit findings` ([#6](https://github.com/masterik/mk-toolkit/issues/6)) | Review arithmetic ported from JS; `review` stops without it. |
+| M5 | The `jq` consumers ([#7](https://github.com/masterik/mk-toolkit/issues/7)) | `facts`, `gate detect/run`, `branch status`, `scratch` — the payload became Markdown only. |
+| M6 | `mkit worklog` + workflow contract ([#8](https://github.com/masterik/mk-toolkit/issues/8)) | Per-branch record written by `commit`, `review`, `pr`, `finish`. |
+| M7 | `repo profile`, `init`, `doctor` ([#3](https://github.com/masterik/mk-toolkit/issues/3)) | Committed `.mkit/config.toml`; consumers added in #17–#20. |
+| — | `audit sandbox` + `sandbox-audit` skill ([#36](https://github.com/masterik/mk-toolkit/issues/36)) | |
+| — | `explain` + `recap` skills ([#43](https://github.com/masterik/mk-toolkit/issues/43)) | |
 
-What became of its three jobs:
+## Accepted gaps
 
-- **`install`** — nothing to do. Adding the marketplace and enabling the plugin is manual, and
-  `~/.claude/settings.json` is sandbox-denied besides.
-- **`status`** — folded into M7's `mkit doctor`, which was already specified to overlap it.
-- **`uninstall`** — nothing to undo. The tombstone existed only to silence the hook, and both
-  are gone (0.15.0).
-
-Re-specified later if the binary turns out to need either verb (see Later). Do not resurrect
-this entry as written — it is scoped against a distribution model the project no longer has.
-
-### M4 — `mkit findings` — done
-Ported `scripts/findings.mjs` (507 lines) to `internal/core/findings/` + `internal/cli/findings.go`.
-Pure data transformation, so parity was testable: all 21 cases of `tests/findings.test.mjs` are now
-`go test` beside the package, plus the JS→Go parity hazards the port introduced —
-`Number(x.toFixed(2))` rounds half away from zero where Go's `FormatFloat` rounds half to even
-(`sim` is compared against `--sim` and `--band`, so 0.125 decides a merge), `sort.SliceStable`
-everywhere because ES2019's sort is stable and ids come from a sort with ties, `||=` rather than
-`??=` on `source`, and an order-preserving record type so an unknown field a reviewer added
-round-trips into `final.jsonl` instead of being dropped by a struct.
-
-**The version-skew guard, and why it points nowhere.** This is the milestone that created the
-problem: it is the first port that makes a *skill* call the binary, so a plugin from GitHub can
-now meet a binary from Homebrew too old for it, with no shared release to keep them in step. The
-answer is that **neither side declares a range**. No comparable tool does — worktrunk ships CLI
-and plugin from one repo and states compatibility in free-text frontmatter; coderabbit, the exact
-analogue, checks `coderabbit --version || echo NOT_INSTALLED` in Markdown at step 1 of its skill
-and carries its one per-feature minimum as untested prose; codegraph declares capability and names
-a fallback. So nothing compares versions at all — M5 deleted even the raw `mkit=`/`mkit_bin=`
-facts, since a binary reporting its own presence is not a fact — and the check is **presence
-only**: `review` runs `command -v mkit && mkit findings schema
---json` at step 0, where a subcommand that does not exist *is* the too-old signal. Absent or too
-old → **stop**, with `brew install masterik/tap/mkit` / `brew upgrade mkit`. That costs invariant 8
-for `review` specifically, deliberately: without the arithmetic there is no reconcile, no groups
-and no ids for verdicts to reference, and the alternative puts back into judgement exactly what
-this stage exists to remove.
-
-**The probe lives in the skill, not in `facts.sh`.** The guard's original home here — "named once
-by the `SessionStart` hook the way a missing `jq` already is" — stopped existing in 0.15.0 when the
-hook and all payload prerequisite reporting were deleted. M5 closed the other door: it folded
-`facts.sh` into the binary, after which the call that would report `mkit=<version>` *is* `mkit` and
-cannot report its own absence. A probe in the skill's own Markdown survives both.
-
-**Done:** `node` is gone from [`prerequisites.md`](prerequisites.md) and `tests/run.sh`; `review`
-consumes `mkit findings … --json` at steps 3, 4 and 6 with the merge and verdict judgement prose in
-Markdown; with `mkit` off `PATH`, `review` says so at step 0 with a remedy that works instead of
-failing at step 3.
-
-### M5 — the `jq` consumers — done
-Ported `gate-run.sh`, `gate-detect.sh`, `branch-scan.sh`, `facts.sh` and `run-open.sh` to
-`mkit gate run`, `mkit gate detect`, `mkit branch status`, `mkit facts` and `mkit scratch open|prune`.
-**Five scripts, not four**: `facts.sh` opened the run directory by calling `run-open.sh`, and a Go
-`facts` reaching back into the payload for a core operation is exactly the dependency this
-milestone existed to remove — so Go needed a run-directory implementation either way, and keeping
-the script would have been a second one. `lib/common.sh` and the whole `tests/` tree went with
-them. **The payload is Markdown**: `plugin/` ships no executable code at all.
-
-Deleted a whole family of degradation branches, because a binary is never half-capable:
-`pr=jq-missing`, `gate_cache=no-jq`, `gate_cache=no-hash`, `scripts_state=no-jq`, `gh=jq-missing`
-and `gh=no-cache`. `gate_cache=no-fingerprint` survives but narrows — with sha256 in process it can
-no longer mean an unwritable `$TMPDIR`, only "no work tree, or git plumbing failed", which is a
-cause with no remedy to offer rather than a missing tool. It also removed the last place a shell
-script could report the binary's absence — `facts.sh` *is* `mkit` now — which is why M4 put
-`review`'s presence probe in the skill's own Markdown rather than here, and why every other skill
-treats `command not found` from its own first call as its stop condition.
-
-**The fast tier was deleted, not pinned.** No skill has consumed `fast=` or `fast_cache=` since the
-tier was removed from `commit` and `review`, and this milestone's spec proposed keeping it as a
-pinned `[gate] fast = "…"`. That was rejected in implementation: it would have meant a new config
-key, a new `init` field and a new template block to keep an output alive that nothing reads, and
-the config pins only what inspection cannot establish. `alt_fast=` went with it.
-
-What the fast tier also carried was a repo's own documented `check:` target, and that did not die
-with it. When nothing is discovered the documented target **is** the chain
-(`full_source=documented`) — which is exactly what `${full:-${fast:-none}}` did before; when a
-chain was discovered it is reported beside it as `documented=` and never replaces it, because a
-`check:` that only lints would silently drop the repo's tests and build.
-
-**The `gate.commands` merge now exists once.** `mkit gate detect` reads `repoconfig` itself and
-tags every step `discovered` / `pinned` / `documented`, printed as `full_source=`, pipe-parallel
-with `full=`. `profile.buildGate` consumes that tagged result instead of running the script and
-merging a second time, and gate discovery no longer needs the payload at all.
-
-**`payload.bats` asserted two things with no behavioral seam** — the three-write-locations rule and
-the explicit-`mktemp`-template rule — and neither died with it. The second is moot in Go, and the
-first got a real seam for the first time: `internal/core/scratch`'s
-`TestWriteSitesAreOnTheReviewedAllowlist` scans `internal/` and `cmd/` for write calls and fails
-any file that is not on a list a human reviewed. That is the same trick `payload.bats` played, one
-layer in.
-
-**Done:** `jq`, `shasum` and `bats-core` are gone from [`prerequisites.md`](prerequisites.md);
-`just shtest` and `tests/` are gone; every skill's first call is `mkit facts <skill>`.
-
-### M6 — `mkit worklog` + the workflow contract — done
-The substrate the seven steps stand on, landed before any of the new skills, so the back half
-starts recording immediately and the front half has something to read.
-
-**One deviation from the plan:**
-[`workflow-contract.md`](../plugin/skills/_shared/references/workflow-contract.md) already shipped,
-ahead of the command it documents — so this milestone made the contract true rather than writing
-it. What was missing was the link from the four skills, and the command itself.
-- `mkit worklog show|append`, `--json`. `<toplevel>/.mkit/worklog/<branch>.jsonl`, append-only, rotated
-  like `gate.jsonl`, never committed, per-worktree. A record carries step, timestamp, content
-  fingerprint (reusing `mkit_tree_fingerprint`'s successor), artifact pointer, one-line gist, and
-  assumptions. Appending is bookkeeping; **reading it is judgement and stays in the skills.**
-  The fingerprint is reached through `pluginroot`'s `CommonFunc` — one producer until M5 ports it,
-  the same delegation M7 used for gate discovery. An unavailable one is `""` plus a named cause,
-  never a failed append.
-  `worklog append` **errors** on a failed write, unlike the gate ledger's best-effort appends: it is a
-  command someone invoked. The best-effort half lives in the skills, which append after their report
-  and treat a failure as one line of note — rule 4 says a recorded fact is an input, never a
-  permission. Exit codes follow M4's vocabulary rather than adding one: `usageErr` (2) for a
-  mistake at the command line — an unknown `--step`, a missing `--gist` — and a plain error (1) for
-  no work tree, which is the environment and is what `repo profile` already returns there.
-- Ship [`workflow-contract.md`](../plugin/skills/_shared/references/workflow-contract.md) and link
-  it from all four existing skills.
-- **The worklog calls are optional, and that is the difference from M4's probe.** M4 settled the
-  skew question as presence-only, and made `review` *stop* when `mkit findings` is missing, because
-  without the arithmetic there is no reconcile. Nothing here is load-bearing that way: a worklog
-  `mkit` cannot answer for costs a step one input and never stops it, which is rule 4 again — a
-  recorded fact is an input, never a permission. So these calls read `facts.sh`'s `mkit=` /
-  `mkit_bin=` starting facts and carry on either way, and no skill grew a second probe.
-- Retrofit the back half: `commit`, `review`, `pr`, `finish` each append one record and each read
-  the log for a goal before deriving one. `review`'s step 1 goal derivation is the model — it
-  already degrades correctly, so this generalises an existing behaviour rather than inventing one.
-**Done when:** a branch that ran `commit` then `review` shows both in `mkit worklog show --json`, and
-`review` invoked cold on that branch takes its goal from the log instead of the branch name. `show`
-reports the **current** tree's fingerprint in the same envelope — a record's fingerprint answers
-nothing on its own.
-`finish` is the exception worth naming: it destroys the log it would write to, so it records only
-where the run stopped short of the cleanup.
-
-### M7 — `mkit repo profile` + `init` + `doctor` — done
-The configuration surface ([ADR 0001](adr/0001-per-repo-config-and-init.md)). Independent of M6
-and of every remaining port, which is what let it come first: `mkit init` in each project was the
-priority, and nothing in the ports blocked it.
-
-**The blocking decision is settled:** repo config is `<toplevel>/.mkit/config.toml`, committed —
-one mkit directory in a working tree, not two. Recorded as
-[ADR 0001's config-path amendment](adr/0001-per-repo-config-and-init.md#amendment-the-config-path),
-which also records why a root-level `mkit.toml`, a path under `.claude/`, and `.agents/mkit.toml`
-were each rejected. The ignore rule becomes a **pair** — `.mkit/*` plus `!.mkit/config.toml` —
-because git cannot re-include a file whose parent directory is excluded.
-- `mkit repo profile --json` — gate commands, spec store, scopes, reviewers, merge style, each
-  tagged `discovered` or `pinned` (or `unavailable`, with a cause — an empty value is never
-  presented as an answer). Discovery reads `docs/agents/issue-tracker.md` where present; scopes
-  come from history, reviewers from CODEOWNERS, the spec ref from the remote.
-  **Gate discovery was delegated to `gate-detect.sh`, not reimplemented** — that script was the
-  single implementation of the invariant until M5 ported it. Since M5 it is `gate.Detect`, which
-  also owns the pinned-over-discovered merge, and `profile` consumes its tagged result.
-- `mkit init` — writes the pinned remainder, committed. Interactive TUI on a TTY, flags otherwise
-  (invariants 2 and 3). Writes nothing outside the repo. Refuses on a shadowed path rather than
-  writing a config that never travels.
-- `mkit doctor` — prerequisites, permission-allowlist gaps, hook registration, plugin enablement,
-  and the **sandbox writable set**. Reports; fixes nothing. Exit status stays 0 with findings: a
-  report that answered is a report that succeeded.
-  **It is the diagnostic surface, not an addition to one** — `install.sh --status` and the
-  `SessionStart` hook were both deleted in 0.15.0, so between then and this the only report of an
-  unwritable user directory was `mkit facts`' `user_dir_writable=` starting fact, and there was no
-  report of a missing tool at all. **It does not restore all of it**: `doctor` cannot run
-  unprompted at session start, and cannot report that `mkit` itself is absent. Both were the
-  hook's job; both remain accepted losses.
-- The degradation sentences keep exactly one producer. That was `lib/common.sh`, fetched through
-  `pluginroot.CommonFunc`, until M5 deleted the shell; the producer is now the Go package that owns
-  the surface — `scratch.UserDirWritable`/`UserDirRemedy` for the user directory,
-  `repoconfig.ShadowedRemedy` for a shadowed config. `doctor` and `facts` both read them; neither
-  words its own.
-**What it deliberately did not do, and now needs picking up:** it landed the config *surface* and
-no consumer. `spec.*` gets one at M8; `gate.commands` got one at M5; `merge.style`,
-`commit.scopes` and `review.reviewers` all got theirs from the config-consumers item above, which
-is where that gap was tracked and closed.
-
-**Done — all four met:** the committed config path is decided and recorded; `mkit doctor` names an
-unwritable `~/.mkit/` without failing, with a remedy naming **both** halves (create, then grant —
-the grant alone cannot create it); `mkit repo profile --json` distinguishes discovered from pinned
-on this repo; and `mkit init` is a no-op on a repo it has already configured.
-
-Two measured facts the implementation turned up, both now pinned by tests:
-- **`git check-ignore -v` exits 0 for a *negated* path too**, printing the `!` pattern that
-  re-included it. It answers "which rule decided this", not "is it ignored" — so truth comes from
-  `-q` and `-v` runs only afterwards, to name the file a remedy must edit. Reading truth off `-v`
-  reports every deliberately re-included file as excluded.
-- **`.gitignore` outranks the common dir's `info/exclude`.** A negation written into the exclude
-  cannot lift a `.mkit/` rule that lives in a committed `.gitignore`, which is why the remedy names
-  whichever file git actually reported.
-
-### M8 — `mkit plan` + the `spec` and `implement` skills
-The front half's mechanical core plus the two skills that consume it. `brainstorm` needs no binary
-support and can land whenever.
-- `mkit plan frontier|blocked|validate`, `--json` — pure arithmetic over the task graph: which
-  slices are unblocked, which are gated by what, cycle and dangling-edge detection. It never
-  chooses a slice, sizes one, or decides one is done.
-- `spec` — synthesise, never re-interview; publish the spec and the graph to the store the profile
-  names, falling back to the run directory when that store is unreachable.
-- `implement` — work the frontier one slice at a time, gate between slices, full gate at the end.
-  **Sequential in place is the default**, not a worktree per slice: `wt` is sandbox-fragile
-  (observed failing to `mktemp`), and parallel editors over one tree is the collision `review`
-  already avoids. Parallel worktrees stay an opt-in for a graph with genuinely independent slices.
-  **The opt-in needs a home:** `[implement] worktrees = false`, a new config key, written by
-  `mkit init` like every other pinned answer. It is not discoverable — whether this repo's tooling
-  survives two editors over two trees is a property of the repo and its hooks, and guessing it
-  wrong costs a collision in the user's working tree.
-- **Settled in M5: there is no fast tier.** M5 deleted it outright rather than keeping it as a
-  pinned config key, because nothing read it and the config pins only what inspection cannot
-  establish. `implement` therefore runs the **full** gate between slices and leans on the ledger
-  for the cache — a slice that changed nothing a step reads classifies `fresh` and can be labelled
-  `cached`, which is the same saving the fast tier would have bought, from evidence rather than
-  from a guess about which check is cheap.
-**Done when:** a spec written by `spec` can be implemented by `implement` on a fresh session with
-no conversation context, working from the artifact and the worklog alone.
-
-### Later
-- **Re-specify `install` / `uninstall`, if the binary earns them.** Withdrawn from M3, not
-  refuted. The bar is a job manual steps genuinely cannot do: `~/.claude/settings.json` stays
-  sandbox-denied, so registration will never be one of them, but detecting a plugin/binary skew
-  (M4's guard), reporting an unregistered marketplace, or creating `~/.mkit` outside a sandboxed
-  session all plausibly are. Specify from what the binary needs then, not from what `install.sh`
-  did.
-- `mkit stage hunks` — the eventual replacement for `commit`'s Markdown patch-staging recipe.
-  Mechanical throughout: cut a per-file diff, drop named hunks, `git apply --cached`, verify with a
-  staged stat, and refuse a split that would cut inside a hunk (intermediate commits must build).
-  The recipe works and is the right thing to ship first; a command earns its place by removing the
-  `@@`-block editing an agent currently does by hand, not by unbreaking anything. Separate from
-  invariant 6, since which hunks go in which commit stays a judgement in the skill.
-- `mkit session show` — read the current transcript's earlier turns back, so `explain` can cover an
-  answer the context has since compacted away. Mechanical (`sessionaudit` already parses the
-  transcripts), so it fits the binary; `explain` says "not in this session" until then (issue #43).
-- `mkit cleanup` TUI — multi-select over `mkit branch status`'s classification.
-- `mkit review` TUI — live parallel reviewer progress.
-- Codex installer target (`~/.codex/`).
-- Other platforms. Deliberately out (see Decision). Reversing it means adding the `goos` entry,
-  auditing the path/exec assumptions, and picking a distribution channel a cask can't serve —
-  Linuxbrew needs a *formula*, Windows a Scoop manifest (GoReleaser emits one).
-
-## Staying in bash, permanently
-- Any hook that must run before setup completes — it cannot depend on a binary whose presence it
-  may have to report as missing.
-
-  This entry used to name `scripts/hooks/session-bootstrap.sh`, which was exactly that case. It
-  was **removed rather than kept** in 0.15.0: the reasoning still holds — `mkit doctor` genuinely
-  cannot report a missing `mkit` — but one implementation with a known gap was preferred over two
-  implementations of one invariant. Reintroducing a bash hook here is a real option if the gap
-  proves expensive; do it deliberately, not by reflex.
-
-## Porting rules — kept, though the port is finished
-The shell layer went with M5. These stay because M6 and M8 add mechanical surface of their own,
-and because they explain why the ported code reads as it does.
-- Each shell script's `.bats` file was a ready-made spec — the `go test` beside each package is a
-  port of it, not a re-derivation. (M4's spec was `tests/findings.test.mjs`, same rule.) Do not
-  "simplify" an assertion whose comment names a measured failure.
-- One script per milestone, merged green. No big-bang rewrite: the bash was commented, tested and
-  load-bearing, and a mass rewrite would have been pure regression risk.
-- Each shell script was deleted in the commit that landed its replacement. Two implementations
-  of one invariant is the failure mode that rule exists to prevent — it now applies to degradation
-  sentences and to the pinned-over-discovered merge, which each have exactly one producer.
-
-## Open questions
-
-None open.
-
-Resolved:
-- **Which way the version-skew guard points** — **dissolved** at M4, not decided. The question
-  assumed one side must declare a machine-comparable range; no comparable tool does (worktrunk,
-  coderabbit and codegraph all checked), and neither does mkit. The payload declares no minimum
-  and the binary declares no payload range, and the check is **presence only**: the skill asks for
-  the subcommand it needs (`mkit findings schema --json`) and a subcommand that does not exist is
-  what "too old" looks like. The probe lives in the skill's Markdown, at step 0 — the only place
-  that survived M5, since `facts.sh` *is* the binary now and a binary cannot report its own
-  absence; M5 deleted `mkit_bin=`/`mkit=` for the same reason. Skew
-  stays a standing condition to report ([ADR 0003](adr/0003-two-distribution-channels.md)),
-  never a state to eliminate.
-- **Whether repo config belongs to mkit or to the harness** — neither, as posed. It is the
-  *repo's* agent configuration and mkit is one consumer, and it lives at
-  `<toplevel>/.mkit/config.toml`, committed, with `.mkit/*` + `!.mkit/config.toml` as the ignore
-  rule ([ADR 0001's config-path amendment](adr/0001-per-repo-config-and-init.md#amendment-the-config-path)).
-  `.agents/mkit.toml` was the closest rejected alternative and the one to revisit if `.agents/`
-  ever specifies a config slot: it is already generated and reconciled by a skills installer
-  against `skills-lock.json`, so writing there means writing into a tree another tool owns.
-- **Two distribution channels, deliberately independent** — the binary via Homebrew, the payload
-  via the GitHub marketplace ([ADR 0003](adr/0003-two-distribution-channels.md)). Neither
-  `curl | sh` nor `go install` for the binary; no clone for the payload. This also settles what
-  the old skew question was really asking: the two versions never "begin moving together",
-  because nothing brings them together.
-- **The `SessionStart` hook still self-heals** and still runs before any binary is on PATH,
-  which is exactly why it stays in bash permanently.
+- **Nothing reports a missing tool unprompted.** The `SessionStart` hook that did was removed in
+  0.15.0; `mkit doctor` is human-run, and a binary can't report its own absence. Re-adding a bash
+  hook is a legitimate option if this proves expensive — do it deliberately, not by reflex.
