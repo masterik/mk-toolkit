@@ -1,52 +1,58 @@
 # mkit
 
-A **personal toolkit for agentic coding** — the skills and tools I use every day to work with
-Claude Code. Shared as-is: it's opinionated, built around one workflow (Claude Code, macOS, git +
-GitHub), and may be useful to you in parts.
+A **personal toolkit for agentic coding**: the skills and tools I use daily with Claude Code.
+Opinionated, built for one setup (Claude Code, macOS, git + GitHub), shared as-is.
 
-Two halves:
+- **Claude Code plugin**: Markdown skills that take work from edits to committed, reviewed and merged.
+- **`mkit` Go binary**: the mechanical layer under the skills, plus housekeeping for the agent's
+  environment.
 
-- **A Claude Code plugin** — Markdown skills that take work from **edits → committed → reviewed →
-  integrated**, plus a few that help you understand and tune the agent itself.
-- **`mkit`, a Go binary** — the mechanical layer under the skills (starting facts, quality gate,
-  branch classification, review-finding arithmetic) and some standalone housekeeping for the
-  agent's environment.
-
-The skills orchestrate `git`, `gh`, [Worktrunk](https://worktrunk.dev) (`wt`), CodeRabbit and
-Codex rather than reimplementing them. Judgement lives in Markdown; anything that must be identical
-every run lives in the binary. Why and how: [concept](docs/concept.md).
+Skills orchestrate `git`, `gh`, [Worktrunk](https://worktrunk.dev) (`wt`), CodeRabbit and Codex
+rather than reimplementing them. Judgement lives in Markdown. Anything that must run identically
+every time lives in the binary. Background: [concept](docs/concept.md).
 
 ## Skills
 
 | Skill | Does |
 | --- | --- |
-| `commit` | Inspect the tree, stage intentionally, split into logical Conventional Commits. |
-| `review` | Review the local diff or recent commits with CodeRabbit + Codex + Claude (or quick: the first two), verify findings, fix what's worth fixing. |
-| `pr` | Commit → push → open a GitHub PR → request reviewers. |
-| `finish` | Commit → merge into base (the open PR, or locally) → delete the branch and worktree. |
-| `cleanup` | Sweep every local branch and worktree; delete what's provably merged, ask about the rest. |
-| `sandbox-audit` | Turn recent sessions' sandbox blocks and permission denials into a proposed settings diff. Report-only; run as `/mkit:sandbox-audit`. |
-| `explain` | Re-say the last answer, or one item from the session, in plain English (`simpler`, `eli5`, `deeper`). |
-| `recap` | Plain-English status of the branch: done, changed, left, waiting on you. Survives compaction. |
+| `commit` | Stage intentionally; split into logical Conventional Commits. |
+| `review` | Review the diff or recent commits with CodeRabbit, Codex and Claude (`quick` uses the first two); verify findings; apply worthwhile fixes. |
+| `pr` | Commit, push, open a GitHub PR, request reviewers. |
+| `finish` | Commit, merge into base (the open PR, or locally), delete the branch and worktree. |
+| `cleanup` | Delete branches and worktrees that are provably merged; ask about the rest. |
+| `sandbox-audit` | Turn sandbox blocks and permission denials into a proposed settings diff. Report-only. |
+| `explain` | Re-explain the last answer or one session item in plain English (`simpler`, `eli5`, `deeper`). |
+| `recap` | Branch status in plain English: done, changed, left, and waiting on you. |
 
-Each skill runs on its own, in any order — there's no required pipeline. Planned: `brainstorm`,
-`spec`, `implement` ([backlog](docs/backlog.md)).
+Each skill runs alone, in any order. Planned: `brainstorm`, `spec`, `implement`
+([backlog](docs/backlog.md)).
+
+**Usage.** Ask in plain words ("commit this", "review my changes", "open a PR", "where are we?"),
+or call a skill directly as `/mkit:<skill>`, for example `/mkit:review quick`. A typical branch:
+
+```
+edit → /mkit:commit → /mkit:review → /mkit:pr   (or /mkit:finish to merge locally)
+```
+
+Skills discover gate commands, commit scopes, reviewers and merge style from the repo. `mkit init`
+can pin them in a committed `.mkit/config.toml`, but that is optional. mkit's state lives in
+`.mkit/`, which it keeps git-ignored.
 
 ## The binary
 
 ```
-mkit facts <skill>       every starting fact a skill needs, in one call
-mkit gate detect | run   find and run the repo's checks; remember what passed over which content
-mkit findings …          reconcile and group a multi-reviewer code review
+mkit facts <skill>       all starting facts a skill needs, in one call
+mkit gate detect | run   find and run the repo's checks; record what passed
+mkit findings …          reconcile and group a multi-reviewer review
 mkit branch status       classify every local branch and worktree
 mkit worklog show        what each step concluded on this branch
-mkit repo profile        discovered vs pinned repo config;  mkit init  pins it
+mkit repo profile        discovered vs pinned config (mkit init pins it)
 mkit doctor              prerequisites, sandbox writability, plugin state
-mkit audit sandbox       sandbox / permission-gate events across sessions
-mkit cache prune         prune stale Claude Code / Codex local storage
+mkit audit sandbox       sandbox and permission-gate events across sessions
+mkit cache prune         prune stale Claude Code / Codex storage
 ```
 
-Every command takes `--json`; on a terminal, some get a TUI.
+Every command takes `--json`. On a terminal, some show a TUI.
 
 ## Install
 
@@ -59,24 +65,26 @@ brew install masterik/tap/mkit
 /plugin install mkit@masterik
 ```
 
-Both are required — the plugin is Markdown, and every skill but `explain` calls the binary. Then run
-`mkit doctor`.
-`gh` and `wt` are recommended; sandbox setup, the Gatekeeper workaround for the unsigned binary,
-and a permission allowlist are in [Prerequisites](docs/prerequisites.md).
+You need both, because every skill except `explain` calls the binary. Then run `mkit doctor`. For
+optional tools, sandbox setup and a permission allowlist, see [Prerequisites](docs/prerequisites.md).
 
 ## Docs
 
-- [Concept](docs/concept.md) — what this is, design principles, how it fits together
-- [Prerequisites](docs/prerequisites.md) — tooling, sandbox, permissions
-- [Backlog](docs/backlog.md) — what's next, invariants, what's done
-- [ADRs](docs/adr/) — decisions that were hard to reverse
-- [AGENTS.md](AGENTS.md) — architecture and conventions, for contributors and coding agents
+For users:
+- [Prerequisites](docs/prerequisites.md): install, optional tools, sandbox, permissions, troubleshooting
+- [Concept](docs/concept.md): what mkit is, its design principles, how the parts fit
+
+For contributors:
+- [CONTRIBUTING.md](CONTRIBUTING.md): setup, layout, rules, tests, PRs, releases
+- [AGENTS.md](AGENTS.md): full architecture and conventions
+- [Backlog](docs/backlog.md): what's next, invariants, what's done
+- [ADRs](docs/adr/): decisions that are hard to reverse
+- [Ideas](docs/ideas/README.md): researched but not scheduled
 
 ## Contributing
 
-It's a personal toolkit, so the direction follows my own workflow — but issues and PRs are
-welcome ([GitHub Issues](https://github.com/masterik/mk-toolkit/issues)). Conventional Commits;
-run `just ci` before opening a PR.
+Direction follows my own workflow, but [issues](https://github.com/masterik/mk-toolkit/issues) and PRs
+are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
