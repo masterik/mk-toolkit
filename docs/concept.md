@@ -1,129 +1,127 @@
-# mkit — Concept
+# mkit: concept
 
 ## What it is
 
-mk-toolkit is a **personal toolkit for agentic coding**: the skills, conventions and small
-mechanical tools one developer uses to work with a coding agent day to day. It is built for that
-workflow first — Claude Code, on macOS, in git repos hosted on GitHub — and published as-is in case
-parts of it are useful to someone else.
+A **personal toolkit for agentic coding**: the skills, conventions and small tools one developer uses
+every day with a coding agent. It targets Claude Code, on macOS, in GitHub-hosted git repos, and is
+published as-is.
 
-It has two halves that ship separately:
+It has two halves, which ship separately:
 
-- **A Claude Code plugin** (`plugin/`) — Markdown skills that tell the agent *when* a task applies
-  and *how* to do it safely: commit, review, open a PR, merge back, clean up branches, audit the
-  sandbox, explain or recap the session.
-- **A Go binary, `mkit`** — the mechanical layer beneath the skills, plus a few standalone
-  utilities for the agent's environment (cache pruning, sandbox audit, `doctor`).
+- **Plugin** (`plugin/`): Markdown skills that tell the agent *when* a task applies and *how* to do it
+  safely.
+- **Binary** (`mkit`, Go): the mechanics beneath the skills, plus environment utilities (`cache
+  prune`, `audit sandbox`, `doctor`).
 
-The agent is the interface; the skills are the muscle memory; the binary does the parts that must
-be identical every run.
+## Why
 
-## Why it exists
-
-Agentic coding repeats the same small procedures many times a day — stage and split commits, run
-the repo's checks, review a diff with several tools, open a PR with the right reviewers, tidy up
-worktrees. Left to the agent, each run re-derives a fragile `git` + `gh` + `wt` command sequence
-from scratch and gets some invariant wrong some of the time. The toolkit writes each procedure down
-once, with the safety rules attached, and moves the deterministic parts into a tested binary.
+Agentic coding repeats the same small procedures many times a day: splitting commits, running checks,
+multi-tool review, opening PRs with the right reviewers, tidying worktrees. Left alone, the agent
+re-derives a fragile `git`/`gh`/`wt` sequence each time and sometimes breaks an invariant. The toolkit
+writes each procedure down once, with its safety rules, and moves the deterministic parts into a
+tested binary.
 
 ## Design principles
 
-- **Judgement in Markdown, mechanics in the binary.** A skill decides commit boundaries, severity,
-  whether a fix is safe. `mkit` opens directories, gathers facts, runs and records the quality
-  gate, classifies branches, does arithmetic over review findings. Where the line is unclear the
-  binary reports candidates and the skill picks.
-- **Composition over replacement.** Orchestrate `git`, `gh`, `wt`, CodeRabbit and Codex; never
-  reimplement them. The binary reports and runs; it never integrates — no staging, merging,
-  pushing or editing your files. Its writes are bounded to its own state (run directories, the gate
-  ledger, the worklog), one `info/exclude` line that keeps `.mkit/` ignored, remote-tracking refs
-  (`git fetch --prune`), and `.mkit/config.toml`, which only `mkit init` writes. The one exception
-  is `mkit cache prune --apply`, which deletes stale Claude Code / Codex storage on request.
-- **A recorded fact is an input, never a permission.** The gate ledger and the worklog remember
-  what earlier runs proved. A skill may use that to skip work, but always says so (`cached`), and
-  never treats a missing record as a reason to stop.
-- **Composable steps, not a pipeline.** Every skill runs alone, in any order, with any subset
-  skipped. It discovers what it needs, derives the thin version of what's missing, and names what
-  it assumed. It never sends you to another skill first and never runs one downstream of itself.
-  Contract: [`workflow-contract.md`](../plugin/skills/_shared/references/workflow-contract.md).
-- **Safe by default.** Irreversible actions (force-push, branch delete, history rewrite, skipping
-  hooks) are gated by one shared safety protocol.
-- **Sandbox-aware.** The agent usually runs under an OS sandbox, a permission classifier and a
-  worktree-isolation guard. State goes where all three already allow writes (`<toplevel>/.mkit/`,
-  `$TMPDIR`), and anything that would hit a denied path is reported up front with a remedy that
-  actually works ([ADR 0002](adr/0002-state-locations-under-a-sandbox.md)).
-- **Discover first, configure optionally.** Gate commands, commit scopes, reviewers and merge style
-  are discovered from the repo. `mkit init` can pin what discovery can't establish into a committed
-  `.mkit/config.toml`, but nothing ever requires it
-  ([ADR 0001](adr/0001-per-repo-config-and-init.md)).
-- **Narrow on purpose.** macOS only, Claude Code only. Supporting more is a packaging question for
-  when someone needs it, not a matrix to carry untested.
+- **Judgement in Markdown, mechanics in the binary.** Skills decide commit boundaries, severity, and
+  whether a fix is safe. `mkit` gathers facts, runs and records the gate, classifies branches, and
+  does the arithmetic on review findings. When the split is unclear, the binary reports candidates
+  and the skill picks.
+- **Compose, don't replace.** Orchestrate `git`, `gh`, `wt`, CodeRabbit and Codex. The binary never
+  stages, merges, pushes or edits your files. Its writes are limited to:
+  - its own state: run dirs, the gate ledger, the worklog;
+  - one `info/exclude` line;
+  - remote-tracking refs, via `git fetch --prune`;
+  - `.mkit/config.toml`, written only by `mkit init`.
 
-## The skills
+  The single exception is `mkit cache prune --apply`, which deletes stale Claude Code and Codex
+  storage when you ask it to.
+- **A recorded fact is an input, never a permission.** A skill may skip work because the gate ledger or
+  worklog shows it was already done, and it says so (`cached`). A missing record is never a reason to
+  stop.
+- **Composable steps, not a pipeline.** Each skill runs alone, in any order. It derives what is missing
+  and names what it assumed. It never sends you to another skill first
+  ([workflow contract](../plugin/skills/_shared/references/workflow-contract.md)).
+- **Safe by default.** Force-push, branch delete, history rewrite and skipping hooks all go through one
+  shared safety protocol.
+- **Sandbox-aware.** State lives only where the OS sandbox, the permission classifier and the
+  worktree guard already allow writes (`<toplevel>/.mkit/`, `$TMPDIR`). A path the sandbox would deny
+  is reported up front, with a remedy that works ([ADR 0002](adr/0002-state-locations-under-a-sandbox.md)).
+- **Discover first, configure optionally.** Gate commands, scopes, reviewers and merge style are read
+  from the repo. `mkit init` can pin them in a committed `.mkit/config.toml`; nothing requires it
+  ([ADR 0001](adr/0001-per-repo-config-and-init.md)).
+- **Narrow on purpose.** macOS and Claude Code only. Other platforms are a packaging question for when
+  someone needs them.
+
+## Skills
 
 | Skill | Does |
 | --- | --- |
-| `commit` | Inspect the tree, stage intentionally, split into logical Conventional Commits. |
-| `review` | Review the local diff or recent commits with CodeRabbit, Codex and Claude (or a quick mode with the first two), verify findings, fix what's worth fixing. |
-| `pr` | Commit → push → open a GitHub PR → request reviewers. |
-| `finish` | Commit → merge into the base branch locally (or merge the open PR) → delete the branch and worktree. |
-| `cleanup` | Sweep every local branch and worktree; delete what's provably merged, ask about the rest. |
-| `sandbox-audit` | Read recent sessions' sandbox and permission-gate events and propose a settings diff. Report-only. |
-| `explain` | Re-say the last answer, or one item from the session, in plain English. |
-| `recap` | Plain-English status of the branch: done, changed, left, waiting on you. |
+| `commit` | Stage intentionally; split into logical Conventional Commits. |
+| `review` | CodeRabbit, Codex and Claude (or `quick`: the first two) over the diff or recent commits; verify findings, fix the worthwhile ones. |
+| `pr` | Commit, push, open a PR, request reviewers. |
+| `finish` | Commit, merge into base (the open PR, or locally), delete the branch and worktree. |
+| `cleanup` | Delete provably merged branches and worktrees; ask about the rest. |
+| `sandbox-audit` | Turn sandbox and permission-gate events into a proposed settings diff. Report-only. |
+| `explain` | Re-explain the last answer or one session item in plain English. |
+| `recap` | Branch status in plain English: done, changed, left, waiting on you. |
 
-Planned, not built: `brainstorm`, `spec` and `implement` — the front half that takes an idea to a
-task graph and works it slice by slice ([backlog](backlog.md)).
+Planned, not yet built: `brainstorm`, `spec` and `implement`. Together they take an idea to a task
+graph and work through it slice by slice ([backlog](backlog.md)).
 
-Skills share one reference bundle, [`plugin/skills/_shared/`](../plugin/skills/_shared/README.md):
-git safety, Conventional Commits, quality-gate detection, worktree handling, review severity and
-lenses, finding triage, agent delegation, output discipline, plain-English writing.
+All skills share one reference bundle, [`_shared/`](../plugin/skills/_shared/README.md). It covers git
+safety, Conventional Commits, gate detection, worktrees, review severity and lenses, triage, agent
+delegation, output discipline and plain-English writing.
 
-## How it fits together
+## How it fits
 
 ```
  Claude Code
    │  loads the plugin (no hooks)
    ▼
- skills/*/SKILL.md           when & how — judgement
+ skills/*/SKILL.md           when & how: judgement
    │  link into
    ▼
  _shared/references/*.md     safety · conventions · gate · worktrees · review
    +
- mkit (Go)                   mechanics — one call each, --json on every command
-   facts                     run directory + every starting fact a skill needs
-   gate detect | run         what this repo's checks are; run them, logged and recorded
-   findings                  validate · reconcile · group a review's findings
-   branch status             classify every local branch/worktree for cleanup
+ mkit (Go)                   mechanics, --json on every command
+   facts                     run dir + all starting facts
+   gate detect | run         the repo's checks; run, log, record
+   findings                  validate · reconcile · group review findings
+   branch status             classify branches/worktrees for cleanup
    worklog show | append     what each step concluded on this branch
-   repo profile · init       discovered vs pinned repo config
-   doctor                    prerequisites, sandbox writability, plugin state
-   audit sandbox · cache prune · scratch prune     environment housekeeping
+   repo profile · init       discovered vs pinned config
+   doctor                    prerequisites, sandbox, plugin state
+   audit sandbox · cache prune · scratch prune     housekeeping
    │  drive
    ▼
  git · gh · wt · coderabbit · codex
 ```
 
-Every repo-scoped skill starts with `mkit facts <skill>` — `review` first probes `mkit findings`,
-`sandbox-audit` (user-wide) starts with `mkit audit sandbox` instead, and `explain` calls no `mkit`
-at all. A missing or too-old binary stops the skill with a `brew` remedy. There is no version range on either side — a subcommand that doesn't exist
-*is* the too-old signal.
+Each repo-scoped skill starts with `mkit facts <skill>`. The exceptions:
+
+- `review` first probes `mkit findings`.
+- `sandbox-audit` starts with `mkit audit sandbox`.
+- `explain` calls no `mkit` command.
+
+A missing or too-old binary stops the skill with a `brew` remedy. Neither side declares a version
+range: a subcommand that doesn't exist *is* the too-old signal.
 
 ## State
 
-Three write locations, chosen by lifetime, and nowhere else:
+There are three write locations, chosen by lifetime:
 
 | Where | What | Lifetime |
 | --- | --- | --- |
 | `$TMPDIR` | anything that dies with the command | one call |
-| `<toplevel>/.mkit/` | run directories, the gate ledger (`gate.jsonl`), the per-branch worklog — git-ignored; plus `config.toml`, committed | across steps and sessions |
-| `~/.mkit/` (`MKIT_HOME`) | user-scoped state — today only the `sandbox-audit` ledger | across repos |
+| `<toplevel>/.mkit/` | run dirs, `gate.jsonl`, `worklog/` (all git-ignored); `config.toml` (committed) | across steps and sessions |
+| `~/.mkit/` (`MKIT_HOME`) | user-scoped state; today only the `sandbox-audit` ledger | across repos |
 
-Plus one line in the common dir's `info/exclude`, so `.mkit/` stays ignored. State is never kept in
-`~/.claude` (sandbox-protected, so no allowlist entry can open it) or the user's own files;
-`mkit cache prune --apply` is the one command that reaches into `~/.claude` and `~/.codex`, and only
-to delete stale storage you asked it to.
+mkit also adds one line to the common dir's `info/exclude`, so `.mkit/` stays ignored. It never stores
+state in your files or in `~/.claude`, which is sandbox-protected, so no allowlist entry can open it.
+`cache prune --apply` deletes stale storage in `~/.claude` and `~/.codex`, and only when you ask.
 
-## Workflow model
+## Workflow
 
 ```
 brainstorm → spec → implement → commit → review → pr ──┐
@@ -132,26 +130,24 @@ brainstorm → spec → implement → commit → review → pr ──┐
 cleanup · sandbox-audit · explain · recap   (outside the line)
 ```
 
-The arrows are the common path, never a required one. Real work enters in the middle — a bug fix
-starts at `implement`, someone else's branch starts at `review`, most changes are just `commit`.
-The **worklog** (one file per branch under `.mkit/worklog/`) is what makes that cheap: each step appends what it
-concluded and over which content, so the next step can reuse a goal or a gate result instead of
-re-deriving it.
+This is the common path, not a required one. A bug fix starts at `implement`, someone else's branch
+starts at `review`, and most changes are just `commit`. The **worklog** keeps one file per branch under
+`.mkit/worklog/`. It records what each step concluded and over which content, so the next step can reuse
+a goal or a gate result instead of re-deriving it.
 
 ## Distribution
 
-- **Plugin** — from the GitHub marketplace: `/plugin marketplace add masterik/mk-toolkit`, then
-  `/plugin install mkit@masterik`.
-- **Binary** — from Homebrew: `brew install masterik/tap/mkit` (darwin amd64 + arm64).
+- **Plugin:** `/plugin marketplace add masterik/mk-toolkit`, then `/plugin install mkit@masterik`.
+- **Binary:** `brew install masterik/tap/mkit` (darwin amd64 and arm64).
 
-The two version independently ([ADR 0003](adr/0003-two-distribution-channels.md)); releases are
-tag-driven and lockstep in practice. Setup details: [`prerequisites.md`](prerequisites.md).
+The two are versioned independently ([ADR 0003](adr/0003-two-distribution-channels.md)). In practice,
+releases are tag-driven and ship together. Setup: [prerequisites](prerequisites.md).
 
 ## Considered and dropped
 
-- **A `SessionStart` hook** that named missing prerequisites. Removed in favour of `mkit doctor` —
-  one implementation instead of two. Accepted loss: nothing reports a missing tool unprompted, and a
-  binary can't report its own absence.
-- **A `Stop` hook** nudging the agent to journal intent per unit of work. Its output is rendered in
-  the transcript every turn and can't be suppressed; `commit` derives intent from the diff instead.
-  A transcript-mining alternative is parked in [`ideas/`](ideas/README.md).
+- **`SessionStart` hook** that reported missing prerequisites. Replaced by `mkit doctor`, so there is one
+  implementation. The cost: nothing reports a missing tool unprompted, and a binary cannot report its
+  own absence.
+- **`Stop` hook** prompting the agent to record its intent. Its output shows in the transcript every
+  turn and can't be suppressed. `commit` derives intent from the diff instead. A transcript-mining
+  alternative is parked in [`ideas/`](ideas/README.md).

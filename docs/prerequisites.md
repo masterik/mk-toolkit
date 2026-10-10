@@ -1,6 +1,6 @@
 # Prerequisites
 
-What the skills and the `mkit` binary need, and how to set them up under Claude Code's sandbox.
+This page covers what the skills and `mkit` need, and how to set them up under Claude Code's sandbox.
 **macOS only** (Intel and Apple Silicon).
 
 ## Install
@@ -14,19 +14,21 @@ brew install git masterik/tap/mkit
 /plugin install mkit@masterik
 ```
 
-Both are required: the plugin is Markdown, and every skill but `explain` starts by calling `mkit`.
-A missing or too-old binary stops the skill with a `brew install` / `brew upgrade mkit` remedy.
-
-Then check everything at once:
+You need both, because every skill except `explain` calls `mkit`. If the binary is missing or too
+old, the skill stops and tells you to run `brew install` or `brew upgrade mkit`.
 
 ```bash
 mkit doctor
 ```
 
-`doctor` reports tool presence on `PATH`, plugin state (including plugin/binary version drift), the
-sandbox writable set, and missing `additionalDirectories` grants for the tools mkit composes. It
-reports only — it never changes anything. It doesn't check tool minimum versions, `gh` auth, or your
-Bash allow rules (see [Fewer permission prompts](#fewer-permission-prompts)).
+`doctor` reports, and never changes anything. It checks:
+
+- whether tools are on `PATH`;
+- plugin state, including drift between plugin and binary versions;
+- the sandbox's writable set;
+- missing `additionalDirectories` grants.
+
+It does not check tool versions, `gh` auth, or Bash allow rules.
 
 ## Required
 
@@ -34,7 +36,7 @@ Bash allow rules (see [Fewer permission prompts](#fewer-permission-prompts)).
 | --- | --- | --- |
 | `git` ≥ 2.30 | everything | `--absolute-git-dir`, `worktree list --porcelain`, `diff --shortstat` |
 | `bash` ≥ 3.2 | `mkit gate run` | gate steps run as `bash -c '<command>'`; macOS's `/bin/bash` is enough |
-| `mkit` | every skill but `explain` | run directory, starting facts, quality gate, branch classifier, findings arithmetic |
+| `mkit` | every skill but `explain` | run dir, starting facts, gate, branch classifier, findings |
 
 ## Recommended
 
@@ -42,8 +44,8 @@ Bash allow rules (see [Fewer permission prompts](#fewer-permission-prompts)).
 | --- | --- | --- |
 | `gh` | `pr`, `finish`, `cleanup` | `pr` can't open a PR; `cleanup` classifies from git alone (`gh=gh-missing`) |
 | `wt` ([Worktrunk](https://worktrunk.dev)) | `finish`, worktree classification | plain `git worktree remove` |
-| `rg` (ripgrep) | `review`'s fix-checks sweep | `grep -E`, slower |
-| `gh stack` ([github/gh-stack](https://github.com/github/gh-stack)) | `pr`/`finish` on stacked PRs | stacked PRs can't be created or merged by the skills |
+| `rg` (ripgrep) | `review`'s fix-checks sweep | slower `grep -E` |
+| `gh stack` ([github/gh-stack](https://github.com/github/gh-stack)) | `pr`/`finish` on stacked PRs | no stacked PRs |
 
 ```bash
 brew install gh ripgrep worktrunk/tap/worktrunk
@@ -51,37 +53,39 @@ gh auth login
 gh extension install github/gh-stack
 ```
 
-### Extra reviewers for `review`
+**Extra reviewers.** `review` uses three sources: CodeRabbit (CLI or plugin), Codex (CLI or plugin)
+and Claude. Any of them can be missing. The skill redistributes the work, says so, and never reports
+a partial review as clean.
 
-`review` wants three independent sources: **CodeRabbit** (`coderabbit` CLI or plugin), **Codex**
-(`codex` CLI or plugin) and Claude. Any can be missing — the skill redistributes its lenses and
-says so; it never reports a partial review as clean.
+## Optional: repo config
 
-## Optional — repo config
+`mkit init` writes a committed `.mkit/config.toml`. It pins two kinds of value:
 
-`mkit init` writes a committed `.mkit/config.toml`: it pins what it discovers (gate commands, commit
-scopes, spec store, merge style) so runs stop re-discovering, plus what discovery can't establish
-(subject length, review mode, branches `cleanup` must keep). Reviewers are the exception — CODEOWNERS
-stays discovered per path unless you pin a list. On a terminal it's a short wizard (Spec → Commit → Review → Merge);
-every field is also a flag. Nothing requires it — every skill runs with no config
-([ADR 0001](adr/0001-per-repo-config-and-init.md)). `mkit repo profile` shows what's discovered vs
-pinned; `mkit init --force` re-discovers and reopens the wizard on an existing config.
+- **What it discovers:** gate commands, commit scopes, spec store and merge style, so runs stop
+  re-discovering them.
+- **What discovery can't establish:** subject length, review mode, and the branches `cleanup` must
+  keep.
+
+Reviewers stay discovered per path from CODEOWNERS unless you pin a list. On a terminal, `init` runs a
+short wizard (Spec → Commit → Review → Merge), and every field is also a flag. Nothing requires the
+config ([ADR 0001](adr/0001-per-repo-config-and-init.md)). `mkit repo profile` shows which values are
+discovered and which are pinned. `mkit init --force` re-discovers and reopens the wizard.
 
 ## Gatekeeper blocks the binary
 
-Release binaries aren't signed or notarized yet ([#28](https://github.com/masterik/mk-toolkit/issues/28)).
-The Homebrew cask clears the quarantine flag on install, so this should not happen; if macOS still
-blocks `mkit` (an older cask, or a binary fetched another way), clear it yourself:
+Releases aren't signed or notarized yet ([#28](https://github.com/masterik/mk-toolkit/issues/28)). The
+cask clears the quarantine flag on install. If macOS still blocks `mkit` (an older cask, or a binary
+fetched some other way), run:
 
 ```bash
 xattr -d com.apple.quarantine "$(which mkit)"
 ```
 
-(Or System Settings → Privacy & Security → Allow Anyway.)
+You can also allow it in System Settings → Privacy & Security → Allow Anyway.
 
 ## Fewer permission prompts
 
-Each subcommand is its own Bash pattern. Allow them once in `~/.claude/settings.json` or a repo's
+Each subcommand is its own Bash pattern. Allow them once in `~/.claude/settings.json` or in a repo's
 `.claude/settings.json`:
 
 ```json
@@ -100,20 +104,20 @@ Each subcommand is its own Bash pattern. Allow them once in `~/.claude/settings.
 }
 ```
 
-`mkit gate run` runs the repo's own lint/test/build — leave it out to approve each gate yourself.
+`mkit gate run` runs the repo's own lint, test and build. Leave it out of the list if you want to
+approve each gate run.
 
 ## Running under the OS sandbox
 
-mkit keeps its state inside the working directory (`<toplevel>/.mkit/`) and `$TMPDIR`, which the
-sandbox already allows, so **most of it needs no grant**
-([ADR 0002](adr/0002-state-locations-under-a-sandbox.md)).
+State lives in `<toplevel>/.mkit/` and `$TMPDIR`, both already writable, so **most of mkit needs no
+grant** ([ADR 0002](adr/0002-state-locations-under-a-sandbox.md)).
 
-### `~/.mkit` — two steps, in order
+### `~/.mkit`: two steps, in order
 
-Only the `sandbox-audit` skill writes here today. A grant covers a directory's *interior*, so it
-can't create the directory — that's a write to `$HOME`, which nothing grants.
+Today only `sandbox-audit` writes here. A grant covers a directory's interior but can't create the
+directory itself, because that would be a write to `$HOME`.
 
-1. Create it from your own shell (in Claude Code, `!` runs outside the sandbox):
+1. Create it outside the sandbox (in Claude Code, `!` runs a command outside it):
    ```
    ! mkdir -p ~/.mkit
    ```
@@ -122,22 +126,22 @@ can't create the directory — that's a write to `$HOME`, which nothing grants.
    { "permissions": { "additionalDirectories": ["~/.mkit"] } }
    ```
 
-Skip step 1 and the first write fails with `mkdir: /Users/you/.mkit: Operation not permitted`.
-`additionalDirectories` rather than `sandbox.filesystem.allowWrite`, because it also satisfies the
-auto-mode classifier's "no writes outside the working directories" rule.
+If you skip step 1, the first write fails with `mkdir: /Users/you/.mkit: Operation not permitted`. Use
+`additionalDirectories` rather than `sandbox.filesystem.allowWrite`, because it also satisfies auto
+mode's "no writes outside the working directories" rule.
 
-> **`~/.claude/…` can't be granted.** It's a protected region: an allowlist entry there is inert.
-> That's why mkit never stores anything under it, and never tells you to allowlist a path there.
+> **`~/.claude/…` can't be granted.** It is a protected region, so an allowlist entry there has no
+> effect. That is why mkit never stores anything there.
 
-### What composed tools need
+### Composed tools
 
 | Tool | Needs | Without it |
 | --- | --- | --- |
-| `go build`/`vet`/`test`, `golangci-lint` | `GOCACHE`, `GOMODCACHE`, `GOLANGCI_LINT_CACHE` in `$TMPDIR` | the gate fails on cache writes, not your code |
-| `gh run view --log` | `~/.cache/gh` in `additionalDirectories` | log fetch fails |
-| `codex` CLI | `~/.codex` in `additionalDirectories` | fails to initialise |
+| `go`, `golangci-lint` | `GOCACHE`, `GOMODCACHE`, `GOLANGCI_LINT_CACHE` in `$TMPDIR` | the gate fails on cache writes |
+| `gh run view --log` | `~/.cache/gh` in `additionalDirectories` | the log fetch fails |
+| `codex` CLI | `~/.codex` in `additionalDirectories` | it fails to initialise |
 | `coderabbit` CLI | `~/.coderabbit` in `additionalDirectories` | its state writes fail |
-| `git push`/`fetch` over HTTPS | nothing | a harmless credential-store warning on stderr |
+| `git push`/`fetch` over HTTPS | nothing | a harmless credential-store warning |
 
 ```bash
 export GOCACHE="$TMPDIR/go-build" GOMODCACHE="$TMPDIR/go-mod" GOLANGCI_LINT_CACHE="$TMPDIR/golangci"
@@ -150,31 +154,21 @@ export GOCACHE="$TMPDIR/go-build" GOMODCACHE="$TMPDIR/go-mod" GOLANGCI_LINT_CACH
 | `pr`, `finish`, `cleanup`, `mkit branch status` | `api.github.com`, `github.com` |
 | `mkit facts <skill> --gh` | `api.github.com` |
 | `pr`, `finish`, `cleanup` | your remote's host |
-| `review`'s external reviewers | whatever `codex` / `coderabbit` call |
+| `review`'s external reviewers | whatever `codex` and `coderabbit` call |
 
-`cleanup` degrades when GitHub is unreachable (`fetch=failed`, and `gh=gh-unauthenticated` or
-`gh=gh-error` depending on where the request died) and still classifies
-from git; `pr` cannot open a PR without `api.github.com`.
+If GitHub is unreachable, `cleanup` still classifies from git. It reports `fetch=failed` plus
+`gh=gh-unauthenticated` or `gh=gh-error`. `pr` can't open a PR without `api.github.com`.
 
 ### Gotchas
 
-- **`ps`/`pgrep` fail outright** under the sandbox — don't build "is it running?" checks on them.
-- **`mktemp` without a template ignores `$TMPDIR`** on macOS and is denied. Always pass a template.
-- **`.git/config` and `.git/hooks` are protected** even inside the working directory, so `git config`
-  writes fail.
-- **`wt` is usually a shell function**, so `mkit facts` looks for the real binary on `PATH` and
-  reports `wt_bin=none` as advisory.
-- **`rtk` is never used inside mkit** — it reshapes output for reading, which a parser can't
-  tolerate. It stays on the agent's own commands.
+- **`ps` and `pgrep` fail** under the sandbox.
+- **`mktemp` without a template ignores `$TMPDIR`** on macOS, and the write is denied. Always pass a
+  template.
+- **`.git/config` and `.git/hooks` are protected**, so `git config` writes fail.
+- **`wt` is usually a shell function.** `mkit facts` looks for the real binary on `PATH` and reports
+  `wt_bin=none` as advisory.
+- **mkit never calls `rtk`.** `rtk` reshapes output for reading, which breaks a parser.
 
 ## Development
 
-```bash
-brew install go golangci-lint just
-just ci     # build, vet, test, lint — what CI runs (golangci-lint v2.12)
-```
-
-Under the sandbox, export the Go cache variables above first. Tests build throwaway repos under
-`$TMPDIR` and point `MKIT_HOME` at a temp directory; none touch your real home. A test suite that
-reaches user-scoped state must set `MKIT_HOME` in its own helper (see `internal/cli`'s `factsRepo`,
-`internal/core/doctor`'s `isolate`) — `scratch.UserDirWritable` creates the directory if absent.
+See [CONTRIBUTING.md](../CONTRIBUTING.md).

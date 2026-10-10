@@ -2,23 +2,16 @@
 
 This file provides guidance to agents when working with code in this repository.
 
-**mkit** — a personal toolkit for agentic coding: a **Go binary (`mkit`) plus a Claude Code plugin**.
-The binary ships by Homebrew (`brew install masterik/tap/mkit`), the plugin from the GitHub
-marketplace (see *The plugin payload*). The plugin packages the skills plus the shared
-`_shared/references/` bundle; the binary owns the mechanical invariants those skills rely on.
-Composition over replacement: the skills orchestrate `git`, `gh`, `wt`, and code-review tools — no
-new git logic.
+**mkit** — personal agentic-coding toolkit: **Go binary (`mkit`, Homebrew `masterik/tap/mkit`) +
+Claude Code plugin** (`/plugin marketplace add masterik/mk-toolkit`). Plugin = skills + `_shared/references/`; binary owns the
+mechanical invariants they rely on. Skills orchestrate `git`, `gh`, `wt`, review tools — no new git logic.
 
-**Next: M8** (`mkit plan` + the `spec` and `implement` skills); M1–M7 are done (M3 withdrawn). The
-payload is **Markdown only** — no scripts, no hooks, no `tests/`. `mkit` is a **hard requirement for
-every skill but `explain`**: each one's first call is `mkit facts <skill>` (`review` first probes
-`mkit findings`; `sandbox-audit`, not repo-scoped, starts with `mkit audit sandbox`; `explain` makes no
-`mkit` call). A binary that is absent *or too old* is the stop condition, with a `brew` remedy:
-`command not found` and `unknown command "facts"` are the same answer. Presence only, no declared
-minimum on either side. The per-branch worklog (`<toplevel>/.mkit/worklog/`) is written by `commit`,
-`review`, `pr` and `finish` and read by those and `recap`; what it reports is **one fewer input, never
-a stop**. Milestones and invariants: [`backlog.md`](docs/backlog.md). Direction and rationale:
-[`concept.md`](docs/concept.md) — the place for *why*, so this file can stay operative.
+**Next: M8** (`mkit plan`, `spec`/`implement` skills); M1–M7 done (M3 withdrawn). `mkit` is **required
+by every skill but `explain`**; first call `mkit facts <skill>` (`review` probes `mkit findings` first;
+`sandbox-audit` starts with `mkit audit sandbox`). Binary absent *or too old* (`command not found` ≡
+`unknown command "facts"`) = stop with a `brew` remedy; presence only, no declared minimum. Worklog
+(`.mkit/worklog/`): written by `commit`/`review`/`pr`/`finish`, also read by `recap`; missing = **one
+fewer input, never a stop**. Milestones: [`backlog.md`](docs/backlog.md); the *why*: [`concept.md`](docs/concept.md).
 
 ## Rules
 
@@ -34,339 +27,198 @@ a stop**. Milestones and invariants: [`backlog.md`](docs/backlog.md). Direction 
 
 ## Commands
 
-`just` (`brew install just`) wraps these; `just --list` shows all recipes.
+`just` wraps these (`just --list`).
 
 ```bash
-just ci                          # build, vet, test, lint — what CI runs, in one shot
+just ci                          # build, vet, test, lint — what CI runs
 just build / vet / test          # go build|vet|test ./...
-just lint                        # golangci-lint run (CI pins v2.12, brew install golangci-lint)
-just run version --json          # exercise the front-end contract
+just lint                        # golangci-lint (CI pins v2.12)
+just run version --json          # front-end contract
 just run doctor                  # prerequisites, sandbox writability, plugin state
-just run worklog show --json        # this branch's worklog: what ran, and what it concluded
-just run repo profile --json     # how this repo works: discovered|pinned|unavailable
-just run facts commit --no-run   # every starting fact, without opening a run dir
-just run audit sandbox --days 14 # sandbox/permission-gate events across every session, against the current settings
+just run worklog show --json     # this branch's worklog
+just run repo profile --json     # discovered|pinned|unavailable
+just run facts commit --no-run   # starting facts, no run dir
+just run audit sandbox --days 14 # sandbox/gate events, all sessions, vs current settings
 ```
 
-Release is tag-driven, and `just release` (`tools/release.sh`) is the whole of it: it picks the
-version (auto: breaking or `feat` → minor pre-1.0, else patch; or pass `patch|minor|major|X.Y.Z`),
-shows it with the PRs since the last tag, and **asks before it pushes** — human-run, it refuses
-without a terminal. Then it bumps `plugin.json`, commits `chore(release): X.Y.Z`, tags and pushes. The tag →
-GoReleaser builds darwin × amd64/arm64, writes the GitHub Release notes from merged PR titles
-(`github-native` — **the Release is the changelog**; `CHANGELOG.md` is frozen at 0.19.0), and
-commits the Homebrew **cask** to `masterik/homebrew-tap`. Releases are lockstep: a plugin-only
-change still gets a tag, so every `plugin.json` version has a Release — the rebuilt binary
-differs only in its version string. `homebrew_casks`, not `brews` (deprecated in
-GoReleaser v2).
+**Release**: `just release` (`tools/release.sh`), needs a terminal. Picks version (auto: breaking/`feat` → minor pre-1.0, else patch; or `patch|minor|major|X.Y.Z`), shows PRs
+since last tag, **asks before pushing**, bumps `plugin.json`, commits `chore(release): X.Y.Z`, tags,
+pushes. Tag → GoReleaser: darwin amd64/arm64, notes from PR titles (**the Release is the
+changelog**; `CHANGELOG.md` frozen at 0.19.0), cask to `masterik/homebrew-tap`
+(`homebrew_casks`, not deprecated `brews`). Lockstep: plugin-only changes still get a tag.
 
 ## Binary invariants
 
-Not preferences — breaking one is a design error, not a trade-off. Full list: `backlog.md`.
+Breaking one is a design error (full list: `backlog.md`).
 
-- **Layering.** `core` returns data · `cmd/` formats · `tui/` renders. Logic never lives in a
-  Bubble Tea `Update`.
-- **No TUI off a TTY.** stdout not a terminal → no ANSI, no alt-screen. Skills pipe this binary;
-  a TUI on a pipe is corruption, not cosmetics.
-- **Every command reachable non-interactively**, and **`--json` on every command**. Two contracts,
-  both live: the fact-reporting commands are read as `key=value` human text, which is byte-for-byte
-  what the scripts printed and what every skill still parses; `mkit findings` is read as `--json`,
-  by `review` at steps 3, 4 and 6. `--json` is where the rest migrate; nothing else reads it yet.
-- **Judgement stays in Markdown.** The binary owns mechanical invariants only.
-- **Skills stay as files** — shipped by the package, never `embed.FS`; they must stay diffable.
+- **Layering.** `core` returns data · `cmd/` formats · `tui/` renders. No logic in a Bubble Tea `Update`.
+- **No TUI off a TTY** — no ANSI/alt-screen on a pipe; skills pipe the binary.
+- **Every command non-interactive-capable, `--json` on all.** Live contracts: fact commands' `key=value`
+  text (byte-for-byte the old scripts', parsed by every skill); `mkit findings --json` (`review` steps
+  3, 4, 6). Others migrate to `--json`; nothing reads it yet.
+- **Judgement stays in Markdown**; binary does mechanical invariants only.
+- **Skills stay as files**, never `embed.FS` — diffable.
 
 ## The port, and what it left behind
 
-**The shell layer is gone** (M5). The rules that got it there are kept because they govern the
-milestone that is left (M8 `mkit plan`) and because they explain why the code
-reads as it does:
+Shell layer gone (M5); its rules still apply:
 
-- The deleted `.bats` file **was the spec** for each script — the `go test` beside each package is
-  a port of it, not a re-derivation from the shell. Do not "simplify" an assertion whose comment
-  names a measured failure.
-- **One implementation of one invariant.** Each script was deleted in the commit that landed its
-  replacement, and no Go package may grow a second wording of a degradation sentence.
-- Deleting degradation branches was part of the win — a binary is never half-capable, so
-  `jq-missing`, `no-hash`, `gate_cache=no-jq`, `gh=no-cache` and `scripts_state=no-jq` died with
-  the forks and temp files they existed for.
+- Deleted `.bats` **was the spec**; each `go test` ports it. Don't "simplify" an assertion whose
+  comment names a measured failure.
+- **One implementation per invariant**; never a second wording of a degradation sentence.
+- Never half-capable: `jq-missing`, `no-hash`, `gate_cache=no-jq`, `gh=no-cache`, `scripts_state=no-jq` stay dead.
 
 ## Layout
 
 ### The binary
-- `cmd/mkit/main.go` — entrypoint only: build the root, exit with `cli.Fail`'s status (1, or 2 for a usage error). No logic.
-- `internal/cli/` — the cobra tree. `root.go` owns the **front-end contract**: `--json`,
-  `--no-tui`, `--yes` resolved once in `PersistentPreRun` into an `Options` on the command
-  context. Read it via `cli.FromContext(cmd)` — never re-check a flag or call `term.IsTerminal`
-  inside a command.
-- `internal/core/` — data-returning logic. Never prints, never assumes a terminal.
-  - `cache/` (M2): `provider.go` (the provider/category table), `scan.go` (read-only),
-    `apply.go` (deletes only what `Scan` named, home-containment guarded), `size.go`
-    (`HumanBytes`).
-  - `gitrepo/` (M7): the few git questions the config surfaces ask. **`Ignored` runs
-    `check-ignore` twice on purpose** — `-v` exits 0 and prints the pattern for a *negated* path
-    too, so it answers "which rule decided this", not "is it ignored"; `-q` is the boolean and
-    `-v` runs only afterwards, to name the file a remedy must edit.
-  - `repoconfig/` (M7): `<toplevel>/.mkit/config.toml`. `Stat` returns
-    `tracked|untracked|shadowed|absent`; **shadowed** is a repo carrying the legacy
-    directory-only `.mkit/` rule, where a written config would silently never travel.
-    `Write` renders a **commented template** rather than marshalling — the file is committed and
-    read in a diff, and no Go TOML marshaller preserves comments. `ShadowedRemedy` is the
-    **one producer** of the shadowed-config sentence. `mkit doctor` and `mkit facts` both read it;
-    neither re-words it.
-  - `initplan/` (#31): the `mkit init` form as data. `Build` turns the pinned config, the
-    discovered profile (`profile.Discover`, no config applied, so the tiers stay apart) and the
-    repo candidates `Gather` collected into pages of questions; `Apply` turns answers back into a
-    config. Pre-selection is **pinned → discovered → form default**: what discovery found is
-    pinned (gate commands, history scopes, spec store, merge style) — reviewers excepted, since a
-    pinned list replaces `pr`'s per-path CODEOWNERS match — and the only form defaults are
-    `merge.style = merge` and `review.mode = full`. Pages are walked Spec → Commit → Review →
-    Merge; Gate and Cleanup are `Optional`, written as pre-selected and opened from the review
-    page. Custom text is validated by the same `repoconfig` rules as the flags.
-  - `profile/` (M7): merges discovered with pinned, tagging every value. Gate discovery —
-    and the pinned-over-discovered merge — belong to `gate.Detect` since M5; the profile
-    consumes the tagged result rather than redoing it. `gate.Detect` lays the repo's own
-    task-runner recipes (`runners.go`: justfile, Makefile, Taskfile, deno tasks) over the
-    ecosystem chain **per step** — a runner's `test` replaces `go test ./...`, a step it lacks
-    keeps the ecosystem command, and a recipe the ecosystem never proposes (`lint` in a Go repo)
-    joins in `GateSteps` order.
-  - `pluginroot/` (M7): locates the payload — `CLAUDE_PLUGIN_ROOT`, `MKIT_PLUGIN_ROOT`, a
-    `plugin/` beside the work tree, then the marketplace checkout. Every *searched* candidate is
-    identified by the **manifest's own name**, never by path: the checkout is named after the
-    marketplace *owner* (`marketplaces/masterik/plugin`), so a path test for the repo name
-    matches nothing. The two environment variables are explicit overrides and are trusted as
-    given. **The work tree comes before the installed copy** — in a payload checkout the tree
-    being edited is what a report is about, and an installed 0.14.0 answering for a 0.16.0 work
-    tree is a wrong answer that looks right.
-  - `doctor/` (M7): the checks. Reports; fixes nothing; exit status stays 0 with findings.
-    `orphans.go` is the closed table of paths an older mkit wrote (old `.mkit/work/`, `<git-dir>/mkit`, the
-    hook's `bootstrap.*`), each reported as a `leftovers` warning with the `rm` to run. An entry is dropped
-    once every machine has run a release past the one that stopped writing it.
-  - `scratch/` (M5): `<toplevel>/.mkit/` — the scratch root, and the **only** package that writes
-    *runtime state* inside a user's work tree. The one other writer there is `repoconfig`, which
-    writes the committed `.mkit/config.toml`; both are on `writes_test.go`'s reviewed allowlist,
-    which counts the write sites per file so adding one to a listed file still fails the test. `EnsureIgnored` puts the `.mkit/*` + `!.mkit/config.toml`
-    pair in the common dir's `info/exclude` before the first create; `Ignored` probes **two**
-    paths, because an unrelated `*.jsonl` rule hides the ledger while leaving every run
-    directory untracked. `TestWriteSitesAreOnTheReviewedAllowlist` asserts the three write
-    locations, chosen by lifetime, by shape against a list a human reviewed. It also owns `~/.mkit` (`MKIT_HOME`) and the one
-    remedy sentence for an unwritable one — `mkit doctor` and `mkit facts` both read that producer
-    rather than wording it twice.
-  - `facts/` (M5): every starting fact a skill reads, gathered in one call. `cd` to the toplevel
-    first, so the pathspec'd file lists and the `--shortstat` beside them cannot disagree; **both**
-    `unstaged_stat` and `staged_stat`, always, because a bare `git diff --shortstat` on fully-staged
-    work reads exactly like a clean tree; `untracked_file_list` as its own block, because `git diff`
-    never lists an untracked file; `:(exclude).mkit` on every enumeration of the user's work; and an
-    unresolvable `--base` prints `base_state=unresolvable` **and** exits 1 — as does an
-    unresolvable `--range`, which used to print an empty range and exit 0, a result a skill
-    cannot tell from a range with nothing in it. A git query that fails is never reported as
-    an empty answer: a `git status` that cannot run is an error, not `clean=yes`.
-  - `branchstatus/` (M5): `cleanup`'s classifier — every local branch's merge/upstream/PR
-    state and every worktree's origin/cleanliness. One batched `gh` call, never a per-branch
-    round trip. `--default` is never re-derived, `$default`/`$develop` are tested directly
-    rather than by splitting a joined string (a branch name may contain a comma), and a
-    `merged` PR match is refused when its `headRefOid` is not the branch tip or an ancestor.
-    A worktree whose `git status` fails is `clean=error`, never collapsed into `yes`.
-  - `gate/` (M5): `Fingerprint` (the staging- and commit-invariant content hash — symlinks
-    hashed as their target path, a tracked file replaced by a directory leaving the mapping,
-    `.mkit` dropped from the HEAD mapping as well as the overlays), `Ledger` (append, classify,
-    rotate) and `Run` (step execution, full log, bounded excerpt). The two `gate run` call forms
-    execute the same string but **normalize the ledger key differently**, and that seam is what
-    makes a `review` → `finish` cache hit possible at all.
-  - `sessionaudit/`: `mkit audit sandbox` (the old `sessions` is a hidden alias for one release: a plugin one release behind still opens with it) — reads `<claude home>/projects/**/*.jsonl` (the
-    `cache` package's `CLAUDE_HOME` rule, not a second one) and classifies every tool result the
-    sandbox or the permission gate had a say in. **Each result is matched against its own call**, paired
-    by `tool_use_id`, never by substring over a transcript: that counted every `cat` of a doc quoting
-    the markers. The three refusals are **anchored at the start of the result**, where Claude Code puts
-    them. An EPERM is found by **the line's shape**, not the exit status — `git push … | tail` exits 0
-    whatever push did, and a `grep` over docs that quote the error exits 1 — so a backticked, table,
-    diff, comment or numbered-listing line is a file being read, not a command failing. An override is
-    **preemptive** when no block had preceded it in its transcript by the time it was *called* — calls issued
-    in one turn return in any order. The window is each event's own timestamp, the file's mtime only a
-    prefilter: a session resumed today still holds last month's events. Its own runs are skipped, and so
-    are queries of the report the skill saves (`sandbox-audit.*`), or each scan would re-count the last
-    one's output. Read-only; the `sandbox-audit` skill holds the judgement. `AttachConfig` then marks each
-    sandbox-block target `covered`/`protected` from `claudecfg`.
-  - `claudecfg/`: the settings the audit reasons about — user `settings.json` under the same `CLAUDE_HOME`
-    rule, plus `.claude/settings{,.local}.json` of every project root. **A file that is absent is no entry;
-    one that cannot be read or parsed is `unreadable`, never an empty config** — "nothing allowlisted" and
-    "could not look" lead to opposite advice. `Roots` resolves a working directory to its work tree top
-    (a linked worktree stays its own; a removed path is skipped). `Judge` matches a target against
-    `allowedDomains`/`allowWrite`/`additionalDirectories` and refuses protected paths (`settings*.json`,
-    hooks, skills, plugins): an entry there is inert. The closed key table in `keys.go` only flags
-    unknown keys under `sandbox`/`permissions`/`autoMode`; it can lag the docs, so it prompts a look, not a verdict.
-  - `findings/` (M4): the review-run arithmetic — validate, similarity, reconcile, group, report.
-    Records are an **order-preserving `Record`**, not a struct: `reconciled.jsonl` and `final.jsonl`
-    re-serialize wholesale, and a struct would silently drop `fix`, `also` or anything a reviewer
-    added. Numbers stay `json.Number` so `line: 42.5` is still not an integer. `toFixed2` rounds
-    half **away from zero** on the exact binary value, matching JS — Go's own `FormatFloat` rounds
-    half to even, and `sim` is compared against `--sim`/`--band`, so 0.125 decides whether a merge
-    is flagged as thin or an unmerged pair comes back for review — location decides the merge
-    itself. Every order-bearing sort is `sort.SliceStable`; ids come from a sort with ties. Writes the run
-    directory's artefacts, prints nothing.
-  - `worklog/` (M6): the per-branch record of what each step concluded,
-    `<toplevel>/.mkit/worklog/<branch>.jsonl`. `FileName` is the branch→file mapping **both verbs go
-    through** — one that `show` and `append` derive separately is one they eventually disagree
-    about, and the symptom is an empty log rather than an error. It escapes to `%XX` and then
-    appends the **full** SHA-256 of the exact branch to **every** name: macOS is
-    case-insensitive, so `JIRA-123` and `jira-123` would otherwise be one file; a digest added
-    only to the uppercase ones is still ordinary branch text that another branch could spell; and
-    a truncated one turns "same string" into "same string, or unlucky". Since git allows ref names
-    longer than a filename may be, the name is budgeted against `NAME_MAX` and the **readable
-    half** is what gets cut to fit, never the digest — injectivity was never carried by the
-    readable half, and an unbudgeted name would not degrade but fail outright, `open` returning
-    ENAMETOOLONG so the branch could not record at all. Rotation matches the gate ledger's
-    down to the constant (`Keep = 200`, trim past `Keep*2`, dead heads first, mkdir
-    lock with the 60-minute staleness break) — including its hardest rule: **a rotation that cannot
-    read the file cleanly does not rotate.** The fingerprint is
-    **`gate.Fingerprint`**, never reimplemented.
-- `internal/tui/` — Bubble Tea rendering over `core`, one subpackage per command.
-  `internal/tui/ui/` is the shared lipgloss styling (palette, status icons, tables, bars) behind the
-  human forms of `doctor`, `repo profile`, `branch status`, `cache prune`, `audit sandbox`, `init` and
-  `version`. Those run only when `Options.Pretty` is set — stdout a terminal and neither `--json` nor
-  `--no-tui` given — so a pipe, an agent and every skill still get the unchanged `key=value` text.
-  `internal/tui/cacheprune/` (M2): the size-sorted tick-list `cache prune --apply` opens on a
-  TTY. `internal/tui/repoinit/` (M7, #31): the `mkit init` wizard, a plain Bubble Tea model
-  over an `initplan.Plan` in the clack style (answered prompts collapse to one `◇` line each).
-  Plain Bubble Tea rather than `huh`, for what `huh` could not do: Esc backs up and aborts only on
-  the first prompt, a locked branch is shown but never reachable by the cursor, Back from review
-  lands on the last prompt, and a list scrolls only once its cursor would leave the window.
-  Neither holds command logic — one toggles selection, the other walks a plan and returns answers.
-- `internal/buildinfo/` — version/commit/date, injected by `-X` ldflags at release.
-- `tools/` — shell that is not part of the plugin payload; staging for a port, and the home
-  for one-shot and maintainer scripts. `release.sh` is the one resident (`just release`).
+- `cmd/mkit/main.go` — entrypoint only; exits with `cli.Fail`'s status (1; 2 = usage).
+- `internal/cli/` — cobra. `root.go` = **front-end contract**: `--json`/`--no-tui`/`--yes` resolved once
+  in `PersistentPreRun` into `Options`; read via `cli.FromContext(cmd)`, never re-check a flag or
+  `term.IsTerminal`.
+- `internal/core/` — returns data; never prints or assumes a terminal.
+  - `cache/` (M2): read-only `Scan`; `apply.go` deletes only what `Scan` named, home-containment guarded.
+  - `gitrepo/` (M7): **`Ignored` runs `check-ignore` twice**: `-v` exits 0 for a *negated* path too
+    (answers "which rule", not "ignored?"); `-q` is the boolean, then `-v` names the file to edit.
+  - `repoconfig/` (M7): `.mkit/config.toml`. `Stat` → `tracked|untracked|shadowed|absent`
+    (**shadowed** = legacy dir-only `.mkit/` rule; config would never travel). `Write` renders a
+    **commented template** (no Go TOML marshaller keeps comments). `ShadowedRemedy` = **sole producer**
+    of that sentence; `doctor`/`facts` never re-word it.
+  - `initplan/` (#31): `mkit init` form as data. `Build` (pinned config + `profile.Discover` without
+    config, tiers apart + `Gather` candidates → pages); `Apply` (answers → config). Pre-select
+    **pinned → discovered → default**; discovered gets pinned (gate, scopes, spec store, merge style)
+    except reviewers (pinned list replaces `pr`'s CODEOWNERS match). Defaults only `merge.style = merge`,
+    `review.mode = full`. Pages Spec → Commit → Review → Merge; Gate/Cleanup `Optional`, pre-selected,
+    opened from review. Custom text uses `repoconfig`'s flag rules.
+  - `profile/` (M7): merges discovered + pinned, tags each value; consumes `gate.Detect`'s gate
+    result. `gate.Detect` overlays task-runner recipes (`runners.go`: just, make, Taskfile, deno) on
+    the ecosystem chain **per step** — runner `test` replaces `go test ./...`, missing step keeps the
+    ecosystem's, extras (`lint`) join in `GateSteps` order.
+  - `pluginroot/` (M7): `CLAUDE_PLUGIN_ROOT`, `MKIT_PLUGIN_ROOT` (trusted as given), `plugin/` beside
+    the work tree, marketplace checkout. Searched ones matched by **manifest name, never path**
+    (checkout is `marketplaces/masterik/plugin`). **Work tree before installed copy** — else an old
+    install answers for a newer tree, wrong but plausible.
+  - `doctor/` (M7): reports, fixes nothing, exit 0. `orphans.go`: closed table of old mkit paths
+    (`.mkit/work/`, `<git-dir>/mkit`, `bootstrap.*`) → `leftovers` warning + `rm`; drop an entry once
+    every machine is past the release that stopped writing it.
+  - `scratch/` (M5): owns `.mkit/`; **sole writer of runtime state** in a work tree (`repoconfig` writes
+    `config.toml`). `writes_test.go` counts write sites per file. `EnsureIgnored` writes the ignore
+    pair to `info/exclude` before first create; `Ignored` probes **two** paths (a `*.jsonl` rule hides
+    the ledger, run dirs untracked). Owns `~/.mkit` (`MKIT_HOME`) and its one unwritable remedy sentence.
+  - `facts/` (M5): all starting facts, one call. `cd` toplevel first (pathspec lists and `--shortstat`
+    agree). **Both** `unstaged_stat` and `staged_stat` (fully-staged looks clean otherwise);
+    separate `untracked_file_list`; `:(exclude).mkit` everywhere. Unresolvable `--base` →
+    `base_state=unresolvable` **+ exit 1**; same for `--range` (empty + exit 0 looks like an empty range).
+    Failed git query = error, never empty (`git status` failing ≠ `clean=yes`).
+  - `branchstatus/` (M5): `cleanup`'s classifier (branch merge/upstream/PR, worktree origin/clean).
+    **One batched `gh` call.** `--default` never re-derived; `$default`/`$develop` tested directly
+    (names may contain commas). `merged` match refused unless `headRefOid` is tip or ancestor. Failed
+    worktree `git status` → `clean=error`.
+  - `gate/` (M5): `Fingerprint` (staging-/commit-invariant; symlink = target path; file→dir leaves
+    mapping; `.mkit` dropped from HEAD and overlays), `Ledger` (append/classify/rotate), `Run` (full
+    log, bounded excerpt). The two `gate run` forms **normalize the ledger key differently** — that
+    seam enables the `review` → `finish` cache hit.
+  - `sessionaudit/`: `mkit audit sandbox` (hidden alias `sessions`, one release). Reads
+    `<claude home>/projects/**/*.jsonl` (`cache`'s `CLAUDE_HOME` rule). Classifies results the
+    sandbox/gate touched: **paired to their call by `tool_use_id`**, never transcript substring (that
+    counted `cat`s of docs); three refusals **anchored at result start**; EPERM by **line shape**, not
+    exit status (`git push … | tail` exits 0; doc `grep` exits 1) — backticked/table/diff/comment/
+    numbered line = file read. Override **preemptive** if no block preceded it when *called* (same-turn
+    calls return out of order). Window by event timestamp, mtime only prefilter. Skips own runs and
+    `sandbox-audit.*` queries (no re-counting). Read-only; `AttachConfig` marks targets
+    `covered`/`protected` via `claudecfg`.
+  - `claudecfg/`: user `settings.json` + each root's `.claude/settings{,.local}.json`. **Absent = no
+    entry; unreadable/unparseable = `unreadable`, never empty** (opposite advice). `Roots`: cwd → work
+    tree top (linked worktree its own, removed skipped). `Judge` matches
+    `allowedDomains`/`allowWrite`/`additionalDirectories`; protected paths (`settings*.json`, hooks,
+    skills, plugins) are inert. `keys.go` flags unknown `sandbox`/`permissions`/`autoMode` keys; may lag docs — a hint, not a verdict.
+  - `findings/` (M4): validate, similarity, reconcile, group, report. **Order-preserving `Record`**, not
+    a struct (re-serialized wholesale; a struct drops `fix`, `also`, extras). `json.Number` (`42.5`
+    stays non-integer). `toFixed2` rounds half **away from zero** on the exact binary value, like JS
+    (Go is half-to-even); at 0.125 `sim` vs `--sim`/`--band` decides thin-merge flag or re-review —
+    location decides the merge. `sort.SliceStable` throughout; ids from a sort with ties. Writes
+    artefacts, prints nothing.
+  - `worklog/` (M6): `.mkit/worklog/<branch>.jsonl`. **`FileName` is the one mapping both verbs use**
+    (drift shows as an empty log). `%XX`-escape + **full** SHA-256 of the exact branch on **every**
+    name (macOS case-insensitive; partial or truncated digest still collides). Budgeted to `NAME_MAX`,
+    cutting the **readable half, never the digest** (else ENAMETOOLONG, no record). Rotation = gate
+    ledger's (`Keep = 200`, trim past `Keep*2`, dead heads first, mkdir lock, 60-min stale break);
+    **can't read cleanly → don't rotate.** Uses **`gate.Fingerprint`**.
+- `internal/tui/` — Bubble Tea over `core`. `ui/`: shared lipgloss for human forms (`doctor`, `repo
+  profile`, `branch status`, `cache prune`, `audit sandbox`, `init`, `version`), only when
+  `Options.Pretty` (TTY, no `--json`/`--no-tui`). `cacheprune/`: tick-list for `cache prune --apply`.
+  `repoinit/`: `init` wizard over `initplan.Plan`, clack style. Plain Bubble Tea, not `huh`: Esc backs
+  up (aborts on first prompt only), locked branch cursor-unreachable, Back from review → last prompt,
+  scroll only when cursor leaves window. No command logic in either.
+- `internal/buildinfo/` — version/commit/date via `-X` ldflags.
+- `tools/` — non-payload maintainer shell; only `release.sh`.
 
 ### The plugin payload
-- `plugin/` — the plugin payload, shipped from the **GitHub marketplace**
-  (`/plugin marketplace add masterik/mk-toolkit`, resolving the root `.claude-plugin/marketplace.json`).
-  Homebrew ships the **binary only**: the cask carries one executable, `.goreleaser.yaml`
-  deliberately declares no `files:`, and there is nothing to register — a cask has no stable path
-  anyway (no `opt/` symlink; Caskroom is version-pinned), and `~/.claude/settings.json` is
-  sandbox-denied besides. The two artifacts version independently, which is accepted rather than
-  worked around ([ADR 0003](docs/adr/0003-two-distribution-channels.md), which withdrew M3).
-- `plugin/.claude-plugin/plugin.json` — manifest (skills auto-discovered from `skills/`).
-  The marketplace entry, `marketplace.json` (`source: "./plugin"`), lives at the **repo root**
-  `.claude-plugin/` — not nested under `plugin/` — because `/plugin marketplace add owner/repo`
-  always looks for `.claude-plugin/marketplace.json` at the repository root; there is no
-  subdirectory syntax for the GitHub-shorthand or git-URL forms.
-- **The plugin ships no hooks.** `hooks/hooks.json` and its one `SessionStart` script were
-  removed in 0.15.0 — prerequisite reporting belongs to the binary (M7's `doctor`), and a hook
-  that could not depend on the binary was the only reason it stayed in bash. Don't add a `hooks`
-  key to the manifest either. **No `Stop` / `SubagentStop` hook, deliberately** — see
-  `concept.md`'s "considered and dropped": that event's `additionalContext` is rendered verbatim
-  in the transcript every turn and cannot be suppressed. If a hook is ever reintroduced, it goes
-  at the **plugin root** in `hooks/hooks.json` (not `.claude-plugin/`), is auto-discovered, and
-  takes no `matcher` — a mistyped matcher is a hook that silently never runs.
-- `plugin/skills/<name>/SKILL.md` — the triggerable skills. The workflow is **seven steps**
-  (`brainstorm` → `spec` → `implement` → `commit` → `review` → `pr`/`finish`) plus four outside the
-  line: `cleanup` (repo-wide branch/worktree gardening), `sandbox-audit` (user-wide: every
-  session's sandbox and permission-gate events, turned into a proposed settings diff — report-only,
-  never edits a settings file), and two reading aids, `explain` (the last answer or one session item,
-  re-said in plain English — **the one skill with no binary dependency**, since it does no mechanical
-  work) and `recap` (the branch's status in plain English from session, worklog and git — read-only,
-  `mkit facts recap --no-run`, writes no worklog record). Both share
-  `_shared/references/plain-english.md`. **Eight exist today** — `commit`, `review`, `pr`, `finish`,
-  `cleanup`, `sandbox-audit`, `explain`, `recap`; the front half is designed and unbuilt (`backlog.md`,
-  M8), so don't describe `brainstorm`/`spec`/`implement` as shipping.
-  The steps are **composable, not sequential**: each is entry-capable, runs alone in any order with
-  any subset skipped, derives the thin version of what it can't find, and names what it assumed.
-  Never write a skill that tells the user to run another skill first, or that runs a step
-  downstream of itself. The contract is `_shared/references/workflow-contract.md`.
-- `plugin/skills/_shared/` — shared references (no `SKILL.md`); skills link in via
-  `../_shared/references/…`. **Keep those relative paths intact** — they're what makes the bundle
-  portable.
-- **The payload ships no executable code at all** (M5). `plugin/` is the manifest, the skills and
-  `_shared/`; there is no `scripts/`, no `lib/common.sh`, and nothing in it is run. `mkit facts
-  <skill>` is every repo-scoped skill's first call — it opens the run directory under `<toplevel>/.mkit/` and
-  returns every starting fact, including the three that say what this machine will let a skill do:
-  `scratch_ignored=`, `user_dir_writable=` and `git_bin=` (the absolute git path, for any call whose
-  output a skill parses — an output-reshaping hook can hand it a summarized status that reads
-  exactly like the tree). A cause needing a sentence goes in the trailing `notes:` block, never on
-  a `key=value` line, since several of those pack more than one pair.
-- **No prerequisite reporting in the payload.** `session-bootstrap.sh` and `install.sh` are both
-  gone (0.15.0). **`mkit doctor` is the report now** (M7) — human-run, on demand. What it does
-  not restore, deliberately: it cannot run unprompted at session start, and cannot report that
-  `mkit` itself is absent. Both were the hook's job and both stay accepted losses; don't re-add a
-  reporter for them. `mkit facts`' `user_dir_writable=` and `config_state=` starting facts
-  are what a *skill* reads, since `doctor` is for a human.
-- `<toplevel>/.mkit/` — the scratch root, owned by `internal/core/scratch`: per-run directories plus `gate.jsonl` (the gate
-  ledger, append-only, rotated back to the newest 200 records once it passes 400) and `worklog/`
-  (M6's worklog, one `<branch>.jsonl` per branch, same append-only shape and same rotation) — **and one
-  committed file, `config.toml`**, the repo config `mkit init` writes
-  ([ADR 0001](docs/adr/0001-per-repo-config-and-init.md#amendment-the-config-path)). That is why
-  the ignore rule is the **pair** `.mkit/*` + `!.mkit/config.toml` and not a directory-only line:
-  git cannot re-include a file whose parent directory is excluded. Both lines go in together —
-  `.mkit/*` alone would hide repo config from `git add`. `.gitignore` **outranks** the common
-  dir's `info/exclude`, so a negation in the exclude cannot lift a `.mkit/` rule in a committed
-  `.gitignore`; the remedy names whichever file git reported. **Inside the
-  working directory, not `<git-dir>/mkit`** ([ADR 0002](docs/adr/0002-state-locations-under-a-sandbox.md)):
-  under a shared `.git` it resolved into the main checkout, where the worktree-isolation guard
-  refuses every write, and `mkit facts` opens it as every repo-scoped skill's first call. `--show-toplevel`, so a
-  linked worktree still gets its own. Scratch is never committed — `scratch.EnsureIgnored` puts the
-  rule in the common dir's `info/exclude` **before** the first write, which is load-bearing rather
-  than tidy: unignored, `git worktree remove` refuses, `git add -A` would commit run artefacts, and
-  the gate fingerprint sees a directory that changes while the gate runs. `mkit facts` reports
-  `scratch_ignored=` because an isolated session cannot write that file. `mkit scratch prune` only removes
-  `<skill>-*` **directories**, which keeps `gate.jsonl` and `worklog/` out of its range. The worklog
-  needs **no ignore rule of its own** — `.mkit/*` already covers it, and a second rule would be a
-  second thing to keep true.
-- `~/.mkit/` — the declared home for state outside a repo, overridable with `MKIT_HOME` (the tests
-  set it so a developer's real state cannot affect a run). **The binary writes nothing there today**:
-  its two files, `bootstrap.state` and `bootstrap.disabled`, went with the hook in 0.15.0. The one
-  file in it is `sandbox-audit.md`, the `sandbox-audit` skill's ledger, written by the agent rather
-  than by `mkit`. It keeps its definition because it is where the binary's user-scoped state will
-  land, and `mkit facts` still probes it so
-  an unwritable one is a starting fact rather than a later surprise. **Not `~/.claude/mkit/`**: that
-  region is sandbox-*protected*, where an allowlist entry is inert, so it was a path no remedy could
-  point at; here, one `permissions.additionalDirectories` entry works.
-- `$TMPDIR` for anything that dies with the command. The division is by lifetime, not by caller.
-  Go's own temp-file API honours `$TMPDIR`; the Darwin per-user temp directory fails outright
-  under the sandbox.
-  `internal/core/scratch`'s `TestWriteSitesAreOnTheReviewedAllowlist` asserts the write set
-  statically, since it has no behavioral seam: every file that writes is on a list a human
-  reviewed.
+- `plugin/` — **Markdown only** (manifest, skills, `_shared/`): no scripts, hooks, `tests/`; nothing
+  runs. Homebrew ships **binary only** (no `files:` in `.goreleaser.yaml`; casks have no stable path;
+  `~/.claude/settings.json` sandbox-denied). Versions independently, accepted ([ADR 0003](docs/adr/0003-two-distribution-channels.md)).
+- `plugin/.claude-plugin/plugin.json` — manifest, skills auto-discovered. `marketplace.json`
+  (`source: "./plugin"`) at **repo-root** `.claude-plugin/`: `/plugin marketplace add owner/repo`
+  looks only there.
+- **No hooks**, no `hooks` key (removed 0.15.0). **No `Stop`/`SubagentStop` hook** — its
+  `additionalContext` renders in the transcript every turn (`concept.md`). If ever reintroduced:
+  plugin-root `hooks/hooks.json`, **no `matcher`** (mistyped = silently never runs).
+- `plugin/skills/<name>/SKILL.md` — **seven-step** workflow (`brainstorm` → `spec` → `implement` →
+  `commit` → `review` → `pr`/`finish`) plus `cleanup` (branches/worktrees), `sandbox-audit` (user-wide
+  → proposed settings diff, never edits), `explain` and `recap` (plain English, share
+  `_shared/references/plain-english.md`; `explain` has **no binary dependency**; `recap` read-only,
+  `mkit facts recap --no-run`, no worklog record). **Eight exist**: `commit`, `review`, `pr`, `finish`,
+  `cleanup`, `sandbox-audit`, `explain`, `recap`; `brainstorm`/`spec`/`implement` unbuilt (M8) — never
+  describe as shipping. Steps **composable, not sequential**: entry-capable, any order/subset, derive
+  a thin version of what's missing, name assumptions. Never tell the user to run another skill first
+  or run a downstream step. Contract: `_shared/references/workflow-contract.md`.
+- `plugin/skills/_shared/` — references, no `SKILL.md`; **keep `../_shared/references/…` paths relative**.
+- `mkit facts <skill>` opens a run dir and reports what the machine allows: `scratch_ignored=`,
+  `user_dir_writable=`, `config_state=`, `git_bin=` (absolute git for parsed calls — a reshaping hook
+  can summarize output). Causes go in trailing `notes:`, never on a `key=value` line (some pack two pairs).
+- **`mkit doctor` is the prereq report** (human-run). Accepted losses — don't re-add a reporter: no
+  session-start run, can't report `mkit` absent. Skills read `facts`, not `doctor`.
+- `<toplevel>/.mkit/` — run dirs, `gate.jsonl` (append-only, back to 200 past 400), `worklog/` (same),
+  **plus committed `config.toml`** ([ADR 0001](docs/adr/0001-per-repo-config-and-init.md#amendment-the-config-path)).
+  - Ignore **pair** `.mkit/*` + `!.mkit/config.toml`, always together (git can't re-include under an
+    excluded dir; `.mkit/*` alone hides config from `git add`). `.gitignore` **outranks**
+    `info/exclude`; remedy names the file git reported.
+  - **Work tree, not `<git-dir>/mkit`** ([ADR 0002](docs/adr/0002-state-locations-under-a-sandbox.md)):
+    shared `.git` → main checkout, refused by worktree isolation. `--show-toplevel`: one per worktree.
+  - Rule written **before** first write: else `git worktree remove` refuses, `git add -A` commits
+    artefacts, fingerprint sees a changing dir. `scratch_ignored=` exists because isolated sessions
+    can't write `info/exclude`.
+  - `mkit scratch prune` removes only `<skill>-*` dirs. Worklog needs no rule of its own.
+- `~/.mkit/` (`MKIT_HOME`) — future user-scoped binary state; binary writes nothing now. Holds
+  `sandbox-audit.md` (agent-written ledger). `facts` probes it. **Not `~/.claude/mkit/`**: protected
+  region, allowlists inert; here one `permissions.additionalDirectories` entry works.
+- `$TMPDIR` — dies with the command. Go honours it; the Darwin per-user temp dir fails under sandbox.
 
 ### Docs and tests
-- `docs/` — `concept.md` (direction/roadmap), `backlog.md` (ordered work list + invariants),
-  `prerequisites.md` (required tooling, setup, permission allowlist, and the sandbox grants the
-  toolkit and its composed tools need), `adr/` (decisions that were hard to reverse, one file per
-  decision — `0001` reverses "no setup step" for repo scope; `0002` supersedes its state-location
-  table and records why the sandbox's protected-path region made relocation the only fix), `ideas/`
-  (researched but
-  unscheduled, one file per idea — evidence parked so a later decision doesn't re-derive it;
-  nothing in it is on the milestone line). Doc-only; nothing here ships in the cask.
-- **Tests are Go's, beside their packages** — `tests/` and its bats suites went with the shell in
-  M5, and each `.bats` was ported into the `_test.go` next to the code that replaced it. Every test
-  that touches state builds a throwaway repo under `$TMPDIR` and points `MKIT_HOME` inside it; no
-  test touches `HOME`, which is the whole containment story. `internal/cli`'s tests drive the real
-  cobra root — argv in, stdout, exit code out — because that is the interface the skills call.
+- `README.md` (users) and `CONTRIBUTING.md` (contributors) — short, pointing here.
+- `docs/` (not shipped) — `concept.md` (direction), `backlog.md` (work + invariants),
+  `prerequisites.md` (tooling, allowlist, sandbox grants), `adr/` (one per decision; `0001` adds a repo
+  setup step, `0002` supersedes its state locations because of the protected region), `ideas/`
+  (researched, unscheduled).
+- **Go tests beside packages** (ported `.bats`). Stateful tests use a throwaway `$TMPDIR` repo with
+  `MKIT_HOME` inside; never `HOME`. `internal/cli` tests drive the real cobra root (argv → stdout,
+  exit code).
 
 ## Conventions
 
-- **macOS-only.** Nothing detects or branches on an OS. `.goreleaser.yaml` builds `darwin` only —
-  amd64 + arm64 is the whole matrix, and a Homebrew **cask** cannot install on Linux regardless.
-  Go's cross-compilation stays available if that changes; it is not a requirement today
-  (`backlog.md`, Later). Prefer `path/filepath` and stdlib over shelling out — for testability, not
-  portability. The one deliberate shell dependency left is `mkit gate run`, which executes a step as
-  `bash -c '<command>'` so `-- sh -c 'a && b'` keeps meaning what it says.
-- **The payload runs nothing.** All mechanical work is in Go; `plugin/` is Markdown.
-- Add a command only for a mechanical invariant, never for a decision. Where the line is unclear,
-  report candidates and let the skill choose. Hooks are held one step further out: they may compute
-  the gap, never fill it.
-- Commands report and run; they never stage, merge, push or edit. They parse stable machine output
-  (`--porcelain`, `--shortstat`/`--name-only`, `--format=json`) and never call `rtk`, which
-  reshapes output for reading.
-- **Three write locations, chosen by lifetime, and nowhere else.** `$TMPDIR` for anything that dies
-  with the command; `<toplevel>/.mkit/` for anything a later step or session reads; `~/.mkit/` for
-  user-scoped state. Plus one named exception, the common dir's `info/exclude`. Never the user's own
-  files — `.mkit/`, ignored, is the only thing mkit puts in a working tree — never `/tmp`, never
-  `~/.claude`. `internal/core/scratch`'s `TestWriteSitesAreOnTheReviewedAllowlist` asserts it by
-  shape — every file that writes is on a list a human reviewed — because the boundaries that
-  enforce it cannot be created inside a test.
-- **A degradation sentence names a remedy that works, or it says the command is human-run.** The
-  sandbox's protected-path region is why: telling a user to allowlist `~/.claude/mkit` produced a
-  configuration that looked right and changed nothing. Detect at the first call and turn it into a
-  starting fact; never add a "reduced" mode.
-- Nothing project-specific is hardcoded: quality-gate commands, commit scopes, and reviewers are
-  discovered from the target repo.
+- **macOS-only**; never branch on OS. darwin amd64+arm64 only (casks don't install on Linux).
+  Prefer stdlib over shelling out (testability). Only shell dependency: `mkit gate run` runs
+  `bash -c '<command>'`, so `-- sh -c 'a && b'` keeps its meaning.
+- Add a command only for a mechanical invariant, never a decision; unclear → report candidates, skill
+  chooses. Hooks may compute the gap, never fill it.
+- Commands report and run; never stage, merge, push, edit. Parse stable output (`--porcelain`,
+  `--shortstat`/`--name-only`, `--format=json`); never call `rtk`.
+- **Three write locations, by lifetime:** `$TMPDIR`, `<toplevel>/.mkit/`, `~/.mkit/`; one exception,
+  the common dir's `info/exclude`. Never user files, `/tmp` or `~/.claude`.
+  `TestWriteSitesAreOnTheReviewedAllowlist` (`internal/core/scratch`) asserts it against a
+  human-reviewed list — the real boundaries can't exist in a test.
+- **Degradation sentences name a working remedy or say "human-run".** (Allowlisting the protected
+  `~/.claude/mkit` looked right, did nothing.) Detect at first call as a starting fact; no "reduced" mode.
+- Nothing project-specific hardcoded: gate commands, scopes, reviewers are discovered.
 
 ## Agent skills
 
