@@ -212,8 +212,10 @@ Shell layer gone (M5); its rules still apply:
   chooses. Hooks may compute the gap, never fill it.
 - Commands report and run; never stage, merge, push, edit. Parse stable output (`--porcelain`,
   `--shortstat`/`--name-only`, `--format=json`); never call `rtk`.
-- **Three write locations, by lifetime:** `$TMPDIR`, `<toplevel>/.mkit/`, `~/.mkit/`; one exception,
-  the common dir's `info/exclude`. Never user files, `/tmp` or `~/.claude`.
+- **Three write locations, by lifetime:** `$TMPDIR`, `<toplevel>/.mkit/`, `~/.mkit/`; bounded exceptions:
+  the `.mkit/` ignore pair in the common dir's `info/exclude`, `git fetch --prune` (`branch status`),
+  `init`'s `.mkit/config.toml`, and `cache prune --apply` deleting stale `~/.claude`/`~/.codex` storage.
+  State never goes in user files, `/tmp` or `~/.claude`.
   `TestWriteSitesAreOnTheReviewedAllowlist` (`internal/core/scratch`) asserts it against a
   human-reviewed list — the real boundaries can't exist in a test.
 - **Degradation sentences name a working remedy or say "human-run".** (Allowlisting the protected

@@ -16,7 +16,7 @@ just ci          # build, vet, test, lint: what CI runs (golangci-lint v2.12)
 just run doctor  # run the binary from source, no install
 ```
 
-Run `just` on its own to list every recipe.
+Run `just --list` to list every recipe. Bare `just` runs `ci`.
 
 When running under Claude Code's sandbox, first move the Go caches into `$TMPDIR`. Otherwise the gate
 fails on cache writes, not on your code:
@@ -55,9 +55,11 @@ These are the ones changes break most often. The full list is the
 - **`--json` on every command, and no TUI off a terminal.** Skills parse the `key=value` text output,
   so treat it as an API.
 - **Commands report and run.** They never stage, merge, push, or edit your files.
-- **Writes go to three places only:** `$TMPDIR`, `<toplevel>/.mkit/` and `~/.mkit/`.
-  `TestWriteSitesAreOnTheReviewedAllowlist` enforces this. A new write site needs a reviewed edit to
-  that list.
+- **State goes to three places only:** `$TMPDIR`, `<toplevel>/.mkit/` and `~/.mkit/`. The bounded
+  exceptions: the `.mkit/` ignore pair in `info/exclude`, `git fetch --prune` (`branch status`),
+  `.mkit/config.toml` (`init`), and `cache prune --apply` deleting stale Claude Code / Codex storage.
+  `TestWriteSitesAreOnTheReviewedAllowlist` checks every Go file that writes against a reviewed list;
+  a new write site needs a reviewed edit to it.
 - **Skills are composable.** Each runs alone, in any order, and never sends the user to another
   skill first ([workflow contract](plugin/skills/_shared/references/workflow-contract.md)).
 - **Nothing project-specific is hardcoded.** Gate commands, commit scopes and reviewers are discovered

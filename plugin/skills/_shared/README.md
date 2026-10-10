@@ -10,8 +10,8 @@ one place.
 
 | Skill | Consumes |
 | --- | --- |
-| `commit` | `conventional-commits`, `git-safety`, `output-discipline`, `agent-delegation`, `summary-format` |
-| `review` | `review-severity`, `lenses-correctness`, `lenses-craft`, `triage-reconcile`, `triage-verify`, `fix-checks`, `agent-delegation`, `output-discipline`, `git-safety`, `summary-format` |
+| `commit` | `conventional-commits`, `git-safety`, `output-discipline`, `agent-delegation`, `quality-gate`, `summary-format`, `workflow-contract` |
+| `review` | `review-severity`, `lenses-correctness`, `lenses-craft`, `triage-reconcile`, `triage-verify`, `fix-checks`, `agent-delegation`, `output-discipline`, `git-safety`, `quality-gate`, `summary-format`, `workflow-contract` |
 | `pr` | everything `commit` uses, plus `worktree`, `quality-gate`, `branching`, `stacked-prs`, `workflow-contract` |
 | `finish` | `conventional-commits`, `git-safety`, `output-discipline`, `summary-format`, `worktree`, `quality-gate`, `branching`, `stacked-prs`, `workflow-contract` |
 | `cleanup` | `worktree`, `branching`, `git-safety`, `output-discipline`, `summary-format` |

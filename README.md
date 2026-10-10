@@ -35,8 +35,8 @@ edit → /mkit:commit → /mkit:review → /mkit:pr   (or /mkit:finish to merge 
 ```
 
 Skills discover gate commands, commit scopes, reviewers and merge style from the repo. `mkit init`
-can pin them in a committed `.mkit/config.toml`, but that is optional. mkit's state lives in
-`.mkit/`, which it keeps git-ignored.
+can pin them in a committed `.mkit/config.toml`, but that is optional. mkit's scratch state lives in
+`.mkit/` and is git-ignored; `.mkit/config.toml` is committed.
 
 ## The binary
 
@@ -71,7 +71,7 @@ optional tools, sandbox setup and a permission allowlist, see [Prerequisites](do
 ## Docs
 
 For users:
-- [Prerequisites](docs/prerequisites.md): install, optional tools, sandbox, permissions, troubleshooting
+- [Prerequisites](docs/prerequisites.md): install, optional tools, sandbox, permissions, Gatekeeper fix, gotchas
 - [Concept](docs/concept.md): what mkit is, its design principles, how the parts fit
 
 For contributors:

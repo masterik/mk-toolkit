@@ -30,7 +30,7 @@ tested binary.
 - **Compose, don't replace.** Orchestrate `git`, `gh`, `wt`, CodeRabbit and Codex. The binary never
   stages, merges, pushes or edits your files. Its writes are limited to:
   - its own state: run dirs, the gate ledger, the worklog;
-  - one `info/exclude` line;
+  - the `.mkit/*` + `!.mkit/config.toml` pair in `info/exclude`;
   - remote-tracking refs, via `git fetch --prune`;
   - `.mkit/config.toml`, written only by `mkit init`.
 
@@ -44,8 +44,9 @@ tested binary.
   ([workflow contract](../plugin/skills/_shared/references/workflow-contract.md)).
 - **Safe by default.** Force-push, branch delete, history rewrite and skipping hooks all go through one
   shared safety protocol.
-- **Sandbox-aware.** State lives only where the OS sandbox, the permission classifier and the
-  worktree guard already allow writes (`<toplevel>/.mkit/`, `$TMPDIR`). A path the sandbox would deny
+- **Sandbox-aware.** Repo and per-call state lives where the OS sandbox, the permission
+  classifier and the worktree guard already allow writes (`<toplevel>/.mkit/`, `$TMPDIR`); `~/.mkit/`
+  needs one grant. A path the sandbox would deny
   is reported up front, with a remedy that works ([ADR 0002](adr/0002-state-locations-under-a-sandbox.md)).
 - **Discover first, configure optionally.** Gate commands, scopes, reviewers and merge style are read
   from the repo. `mkit init` can pin them in a committed `.mkit/config.toml`; nothing requires it
@@ -117,7 +118,8 @@ There are three write locations, chosen by lifetime:
 | `<toplevel>/.mkit/` | run dirs, `gate.jsonl`, `worklog/` (all git-ignored); `config.toml` (committed) | across steps and sessions |
 | `~/.mkit/` (`MKIT_HOME`) | user-scoped state; today only the `sandbox-audit` ledger | across repos |
 
-mkit also adds one line to the common dir's `info/exclude`, so `.mkit/` stays ignored. It never stores
+mkit also adds the pair `.mkit/*` + `!.mkit/config.toml` to the common dir's `info/exclude`, so
+scratch stays ignored and the config stays addable. It never stores
 state in your files or in `~/.claude`, which is sandbox-protected, so no allowlist entry can open it.
 `cache prune --apply` deletes stale storage in `~/.claude` and `~/.codex`, and only when you ask.
 
