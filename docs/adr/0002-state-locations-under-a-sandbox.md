@@ -69,7 +69,7 @@ state.
 > **Amended 2026-09-10 — it is two steps, not one.** This decision was written as "one
 > `additionalDirectories` entry and it works". Measured afterwards: the grant covers the
 > directory's *interior*, so `mkdir ~/.mkit` is a write to `$HOME`, which nothing grants
-> (`mkdir: /Users/mk/.mkit: Operation not permitted`). The directory must exist **first**, and no
+> (`mkdir: /Users/you/.mkit: Operation not permitted`). The directory must exist **first**, and no
 > sandboxed session can create it. Every remedy sentence names both halves — `! mkdir -p ~/.mkit`,
 > run in the user's own shell, then the grant — and `mkit_user_dir_remedy()` is the single producer
 > of that sentence, which `mkit doctor` calls rather than re-wording.
@@ -146,7 +146,7 @@ without its run directory.
 - **The grant does not create the directory — an amendment to decision 2, measured after the
   fact.** A `permissions.additionalDirectories` entry for `~/.mkit` covers that directory's
   *interior*; `mkdir ~/.mkit` is a write to `$HOME`, which nothing grants
-  (`mkdir: /Users/mk/.mkit: Operation not permitted`). So "one grant and it works" is one step
+  (`mkdir: /Users/you/.mkit: Operation not permitted`). So "one grant and it works" is one step
   short: the directory must exist first, and nothing inside a sandboxed session can create it.
   Every remedy sentence must name **both** halves — create, then grant — and a human-run
   migration script is required rather than merely convenient

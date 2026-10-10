@@ -10,8 +10,7 @@ description: >
 
 # Statusline provider — starship speed + ccstatusline features
 
-**Status:** idea only, 2026-09-05. Not scheduled. Personal tooling — unrelated to mk-toolkit's
-Go-port mission, not on `backlog.md`.
+**Status:** idea only, 2026-09-05. Not scheduled. Not on `backlog.md`.
 
 **Idea.** A native Claude Code statusline provider combining starship's Rust module speed with
 ccstatusline's rate-limit usage windows (5h/weekly).

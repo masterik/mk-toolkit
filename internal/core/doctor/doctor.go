@@ -8,7 +8,7 @@
 // **It cannot restore everything they did.** Doctor does not run unprompted at
 // session start, and cannot report that `mkit` itself is absent — a missing binary
 // cannot report on itself. Both were the hook's job and both are accepted losses
-// (docs/backlog.md, "Staying in bash, permanently").
+// (docs/backlog.md, "Accepted gaps").
 //
 // Every degradation sentence has exactly one producer. Until M5 the shell was it
 // and this fetched from `lib/common.sh`; since the payload's last script went,

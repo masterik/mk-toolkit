@@ -128,7 +128,7 @@ func UserDirWritable() bool {
 //
 // **Both halves, always.** The grant covers the directory's *interior*; creating
 // the directory is a write to its parent, which nothing grants — measured:
-// `mkdir: /Users/mk/.mkit: Operation not permitted`. A sentence naming only the
+// `mkdir: /Users/you/.mkit: Operation not permitted`. A sentence naming only the
 // grant produced a configuration that looked right and changed nothing, which is
 // the exact failure ADR 0002 was written about, one level down. The `mkdir` half
 // is human-run by construction: no sandboxed session can perform it, so it is
