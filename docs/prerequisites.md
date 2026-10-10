@@ -147,7 +147,8 @@ export GOCACHE="$TMPDIR/go-build" GOMODCACHE="$TMPDIR/go-mod" GOLANGCI_LINT_CACH
 
 | Skill / command | Hosts |
 | --- | --- |
-| `pr`, `finish`, `cleanup`, `mkit branch status`, `mkit facts <skill> --gh` | `api.github.com`, `github.com` |
+| `pr`, `finish`, `cleanup`, `mkit branch status` | `api.github.com`, `github.com` |
+| `mkit facts <skill> --gh` | `api.github.com` |
 | `pr`, `finish`, `cleanup` | your remote's host |
 | `review`'s external reviewers | whatever `codex` / `coderabbit` call |
 
