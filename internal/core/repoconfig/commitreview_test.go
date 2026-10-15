@@ -178,7 +178,7 @@ func TestRemoteNameRejectsAnythingGitWouldReadAsAnOption(t *testing.T) {
 	if pb == nil || c.Remote.Name != "" {
 		t.Fatalf("a remote named --force survived: %+v %+v", c.Remote, c.Problems)
 	}
-	if strings.Contains(pb.Detail, "origin") || !strings.Contains(pb.Detail, "as if nothing were pinned") {
+	if strings.Contains(pb.Detail, "`origin` is the fallback") || !strings.Contains(pb.Detail, "as if nothing were pinned") {
 		t.Errorf("detail does not say what happens next: %s", pb.Detail)
 	}
 }
