@@ -130,6 +130,9 @@ type Options struct {
 	ConfigProblems []string
 	NoFetch        bool
 	NoGH           bool
+	// Remote is the config's pinned remote name, "" when none. Resolved against
+	// what this checkout has by gitrepo.ResolveRemote, the one resolver.
+	Remote string
 }
 
 // pullRequest is one PR as the batched lookup returns it.
@@ -156,7 +159,7 @@ func Run(repo *gitrepo.Repo, opt Options) (*Scan, error) {
 	s.Protected, s.KeepUnknown = ProtectedSet(opt.Default, s.Develop, local), unknown
 
 	current, _ := git(repo, "branch", "--show-current")
-	s.Remote = firstLine(mustGit(repo, "remote"))
+	s.Remote = repo.ResolveRemote(opt.Remote).Name
 	s.Fetch = fetch(repo, s.Remote, opt.NoFetch)
 
 	prs, ghState := lookupPRs(repo, s.Remote, opt.NoGH)
@@ -204,8 +207,14 @@ func lookupPRs(repo *gitrepo.Repo, remote string, skip bool) (map[string]pullReq
 	if err := run(repo, "gh", "auth", "status"); err != nil {
 		return nil, "gh-unauthenticated"
 	}
-	out, err := output(repo, "gh", "pr", "list", "--state", "all",
-		"--json", "headRefName,number,state,headRefOid", "--limit", "500")
+	args := []string{"pr", "list", "--state", "all",
+		"--json", "headRefName,number,state,headRefOid", "--limit", "500"}
+	// `gh` otherwise asks its own set default or remote ranking, which need not be
+	// the remote this scan fetched. Not a GitHub remote: `gh`'s own pick, as before.
+	if slug := repo.GitHubRepo(remote); slug != "" {
+		args = append(args, "--repo", slug)
+	}
+	out, err := output(repo, "gh", args...)
 	if err != nil {
 		return nil, "gh-error"
 	}
@@ -501,13 +510,6 @@ func lines(s string) []string {
 		return nil
 	}
 	return strings.Split(s, "\n")
-}
-
-func firstLine(s string) string {
-	if i := strings.IndexByte(s, '\n'); i >= 0 {
-		return s[:i]
-	}
-	return s
 }
 
 func isDir(path string) bool {

@@ -194,3 +194,31 @@ func TestProfileIsCompleteWithNoConfig(t *testing.T) {
 		t.Errorf("config state = %q, want absent", p.Config.State)
 	}
 }
+
+// A remote is a decision only when there is more than one: a pin is Pinned, a
+// pin this clone lacks and an unpinned choice are Unavailable with a cause — a
+// plausible `origin` tagged as an answer would hide that the skills will ask.
+func TestRemoteIsPinnedDiscoveredOrAnOpenQuestion(t *testing.T) {
+	repo := newRepo(t)
+	pin := func(name string) *repoconfig.Config {
+		return &repoconfig.Config{Remote: repoconfig.Remote{Name: name}}
+	}
+
+	if v := discoverRemote(repo, &repoconfig.Config{}); v.Source != Unavailable {
+		t.Errorf("no remote: %+v", v)
+	}
+	run(t, repo.Toplevel, "remote", "add", "origin", "https://example.invalid/o.git")
+	if v := discoverRemote(repo, &repoconfig.Config{}); v.Value != "origin" || v.Source != Discovered {
+		t.Errorf("one remote: %+v", v)
+	}
+	run(t, repo.Toplevel, "remote", "add", "fork", "https://example.invalid/f.git")
+	if v := discoverRemote(repo, &repoconfig.Config{}); v.Source != Unavailable || !strings.Contains(v.Cause, "ask") {
+		t.Errorf("two remotes, nothing pinned: %+v", v)
+	}
+	if v := discoverRemote(repo, pin("fork")); v.Value != "fork" || v.Source != Pinned {
+		t.Errorf("pinned: %+v", v)
+	}
+	if v := discoverRemote(repo, pin("gone")); v.Source != Unavailable || !strings.Contains(v.Cause, `"gone"`) {
+		t.Errorf("a pin this clone lacks: %+v", v)
+	}
+}

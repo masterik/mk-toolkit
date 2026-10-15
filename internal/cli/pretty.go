@@ -150,6 +150,7 @@ func prettyProfile(out io.Writer, p *profile.Profile) {
 	profList(out, s, "reviewers", p.Review, lw)
 	profValue(out, s, "review mode", p.ReviewMode, lw)
 	profValue(out, s, "merge style", p.Merge, lw)
+	profValue(out, s, "remote", p.Remote, lw)
 	profList(out, s, "cleanup keep", p.Keep, lw)
 
 	_, _ = fmt.Fprintf(out, "\n%s\n", s.Section("payload"))

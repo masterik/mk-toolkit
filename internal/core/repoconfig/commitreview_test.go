@@ -144,3 +144,34 @@ func TestIsZeroCountsTheNewKeys(t *testing.T) {
 }
 
 func intp(n int) *int { return &n }
+
+func TestRemoteNameRoundTripsAndIsCounted(t *testing.T) {
+	dir := t.TempDir()
+	c := &Config{Remote: Remote{Name: "upstream"}}
+	if c.IsZero() {
+		t.Fatal("a pinned remote is not a zero config")
+	}
+	if err := Write(dir, c); err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := Load(dir)
+	if err != nil || len(got.Problems) != 0 || got.Remote.Name != "upstream" {
+		t.Fatalf("round trip: %+v, %v", got, err)
+	}
+}
+
+func TestRemoteNameRejectsAnythingGitWouldReadAsAnOption(t *testing.T) {
+	for _, name := range []string{"-f", "two words", ""} {
+		if CheckRemoteName(name) == nil {
+			t.Errorf("CheckRemoteName(%q) accepted", name)
+		}
+	}
+	c := loadFile(t, "[remote]\nname = \"--force\"\n")
+	pb := c.Problem("remote.name")
+	if pb == nil || c.Remote.Name != "" {
+		t.Fatalf("a remote named --force survived: %+v %+v", c.Remote, c.Problems)
+	}
+	if !strings.Contains(pb.Detail, "`origin` is the fallback") {
+		t.Errorf("detail does not say what happens next: %s", pb.Detail)
+	}
+}

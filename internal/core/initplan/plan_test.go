@@ -492,3 +492,66 @@ func TestPickTagsThePinAndDescribesWhatItAdds(t *testing.T) {
 		t.Errorf("added option %+v, want a described pin", o)
 	}
 }
+
+// The remote page exists to choose between remotes, so a lone remote has none —
+// unless the config already pins one, which a rewrite must not drop.
+func TestRemotePageAppearsOnlyWithAChoiceOrAPin(t *testing.T) {
+	has := func(p *Plan) bool { return p.Question(KeyRemote) != nil }
+	one := Candidates{Remotes: []Remote{{Name: "origin"}}}
+	two := Candidates{Remotes: []Remote{{Name: "fork"}, {Name: "origin"}}}
+
+	if has(Build(Input{Candidates: one})) || has(Build(Input{})) {
+		t.Error("remote asked with nothing to choose between")
+	}
+	if !has(Build(Input{Candidates: two})) {
+		t.Error("remote not asked with two remotes")
+	}
+	pin := &repoconfig.Config{Remote: repoconfig.Remote{Name: "upstream"}}
+	if !has(Build(Input{Existing: pin, Candidates: one})) {
+		t.Error("a pin vanished from the form on a clone with one remote")
+	}
+}
+
+func TestRemotePreselectionAndApply(t *testing.T) {
+	two := Candidates{Remotes: []Remote{{Name: "fork", URL: "u1"}, {Name: "origin", URL: "u2"}}}
+	disc := &profile.Profile{Remote: profile.Value{Value: "origin", Source: profile.Discovered}}
+
+	p := Build(Input{Discovered: disc, Candidates: two})
+	if got, prov := selected(t, p, KeyRemote); got != "origin" || prov != Discovered {
+		t.Errorf("selected %q (%s), want origin (discovered)", got, prov)
+	}
+	cfg, err := Apply(p, p.Preselected())
+	if err != nil || cfg.Remote.Name != "origin" {
+		t.Errorf("accepting the form pins %q, %v; want origin", cfg.Remote.Name, err)
+	}
+
+	pinned := &repoconfig.Config{Remote: repoconfig.Remote{Name: "fork"}}
+	p = Build(Input{Existing: pinned, Discovered: disc, Candidates: two})
+	if got, prov := selected(t, p, KeyRemote); got != "fork" || prov != Pinned {
+		t.Errorf("selected %q (%s), want fork (pinned)", got, prov)
+	}
+
+	a := p.Preselected()
+	a.Choice[KeyRemote] = []string{DontPin}
+	if cfg, _ := Apply(p, a); cfg.Remote.Name != "" {
+		t.Errorf("don't pin still pinned %q", cfg.Remote.Name)
+	}
+}
+
+// With several remotes the real profile reports no discovered value, so the form
+// default is what makes accepting the form pin `origin`.
+func TestRemoteFormDefaultIsOriginWhenDiscoveryIsAQuestion(t *testing.T) {
+	disc := &profile.Profile{Remote: profile.Value{Source: profile.Unavailable, Cause: "2 remotes"}}
+	p := Build(Input{Discovered: disc, Candidates: Candidates{Remotes: []Remote{{Name: "fork"}, {Name: "origin"}}}})
+	if got, prov := selected(t, p, KeyRemote); got != "origin" || prov != Default {
+		t.Errorf("selected %q (%s), want origin (default)", got, prov)
+	}
+	if cfg, _ := Apply(p, p.Preselected()); cfg.Remote.Name != "origin" {
+		t.Errorf("accepting the form pins %q, want origin", cfg.Remote.Name)
+	}
+
+	p = Build(Input{Discovered: disc, Candidates: Candidates{Remotes: []Remote{{Name: "fork"}, {Name: "upstream"}}}})
+	if got, _ := selected(t, p, KeyRemote); got != DontPin {
+		t.Errorf("selected %q with no origin, want don't pin", got)
+	}
+}

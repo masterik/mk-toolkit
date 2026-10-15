@@ -14,7 +14,7 @@ import (
 )
 
 func newBranchStatusCmd() *cobra.Command {
-	var def string
+	var def, remote string
 	var noFetch, noGH bool
 
 	cmd := &cobra.Command{
@@ -54,7 +54,7 @@ func newBranchStatusCmd() *cobra.Command {
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if def == "" {
-				return usageErr("usage: mkit branch status --default <branch> [--no-fetch] [--no-gh]")
+				return usageErr("usage: mkit branch status --default <branch> [--remote <name>] [--no-fetch] [--no-gh]")
 			}
 			repo, err := gitrepo.Open("")
 			if err != nil {
@@ -82,9 +82,19 @@ func newBranchStatusCmd() *cobra.Command {
 			for _, pb := range cfg.Problems {
 				problems = append(problems, pb.Detail)
 			}
+			// A remote named for this call replaces the config's pin, the way
+			// `mkit facts --remote` does; one that is not configured is a usage
+			// mistake, not a silent fallback to `origin`.
+			pin := cfg.Remote.Name
+			if remote != "" {
+				if _, err := repo.ChooseRemote(remote); err != nil {
+					return &ExitError{Code: 2, Msg: err.Error()}
+				}
+				pin = remote
+			}
 			s, err := branchstatus.Run(repo, branchstatus.Options{
 				Default: def, Keep: cfg.Cleanup.Keep, ConfigProblems: problems,
-				NoFetch: noFetch, NoGH: noGH,
+				NoFetch: noFetch, NoGH: noGH, Remote: pin,
 			})
 			if err != nil {
 				return &ExitError{Code: 2, Msg: err.Error()}
@@ -102,6 +112,8 @@ func newBranchStatusCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&def, "default", "", "the default branch, already resolved")
+	cmd.Flags().StringVar(&remote, "remote", "",
+		"fetch and look up PRs through this remote, over the config's pin; not configured here is an error")
 	cmd.Flags().BoolVar(&noFetch, "no-fetch", false, "skip `git fetch --prune`; upstream=gone then reflects a stale local view")
 	cmd.Flags().BoolVar(&noGH, "no-gh", false, "skip the GitHub lookup even when gh is present and authenticated")
 	return cmd

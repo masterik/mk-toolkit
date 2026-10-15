@@ -76,6 +76,7 @@ const (
 	KeyReviewers  = "review.reviewers"
 	KeyReviewMode = "review.mode"
 	KeyMerge      = "merge.style"
+	KeyRemote     = "remote.name"
 	KeyKeep       = "cleanup.keep"
 	KeyGateNew    = "gate.new"
 	gateStepPre   = "gate.step."
@@ -258,14 +259,22 @@ func Build(in Input) *Plan {
 	if in.Discovered == nil {
 		in.Discovered = &profile.Profile{}
 	}
-	return &Plan{Pages: []Page{
+	pages := []Page{
 		{Title: "Spec", Intro: introSpec, Questions: []Question{specStore(in), specRef(in)}},
 		{Title: "Commit", Intro: introCommit, Questions: append(scopes(in), subjectMax(in))},
 		{Title: "Review", Intro: introReview, Questions: []Question{reviewMode(in), reviewers(in)}},
 		{Title: "Merge", Intro: introMerge, Questions: []Question{mergeStyle(in)}},
-		{Title: "Gate", Intro: introGate, Questions: gateQuestions(in), Optional: true},
-		{Title: "Cleanup", Intro: introCleanup, Questions: []Question{keep(in)}, Optional: true},
-	}}
+	}
+	// Asked only where there is something to choose between — or a pin to keep: a
+	// lone remote is the answer, and a rewrite must not drop a pin on a clone that
+	// happens to lack the remote.
+	if len(in.Candidates.Remotes) > 1 || in.Existing.Remote.Name != "" {
+		pages = append(pages, Page{Title: "Remote", Intro: introRemote, Questions: []Question{remote(in)}})
+	}
+	return &Plan{Pages: append(pages,
+		Page{Title: "Gate", Intro: introGate, Questions: gateQuestions(in), Optional: true},
+		Page{Title: "Cleanup", Intro: introCleanup, Questions: []Question{keep(in)}, Optional: true},
+	)}
 }
 
 // The page intros. Each names what the page is for and which skill reads it.
@@ -284,6 +293,9 @@ const (
 	introMerge = "How a finished branch lands on its base: the finish skill merges locally, the pr " +
 		"skill through GitHub. When the GitHub repo allows only one merge method, that one is " +
 		"used whatever this says."
+	introRemote = "More than one git remote is configured here. The pr and finish skills push the branch " +
+		"to one of them and ask GitHub about its pull requests. Pin the one to use and they stop asking; " +
+		"unpinned, they fall back to `origin` where it exists, and ask when it does not settle the choice."
 	introGate = "The quality gate: the commands commit, review, pr and finish run before work " +
 		"integrates — lint, typecheck, vet, test, build. Each step comes from this repo's own " +
 		"task runner (justfile, Makefile, Taskfile, package.json scripts, deno tasks) where it defines one, " +
@@ -652,6 +664,36 @@ func mergeStyle(in Input) Question {
 	return q
 }
 
+func remote(in Input) Question {
+	q := Question{Key: KeyRemote, Kind: Select, Title: "Remote",
+		Description: "The git remote pr and finish push to.",
+		Note:        rejected(in.Existing, KeyRemote)}
+	for _, r := range in.Candidates.Remotes {
+		desc := r.URL
+		if desc == "" {
+			desc = "a configured remote"
+		}
+		q.Options = append(q.Options, Option{Value: r.Name, Label: r.Name, Description: desc, Provenance: Suggested})
+	}
+	q.Options = append(q.Options, discoverOpt("`origin` where it exists; the skills ask when it does not settle the choice"))
+	disc := ""
+	if v := in.Discovered.Remote; v.Source == profile.Discovered {
+		disc = v.Value
+	}
+	// With several remotes discovery is a question, not an answer, so it names no
+	// value. `origin` is then the form default: accepting the form pins it, which
+	// is what ends the skills asking. No `origin` means no default — a guess among
+	// remotes is not worth pinning.
+	def := ""
+	for _, r := range in.Candidates.Remotes {
+		if r.Name == "origin" {
+			def = "origin"
+		}
+	}
+	pick(&q, in.Existing.Remote.Name, disc, def)
+	return q
+}
+
 func keep(in Input) Question {
 	q := Question{Key: KeyKeep, Kind: Multi, Title: "Keep branches",
 		CustomTitle: "More branches", CustomPlaceholder: "comma-separated branch names"}
@@ -827,6 +869,9 @@ func Apply(p *Plan, a Answers) (*repoconfig.Config, error) {
 		return nil, err
 	}
 	if cfg.Merge.Style, err = one(KeyMerge); err != nil {
+		return nil, err
+	}
+	if cfg.Remote.Name, err = one(KeyRemote); err != nil {
 		return nil, err
 	}
 	keepList, err := many(KeyKeep)

@@ -481,3 +481,71 @@ func TestScanJSON(t *testing.T) {
 		t.Errorf("worktrees = %+v", got.Worktrees)
 	}
 }
+
+// loggingGH is a `gh` that records every invocation, one line of arguments each,
+// and answers like fakeGH with no PRs.
+func loggingGH(t *testing.T) (logPath string) {
+	t.Helper()
+	dir := t.TempDir()
+	logPath = filepath.Join(dir, "calls.log")
+	script := "#!/usr/bin/env bash\necho \"$*\" >> '" + logPath + "'\n" +
+		"case \"$1 $2\" in\n\"auth status\") exit 0 ;;\n\"pr list\") echo '[]' ;;\n\"pr view\") exit 1 ;;\nesac\n"
+	if err := os.WriteFile(filepath.Join(dir, "gh"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return logPath
+}
+
+func twoGitHubRemotes(t *testing.T, repo string) {
+	t.Helper()
+	gateGit(t, repo, "remote", "add", "origin", "https://github.com/me/fork.git")
+	gateGit(t, repo, "remote", "add", "upstream", "git@github.com:org/project.git")
+}
+
+// `gh` picks its own repo — a set default, or its own remote ranking — unless it
+// is told. The scan fetches the resolved remote, so the PR lookup must name that
+// remote's repo, or a branch's PR is looked up somewhere it was never pushed.
+func TestScanPRLookupNamesTheResolvedRemotesRepo(t *testing.T) {
+	repo := scanRepo(t)
+	twoGitHubRemotes(t, repo)
+	calls := loggingGH(t)
+
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{nil, "--repo me/fork"},
+		{[]string{"--remote", "upstream"}, "--repo org/project"},
+	} {
+		_ = os.Remove(calls)
+		res := scan(t, append([]string{"--default", "main", "--no-fetch"}, tc.args...)...)
+		if res.code != 0 {
+			t.Fatalf("%v: exit %d %s", tc.args, res.code, res.stderr)
+		}
+		b, _ := os.ReadFile(calls)
+		if !strings.Contains(string(b), "pr list") || !strings.Contains(string(b), tc.want) {
+			t.Errorf("%v: gh was called as %q, want %q", tc.args, b, tc.want)
+		}
+		if got := field(res.stdout, "remote"); (tc.args == nil) == (got == "upstream") {
+			t.Errorf("%v: remote = %q", tc.args, got)
+		}
+	}
+
+	// The pin from the config does the same as the flag.
+	put(t, repo, ".mkit/config.toml", "version = 1\n[remote]\nname = \"upstream\"\n")
+	_ = os.Remove(calls)
+	scan(t, "--default", "main", "--no-fetch")
+	if b, _ := os.ReadFile(calls); !strings.Contains(string(b), "--repo org/project") {
+		t.Errorf("a pinned remote was not used for the lookup: %q", b)
+	}
+}
+
+func TestScanRemoteFlagMustNameAConfiguredRemote(t *testing.T) {
+	repo := scanRepo(t)
+	twoGitHubRemotes(t, repo)
+	res := scan(t, "--default", "main", "--no-fetch", "--no-gh", "--remote", "nope")
+	if res.code != 2 || !strings.Contains(res.stderr, "not a remote configured here") {
+		t.Errorf("exit %d, stderr %q — a mistyped remote must not fall back to origin", res.code, res.stderr)
+	}
+}
