@@ -565,3 +565,21 @@ func TestFactsRemoteFlagChoosesAndNamesTheRepo(t *testing.T) {
 		t.Errorf("a refused call left a run directory behind: %v", entries)
 	}
 }
+
+// A detached HEAD has no branch to have a PR, and `gh pr view --repo` needs a
+// branch argument — so the lookup is skipped rather than asked of whichever repo
+// `gh` would pick.
+func TestFactsDetachedHeadSkipsThePRLookup(t *testing.T) {
+	repo := factsRepo(t)
+	gateGit(t, repo, "remote", "add", "origin", "https://github.com/me/fork.git")
+	gateGit(t, repo, "checkout", "-q", "--detach")
+	calls := loggingGH(t)
+
+	res := run(t, "facts", "pr", "--no-run", "--gh")
+	if got := factsField(res.stdout, "pr"); got != "none" {
+		t.Errorf("pr = %q, want none", got)
+	}
+	if b, _ := os.ReadFile(calls); strings.Contains(string(b), "pr view") {
+		t.Errorf("a detached HEAD still asked gh about a PR: %q", b)
+	}
+}

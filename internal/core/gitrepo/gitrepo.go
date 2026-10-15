@@ -401,8 +401,10 @@ func (r *Repo) AliveCommits(heads []string) map[string]bool {
 }
 
 // DefaultBranch resolves this repo's default branch: the HEAD of the remote
-// ResolveRemote(pinned) picks — the config's pin, else `origin` — where there is one, then the first local branch named main, master or trunk, then
-// "unknown".
+// ResolveRemote(pinned) picks — the config's pin, else `origin` — where there is
+// one and this checkout has that branch, then the first local branch named main,
+// master or trunk, then "unknown". **Always a local branch, or "unknown"**: a
+// name that exists only as a remote-tracking ref is never returned.
 //
 // **One implementation**: `mkit facts` prints it as `default_branch=`, `mkit
 // branch status` is handed it rather than re-deriving it, and `mkit repo profile`
@@ -435,12 +437,9 @@ func (r *Repo) DefaultBranch(pinnedRemote string) string {
 			return b
 		}
 	}
-	// Nothing local matched. The remote's name is still a better report than
-	// "unknown" — every caller reports this rather than branching on it, and the
-	// one that refuses a non-local default refuses "unknown" just the same.
-	if remoteHead != "" {
-		return remoteHead
-	}
+	// Nothing local matched. Not the remote's name: it is not a branch this
+	// checkout has, and `mkit branch status` refuses such a `--default` — the
+	// whole of `cleanup` would stop on it where "unknown" is reported and handled.
 	return "unknown"
 }
 

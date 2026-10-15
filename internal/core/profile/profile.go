@@ -444,7 +444,7 @@ func discoverKeep(repo *gitrepo.Repo, cfg *repoconfig.Config) List {
 	def := repo.DefaultBranch(cfg.Remote.Name)
 	if def == "unknown" {
 		return List{Values: []string{}, Source: Unavailable,
-			Cause: "no remote HEAD and no local main/master/trunk, so the default branch " +
+			Cause: "no local main/master/trunk and no checked-out branch for the remote's HEAD, so the default branch " +
 				"cleanup protects cannot be named here"}
 	}
 	return List{Values: branchstatus.ProtectedSet(def, branchstatus.Develop(repo, def), nil), Source: Discovered}

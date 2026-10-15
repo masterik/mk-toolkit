@@ -195,6 +195,13 @@ func TestDefaultBranchPrefersALocalBranchOverAStaleRemoteHead(t *testing.T) {
 		t.Errorf("DefaultBranch() = %q, want main: the remote's answer names no local branch", got)
 	}
 
+	// No local main either: the remote-only name is still not returned.
+	git(t, repo, "branch", "-m", "main", "work")
+	if got := repo.DefaultBranch(""); got != "unknown" {
+		t.Errorf("DefaultBranch() = %q, want unknown: a name only the remote has is not a branch here", got)
+	}
+	git(t, repo, "branch", "-m", "work", "main")
+
 	// With the branch actually present, the remote's answer is the right one.
 	git(t, repo, "branch", "develop")
 	if got := repo.DefaultBranch(""); got != "develop" {

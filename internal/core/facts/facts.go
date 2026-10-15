@@ -597,12 +597,18 @@ func (f *Facts) setPR(repo *gitrepo.Repo) {
 	}
 	// `gh` picks its own repo — a set default, or its own remote ranking — unless
 	// told: the remote mkit resolved is the one the branch was pushed to. `--repo`
-	// makes `pr view` take the branch as an argument, which a detached HEAD lacks.
+	// makes `pr view` take the branch as an argument, which a detached HEAD lacks —
+	// and a detached HEAD has no branch to have a PR, so it is not looked up at all
+	// rather than asked of whichever repo `gh` would pick.
 	args := []string{"pr", "view"}
-	if f.RemoteRepo != "" && !f.Detached {
+	if f.RemoteRepo != "" {
 		args = append(args, f.Branch, "--repo", f.RemoteRepo)
 	}
-	out, err := output(repo, "gh", append(args, "--json", "url,state,isDraft")...)
+	var out []byte
+	var err error
+	if !f.Detached {
+		out, err = output(repo, "gh", append(args, "--json", "url,state,isDraft")...)
+	}
 	if err == nil && len(out) > 0 {
 		var v struct {
 			URL     string `json:"url"`
