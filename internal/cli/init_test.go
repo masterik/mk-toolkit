@@ -140,3 +140,18 @@ func TestFieldFlagGivenSeesEveryFieldFlag(t *testing.T) {
 		}
 	}
 }
+
+func TestInitRemoteFlagPinsAndValidates(t *testing.T) {
+	repo := initRepo(t)
+	if res := run(t, "init", "--remote", "--force"); res.code == 0 {
+		t.Fatalf("a remote named --force was accepted: %s", res.stdout)
+	}
+	m, res := initJSON(t, "--remote", "upstream")
+	if res.code != 0 || m["state"] != "written" {
+		t.Fatalf("exit %d, %v %s", res.code, m, res.stderr)
+	}
+	b, err := os.ReadFile(filepath.Join(repo, ".mkit", "config.toml"))
+	if err != nil || !strings.Contains(string(b), "[remote]\nname = 'upstream'") {
+		t.Errorf("config does not pin the remote: %s %v", b, err)
+	}
+}

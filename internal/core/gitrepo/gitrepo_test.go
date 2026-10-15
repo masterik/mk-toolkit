@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -190,13 +191,103 @@ func TestDefaultBranchPrefersALocalBranchOverAStaleRemoteHead(t *testing.T) {
 	git(t, repo, "update-ref", "refs/remotes/origin/develop", "HEAD")
 	git(t, repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/develop")
 
-	if got := repo.DefaultBranch(); got != "main" {
+	if got := repo.DefaultBranch(""); got != "main" {
 		t.Errorf("DefaultBranch() = %q, want main: the remote's answer names no local branch", got)
 	}
 
+	// No local main either: the remote-only name is still not returned.
+	git(t, repo, "branch", "-m", "main", "work")
+	if got := repo.DefaultBranch(""); got != "unknown" {
+		t.Errorf("DefaultBranch() = %q, want unknown: a name only the remote has is not a branch here", got)
+	}
+	git(t, repo, "branch", "-m", "work", "main")
+
 	// With the branch actually present, the remote's answer is the right one.
 	git(t, repo, "branch", "develop")
-	if got := repo.DefaultBranch(); got != "develop" {
+	if got := repo.DefaultBranch(""); got != "develop" {
 		t.Errorf("DefaultBranch() = %q, want develop once it exists locally", got)
+	}
+}
+
+// `git remote` is alphabetical, so a fork workflow's `fork` sorts before
+// `origin`: taking git's first made `fork` the answer. `origin` wins when
+// nothing is pinned, and only a pin that is configured here beats it.
+func TestResolveRemote(t *testing.T) {
+	repo := newRepo(t)
+	if c := repo.ResolveRemote(""); c.Name != "" || c.Source != RemoteNone || c.Ask() {
+		t.Errorf("no remote: %+v", c)
+	}
+	// A pin on a clone with no remote at all still went nowhere, and says so in
+	// words that do not name an empty fallback.
+	c := repo.ResolveRemote("fork")
+	if c.PinMissing != "fork" || !strings.Contains(c.PinMissingDetail(), "no remote is configured") {
+		t.Errorf("a pin with no remotes configured: %+v / %q", c, c.PinMissingDetail())
+	}
+
+	git(t, repo, "remote", "add", "upstream", "https://example.invalid/u.git")
+	if c := repo.ResolveRemote(""); c.Name != "upstream" || c.Source != RemoteOnly || c.Ask() {
+		t.Errorf("a lone remote is the answer, not a question: %+v", c)
+	}
+
+	git(t, repo, "remote", "add", "fork", "https://example.invalid/f.git")
+	if c := repo.ResolveRemote(""); c.Name != "fork" || c.Source != RemoteFirst || !c.Ask() {
+		t.Errorf("several, none origin: %+v, want git's first as a guess to ask about", c)
+	}
+
+	git(t, repo, "remote", "add", "origin", "https://example.invalid/o.git")
+	if c := repo.ResolveRemote(""); c.Name != "origin" || c.Source != RemoteOrigin || !c.Ask() {
+		t.Errorf("origin must beat the alphabetically first remote: %+v", c)
+	}
+	if c := repo.ResolveRemote("upstream"); c.Name != "upstream" || c.Source != RemotePinned || c.Ask() || c.PinMissing != "" {
+		t.Errorf("a pin configured here is decided: %+v", c)
+	}
+	// A pin travels with the repo; a clone without the remote falls back and says so.
+	if c := repo.ResolveRemote("gone"); c.Name != "origin" || c.PinMissing != "gone" || !c.Ask() {
+		t.Errorf("a pin this clone lacks: %+v", c)
+	}
+}
+
+// In a fork workflow the pinned remote's HEAD is the project's, not the fork's.
+func TestDefaultBranchFollowsThePinnedRemote(t *testing.T) {
+	repo := newRepo(t)
+	git(t, repo, "branch", "-M", "main")
+	git(t, repo, "branch", "develop")
+	for _, r := range []string{"origin", "upstream"} {
+		git(t, repo, "remote", "add", r, "https://example.invalid/"+r+".git")
+	}
+	git(t, repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+	git(t, repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+	git(t, repo, "update-ref", "refs/remotes/upstream/develop", "HEAD")
+	git(t, repo, "symbolic-ref", "refs/remotes/upstream/HEAD", "refs/remotes/upstream/develop")
+
+	if got := repo.DefaultBranch(""); got != "main" {
+		t.Errorf("unpinned DefaultBranch = %q, want origin's main", got)
+	}
+	if got := repo.DefaultBranch("upstream"); got != "develop" {
+		t.Errorf("pinned DefaultBranch = %q, want upstream's develop", got)
+	}
+}
+
+func TestChooseRemoteAndGitHubRepo(t *testing.T) {
+	repo := newRepo(t)
+	git(t, repo, "remote", "add", "origin", "https://github.com/me/fork.git")
+	git(t, repo, "remote", "add", "up", "git@github.com:org/project")
+	git(t, repo, "remote", "add", "lab", "https://gitlab.com/g/p.git")
+	// The host is not a substring match: neither of these is GitHub.
+	git(t, repo, "remote", "add", "evil", "https://evilgithub.com/acme/repo.git")
+	git(t, repo, "remote", "add", "evil2", "https://github.com.evil.example/acme/repo.git")
+	git(t, repo, "remote", "add", "tok", "https://user@github.com/org/tok.git")
+
+	if c, err := repo.ChooseRemote("up"); err != nil || c.Name != "up" || c.Source != RemoteChosen || c.Ask() {
+		t.Errorf("a configured remote is decided: %+v %v", c, err)
+	}
+	if _, err := repo.ChooseRemote("nope"); err == nil {
+		t.Error("an unconfigured name was accepted instead of refused")
+	}
+	for remote, want := range map[string]string{"origin": "me/fork", "up": "org/project", "lab": "", "": "", "nope": "",
+		"evil": "", "evil2": "", "tok": "org/tok"} {
+		if got := repo.GitHubRepo(remote); got != want {
+			t.Errorf("GitHubRepo(%q) = %q, want %q", remote, got, want)
+		}
 	}
 }

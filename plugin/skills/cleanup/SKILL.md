@@ -34,7 +34,7 @@ References, read the ones a step calls for: `../_shared/references/worktree.md`,
   mistake, not an instruction: the pinned names are *added* to what cleanup already protects, never
   substituted for them. This is decided in `mkit branch status`, not here.
 - Ends by switching to one of the kept branches and pulling it up to date with the remote `mkit branch status`
-  discovers (never assumed to be named `origin`).
+  resolves (a pin, or what the user chose — never assumed to be named `origin`).
 
 ## Preconditions
 
@@ -45,6 +45,11 @@ References, read the ones a step calls for: `../_shared/references/worktree.md`,
 mkit facts cleanup
 mkit branch status --default <default_branch from mkit facts>
 ```
+
+**`remote_choice=ask`** (several remotes, none pinned): ask which remote *before* the second call — it fetches
+and looks PRs up through one — then re-run the first with `--no-run --remote <answer>` (the default branch can
+differ per remote) and pass `--remote <answer>` to the second. `../_shared/references/remote.md` has the rule,
+including why the pin is offered in the final report and never run mid-way.
 
 `mkit facts` **is** this skill's dependency check. If it fails with `command not found` **or**
 `unknown command "facts"` — absent and too old are the same answer here — **stop** and say:
@@ -68,7 +73,8 @@ From `mkit branch status` (add `--json` if any branch name contains a comma — 
 `keep=` (what `[cleanup] keep` pinned, or `none`), `keep_unknown=` (pinned names with no local branch here —
 **not an error**: a keep list travels with the repo, so a long-lived branch nobody has checked out in this
 clone is the ordinary state. Mention it once in the final report, so a typo in the config is visible without
-being treated as one), `config_problems=` (see below), `remote=`, `fetch=` (say if it came back `failed` — classify
+being treated as one), `config_problems=` (see below), `remote=` (a `- remote:` line in `notes:` is a pin this clone lacks — report it
+verbatim; it is not a `config_problems=` count), `fetch=` (say if it came back `failed` — classify
 on what you have and note it), `gh=` (`ok | skipped | no-remote | gh-missing | gh-unauthenticated | gh-error`;
 say if it is anything but `ok` — some classes below then rest on git alone, while every branch and worktree
 row is still complete), the `branches:` table and the `worktrees:` table. Full column meaning is in
@@ -212,12 +218,12 @@ force-delete anything you merely suspect is fine.
 
 ### 5. Switch and pull
 
-Bring the kept branches up to date with the **discovered** remote — the one `mkit branch status` reported as
-`remote=`, never a hardcoded name, since nothing here is safe to assume about a repo you didn't set up:
+Bring the kept branches up to date with the **resolved** remote — the one `mkit branch status` reported as
+`remote=` (pinned, chosen above, or the `origin` fallback), never a hardcoded name, since nothing here is safe to assume about a repo you didn't set up:
 
 ```bash
 git switch <one of protected=>                            # land on whichever you're ending on
-git pull --ff-only                                        # only if remote != none
+git pull --ff-only <remote> <landing-branch>              # only if remote != none
 git fetch <remote> <other>:<other>                        # update each other kept branch without checking it out
 ```
 
@@ -239,11 +245,12 @@ Prefer switching to the **default** branch as the place to land, unless the user
 points at `develop` or another kept branch instead — say which one you picked and why it was a judgement call, not a fact the
 command handed you.
 
-**The `git pull --ff-only` above is gated on the landing branch having an upstream, not just on
-`remote != none`.** Landing on a pinned keep branch is exactly the case with no remote counterpart, and a
-pull there fails with "no tracking information" — a failure about a branch that is behaving as pinned. Check
-the branch row's `upstream=` for whichever branch you land on: no upstream, skip the pull silently, the same
-as the fetch.
+**The `git pull --ff-only <remote> <landing-branch>` above is gated on the landing branch having a counterpart
+on `<remote>`, not just on `remote != none`.** It names the resolved remote instead of following the branch's own
+upstream, which can be a different remote. Landing on a pinned keep branch is exactly the case with no remote
+counterpart, and a pull there fails with "couldn't find remote ref" — a failure about a branch that is behaving
+as pinned. Check the branch row's `upstream=` for whichever branch you land on: none, or on another remote than
+`<remote>`, skip the pull silently, the same as the fetch.
 
 ### 6. Verify
 
@@ -271,7 +278,7 @@ Left alone:
 <branch> — <why: dirty worktree / declined / claude-code worktree>
 ...
 
-Note: <branch> is N commits behind origin/<branch> — <why it couldn't be fast-forwarded, if it couldn't>
+Note: <branch> is N commits behind <remote>/<branch> — <why it couldn't be fast-forwarded, if it couldn't>
 Note: `[cleanup] keep` pins <name>, which is not a local branch in this checkout — nothing to protect here.
 ```
 

@@ -67,6 +67,8 @@ func Rule(key string) string {
 	switch key {
 	case "commit.subject_max":
 		return "a positive number of characters"
+	case "remote.name":
+		return "a name git accepts for a remote: no spaces or `~^:?*[\\`, not starting with `-` or `.`"
 	}
 	return ""
 }
@@ -114,6 +116,29 @@ func CheckSubjectMax(n int) error {
 	return nil
 }
 
+// CheckRemoteName refuses a remote name Load would refuse on read. A name is
+// handed to `git push` as an argument, so one that reads as an option is refused
+// here rather than at the push; and a name git cannot register (`bad:name`) would
+// be a pin that never matches any clone, falling back forever.
+//
+// Shape only — whether this clone has the remote is not the question: the config
+// travels, and a clone without it falls back and says so.
+func CheckRemoteName(name string) error {
+	bad := name == "" || strings.HasPrefix(name, "-") || strings.HasPrefix(name, ".") ||
+		strings.HasSuffix(name, ".") || strings.HasSuffix(name, ".lock") ||
+		strings.Contains(name, "..") || strings.Contains(name, "@{") || strings.Contains(name, "//") ||
+		strings.ContainsAny(name, " \t\r\n~^:?*[\\\x7f")
+	for _, r := range name {
+		if r < 0x20 {
+			bad = true
+		}
+	}
+	if bad {
+		return fmt.Errorf("a remote is %s", Rule("remote.name"))
+	}
+	return nil
+}
+
 // ParseGatePin splits a `step=command` pin, trimmed, refusing either half empty.
 func ParseGatePin(s string) (step, command string, err error) {
 	step, command, ok := strings.Cut(s, "=")
@@ -147,6 +172,7 @@ type Config struct {
 	Commit  Commit `toml:"commit"`
 	Review  Review `toml:"review"`
 	Merge   Merge  `toml:"merge"`
+	Remote  Remote `toml:"remote"`
 
 	Cleanup Cleanup `toml:"cleanup"`
 
@@ -232,6 +258,16 @@ func subjectMaxProblem(n int, path string) Problem {
 			"`commit` falls back to its own convention", path, n, Rule("commit.subject_max"))}
 }
 
+// remoteNameProblem is the one sentence for a `remote.name` that cannot be a
+// remote name. Its own producer for subjectMaxProblem's reason: the key is not
+// an enumeration, and what happens next is the ordinary remote resolution.
+func remoteNameProblem(name, path string) Problem {
+	return Problem{Kind: ProblemInvalidValue, Key: "remote.name", Value: name, Path: path,
+		Detail: fmt.Sprintf("`remote.name` in %s is %q, which is not a usable remote name "+
+			"— a remote is %s, so the pinned remote is ignored and the remote is chosen as if nothing were pinned",
+			path, name, Rule("remote.name"))}
+}
+
 func unparsableProblem(path, msg string) Problem {
 	return Problem{Kind: ProblemUnparsable, Value: msg, Path: path,
 		Detail: fmt.Sprintf("%s is not valid TOML (%s) — nothing in it is pinned, and every "+
@@ -312,6 +348,20 @@ type Review struct {
 // Merge pins how this repo integrates a branch: merge, squash or rebase.
 type Merge struct {
 	Style string `toml:"style,omitempty"`
+}
+
+// Remote pins which git remote `pr` and `finish` push to and ask GitHub about,
+// for a checkout with more than one.
+//
+// **Not discoverable with confidence**: `origin` is the convention, but a fork
+// workflow has `origin` as the fork and `upstream` as the project, and which one
+// a branch goes to is the team's decision. Unpinned, mkit falls back to `origin`
+// where it exists, and a skill asks when several remotes make that a guess.
+//
+// A name, not a URL: remotes are per-clone, the name is what travels. One that is
+// not configured in a given clone is reported and falls back, never an error.
+type Remote struct {
+	Name string `toml:"name,omitempty"`
 }
 
 // Cleanup pins the branches a repo-wide cleanup must never delete, beyond the
@@ -530,6 +580,10 @@ func (c *Config) validate(path string) {
 		c.Problems = append(c.Problems, subjectMaxProblem(*c.Commit.SubjectMax, path))
 		c.Commit.SubjectMax = nil
 	}
+	if c.Remote.Name != "" && CheckRemoteName(c.Remote.Name) != nil {
+		c.Problems = append(c.Problems, remoteNameProblem(c.Remote.Name, path))
+		c.Remote.Name = ""
+	}
 	if c.Version > Version {
 		c.Problems = append(c.Problems, newerVersionProblem(c.Version, path))
 	}
@@ -541,7 +595,7 @@ func (c *Config) IsZero() bool {
 		c.Spec.Store == "" && c.Spec.Ref == "" &&
 		len(c.Commit.Scopes) == 0 && c.Commit.SubjectMax == nil &&
 		len(c.Review.Reviewers) == 0 && c.Review.Mode == "" &&
-		c.Merge.Style == "" &&
+		c.Merge.Style == "" && c.Remote.Name == "" &&
 		len(c.Cleanup.Keep) == 0
 }
 
@@ -630,6 +684,12 @@ func render(c *Config) string {
 		b.WriteString("\n# How this repo integrates a branch: merge | squash | rebase.\n")
 		b.WriteString("[merge]\n")
 		fmt.Fprintf(&b, "style = %s\n", quote(c.Merge.Style))
+	}
+	if c.Remote.Name != "" {
+		b.WriteString("\n# The git remote `pr` and `finish` push to, for a checkout with more than one.\n")
+		b.WriteString("# Unpinned, mkit falls back to `origin` where it exists. A name, not a URL.\n")
+		b.WriteString("[remote]\n")
+		fmt.Fprintf(&b, "name = %s\n", quote(c.Remote.Name))
 	}
 	if len(c.Cleanup.Keep) > 0 {
 		b.WriteString("\n# Branches `cleanup` must never delete — names, not patterns. Added to what\n")

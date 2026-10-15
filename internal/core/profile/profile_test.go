@@ -194,3 +194,52 @@ func TestProfileIsCompleteWithNoConfig(t *testing.T) {
 		t.Errorf("config state = %q, want absent", p.Config.State)
 	}
 }
+
+// A remote is a decision only when there is more than one: a pin is Pinned, a
+// pin this clone lacks and an unpinned choice are Unavailable with a cause — a
+// plausible `origin` tagged as an answer would hide that the skills will ask.
+func TestRemoteIsPinnedDiscoveredOrAnOpenQuestion(t *testing.T) {
+	repo := newRepo(t)
+	pin := func(name string) *repoconfig.Config {
+		return &repoconfig.Config{Remote: repoconfig.Remote{Name: name}}
+	}
+
+	if v := discoverRemote(repo, &repoconfig.Config{}); v.Source != Unavailable {
+		t.Errorf("no remote: %+v", v)
+	}
+	run(t, repo.Toplevel, "remote", "add", "origin", "https://example.invalid/o.git")
+	if v := discoverRemote(repo, &repoconfig.Config{}); v.Value != "origin" || v.Source != Discovered {
+		t.Errorf("one remote: %+v", v)
+	}
+	run(t, repo.Toplevel, "remote", "add", "fork", "https://example.invalid/f.git")
+	if v := discoverRemote(repo, &repoconfig.Config{}); v.Source != Unavailable || !strings.Contains(v.Cause, "ask") {
+		t.Errorf("two remotes, nothing pinned: %+v", v)
+	}
+	if v := discoverRemote(repo, pin("fork")); v.Value != "fork" || v.Source != Pinned {
+		t.Errorf("pinned: %+v", v)
+	}
+	if v := discoverRemote(repo, pin("gone")); v.Source != Unavailable || !strings.Contains(v.Cause, `"gone"`) {
+		t.Errorf("a pin this clone lacks: %+v", v)
+	}
+}
+
+// With several remotes and none pinned the resolved remote is a guess, and in a
+// fork workflow it is the fork: a spec ref discovered from it would point `init`
+// at the wrong project. A pin makes it an answer again.
+func TestSpecRefIsNotDiscoveredFromAGuessedRemote(t *testing.T) {
+	repo := newRepo(t)
+	writeFile(t, repo.Toplevel, "docs/agents/issue-tracker.md", "# Issue tracker: GitHub\n")
+	run(t, repo.Toplevel, "remote", "add", "origin", "https://github.com/me/fork.git")
+
+	if got := discoverSpec(repo, &repoconfig.Config{}).Ref; got.Value != "me/fork" || got.Source != Discovered {
+		t.Errorf("one remote: %+v", got)
+	}
+	run(t, repo.Toplevel, "remote", "add", "upstream", "https://github.com/org/project.git")
+	if got := discoverSpec(repo, &repoconfig.Config{}).Ref; got.Source != Unavailable {
+		t.Errorf("two remotes, none pinned, ref discovered from the guess: %+v", got)
+	}
+	pinned := &repoconfig.Config{Remote: repoconfig.Remote{Name: "upstream"}}
+	if got := discoverSpec(repo, pinned).Ref; got.Value != "org/project" {
+		t.Errorf("pinned upstream: %+v", got)
+	}
+}

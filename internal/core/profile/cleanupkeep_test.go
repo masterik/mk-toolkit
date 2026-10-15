@@ -19,14 +19,14 @@ func TestCleanupKeepIsDiscoveredFromWhatCleanupAlreadyProtects(t *testing.T) {
 	if p.Keep.Source != Discovered {
 		t.Fatalf("source = %q (%s), want discovered", p.Keep.Source, p.Keep.Cause)
 	}
-	if want := repo.DefaultBranch(); strings.Join(p.Keep.Values, ",") != want {
+	if want := repo.DefaultBranch(""); strings.Join(p.Keep.Values, ",") != want {
 		t.Errorf("keep = %v, want just the default branch %q", p.Keep.Values, want)
 	}
 }
 
 func TestCleanupKeepIncludesADevelopLikeBranchWhenOneExistsLocally(t *testing.T) {
 	repo := newRepo(t)
-	def := repo.DefaultBranch()
+	def := repo.DefaultBranch("")
 	run(t, repo.Toplevel, "branch", "develop")
 
 	p, err := Build(repo)

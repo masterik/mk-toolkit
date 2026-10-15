@@ -10,8 +10,11 @@ package gitrepo
 
 import (
 	"errors"
+	"fmt"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -165,13 +168,128 @@ func (r *Repo) LocalConfigValue(key string) string {
 	return out
 }
 
-// Remote returns the name of the first configured remote, or "".
-func (r *Repo) Remote() string {
-	out, err := run(r.Toplevel, "remote")
-	if err != nil || out == "" {
+// Where a resolved remote came from.
+const (
+	// RemotePinned — `[remote] name` in the repo config, and it is configured here.
+	RemotePinned = "pinned"
+	// RemoteOrigin — nothing pinned, and a remote named `origin` exists.
+	RemoteOrigin = "origin"
+	// RemoteOnly — nothing pinned, no `origin`, and exactly one remote.
+	RemoteOnly = "only"
+	// RemoteFirst — nothing pinned, no `origin`, several remotes: git's first.
+	// A guess, and the one source a caller must not present as an answer.
+	RemoteFirst = "first"
+	// RemoteNone — no remote is configured, which is a normal state.
+	RemoteNone = "none"
+	// RemoteChosen — named for this one call (`--remote`), by a user who was just
+	// asked. Decided like a pin, but it comes from no file.
+	RemoteChosen = "chosen"
+)
+
+// RemoteChoice is how this checkout's remote was resolved.
+type RemoteChoice struct {
+	// Name is the resolved remote, "" when none is configured.
+	Name string
+	// Source is one of the Remote* constants.
+	Source string
+	// All is every configured remote, in git's order.
+	All []string
+	// PinMissing is the pinned name that is not configured in this checkout, or
+	// "". A pin travels with the repo; a clone that never added that remote still
+	// resolves, to the fallback, and says why.
+	PinMissing string
+}
+
+// Ask reports whether the caller should let the user choose: several remotes and
+// no usable pin. Pinned means decided, and a lone remote has nothing to choose.
+func (c RemoteChoice) Ask() bool {
+	return len(c.All) > 1 && c.Source != RemotePinned && c.Source != RemoteChosen
+}
+
+// ResolveRemote picks the remote skills push to and ask GitHub about. A pinned
+// name that is configured wins; otherwise `origin`, otherwise the only remote,
+// otherwise git's first — which is alphabetical, so `fork` would beat `origin`
+// were `origin` not tried first.
+func (r *Repo) ResolveRemote(pinned string) RemoteChoice {
+	c := RemoteChoice{All: r.Remotes(), Source: RemoteNone}
+	has := func(n string) bool { return slices.Contains(c.All, n) }
+	switch {
+	case len(c.All) == 0:
+	case pinned != "" && has(pinned):
+		c.Name, c.Source = pinned, RemotePinned
+		return c
+	case has("origin"):
+		c.Name, c.Source = "origin", RemoteOrigin
+	case len(c.All) == 1:
+		c.Name, c.Source = c.All[0], RemoteOnly
+	default:
+		c.Name, c.Source = c.All[0], RemoteFirst
+	}
+	// Also with no remote at all: a pin on a clone that has none is the clearest
+	// case of a pin that went nowhere, and the one a "len > 0" guard hid.
+	c.PinMissing = pinned
+	return c
+}
+
+// UnknownRemoteError is a remote named for this call that is not configured — a
+// usage mistake, exit 2, unlike a pin from the config, which falls back.
+type UnknownRemoteError struct {
+	Name string
+	All  []string
+}
+
+func (e *UnknownRemoteError) Error() string {
+	have := "none"
+	if len(e.All) > 0 {
+		have = strings.Join(e.All, ", ")
+	}
+	return fmt.Sprintf("--remote %q is not a remote configured here (have: %s)", e.Name, have)
+}
+
+// ChooseRemote is ResolveRemote for a name given for one call. A pin the clone
+// lacks is a fallback and a note; a name typed on the command line that is not a
+// remote is a mistake, and is refused rather than quietly replaced by `origin`.
+func (r *Repo) ChooseRemote(name string) (RemoteChoice, error) {
+	c := r.ResolveRemote(name)
+	if c.Source != RemotePinned {
+		return c, &UnknownRemoteError{Name: name, All: c.All}
+	}
+	c.Source = RemoteChosen
+	return c, nil
+}
+
+// The host is anchored on what can precede it in a remote URL — a scheme's `//`,
+// a user's `@`, or the start of an scp-like address — so `evilgithub.com` and
+// `github.com.evil.example` are not GitHub.
+var githubRepo = regexp.MustCompile(`(?:^|[/@])github\.com[:/]+([^/]+/[^/]+?)(?:\.git)?/?$`)
+
+// GitHubRepo is the `owner/repo` of a GitHub remote, "" for any other host or no
+// such remote. The one producer of the repo `gh` is told to use (`--repo`): left
+// to itself `gh` picks a set default or its own ranking, not the remote mkit
+// pushed to.
+func (r *Repo) GitHubRepo(remote string) string {
+	if remote == "" {
 		return ""
 	}
-	return strings.SplitN(out, "\n", 2)[0]
+	m := githubRepo.FindStringSubmatch(r.RemoteURL(remote))
+	if m == nil {
+		return ""
+	}
+	return m[1]
+}
+
+// PinMissingDetail is the one sentence for a pin this clone lacks, so `facts` and
+// `repo profile` cannot word it twice. "" when nothing is missing.
+func (c RemoteChoice) PinMissingDetail() string {
+	if c.PinMissing == "" {
+		return ""
+	}
+	if c.Name == "" {
+		return fmt.Sprintf("`remote.name` pins %q, which is not configured in this checkout — "+
+			"no remote is configured here at all, so there is nothing to push to", c.PinMissing)
+	}
+	return fmt.Sprintf("`remote.name` pins %q, which is not configured in this checkout — "+
+		"%q is used instead", c.PinMissing, c.Name)
 }
 
 // RemoteURL returns the fetch URL of the named remote, or "".
@@ -282,9 +400,11 @@ func (r *Repo) AliveCommits(heads []string) map[string]bool {
 	return alive
 }
 
-// DefaultBranch resolves this repo's default branch: the remote's own HEAD where
-// there is one, then the first local branch named main, master or trunk, then
-// "unknown".
+// DefaultBranch resolves this repo's default branch: the HEAD of the remote
+// ResolveRemote(pinned) picks — the config's pin, else `origin` — where there is
+// one and this checkout has that branch, then the first local branch named main,
+// master or trunk, then "unknown". **Always a local branch, or "unknown"**: a
+// name that exists only as a remote-tracking ref is never returned.
 //
 // **One implementation**: `mkit facts` prints it as `default_branch=`, `mkit
 // branch status` is handed it rather than re-deriving it, and `mkit repo profile`
@@ -296,9 +416,9 @@ func (r *Repo) AliveCommits(heads []string) map[string]bool {
 // "unknown" rather than an error: a repo with no remote and no conventionally
 // named branch is a normal repo, and every caller reports the answer rather than
 // stopping on it.
-func (r *Repo) DefaultBranch() string {
+func (r *Repo) DefaultBranch(pinnedRemote string) string {
 	var remoteHead string
-	if remote := r.Remote(); remote != "" {
+	if remote := r.ResolveRemote(pinnedRemote).Name; remote != "" {
 		if head, err := run(r.Toplevel, "symbolic-ref", "--short", "refs/remotes/"+remote+"/HEAD"); err == nil {
 			remoteHead = strings.TrimPrefix(head, remote+"/")
 		}
@@ -317,12 +437,9 @@ func (r *Repo) DefaultBranch() string {
 			return b
 		}
 	}
-	// Nothing local matched. The remote's name is still a better report than
-	// "unknown" — every caller reports this rather than branching on it, and the
-	// one that refuses a non-local default refuses "unknown" just the same.
-	if remoteHead != "" {
-		return remoteHead
-	}
+	// Nothing local matched. Not the remote's name: it is not a branch this
+	// checkout has, and `mkit branch status` refuses such a `--default` — the
+	// whole of `cleanup` would stop on it where "unknown" is reported and handled.
 	return "unknown"
 }
 

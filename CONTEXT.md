@@ -16,6 +16,10 @@ _Avoid_: default config
 **Optional page**:
 A page of the `mkit init` wizard that is not walked — the gate and the cleanup keep list. Its pre-selection is written as it stands; the review page opens it for a change.
 
+**Remote**:
+The one git remote a branch is pushed to and whose GitHub repo its PR is about — a single choice, not a push/PR pair. A **Pinned value** when the repo config names it and this clone has it; otherwise `origin` if it exists, else the only remote, else git's first. When several remotes remain and nothing is pinned, that is a guess: the skills ask once per run and offer to pin the answer.
+_Avoid_: upstream (a branch's tracking ref, or the project in a fork workflow), push target
+
 **Scope**:
 The area-of-change in a conventional commit's parentheses (`feat(cli): …`). Repo-specific; discovered from history.
 _Avoid_: using "scope" for a commit **Type**
@@ -27,6 +31,7 @@ The conventional-commit kind (`feat`, `fix`, `docs`, …). A fixed vocabulary fr
 
 - Pre-selection in `mkit init` follows **Pinned value** → **Discovered value** → **Form default**.
 - A gate step's **Discovered value** prefers the repo's own task-runner recipe (just, make, Taskfile, deno tasks) over the language's standard command.
+- A **Remote** is a **Form default** (`origin`) only where several exist: discovery then names no value, so accepting `mkit init` pins it. The same **Remote** also decides which HEAD names the default branch.
 - Reviewers are the one discovered list `init` does not pin: pinning CODEOWNERS' owners would replace `pr`'s per-path match with a flat list.
 
 ## Flagged ambiguities

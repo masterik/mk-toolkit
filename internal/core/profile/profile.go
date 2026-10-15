@@ -11,6 +11,7 @@
 package profile
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -83,6 +84,8 @@ type Profile struct {
 	// installed, not that the team wants it run.
 	ReviewMode Value `json:"review_mode"`
 	Merge      Value `json:"merge_style"`
+	// Remote is the git remote `pr` and `finish` push to.
+	Remote Value `json:"remote"`
 	// Keep is the branches `cleanup` must never delete.
 	Keep    List        `json:"cleanup_keep"`
 	Payload PayloadInfo `json:"payload"`
@@ -153,6 +156,7 @@ func build(repo *gitrepo.Repo, cfg *repoconfig.Config) *Profile {
 	p.Review = discoverReviewers(repo, cfg)
 	p.ReviewMode = reviewMode(cfg)
 	p.Merge = discoverMerge(repo, cfg)
+	p.Remote = discoverRemote(repo, cfg)
 	p.Keep = discoverKeep(repo, cfg)
 	return p
 }
@@ -218,10 +222,10 @@ func discoverSpec(repo *gitrepo.Repo, cfg *repoconfig.Config) Spec {
 	case cfg.Spec.Ref != "":
 		s.Ref = Value{Value: cfg.Spec.Ref, Source: Pinned}
 	case s.Store.Value == "github-issues":
-		if slug := githubSlug(repo); slug != "" {
+		if slug := githubSlug(repo, cfg); slug != "" {
 			s.Ref = Value{Value: slug, Source: Discovered}
 		} else {
-			s.Ref = Value{Source: Unavailable, Cause: "no GitHub remote to read the slug from"}
+			s.Ref = Value{Source: Unavailable, Cause: "no GitHub remote to read the slug from, or several remotes and none pinned"}
 		}
 	default:
 		s.Ref = Value{Source: Unavailable, Cause: "no ref pinned, and none derivable for this store"}
@@ -253,18 +257,39 @@ func readTrackerDoc(toplevel string) string {
 	return ""
 }
 
-var remoteSlug = regexp.MustCompile(`github\.com[:/]+([^/]+/[^/]+?)(?:\.git)?/?$`)
+// githubSlug is the GitHub repo of the resolved remote. Not while that remote is
+// a guess (several remotes, none pinned): in a fork workflow `origin` is the
+// fork, and a discovered ref pre-selected from it would point `init` at the
+// wrong project. The form still offers every remote's slug as a suggestion.
+func githubSlug(repo *gitrepo.Repo, cfg *repoconfig.Config) string {
+	rc := repo.ResolveRemote(cfg.Remote.Name)
+	if rc.Ask() {
+		return ""
+	}
+	return repo.GitHubRepo(rc.Name)
+}
 
-func githubSlug(repo *gitrepo.Repo) string {
-	remote := repo.Remote()
-	if remote == "" {
-		return ""
+// discoverRemote reports the remote `pr` and `finish` use. A pin this checkout
+// lacks is Unavailable rather than a quiet fallback — the failure shape of an
+// invalid `spec.store`: a plausible answer tagged as if nothing were wrong. With
+// several remotes and no pin the fallback is a guess, and the cause says so.
+func discoverRemote(repo *gitrepo.Repo, cfg *repoconfig.Config) Value {
+	if pb := cfg.Problem("remote.name"); pb != nil {
+		return Value{Source: Unavailable, Cause: pb.Detail}
 	}
-	m := remoteSlug.FindStringSubmatch(repo.RemoteURL(remote))
-	if m == nil {
-		return ""
+	rc := repo.ResolveRemote(cfg.Remote.Name)
+	switch {
+	case rc.PinMissing != "":
+		return Value{Source: Unavailable, Cause: rc.PinMissingDetail()}
+	case rc.Source == gitrepo.RemotePinned:
+		return Value{Value: rc.Name, Source: Pinned}
+	case rc.Source == gitrepo.RemoteNone:
+		return Value{Source: Unavailable, Cause: "no remote is configured"}
+	case rc.Ask():
+		return Value{Source: Unavailable, Cause: fmt.Sprintf("%d remotes (%s) and none pinned — "+
+			"`pr` and `finish` ask, offering %q", len(rc.All), strings.Join(rc.All, ", "), rc.Name)}
 	}
-	return m[1]
+	return Value{Value: rc.Name, Source: Discovered}
 }
 
 var scopeRe = regexp.MustCompile(`^[a-z]+\(([a-zA-Z0-9_.\-/]+)\)!?:`)
@@ -416,10 +441,10 @@ func discoverKeep(repo *gitrepo.Repo, cfg *repoconfig.Config) List {
 	if len(cfg.Cleanup.Keep) > 0 {
 		return List{Values: cfg.Cleanup.Keep, Source: Pinned}
 	}
-	def := repo.DefaultBranch()
+	def := repo.DefaultBranch(cfg.Remote.Name)
 	if def == "unknown" {
 		return List{Values: []string{}, Source: Unavailable,
-			Cause: "no remote HEAD and no local main/master/trunk, so the default branch " +
+			Cause: "no local main/master/trunk and no checked-out branch for the remote's HEAD, so the default branch " +
 				"cleanup protects cannot be named here"}
 	}
 	return List{Values: branchstatus.ProtectedSet(def, branchstatus.Develop(repo, def), nil), Source: Discovered}

@@ -49,7 +49,8 @@ func newFactsCmd() *cobra.Command {
 				code := 1
 				var slug *scratch.SlugError
 				var rev *facts.RevError
-				if errors.As(gerr, &slug) || errors.As(gerr, &rev) {
+				var unknown *gitrepo.UnknownRemoteError
+				if errors.As(gerr, &slug) || errors.As(gerr, &rev) || errors.As(gerr, &unknown) {
 					code = 2
 				}
 				return &ExitError{Code: code, Msg: gerr.Error()}
@@ -86,6 +87,8 @@ func newFactsCmd() *cobra.Command {
 	cmd.Flags().StringVar(&opt.Base, "base", "", "compare against this branch; an unresolvable one is fatal")
 	cmd.Flags().StringVar(&opt.Range, "range", "",
 		"an explicit git range, instead of the working-tree scopes; an unresolvable one is fatal")
+	cmd.Flags().StringVar(&opt.Remote, "remote", "",
+		"use this remote for this call, over the config's pin; not configured here is an error")
 	cmd.Flags().BoolVar(&opt.GH, "gh", false, "ask GitHub whether this branch already has a PR")
 	cmd.Flags().BoolVar(&opt.NoRun, "no-run", false, "do not open a run directory")
 	cmd.Flags().IntVar(&opt.StatusMax, "status-max", 60, "maximum status entries to print")
@@ -114,7 +117,8 @@ func renderFacts(out io.Writer, f *facts.Facts, opt facts.Options) {
 
 	p("branch=%s\ndetached=%s\n", f.Branch, yesNo(f.Detached))
 	p("upstream=%s\npushed=%s\n", f.Upstream, yesNo(f.Pushed))
-	p("remote=%s\n", orNone(f.Remote))
+	p("remote=%s\nremote_source=%s\nremote_repo=%s\n", orNone(f.Remote), f.RemoteSource, orNone(f.RemoteRepo))
+	p("remotes=%s\nremote_choice=%s\n", orNone(strings.Join(f.Remotes, ",")), askWord(f.RemoteAsk))
 	p("default_branch=%s\n", f.DefaultBranch)
 	if f.Base != "" {
 		p("base=%s\n", f.Base)
@@ -222,6 +226,10 @@ type factsJSON struct {
 	Upstream       string               `json:"upstream"`
 	Pushed         bool                 `json:"pushed"`
 	Remote         string               `json:"remote"`
+	RemoteSource   string               `json:"remote_source"`
+	RemoteRepo     string               `json:"remote_repo"`
+	Remotes        []string             `json:"remotes"`
+	RemoteChoice   string               `json:"remote_choice"`
 	DefaultBranch  string               `json:"default_branch"`
 	Base           string               `json:"base,omitempty"`
 	Ahead          int                  `json:"ahead"`
@@ -262,7 +270,8 @@ func writeFactsJSON(out io.Writer, f *facts.Facts) error {
 		WorktreeOrigin: f.WorktreeOrigin, CleanupPath: f.CleanupPath,
 		WTListsThis: f.WTListsThis, WTConfig: f.WTConfig, WTBin: f.WTBin,
 		Branch: f.Branch, Detached: f.Detached, Upstream: f.Upstream, Pushed: f.Pushed,
-		Remote: f.Remote, DefaultBranch: f.DefaultBranch, Base: f.Base,
+		Remote: f.Remote, RemoteSource: f.RemoteSource, RemoteRepo: f.RemoteRepo, Remotes: nonNil(f.Remotes),
+		RemoteChoice: askWord(f.RemoteAsk), DefaultBranch: f.DefaultBranch, Base: f.Base,
 		Ahead: f.Ahead, Behind: f.Behind,
 		Clean: f.Clean, Staged: f.Staged, Unstaged: f.Unstaged, Untracked: f.Untracked,
 		Conflicted: f.Conflicted, Status: nonNil(f.Status), StatusTotal: f.StatusTotal,
@@ -278,4 +287,13 @@ func writeFactsJSON(out io.Writer, f *facts.Facts) error {
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "  ")
 	return enc.Encode(j)
+}
+
+// askWord is `remote_choice=`: ask when several remotes and nothing pinned make
+// `remote=` a fallback to confirm, no when it is an answer.
+func askWord(ask bool) string {
+	if ask {
+		return "ask"
+	}
+	return "no"
 }

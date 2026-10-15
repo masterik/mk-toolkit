@@ -13,7 +13,8 @@ with no review use `finish`.
 
 References: `../_shared/references/conventional-commits.md`, `../_shared/references/quality-gate.md`,
 `../_shared/references/worktree.md`, `../_shared/references/git-safety.md`,
-`../_shared/references/branching.md`, `../_shared/references/output-discipline.md`,
+`../_shared/references/branching.md`, `../_shared/references/remote.md`,
+`../_shared/references/output-discipline.md`,
 `../_shared/references/agent-delegation.md`, `../_shared/references/workflow-contract.md`,
 `../_shared/references/stacked-prs.md` (only for a stacked PR).
 
@@ -35,6 +36,8 @@ A PR that is easy to review and safe to merge:
 - **Draft?** — draft if the work isn't ready for review.
 - **Area prefix** — scoped to one package → prefix the title `[area]` (`[api]`, `[ui]`).
 - **Reviewers** — step 6: pinned in the repo config, from `CODEOWNERS`, or ask.
+- **Remote** — only when step 0 says `remote_choice=ask` (several remotes, none pinned): ask which one,
+  default `remote=`, then offer to pin it. `../_shared/references/remote.md` has the whole rule.
 
 ## Workflow
 
@@ -67,7 +70,10 @@ Step 5 drafts the "why" from those gists where they exist, rather than re-derivi
 subjects alone.
 
 That covers the branch, the status, `commits:` for `<base>..HEAD`, the stat, `codeowners=` for step 6, and
-`pr=` — whether this branch already has one, which is the check that otherwise gets skipped. Keep the `run=`
+`pr=` — whether this branch already has one, which is the check that otherwise gets skipped — and the
+remote: `remote=`, `remote_source=`, `remote_repo=`, `remotes=`, `remote_choice=`. On `remote_choice=ask`, ask and then
+re-run this `mkit facts` call with `--no-run --remote <answer>` added, as `remote.md` says — `pr=` and
+`default_branch=` above describe the fallback remote until you do. Keep the `run=`
 literal; this file writes it as `<run-dir>`. There is no `$RUN_DIR` (a shell variable does not survive to the
 next Bash call), and re-running `mkit facts` opens a second directory instead of returning the first.
 
@@ -130,8 +136,11 @@ Same inside a worktree — just confirm `git branch --show-current` is the featu
 ### 3. Push the branch
 
 ```bash
-git push -u origin <feature-branch>     # -u on first push; plain git push afterward
+git push -u <remote> <feature-branch>   # -u on first push; plain git push afterward
 ```
+
+`<remote>` is step 0's `remote=` — or the user's answer when `remote_choice=ask` — never a hardcoded
+`origin` (`../_shared/references/remote.md`).
 
 Pushing from a worktree works normally. Never force-push unless asked. If the remote rejects because the
 branch diverged, stop and surface it.
@@ -195,7 +204,7 @@ nothing more. Figure out who, without hardcoding handles:
    that has been settled in a committed file. Say it is pinned in the preview and the report (rule 3).
 1. `CODEOWNERS` — step 0 reported `codeowners=<path>` or `none`; owners of the changed paths are the natural
    reviewers.
-2. Repo/team conventions the user or docs mention; a configured default reviewer/team (`gh repo view`, org
+2. Repo/team conventions the user or docs mention; a configured default reviewer/team (`gh repo view` — with `<remote_repo>` unless `remote_repo=none`; org
    settings).
 3. Reviewers the user named.
 4. None determinable and the change clearly needs review → ask (offer to skip for a draft).
@@ -207,6 +216,7 @@ Show the full PR and confirm (unless the user already said "just create it"):
 ```
 Title:     <title>
 Base:      <base> ← <feature-branch>
+Remote:    <remote> (<pinned in .mkit/config.toml | origin | chosen by you | fallback>)  [only with several remotes]
 Draft:     <yes/no>
 Reviewers: <handles or "none"> (<pinned in .mkit/config.toml | from CODEOWNERS | repo/org default |
            named by you | asked>)
@@ -229,6 +239,10 @@ gh pr create \
   [--draft] \
   [--reviewer <handle> --reviewer <handle>]
 ```
+
+Name the repo: `--repo <remote_repo> --head <feature-branch>` whenever `remote_repo=` is not `none` —
+without it `gh` can pick another repo than the one just pushed to, without refusing
+(`../_shared/references/remote.md`, "Using it"). The same goes for `gh repo view` in step 6 (a repo argument only when `remote_repo=` is not `none`).
 
 Then remove the temp file.
 
@@ -282,8 +296,9 @@ Commits (<base>..HEAD):
 The commit list is step 0's `commits:` block — already in context, and cheap precisely because the diff never
 was. Never just "N commits pushed." Prune with `mkit scratch prune` on the way out.
 
-After the block, say what the reader still has to do or decide, or "nothing needed from you": CI still
-running, a reviewer that could not be determined, a check served from the ledger as `cached`, a pin that went
+After the block, say what the reader still has to do or decide, or "nothing needed from you": a remote chosen
+but not pinned (`mkit init --force --remote <name>`, for the user to run and commit — never run mid-run),
+CI still running, a reviewer that could not be determined, a check served from the ledger as `cached`, a pin that went
 nowhere. Never leave those implied by the block's fields alone.
 
 Then record the run:
@@ -304,6 +319,8 @@ a completed no-op is a fact, and is not what an absent record says.
 | ----------------------------------- | ----------------------------------------------------------------- |
 | No commits ahead of base            | Stop — nothing to PR. Check the user is on the right branch.      |
 | Branch not pushed / push rejected   | Push with `-u`; if diverged, surface it — do not force-push.      |
+| `remote=none`                       | Stop — nothing to push to; say to add a remote.                   |
+| Several remotes, none pinned        | Ask which (`remote_choice=ask`), offer `mkit init --force --remote`. |
 | PR already exists for this branch   | step 0's `pr=` holds a URL — show it (`none`/`gh-missing` are not). |
 | Lint/test/build fails               | Report which step; user decides fix vs proceed-as-draft.          |
 | On the base branch                  | Stop — tell the user to create a feature branch first.            |

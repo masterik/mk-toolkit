@@ -35,6 +35,7 @@ func newInitCmd() *cobra.Command {
 		reviewers  []string
 		reviewMode string
 		merge      string
+		remote     string
 		keep       []string
 		force      bool
 	)
@@ -47,8 +48,9 @@ func newInitCmd() *cobra.Command {
 			"absent, and `mkit init` only removes repeated discovery. It writes nothing\n" +
 			"outside the repo, and is a no-op on a repo that already has a config — pass\n" +
 			"--force to rewrite one.\n\n" +
-			"On a terminal it opens a wizard (Spec, Commit, Review, Merge): every answer is a\n" +
-			"choice with a description, pre-selected from the pinned value, then the\n" +
+			"On a terminal it opens a wizard (Spec, Commit, Review, Merge, and Remote when\n" +
+			"there are several remotes): every answer is a choice with a description,\n" +
+			"pre-selected from the pinned value, then the\n" +
 			"discovered one, then a form default (merge style `merge`, review mode `full`).\n" +
 			"What discovery finds is pinned. The gate and the cleanup keep list are written as\n" +
 			"found and can be changed from the review page, which shows the exact file.\n" +
@@ -100,7 +102,7 @@ func newInitCmd() *cobra.Command {
 				// zero-value test cannot tell it from an omitted flag.
 				subjectMaxSet: cmd.Flags().Changed("subject-max"),
 				reviewers:     reviewers, reviewMode: reviewMode,
-				merge: merge, keep: keep,
+				merge: merge, remote: remote, keep: keep,
 			}); err != nil {
 				return err
 			}
@@ -158,6 +160,7 @@ func newInitCmd() *cobra.Command {
 	cmd.Flags().StringArrayVar(&reviewers, "reviewer", nil, "pin a default reviewer (repeatable)")
 	cmd.Flags().StringVar(&reviewMode, "review-mode", "", "full | quick — the roster the review skill opens with")
 	cmd.Flags().StringVar(&merge, "merge", "", "merge | squash | rebase")
+	cmd.Flags().StringVar(&remote, "remote", "", "the git remote pr and finish push to, for a checkout with several")
 	cmd.Flags().StringArrayVar(&keep, "keep", nil,
 		"pin a branch cleanup must never delete (repeatable); the default branch is kept regardless")
 	cmd.Flags().BoolVar(&force, "force", false, "rewrite an existing config")
@@ -189,6 +192,7 @@ type flagValues struct {
 	reviewers     []string
 	reviewMode    string
 	merge         string
+	remote        string
 	keep          []string
 }
 
@@ -240,6 +244,14 @@ func applyFlags(cfg *repoconfig.Config, f flagValues) error {
 			return fmt.Errorf("--merge %q: %w", merge, err)
 		}
 		cfg.Merge.Style = merge
+	}
+	// The name is checked for shape only. Whether this clone has the remote is not
+	// the question: the config travels, and a clone without it falls back.
+	if f.remote != "" {
+		if err := repoconfig.CheckRemoteName(f.remote); err != nil {
+			return fmt.Errorf("--remote %q: %w", f.remote, err)
+		}
+		cfg.Remote.Name = f.remote
 	}
 	// No validation, because there is nothing to validate against: any string is
 	// a legal branch name to pin, and a name with no branch here is not an error

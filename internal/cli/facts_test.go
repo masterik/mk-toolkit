@@ -483,3 +483,103 @@ func TestFactsAFailingStatusIsNotACleanTree(t *testing.T) {
 		t.Error("clean=yes from a git status that failed — the tree was dirty")
 	}
 }
+
+// With several remotes and nothing pinned, `remote=` is a fallback and the facts
+// say to ask; a pin makes it an answer, and a pin this clone lacks is a note.
+func TestFactsRemoteResolution(t *testing.T) {
+	repo := factsRepo(t)
+	facts := func() string {
+		res := run(t, "facts", "pr", "--no-run")
+		if res.code != 0 {
+			t.Fatalf("exit %d: %s", res.code, res.stderr)
+		}
+		return res.stdout
+	}
+	check := func(out, remote, source, choice string) {
+		t.Helper()
+		for k, want := range map[string]string{"remote": remote, "remote_source": source, "remote_choice": choice} {
+			if got := factsField(out, k); got != want {
+				t.Errorf("%s = %q, want %q\n%s", k, got, want, out)
+			}
+		}
+	}
+
+	check(facts(), "none", "none", "no")
+
+	gateGit(t, repo, "remote", "add", "origin", "https://example.invalid/o.git")
+	check(facts(), "origin", "origin", "no")
+
+	gateGit(t, repo, "remote", "add", "fork", "https://example.invalid/f.git")
+	out := facts()
+	check(out, "origin", "origin", "ask")
+	if got := factsField(out, "remotes"); got != "fork,origin" {
+		t.Errorf("remotes = %q", got)
+	}
+
+	put(t, repo, ".mkit/config.toml", "version = 1\n[remote]\nname = \"fork\"\n")
+	check(facts(), "fork", "pinned", "no")
+
+	put(t, repo, ".mkit/config.toml", "version = 1\n[remote]\nname = \"gone\"\n")
+	out = facts()
+	check(out, "origin", "origin", "ask")
+	if !strings.Contains(out, `pins "gone", which is not configured`) {
+		t.Errorf("a pin this clone lacks is not reported:\n%s", out)
+	}
+}
+
+// `--remote` is what a skill passes after asking the user: it replaces the pin for
+// that call, decides the question, and refuses a name that is not a remote rather
+// than quietly using `origin`. `pr=` looks the branch up in the chosen remote's
+// repo, because `gh` would otherwise pick its own.
+func TestFactsRemoteFlagChoosesAndNamesTheRepo(t *testing.T) {
+	repo := factsRepo(t)
+	gateGit(t, repo, "remote", "add", "origin", "https://github.com/me/fork.git")
+	gateGit(t, repo, "remote", "add", "upstream", "git@github.com:org/project.git")
+	calls := loggingGH(t)
+
+	out := run(t, "facts", "pr", "--no-run", "--gh").stdout
+	if factsField(out, "remote_repo") != "me/fork" || factsField(out, "remote_choice") != "ask" {
+		t.Errorf("unflagged:\n%s", out)
+	}
+
+	_ = os.Remove(calls)
+	res := run(t, "facts", "pr", "--no-run", "--gh", "--remote", "upstream")
+	if res.code != 0 {
+		t.Fatalf("exit %d: %s", res.code, res.stderr)
+	}
+	for k, want := range map[string]string{"remote": "upstream", "remote_source": "chosen",
+		"remote_choice": "no", "remote_repo": "org/project"} {
+		if got := factsField(res.stdout, k); got != want {
+			t.Errorf("%s = %q, want %q", k, got, want)
+		}
+	}
+	if b, _ := os.ReadFile(calls); !strings.Contains(string(b), "pr view main --repo org/project") {
+		t.Errorf("gh pr view did not name the chosen remote's repo: %q", b)
+	}
+
+	res = run(t, "facts", "pr", "--remote", "nope")
+	if res.code != 2 {
+		t.Errorf("a mistyped remote exited %d, want 2", res.code)
+	}
+	if entries, _ := os.ReadDir(filepath.Join(repo, ".mkit")); len(entries) != 0 {
+		t.Errorf("a refused call left a run directory behind: %v", entries)
+	}
+}
+
+// A detached HEAD has no branch to have a PR, and `gh pr view --repo` needs a
+// branch argument — so the lookup is skipped rather than asked of whichever repo
+// `gh` would pick.
+func TestFactsDetachedHeadSkipsThePRLookup(t *testing.T) {
+	repo := factsRepo(t)
+	gateGit(t, repo, "remote", "add", "origin", "https://github.com/me/fork.git")
+	gateGit(t, repo, "checkout", "-q", "--detach")
+	calls := loggingGH(t)
+
+	res := run(t, "facts", "pr", "--no-run", "--gh")
+	if got := factsField(res.stdout, "pr"); got != "none" {
+		t.Errorf("pr = %q, want none", got)
+	}
+	if b, _ := os.ReadFile(calls); strings.Contains(string(b), "pr view") {
+		t.Errorf("a detached HEAD still asked gh about a PR: %q", b)
+	}
+}

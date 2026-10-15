@@ -17,6 +17,7 @@ merges locally, no remote round trip. Either way this skill never *opens* a PR f
 References, read the ones a step calls for: `../_shared/references/worktree.md`,
 `../_shared/references/quality-gate.md`, `../_shared/references/conventional-commits.md`,
 `../_shared/references/git-safety.md`, `../_shared/references/branching.md`,
+`../_shared/references/remote.md`,
 `../_shared/references/output-discipline.md`, `../_shared/references/workflow-contract.md`,
 `../_shared/references/stacked-prs.md` (only when the PR is part of a stack).
 
@@ -67,7 +68,9 @@ the first. Check four things in what it printed:
 3. **Cleanup path** — `cleanup_path=` is `exit-worktree` (the harness's own worktree) · `wt` (linked,
    worktrunk present) · `git-worktree` (linked, no worktrunk) · `none` (primary checkout). It decides step 4.
    Read `../_shared/references/worktree.md` there, not now.
-4. **Existing PR** — `pr=` is a URL only when one exists, alongside `pr_state=OPEN|CLOSED|MERGED` and
+4. **Existing PR** — first the remote: on `remote_choice=ask` (several remotes, none pinned) ask which and re-run
+   this `mkit facts` with `--no-run --remote <answer>` added, **before routing** — `pr=` was computed for the
+   fallback remote (`../_shared/references/remote.md`). Then `pr=` is a URL only when one exists, alongside `pr_state=OPEN|CLOSED|MERGED` and
    `pr_draft=true|false`. Sentinels (`none`, `gh-missing`, `gh-unauthenticated`, `no-remote`)
    mean there is nothing to merge remotely — take the **local merge path**. `pr_state=OPEN` (and not
    draft) redirects step 4 to the **PR merge path** instead: this branch is merged on GitHub, not with a
@@ -190,8 +193,11 @@ announce — and it is why the two conditions are written as things to look for 
 **PR path** (`pr=<url>`, `pr_state=OPEN`, not draft) — merge on GitHub, then sync locally:
 
 1. **Push anything step 1 committed.** `gh pr merge` merges what's on GitHub, not local state:
-   `pushed=no` → `git push -u origin <feature-branch>`; otherwise plain `git push` if `ahead=` > 0.
-2. **Pick the merge method.** `gh repo view --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed`
+   Push explicitly, after step 1: `git push -u <remote> <feature-branch>` when `pushed=no`, else
+   `git push <remote> <feature-branch>` (a no-op when up to date). Not a bare `git push`: `pushed=yes` only proves
+   *some* upstream exists, possibly on another remote, and `ahead=` predates step 1's commits.
+   `<remote>` is `remote=` — never a hardcoded `origin` — as settled in step 0.
+2. **Pick the merge method.** `gh repo view [<remote_repo>] --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed`
    tells you what the remote will accept; `merge_style` above tells you what this repo wants.
    `merge`→`--merge`/`mergeCommitAllowed`, `squash`→`--squash`/`squashMergeAllowed`,
    `rebase`→`--rebase`/`rebaseMergeAllowed`. In order:
@@ -238,7 +244,7 @@ announce — and it is why the two conditions are written as things to look for 
    one), work from `primary=` instead — same rule as the local path's worktree.md note:
    ```bash
    git switch <base>
-   git pull        # or: git fetch <remote> && git merge --ff-only <remote>/<base>
+   git pull --ff-only <remote> <base>   # explicit: a bare `git pull` follows the base's own upstream, possibly another remote
    ```
 5. **Confirm the merge actually landed, then remove the local vestiges.** `gh pr merge` returning success
    does not always mean *merged*: on a branch that requires a merge queue it means "enqueued" (or
@@ -315,7 +321,7 @@ git merge --no-ff <feature-branch>      # or --ff-only for linear history, if it
 git branch -d <feature-branch>
 ```
 
-Update the base against the remote first (`git fetch` / `git pull --ff-only <base>`) when one exists, so you
+Update the base against the remote first (`git fetch <remote>` / `git pull --ff-only <remote> <base>`) when one exists, so you
 merge onto current base.
 
 On the three plain-git paths a `merge_style` decides the shape of that merge, with none of worktrunk's

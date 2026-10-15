@@ -33,9 +33,12 @@ type Options struct {
 	// Base is a branch to compare against; an unresolvable one is fatal.
 	Base string
 	// Range is an explicit git range, which replaces the working-tree scopes.
-	Range     string
-	GH        bool
-	NoRun     bool
+	Range string
+	GH    bool
+	NoRun bool
+	// Remote names the remote for this one call, over the config's pin: what a
+	// skill passes after asking the user. Not configured here is an error.
+	Remote    string
 	StatusMax int
 	FilesMax  int
 }
@@ -85,11 +88,20 @@ type Facts struct {
 	WTConfig    string
 	WTBin       string
 
-	Branch        string
-	Detached      bool
-	Upstream      string
-	Pushed        bool
-	Remote        string
+	Branch   string
+	Detached bool
+	Upstream string
+	Pushed   bool
+	// Remote is the resolved remote (pinned, else origin, else the only or first
+	// one), "" when none. RemoteSource says which; Remotes lists them all;
+	// RemoteAsk is set when there are several and nothing is pinned, so the
+	// resolution is a fallback the user should confirm.
+	Remote       string
+	RemoteSource string
+	Remotes      []string
+	RemoteAsk    bool
+	// RemoteRepo is the resolved remote's GitHub `owner/repo`, "" for any other host.
+	RemoteRepo    string
 	DefaultBranch string
 	Base          string
 	Ahead         int
@@ -188,6 +200,12 @@ func Gather(repo *gitrepo.Repo, opt Options) (*Facts, error) {
 	if err := checkRev("--range", opt.Range); err != nil {
 		return nil, err
 	}
+	// Before the run directory exists: a mistyped remote must not leave one behind.
+	if opt.Remote != "" {
+		if _, err := repo.ChooseRemote(opt.Remote); err != nil {
+			return nil, err
+		}
+	}
 	if opt.StatusMax <= 0 {
 		opt.StatusMax = 60
 	}
@@ -256,6 +274,7 @@ func Gather(repo *gitrepo.Repo, opt Options) (*Facts, error) {
 	f.setUserDirNote()
 	f.GitBin = gitBin()
 	f.setWorktreeOrigin(repo)
+	f.setRemote(repo, opt.Remote)
 	f.setBranch(repo)
 	if err := f.setWorkingTree(repo, opt); err != nil {
 		return f, err
@@ -369,12 +388,11 @@ func (f *Facts) setBranch(repo *gitrepo.Repo) {
 	} else {
 		f.Upstream = "none"
 	}
-	f.Remote = firstLine(git(repo, "remote"))
 
 	// Delegated, never re-derived: `mkit branch status` is handed this answer and
 	// `mkit repo profile` reports the branches it protects, so the resolution
 	// lives in exactly one place.
-	f.DefaultBranch = repo.DefaultBranch()
+	f.DefaultBranch = repo.DefaultBranch(f.Remote)
 
 	if f.HasUpstream {
 		counts := strings.Fields(git(repo, "rev-list", "--left-right", "--count", "HEAD..."+f.Upstream))
@@ -541,6 +559,35 @@ func untrackedScope(repo *gitrepo.Repo, max int) (Scope, error) {
 	return Scope{Files: len(list), List: capList(list, max)}, nil
 }
 
+// setRemote resolves the remote from the config pin. Config is an input, never a
+// permission: a file that cannot be read or a pin that is unusable resolves to
+// the fallback, and the cause is a note, not a failure.
+func (f *Facts) setRemote(repo *gitrepo.Repo, chosen string) {
+	defer func() { f.RemoteRepo = repo.GitHubRepo(f.Remote) }()
+	if chosen != "" {
+		// Validated up front; a name given for this call replaces the pin, so the
+		// config is not read and has nothing to report.
+		rc, _ := repo.ChooseRemote(chosen)
+		f.Remote, f.RemoteSource, f.Remotes, f.RemoteAsk = rc.Name, rc.Source, rc.All, false
+		return
+	}
+	cfg, _, err := repoconfig.Load(repo.Toplevel)
+	if err != nil {
+		f.Notes = append(f.Notes, "remote_source — "+
+			repoconfig.UnreadableProblem(repoconfig.Path(repo.Toplevel), err).Detail)
+		cfg = &repoconfig.Config{}
+	}
+	rc := repo.ResolveRemote(cfg.Remote.Name)
+	f.Remote, f.RemoteSource, f.Remotes, f.RemoteAsk = rc.Name, rc.Source, rc.All, rc.Ask()
+	if pb := cfg.Problem("remote.name"); pb != nil {
+		f.Notes = append(f.Notes, "remote_source="+rc.Source+" — "+pb.Detail+".")
+	}
+	if d := rc.PinMissingDetail(); d != "" {
+		f.Notes = append(f.Notes, fmt.Sprintf("remote_source=%s — %s. Remedy: `git remote add %s <url>`, "+
+			"or re-pin with `mkit init --force --remote <name>`.", rc.Source, d, rc.PinMissing))
+	}
+}
+
 // setPR names which of the four things `pr=none` used to mean actually happened;
 // only the first of them justifies opening one.
 func (f *Facts) setPR(repo *gitrepo.Repo) {
@@ -548,7 +595,20 @@ func (f *Facts) setPR(repo *gitrepo.Repo) {
 		f.PR = "gh-missing"
 		return
 	}
-	out, err := output(repo, "gh", "pr", "view", "--json", "url,state,isDraft")
+	// `gh` picks its own repo — a set default, or its own remote ranking — unless
+	// told: the remote mkit resolved is the one the branch was pushed to. `--repo`
+	// makes `pr view` take the branch as an argument, which a detached HEAD lacks —
+	// and a detached HEAD has no branch to have a PR, so it is not looked up at all
+	// rather than asked of whichever repo `gh` would pick.
+	args := []string{"pr", "view"}
+	if f.RemoteRepo != "" {
+		args = append(args, f.Branch, "--repo", f.RemoteRepo)
+	}
+	var out []byte
+	var err error
+	if !f.Detached {
+		out, err = output(repo, "gh", append(args, "--json", "url,state,isDraft")...)
+	}
 	if err == nil && len(out) > 0 {
 		var v struct {
 			URL     string `json:"url"`
@@ -680,13 +740,6 @@ func lines(s string) []string {
 		return nil
 	}
 	return strings.Split(s, "\n")
-}
-
-func firstLine(s string) string {
-	if i := strings.IndexByte(s, '\n'); i >= 0 {
-		return s[:i]
-	}
-	return s
 }
 
 func git(repo *gitrepo.Repo, args ...string) string {

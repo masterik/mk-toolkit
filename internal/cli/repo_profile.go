@@ -84,6 +84,7 @@ func renderProfile(out io.Writer, p *profile.Profile) {
 	renderValue(out, "review mode", p.ReviewMode)
 	_, _ = fmt.Fprintln(out)
 	renderValue(out, "merge style", p.Merge)
+	renderValue(out, "remote", p.Remote)
 	renderList(out, "cleanup keep", p.Keep)
 
 	_, _ = fmt.Fprintln(out, "\npayload:")

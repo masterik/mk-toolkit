@@ -34,7 +34,7 @@ or call a skill directly as `/mkit:<skill>`, for example `/mkit:review quick`. A
 edit → /mkit:commit → /mkit:review → /mkit:pr   (or /mkit:finish to merge locally)
 ```
 
-Skills discover gate commands, commit scopes, reviewers and merge style from the repo. `mkit init`
+Skills discover gate commands, commit scopes, reviewers, merge style and the push remote from the repo. `mkit init`
 can pin them in a committed `.mkit/config.toml`, but that is optional. mkit's scratch state lives in
 `.mkit/` and is git-ignored; `.mkit/config.toml` is committed.
 

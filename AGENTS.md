@@ -79,6 +79,10 @@ Shell layer gone (M5); its rules still apply:
   - `cache/` (M2): read-only `Scan`; `apply.go` deletes only what `Scan` named, home-containment guarded.
   - `gitrepo/` (M7): **`Ignored` runs `check-ignore` twice**: `-v` exits 0 for a *negated* path too
     (answers "which rule", not "ignored?"); `-q` is the boolean, then `-v` names the file to edit.
+    **`ResolveRemote` is the one remote resolver** ([ADR 0005](docs/adr/0005-one-remote-per-repo.md)) (`[remote] name` pin → `origin` → lone remote → git's
+    first, a guess): `git remote` is alphabetical, so "first" alone picks `fork` over `origin`. `Ask()` =
+    several remotes without a usable pin or a `--remote` choice. `facts`, `branchstatus`, `profile` all call it; a pin this clone lacks
+    falls back and is reported, never an error.
   - `repoconfig/` (M7): `.mkit/config.toml`. `Stat` → `tracked|untracked|shadowed|absent`
     (**shadowed** = legacy dir-only `.mkit/` rule; config would never travel). `Write` renders a
     **commented template** (no Go TOML marshaller keeps comments). `ShadowedRemedy` = **sole producer**
@@ -87,7 +91,8 @@ Shell layer gone (M5); its rules still apply:
     config, tiers apart + `Gather` candidates → pages); `Apply` (answers → config). Pre-select
     **pinned → discovered → default**; discovered gets pinned (gate, scopes, spec store, merge style)
     except reviewers (pinned list replaces `pr`'s CODEOWNERS match). Defaults only `merge.style = merge`,
-    `review.mode = full`. Pages Spec → Commit → Review → Merge; Gate/Cleanup `Optional`, pre-selected,
+    `review.mode = full`. Pages Spec → Commit → Review → Merge → Remote (only with >1 remote, or a pin to
+    keep); Gate/Cleanup `Optional`, pre-selected,
     opened from review. Custom text uses `repoconfig`'s flag rules.
   - `profile/` (M7): merges discovered + pinned, tags each value; consumes `gate.Detect`'s gate
     result. `gate.Detect` overlays task-runner recipes (`runners.go`: just, make, Taskfile, deno) on
@@ -174,7 +179,9 @@ Shell layer gone (M5); its rules still apply:
 - `plugin/skills/_shared/` — references, no `SKILL.md`; **keep `../_shared/references/…` paths relative**.
 - `mkit facts <skill>` opens a run dir and reports what the machine allows: `scratch_ignored=`,
   `user_dir_writable=`, `config_state=`, `git_bin=` (absolute git for parsed calls — a reshaping hook
-  can summarize output). Causes go in trailing `notes:`, never on a `key=value` line (some pack two pairs).
+  can summarize output), `remote=`/`remote_source=`/`remote_repo=`/`remotes=`/`remote_choice=` (`ask` → the
+  skill asks which remote, then re-runs with `--remote`; rule in `_shared/references/remote.md`). Causes go in trailing `notes:`, never on a
+  `key=value` line (some pack two pairs).
 - **`mkit doctor` is the prereq report** (human-run). Accepted losses — don't re-add a reporter: no
   session-start run, can't report `mkit` absent. Skills read `facts`, not `doctor`.
 - `<toplevel>/.mkit/` — run dirs, `gate.jsonl` (append-only, back to 200 past 400), `worklog/` (same),
