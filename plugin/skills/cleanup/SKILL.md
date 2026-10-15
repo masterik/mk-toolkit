@@ -73,7 +73,8 @@ From `mkit branch status` (add `--json` if any branch name contains a comma — 
 `keep=` (what `[cleanup] keep` pinned, or `none`), `keep_unknown=` (pinned names with no local branch here —
 **not an error**: a keep list travels with the repo, so a long-lived branch nobody has checked out in this
 clone is the ordinary state. Mention it once in the final report, so a typo in the config is visible without
-being treated as one), `config_problems=` (see below), `remote=`, `fetch=` (say if it came back `failed` — classify
+being treated as one), `config_problems=` (see below), `remote=` (a `- remote:` line in `notes:` is a pin this clone lacks — report it
+verbatim; it is not a `config_problems=` count), `fetch=` (say if it came back `failed` — classify
 on what you have and note it), `gh=` (`ok | skipped | no-remote | gh-missing | gh-unauthenticated | gh-error`;
 say if it is anything but `ok` — some classes below then rest on git alone, while every branch and worktree
 row is still complete), the `branches:` table and the `worktrees:` table. Full column meaning is in
@@ -277,7 +278,7 @@ Left alone:
 <branch> — <why: dirty worktree / declined / claude-code worktree>
 ...
 
-Note: <branch> is N commits behind origin/<branch> — <why it couldn't be fast-forwarded, if it couldn't>
+Note: <branch> is N commits behind <remote>/<branch> — <why it couldn't be fast-forwarded, if it couldn't>
 Note: `[cleanup] keep` pins <name>, which is not a local branch in this checkout — nothing to protect here.
 ```
 

@@ -549,3 +549,21 @@ func TestScanRemoteFlagMustNameAConfiguredRemote(t *testing.T) {
 		t.Errorf("exit %d, stderr %q — a mistyped remote must not fall back to origin", res.code, res.stderr)
 	}
 }
+
+// A pin this clone lacks falls back, and the scan says so — in `notes:`, not in
+// `config_problems=`, whose count means `keep=` may be missing names.
+func TestScanReportsAPinnedRemoteThisCloneLacks(t *testing.T) {
+	repo := scanRepo(t)
+	twoGitHubRemotes(t, repo)
+	put(t, repo, ".mkit/config.toml", "version = 1\n[remote]\nname = \"gone\"\n")
+	res := scan(t, "--default", "main", "--no-fetch", "--no-gh")
+	if got := field(res.stdout, "remote"); got != "origin" {
+		t.Errorf("remote = %q, want the origin fallback", got)
+	}
+	if got := field(res.stdout, "config_problems"); got != "0" {
+		t.Errorf("config_problems = %q: a missing remote is not a config problem", got)
+	}
+	if !strings.Contains(res.stdout, `- remote: `+"`remote.name` pins \"gone\"") {
+		t.Errorf("the missing pin is not reported in notes:\n%s", res.stdout)
+	}
+}

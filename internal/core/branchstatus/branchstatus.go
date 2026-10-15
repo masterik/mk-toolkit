@@ -98,6 +98,10 @@ type Scan struct {
 	// `keep=none`.
 	ConfigProblems []string
 	Remote         string
+	// RemoteNote is the sentence for a pinned remote this clone lacks, "" when
+	// nothing went wrong. Not a config problem: that count says `keep=` may be
+	// missing names, which is not what a missing remote means.
+	RemoteNote string
 	// Fetch is ok, skipped, no-remote or failed.
 	Fetch string
 	// WorktreesState is ok or unreadable. `cleanup` plans teardown from these
@@ -159,7 +163,8 @@ func Run(repo *gitrepo.Repo, opt Options) (*Scan, error) {
 	s.Protected, s.KeepUnknown = ProtectedSet(opt.Default, s.Develop, local), unknown
 
 	current, _ := git(repo, "branch", "--show-current")
-	s.Remote = repo.ResolveRemote(opt.Remote).Name
+	rc := repo.ResolveRemote(opt.Remote)
+	s.Remote, s.RemoteNote = rc.Name, rc.PinMissingDetail()
 	s.Fetch = fetch(repo, s.Remote, opt.NoFetch)
 
 	prs, ghState := lookupPRs(repo, s.Remote, opt.NoGH)

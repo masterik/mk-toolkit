@@ -244,7 +244,7 @@ announce — and it is why the two conditions are written as things to look for 
    one), work from `primary=` instead — same rule as the local path's worktree.md note:
    ```bash
    git switch <base>
-   git pull        # or: git fetch <remote> && git merge --ff-only <remote>/<base>
+   git pull --ff-only <remote> <base>   # explicit: a bare `git pull` follows the base's own upstream, possibly another remote
    ```
 5. **Confirm the merge actually landed, then remove the local vestiges.** `gh pr merge` returning success
    does not always mean *merged*: on a branch that requires a merge queue it means "enqueued" (or

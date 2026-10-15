@@ -293,9 +293,10 @@ const (
 	introMerge = "How a finished branch lands on its base: the finish skill merges locally, the pr " +
 		"skill through GitHub. When the GitHub repo allows only one merge method, that one is " +
 		"used whatever this says."
-	introRemote = "More than one git remote is configured here. The pr and finish skills push the branch " +
-		"to one of them and ask GitHub about its pull requests. Pin the one to use and they stop asking; " +
-		"unpinned, they fall back to `origin` where it exists, and ask when it does not settle the choice."
+	introRemote = "The pr, finish and cleanup skills push the branch to one git remote and ask GitHub about its " +
+		"pull requests. This page appears when several remotes are configured here, or the config already " +
+		"pins one (which this clone may lack). Pin the one to use and they stop asking; " +
+		"unpinned, they offer `origin` where it exists and ask once per run while there are several."
 	introGate = "The quality gate: the commands commit, review, pr and finish run before work " +
 		"integrates — lint, typecheck, vet, test, build. Each step comes from this repo's own " +
 		"task runner (justfile, Makefile, Taskfile, package.json scripts, deno tasks) where it defines one, " +

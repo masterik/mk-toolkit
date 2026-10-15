@@ -38,7 +38,9 @@ func newBranchStatusCmd() *cobra.Command {
 			"array element.\n" +
 			"`config_problems=` counts what the config said that could not be honoured, one\n" +
 			"sentence each in the trailing `notes:` block; above zero, `keep=` may be missing\n" +
-			"names that were pinned.\n\n" +
+			"names that were pinned.\n" +
+			"A pinned `[remote]` this clone does not have falls back to the resolved remote and is\n" +
+			"reported as a `- remote:` line in `notes:`, not counted in `config_problems=`.\n\n" +
 			"Columns, in the order they are printed:\n" +
 			"  branch       the local branch name\n" +
 			"  class        protected | current | merged | merged-pr | open-pr | closed-pr |\n" +
@@ -157,10 +159,13 @@ func renderBranchStatus(out io.Writer, s *branchstatus.Scan) {
 	}
 	// Last, and only when there is something to say: the sentences behind
 	// `config_problems=`, each already worded by `repoconfig`.
-	if len(s.ConfigProblems) > 0 {
+	if len(s.ConfigProblems) > 0 || s.RemoteNote != "" {
 		_, _ = fmt.Fprintln(out, "notes:")
 		for _, n := range s.ConfigProblems {
 			_, _ = fmt.Fprintf(out, "- %s\n", n)
+		}
+		if s.RemoteNote != "" {
+			_, _ = fmt.Fprintf(out, "- remote: %s\n", s.RemoteNote)
 		}
 	}
 }
@@ -180,6 +185,7 @@ type branchScanJSON struct {
 	ConfigProblems []string           `json:"config_problems"`
 	KeepUnknown    []string           `json:"keep_unknown"`
 	Remote         string             `json:"remote"`
+	RemoteNote     string             `json:"remote_note,omitempty"`
 	Fetch          string             `json:"fetch"`
 	GH             string             `json:"gh"`
 	Branches       []branchJSON       `json:"branches"`
@@ -207,7 +213,7 @@ func writeBranchStatusJSON(out io.Writer, s *branchstatus.Scan) error {
 		Default: s.Default, Develop: s.Develop, Protected: s.Protected,
 		Keep: nonNil(s.Keep), KeepUnknown: nonNil(s.KeepUnknown),
 		ConfigProblems: nonNil(s.ConfigProblems),
-		Remote:         s.Remote, Fetch: s.Fetch, GH: s.GH, WorktreesState: s.WorktreesState,
+		Remote:         s.Remote, RemoteNote: s.RemoteNote, Fetch: s.Fetch, GH: s.GH, WorktreesState: s.WorktreesState,
 		Branches:  make([]branchJSON, 0, len(s.Branches)),
 		Worktrees: make([]worktreeScanJSON, 0, len(s.Worktrees)),
 	}
