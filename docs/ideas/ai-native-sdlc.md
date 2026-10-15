@@ -79,8 +79,8 @@ matches the plan, first-pass CI success, eval pass rate.
 
 mkit is already shaped like this playbook:
 
-- **Its seven-step workflow is the Build-to-Deploy half:** `brainstorm` → `spec` → `implement` →
-  `commit` → `review` → `pr`/`finish`.
+- **Its planned seven-step workflow is the Build-to-Deploy half:** `brainstorm` → `spec` → `implement` →
+  `commit` → `review` → `pr`/`finish` (the first three are unbuilt, M8; the rest ship).
 - **The binary owns "controls enforced by configuration":** the gate, its fingerprinted ledger,
   findings validation, the sandbox audit.
 - **The worklog is close to an audit trail.**
@@ -142,8 +142,9 @@ one naming rule, so intents are found consistently. It could just as well be a t
 **[mod] `/intent` without interrupting the task.** The playbook's leading metric for this stage is
 the time from first conversation to committed intent. Ideas usually arrive mid-task. An immediate
 command plus `$.model.fork` in a side pane captures the idea as a draft intent without derailing
-the current session, using the same mechanism as idea 2 of the mods doc (side recap). It writes a
-draft into `.mkit/` only; the user promotes it later.
+the current session, using the same mechanism as idea 2 of the mods doc (side recap). The mod does not
+write `.mkit/` itself — all writes go through the binary, so it calls a `mkit` command (to be added) that
+stores the draft in `.mkit/`; the user promotes it later.
 
 ### Design: spec
 

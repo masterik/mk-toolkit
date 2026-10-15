@@ -17,7 +17,7 @@ _Avoid_: default config
 A page of the `mkit init` wizard that is not walked — the gate and the cleanup keep list. Its pre-selection is written as it stands; the review page opens it for a change.
 
 **Remote**:
-The one git remote a branch is pushed to and whose GitHub repo its PR is about — a single choice, not a push/PR pair. A **Pinned value** when the repo config names it; otherwise `origin` if it exists. With several remotes and none pinned, the skills ask once and offer to pin the answer.
+The one git remote a branch is pushed to and whose GitHub repo its PR is about — a single choice, not a push/PR pair. A **Pinned value** when the repo config names it and this clone has it; otherwise `origin` if it exists, else the only remote, else git's first. When several remotes remain and nothing is pinned, that is a guess: the skills ask once per run and offer to pin the answer.
 _Avoid_: upstream (a branch's tracking ref, or the project in a fork workflow), push target
 
 **Scope**:

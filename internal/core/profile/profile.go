@@ -225,7 +225,7 @@ func discoverSpec(repo *gitrepo.Repo, cfg *repoconfig.Config) Spec {
 		if slug := githubSlug(repo, cfg); slug != "" {
 			s.Ref = Value{Value: slug, Source: Discovered}
 		} else {
-			s.Ref = Value{Source: Unavailable, Cause: "no GitHub remote to read the slug from"}
+			s.Ref = Value{Source: Unavailable, Cause: "no GitHub remote to read the slug from, or several remotes and none pinned"}
 		}
 	default:
 		s.Ref = Value{Source: Unavailable, Cause: "no ref pinned, and none derivable for this store"}
@@ -257,8 +257,16 @@ func readTrackerDoc(toplevel string) string {
 	return ""
 }
 
+// githubSlug is the GitHub repo of the resolved remote. Not while that remote is
+// a guess (several remotes, none pinned): in a fork workflow `origin` is the
+// fork, and a discovered ref pre-selected from it would point `init` at the
+// wrong project. The form still offers every remote's slug as a suggestion.
 func githubSlug(repo *gitrepo.Repo, cfg *repoconfig.Config) string {
-	return repo.GitHubRepo(repo.ResolveRemote(cfg.Remote.Name).Name)
+	rc := repo.ResolveRemote(cfg.Remote.Name)
+	if rc.Ask() {
+		return ""
+	}
+	return repo.GitHubRepo(rc.Name)
 }
 
 // discoverRemote reports the remote `pr` and `finish` use. A pin this checkout

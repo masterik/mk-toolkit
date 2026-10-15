@@ -161,9 +161,16 @@ func TestRemoteNameRoundTripsAndIsCounted(t *testing.T) {
 }
 
 func TestRemoteNameRejectsAnythingGitWouldReadAsAnOption(t *testing.T) {
-	for _, name := range []string{"-f", "two words", ""} {
+	// `bad:name` cannot be registered by git, so a pin of it would never match a
+	// clone and fall back forever.
+	for _, name := range []string{"-f", "two words", "", "bad:name", "a..b", ".hidden", "x.lock", "t~1", "a\x01b"} {
 		if CheckRemoteName(name) == nil {
 			t.Errorf("CheckRemoteName(%q) accepted", name)
+		}
+	}
+	for _, ok := range []string{"origin", "my-fork", "org/fork", "up_stream.2"} {
+		if err := CheckRemoteName(ok); err != nil {
+			t.Errorf("CheckRemoteName(%q) refused a valid name: %v", ok, err)
 		}
 	}
 	c := loadFile(t, "[remote]\nname = \"--force\"\n")
@@ -171,7 +178,7 @@ func TestRemoteNameRejectsAnythingGitWouldReadAsAnOption(t *testing.T) {
 	if pb == nil || c.Remote.Name != "" {
 		t.Fatalf("a remote named --force survived: %+v %+v", c.Remote, c.Problems)
 	}
-	if !strings.Contains(pb.Detail, "`origin` is the fallback") {
+	if strings.Contains(pb.Detail, "origin") || !strings.Contains(pb.Detail, "as if nothing were pinned") {
 		t.Errorf("detail does not say what happens next: %s", pb.Detail)
 	}
 }

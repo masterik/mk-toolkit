@@ -507,8 +507,17 @@ func TestRemotePageAppearsOnlyWithAChoiceOrAPin(t *testing.T) {
 		t.Error("remote not asked with two remotes")
 	}
 	pin := &repoconfig.Config{Remote: repoconfig.Remote{Name: "upstream"}}
-	if !has(Build(Input{Existing: pin, Candidates: one})) {
-		t.Error("a pin vanished from the form on a clone with one remote")
+	kept := Build(Input{Existing: pin, Candidates: one})
+	if !has(kept) {
+		t.Fatal("a pin vanished from the form on a clone with one remote")
+	}
+	// Not just rendered: pre-selected as the pin, and written back by Apply, even
+	// though this clone has no such remote to offer.
+	if got, prov := selected(t, kept, KeyRemote); got != "upstream" || prov != Pinned {
+		t.Errorf("selected %q (%s), want upstream (pinned)", got, prov)
+	}
+	if cfg, err := Apply(kept, kept.Preselected()); err != nil || cfg.Remote.Name != "upstream" {
+		t.Errorf("Apply dropped the pin: %q, %v", cfg.Remote.Name, err)
 	}
 }
 

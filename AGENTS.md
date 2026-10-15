@@ -81,7 +81,7 @@ Shell layer gone (M5); its rules still apply:
     (answers "which rule", not "ignored?"); `-q` is the boolean, then `-v` names the file to edit.
     **`ResolveRemote` is the one remote resolver** ([ADR 0005](docs/adr/0005-one-remote-per-repo.md)) (`[remote] name` pin → `origin` → lone remote → git's
     first, a guess): `git remote` is alphabetical, so "first" alone picks `fork` over `origin`. `Ask()` =
-    several remotes, none pinned. `facts`, `branchstatus`, `profile` all call it; a pin this clone lacks
+    several remotes without a usable pin or a `--remote` choice. `facts`, `branchstatus`, `profile` all call it; a pin this clone lacks
     falls back and is reported, never an error.
   - `repoconfig/` (M7): `.mkit/config.toml`. `Stat` → `tracked|untracked|shadowed|absent`
     (**shadowed** = legacy dir-only `.mkit/` rule; config would never travel). `Write` renders a

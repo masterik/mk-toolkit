@@ -266,6 +266,10 @@ func TestChooseRemoteAndGitHubRepo(t *testing.T) {
 	git(t, repo, "remote", "add", "origin", "https://github.com/me/fork.git")
 	git(t, repo, "remote", "add", "up", "git@github.com:org/project")
 	git(t, repo, "remote", "add", "lab", "https://gitlab.com/g/p.git")
+	// The host is not a substring match: neither of these is GitHub.
+	git(t, repo, "remote", "add", "evil", "https://evilgithub.com/acme/repo.git")
+	git(t, repo, "remote", "add", "evil2", "https://github.com.evil.example/acme/repo.git")
+	git(t, repo, "remote", "add", "tok", "https://user@github.com/org/tok.git")
 
 	if c, err := repo.ChooseRemote("up"); err != nil || c.Name != "up" || c.Source != RemoteChosen || c.Ask() {
 		t.Errorf("a configured remote is decided: %+v %v", c, err)
@@ -273,7 +277,8 @@ func TestChooseRemoteAndGitHubRepo(t *testing.T) {
 	if _, err := repo.ChooseRemote("nope"); err == nil {
 		t.Error("an unconfigured name was accepted instead of refused")
 	}
-	for remote, want := range map[string]string{"origin": "me/fork", "up": "org/project", "lab": "", "": "", "nope": ""} {
+	for remote, want := range map[string]string{"origin": "me/fork", "up": "org/project", "lab": "", "": "", "nope": "",
+		"evil": "", "evil2": "", "tok": "org/tok"} {
 		if got := repo.GitHubRepo(remote); got != want {
 			t.Errorf("GitHubRepo(%q) = %q, want %q", remote, got, want)
 		}

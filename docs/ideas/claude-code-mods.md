@@ -136,7 +136,8 @@ users. For a personal toolkit the drift risk costs more than that guarantee.
 
 ### 1. Pre-run `mkit facts` when a skill loads
 
-**Mechanism.** `skill.prompt` hook, matched to mkit's skills. It runs `mkit facts <skill>` via
+**Mechanism.** `skill.prompt` hook, matched to mkit's skills that depend on the binary — **not `explain`**,
+which has no binary dependency and must keep none (so the hook and its missing-binary stop skip it). It runs `mkit facts <skill>` via
 `$.process.run` (argument list, no shell) and prepends the `key=value` block to the skill text, under
 a fixed marker. `SKILL.md` step 1 gains one sentence: "if a facts block is already present, use it;
 otherwise run `mkit facts <skill>`."

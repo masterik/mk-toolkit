@@ -204,7 +204,7 @@ nothing more. Figure out who, without hardcoding handles:
    that has been settled in a committed file. Say it is pinned in the preview and the report (rule 3).
 1. `CODEOWNERS` — step 0 reported `codeowners=<path>` or `none`; owners of the changed paths are the natural
    reviewers.
-2. Repo/team conventions the user or docs mention; a configured default reviewer/team (`gh repo view <remote_repo>`, org
+2. Repo/team conventions the user or docs mention; a configured default reviewer/team (`gh repo view` — with `<remote_repo>` unless `remote_repo=none`; org
    settings).
 3. Reviewers the user named.
 4. None determinable and the change clearly needs review → ask (offer to skip for a draft).
@@ -242,7 +242,7 @@ gh pr create \
 
 Name the repo: `--repo <remote_repo> --head <feature-branch>` whenever `remote_repo=` is not `none` —
 without it `gh` can pick another repo than the one just pushed to, without refusing
-(`../_shared/references/remote.md`, "Using it"). The same `--repo` goes on `gh repo view` in step 6.
+(`../_shared/references/remote.md`, "Using it"). The same goes for `gh repo view` in step 6 (a repo argument only when `remote_repo=` is not `none`).
 
 Then remove the temp file.
 

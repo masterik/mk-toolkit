@@ -68,7 +68,7 @@ func Rule(key string) string {
 	case "commit.subject_max":
 		return "a positive number of characters"
 	case "remote.name":
-		return "the name of a git remote: no spaces, not starting with `-`"
+		return "a name git accepts for a remote: no spaces or `~^:?*[\\`, not starting with `-` or `.`"
 	}
 	return ""
 }
@@ -118,9 +118,22 @@ func CheckSubjectMax(n int) error {
 
 // CheckRemoteName refuses a remote name Load would refuse on read. A name is
 // handed to `git push` as an argument, so one that reads as an option is refused
-// here rather than at the push.
+// here rather than at the push; and a name git cannot register (`bad:name`) would
+// be a pin that never matches any clone, falling back forever.
+//
+// Shape only — whether this clone has the remote is not the question: the config
+// travels, and a clone without it falls back and says so.
 func CheckRemoteName(name string) error {
-	if name == "" || strings.HasPrefix(name, "-") || strings.ContainsAny(name, " \t\r\n") {
+	bad := name == "" || strings.HasPrefix(name, "-") || strings.HasPrefix(name, ".") ||
+		strings.HasSuffix(name, ".") || strings.HasSuffix(name, ".lock") ||
+		strings.Contains(name, "..") || strings.Contains(name, "@{") || strings.Contains(name, "//") ||
+		strings.ContainsAny(name, " \t\r\n~^:?*[\\\x7f")
+	for _, r := range name {
+		if r < 0x20 {
+			bad = true
+		}
+	}
+	if bad {
 		return fmt.Errorf("a remote is %s", Rule("remote.name"))
 	}
 	return nil
@@ -247,11 +260,11 @@ func subjectMaxProblem(n int, path string) Problem {
 
 // remoteNameProblem is the one sentence for a `remote.name` that cannot be a
 // remote name. Its own producer for subjectMaxProblem's reason: the key is not
-// an enumeration, and what happens next is the `origin` fallback.
+// an enumeration, and what happens next is the ordinary remote resolution.
 func remoteNameProblem(name, path string) Problem {
 	return Problem{Kind: ProblemInvalidValue, Key: "remote.name", Value: name, Path: path,
 		Detail: fmt.Sprintf("`remote.name` in %s is %q, which is not a usable remote name "+
-			"— a remote is %s, so the pinned remote is ignored and `origin` is the fallback",
+			"— a remote is %s, so the pinned remote is ignored and the remote is chosen as if nothing were pinned",
 			path, name, Rule("remote.name"))}
 }
 

@@ -222,7 +222,7 @@ Bring the kept branches up to date with the **resolved** remote — the one `mki
 
 ```bash
 git switch <one of protected=>                            # land on whichever you're ending on
-git pull --ff-only                                        # only if remote != none
+git pull --ff-only <remote> <landing-branch>              # only if remote != none
 git fetch <remote> <other>:<other>                        # update each other kept branch without checking it out
 ```
 
@@ -244,11 +244,12 @@ Prefer switching to the **default** branch as the place to land, unless the user
 points at `develop` or another kept branch instead — say which one you picked and why it was a judgement call, not a fact the
 command handed you.
 
-**The `git pull --ff-only` above is gated on the landing branch having an upstream, not just on
-`remote != none`.** Landing on a pinned keep branch is exactly the case with no remote counterpart, and a
-pull there fails with "no tracking information" — a failure about a branch that is behaving as pinned. Check
-the branch row's `upstream=` for whichever branch you land on: no upstream, skip the pull silently, the same
-as the fetch.
+**The `git pull --ff-only <remote> <landing-branch>` above is gated on the landing branch having a counterpart
+on `<remote>`, not just on `remote != none`.** It names the resolved remote instead of following the branch's own
+upstream, which can be a different remote. Landing on a pinned keep branch is exactly the case with no remote
+counterpart, and a pull there fails with "couldn't find remote ref" — a failure about a branch that is behaving
+as pinned. Check the branch row's `upstream=` for whichever branch you land on: none, or on another remote than
+`<remote>`, skip the pull silently, the same as the fetch.
 
 ### 6. Verify
 

@@ -258,7 +258,10 @@ func (r *Repo) ChooseRemote(name string) (RemoteChoice, error) {
 	return c, nil
 }
 
-var githubRepo = regexp.MustCompile(`github\.com[:/]+([^/]+/[^/]+?)(?:\.git)?/?$`)
+// The host is anchored on what can precede it in a remote URL — a scheme's `//`,
+// a user's `@`, or the start of an scp-like address — so `evilgithub.com` and
+// `github.com.evil.example` are not GitHub.
+var githubRepo = regexp.MustCompile(`(?:^|[/@])github\.com[:/]+([^/]+/[^/]+?)(?:\.git)?/?$`)
 
 // GitHubRepo is the `owner/repo` of a GitHub remote, "" for any other host or no
 // such remote. The one producer of the repo `gh` is told to use (`--repo`): left

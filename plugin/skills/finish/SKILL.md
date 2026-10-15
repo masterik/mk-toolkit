@@ -193,9 +193,11 @@ announce — and it is why the two conditions are written as things to look for 
 **PR path** (`pr=<url>`, `pr_state=OPEN`, not draft) — merge on GitHub, then sync locally:
 
 1. **Push anything step 1 committed.** `gh pr merge` merges what's on GitHub, not local state:
-   `pushed=no` → `git push -u <remote> <feature-branch>`; otherwise plain `git push` if `ahead=` > 0.
+   Push explicitly, after step 1: `git push -u <remote> <feature-branch>` when `pushed=no`, else
+   `git push <remote> <feature-branch>` (a no-op when up to date). Not a bare `git push`: `pushed=yes` only proves
+   *some* upstream exists, possibly on another remote, and `ahead=` predates step 1's commits.
    `<remote>` is `remote=` — never a hardcoded `origin` — as settled in step 0.
-2. **Pick the merge method.** `gh repo view <remote_repo> --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed`
+2. **Pick the merge method.** `gh repo view [<remote_repo>] --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed`
    tells you what the remote will accept; `merge_style` above tells you what this repo wants.
    `merge`→`--merge`/`mergeCommitAllowed`, `squash`→`--squash`/`squashMergeAllowed`,
    `rebase`→`--rebase`/`rebaseMergeAllowed`. In order:

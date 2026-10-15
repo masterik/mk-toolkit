@@ -14,9 +14,10 @@ config's `[remote] name` pin first, so it is one implementation (`internal/core/
 | `remotes=` | every configured remote, comma-joined, or `none` |
 | `remote_choice=` | `ask` when there are several remotes and none is pinned or chosen; otherwise `no` |
 
-`pr=` and `default_branch=` are computed **for `remote=`**. A trailing `notes:` entry naming `remote_source` is
-a pin that went nowhere (a remote this clone lacks, a name mkit refused): report that sentence verbatim, then
-carry on with the fallback `remote=` already shows.
+`pr=` and `default_branch=` are computed **for `remote=`**. A trailing `notes:` entry naming `remote_source` is a
+config-resolution note — a pin that went nowhere (a remote this clone lacks, a name mkit refused) or a config
+file that could not be read: report that sentence verbatim, then carry on with the fallback `remote=` already
+shows.
 
 ## The rule
 
@@ -33,7 +34,8 @@ carry on with the fallback `remote=` already shows.
    - **Never run `mkit init` mid-run.** It writes `.mkit/config.toml`, an un-ignored file: in the feature
      worktree it leaves the tree dirty, blocks the worktree removal at the end of `finish`, and never reaches a
      PR. Offer the pin in the **final report** instead, as a command for the user to run and commit on their
-     own: `mkit init --force --remote <name>`. After a pin the question never comes back.
+     own: `mkit init --force --remote <name>`. Once the pinned remote is configured in the checkout the question
+     stays away; a clone that lacks it falls back, and asks again.
    - The user cannot be asked (they said "just do it", or this is unattended) → use `remote=` and name it in
      the report as a fallback, never as a pinned answer.
 3. **`remote=none`** — nothing to push to. `pr` stops; `finish` takes the local path; `cleanup` skips its
@@ -43,7 +45,8 @@ carry on with the fallback `remote=` already shows.
 
 - Push: `git push -u <remote> <branch>`; delete: `git push <remote> --delete <branch>`; sync:
   `git fetch <remote>`.
-- **Name the repo to `gh` — always, when `remote_repo=` is not `none`.** Left to itself `gh` uses a set
+- **Name the repo to `gh` — always, when `remote_repo=` is not `none`** (when it is `none`, leave `--repo` off
+  and `gh` chooses as before). Left to itself `gh` uses a set
   default (`gh repo set-default`) or its own remote ranking, and with several remotes it can pick another repo
   *without* refusing — a PR opened or looked up in the wrong place, silently. So `gh pr create --repo
   <remote_repo> --head <branch>` and `gh repo view <remote_repo> --json …`. A command that takes a PR URL

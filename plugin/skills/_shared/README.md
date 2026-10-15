@@ -14,7 +14,7 @@ one place.
 | `review` | `review-severity`, `lenses-correctness`, `lenses-craft`, `triage-reconcile`, `triage-verify`, `fix-checks`, `agent-delegation`, `output-discipline`, `git-safety`, `quality-gate`, `summary-format`, `workflow-contract` |
 | `pr` | everything `commit` uses, plus `worktree`, `quality-gate`, `branching`, `remote`, `stacked-prs`, `workflow-contract` |
 | `finish` | `conventional-commits`, `git-safety`, `output-discipline`, `summary-format`, `worktree`, `quality-gate`, `branching`, `remote`, `stacked-prs`, `workflow-contract` |
-| `cleanup` | `worktree`, `branching`, `git-safety`, `output-discipline`, `summary-format` |
+| `cleanup` | `worktree`, `branching`, `remote`, `git-safety`, `output-discipline`, `summary-format` |
 | `sandbox-audit` | `output-discipline`, `summary-format` |
 | `explain` | `plain-english` |
 | `recap` | `plain-english`, `workflow-contract` |

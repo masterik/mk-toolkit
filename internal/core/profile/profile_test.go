@@ -222,3 +222,24 @@ func TestRemoteIsPinnedDiscoveredOrAnOpenQuestion(t *testing.T) {
 		t.Errorf("a pin this clone lacks: %+v", v)
 	}
 }
+
+// With several remotes and none pinned the resolved remote is a guess, and in a
+// fork workflow it is the fork: a spec ref discovered from it would point `init`
+// at the wrong project. A pin makes it an answer again.
+func TestSpecRefIsNotDiscoveredFromAGuessedRemote(t *testing.T) {
+	repo := newRepo(t)
+	writeFile(t, repo.Toplevel, "docs/agents/issue-tracker.md", "# Issue tracker: GitHub\n")
+	run(t, repo.Toplevel, "remote", "add", "origin", "https://github.com/me/fork.git")
+
+	if got := discoverSpec(repo, &repoconfig.Config{}).Ref; got.Value != "me/fork" || got.Source != Discovered {
+		t.Errorf("one remote: %+v", got)
+	}
+	run(t, repo.Toplevel, "remote", "add", "upstream", "https://github.com/org/project.git")
+	if got := discoverSpec(repo, &repoconfig.Config{}).Ref; got.Source != Unavailable {
+		t.Errorf("two remotes, none pinned, ref discovered from the guess: %+v", got)
+	}
+	pinned := &repoconfig.Config{Remote: repoconfig.Remote{Name: "upstream"}}
+	if got := discoverSpec(repo, pinned).Ref; got.Value != "org/project" {
+		t.Errorf("pinned upstream: %+v", got)
+	}
+}
