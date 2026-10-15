@@ -34,7 +34,7 @@ References, read the ones a step calls for: `../_shared/references/worktree.md`,
   mistake, not an instruction: the pinned names are *added* to what cleanup already protects, never
   substituted for them. This is decided in `mkit branch status`, not here.
 - Ends by switching to one of the kept branches and pulling it up to date with the remote `mkit branch status`
-  discovers (never assumed to be named `origin`).
+  resolves (a pin, or what the user chose — never assumed to be named `origin`).
 
 ## Preconditions
 
@@ -45,6 +45,11 @@ References, read the ones a step calls for: `../_shared/references/worktree.md`,
 mkit facts cleanup
 mkit branch status --default <default_branch from mkit facts>
 ```
+
+**`remote_choice=ask`** (several remotes, none pinned): ask which remote *before* the second call — it fetches
+and looks PRs up through one — then re-run the first with `--no-run --remote <answer>` (the default branch can
+differ per remote) and pass `--remote <answer>` to the second. `../_shared/references/remote.md` has the rule,
+including why the pin is offered in the final report and never run mid-way.
 
 `mkit facts` **is** this skill's dependency check. If it fails with `command not found` **or**
 `unknown command "facts"` — absent and too old are the same answer here — **stop** and say:
@@ -212,8 +217,8 @@ force-delete anything you merely suspect is fine.
 
 ### 5. Switch and pull
 
-Bring the kept branches up to date with the **discovered** remote — the one `mkit branch status` reported as
-`remote=`, never a hardcoded name, since nothing here is safe to assume about a repo you didn't set up:
+Bring the kept branches up to date with the **resolved** remote — the one `mkit branch status` reported as
+`remote=` (pinned, chosen above, or the `origin` fallback), never a hardcoded name, since nothing here is safe to assume about a repo you didn't set up:
 
 ```bash
 git switch <one of protected=>                            # land on whichever you're ending on

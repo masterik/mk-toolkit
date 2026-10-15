@@ -12,8 +12,8 @@ one place.
 | --- | --- |
 | `commit` | `conventional-commits`, `git-safety`, `output-discipline`, `agent-delegation`, `quality-gate`, `summary-format`, `workflow-contract` |
 | `review` | `review-severity`, `lenses-correctness`, `lenses-craft`, `triage-reconcile`, `triage-verify`, `fix-checks`, `agent-delegation`, `output-discipline`, `git-safety`, `quality-gate`, `summary-format`, `workflow-contract` |
-| `pr` | everything `commit` uses, plus `worktree`, `quality-gate`, `branching`, `stacked-prs`, `workflow-contract` |
-| `finish` | `conventional-commits`, `git-safety`, `output-discipline`, `summary-format`, `worktree`, `quality-gate`, `branching`, `stacked-prs`, `workflow-contract` |
+| `pr` | everything `commit` uses, plus `worktree`, `quality-gate`, `branching`, `remote`, `stacked-prs`, `workflow-contract` |
+| `finish` | `conventional-commits`, `git-safety`, `output-discipline`, `summary-format`, `worktree`, `quality-gate`, `branching`, `remote`, `stacked-prs`, `workflow-contract` |
 | `cleanup` | `worktree`, `branching`, `git-safety`, `output-discipline`, `summary-format` |
 | `sandbox-audit` | `output-discipline`, `summary-format` |
 | `explain` | `plain-english` |
@@ -37,6 +37,8 @@ sweeping every branch and worktree. The workflow has seven steps, but three of t
 - `worktree.md`: the `cleanup_path` values `mkit facts` reports (`exit-worktree`, `wt`,
   `git-worktree`, `none`) and the teardown for each.
 - `branching.md`: the branch model to assume when a repo documents none.
+- `remote.md`: which git remote to push to when a repo has several: the `mkit facts` keys, when to ask, and
+  how a pin (`mkit init --remote`) ends the question.
 - `stacked-prs.md`: detecting a GitHub-native stack and routing around the calls that break on one.
   Without a stack, `pr` and `finish` are unchanged.
 - `review-severity.md`: the severity bar (`critical`, `major`, `minor`; prose findings are minor), the
