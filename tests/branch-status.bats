@@ -391,15 +391,12 @@ gone_upstream() {
 	[ "$(worktree_field feature 4)" = error ]
 }
 
-# cleanup demotes a merged branch to ask on clean=no, then offers --force with a
-# "discards uncommitted work" sentence: a log mkit wrote must never trigger that.
-@test "a worktree holding only an old .mkit run dir is clean; a real file is not" {
+# `.mkit/` left the design (#50): an old run dir is untracked content like any other,
+# so the worktree is not clean and cleanup asks rather than removing it.
+@test "a worktree holding an old .mkit run dir is not clean" {
 	git worktree add -q -b feature "$TEST_TMP/wt" main
 	mkdir -p "$TEST_TMP/wt/.mkit/review-x"
 	printf 'log\n' >"$TEST_TMP/wt/.mkit/review-x/step.log"
-	run branch_status --default main --no-fetch --no-gh
-	[ "$(worktree_field feature 4)" = yes ]
-	printf 'dirty\n' >"$TEST_TMP/wt/dirty.txt"
 	run branch_status --default main --no-fetch --no-gh
 	[ "$(worktree_field feature 4)" = no ]
 }
