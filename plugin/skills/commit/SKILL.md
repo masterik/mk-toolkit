@@ -52,16 +52,6 @@ mkit facts commit
 Presence only, no declared minimum on either side — a subcommand that does not exist *is* the too-old
 signal.
 
-Then read what ran on this branch before, and what each step concluded — never a stop:
-`../_shared/references/workflow-contract.md`, "Reading it".
-
-```bash
-mkit worklog show --json --limit 20
-```
-
-A `spec` or `implement` gist is the scope hint step 2 splits against — it says what this branch was
-*for*, which the diff alone never does.
-
 Keep the `run=` and `refs=` literals it prints; this file writes the first as `<run-dir>`. There is no
 `$RUN_DIR` — a shell variable does not survive to the next Bash call — and re-running `mkit facts` opens a
 second directory instead of returning the first.
@@ -220,23 +210,6 @@ Scopes: derived from the last 200 commits · subject max ~72 (this skill's own c
 
 Nothing pinned and nothing to say → no line. A rejected pin is reported here too, in the words the
 profile's `cause` used.
-
-Then record the run:
-
-```bash
-mkit worklog append --step commit --gist '<one line: what this run concluded>' \
-  [--artifact '<first-sha>^..<last-sha>'] [--assume '<what this run derived rather than found>']...
-```
-
-The range is inclusive of the first commit — `<first-sha>..<last-sha>` excludes it, and names nothing at
-all on a one-commit run. For a single commit pass the sha itself.
-
-After the report is produced, and it never changes the report: a failed append is one line of note, not a
-failed run. **A run that made no commits still records**, with no `--artifact` and a gist naming the state
-it actually found: `working tree clean; nothing to commit` only where that is true, and otherwise what was
-left behind and why (`changes left unstaged at the user's request`). One record per finished step, and a
-checked no-op is a fact — it tells the next step the tree was looked at, which is not what an absent record
-says. A gist that reports a clean tree over a dirty one is worse than no record at all.
 
 ## Conventional Commit format
 

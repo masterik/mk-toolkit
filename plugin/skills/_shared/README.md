@@ -27,7 +27,7 @@ sweeping every branch and worktree. The workflow has seven steps, but three of t
 ## References
 
 - `workflow-contract.md`: how the steps compose. Every step is entry-capable (runs alone, in any order,
-  with any subset skipped). Covers the rules that keep this true, the per-branch worklog, and what each
+  with any subset skipped). Covers the rules that keep this true, what a step reads from the branch and its PR, and what each
   step owes the next.
 - `git-safety.md`: no force-push, no config edits, no AI attribution, no skipped hooks; confirm before
   any irreversible step.

@@ -21,7 +21,7 @@ skipped. A user who types `commit` has asked for a commit, not for the six steps
 ## The five rules
 
 **1. Discover, then derive. Never demand.** A step establishes what it needs by looking: at the
-repo, at the worklog, at the conversation. What it cannot find, it derives the **thin version** of
+repo, at its history and PR, at the conversation. What it cannot find, it derives the **thin version** of
 itself, inline, and carries on. `review` with no spec derives a one-line goal from the branch and
 commit messages — which is what it already does — and every step works that way.
 
@@ -35,72 +35,43 @@ in one clause: "no spec found — goal taken from the branch name, confidence lo
 makes a skipped step safe rather than silent. A run that assumed something and reported a clean
 result has lied by omission.
 
-**4. Record for the next step; never gate on the last one.** Every step appends one worklog record
-when it finishes — with one exception, and it is the shape of the rule rather than a hole in it:
-`finish` usually destroys its own log, since the worklog lives in the worktree it removes and is
-keyed on the branch it deletes. So `finish` records where it stopped short and skips where the
-cleanup ran, and that skip is not a degradation to report. `explain` and `recap` are reading aids, not
-steps: they conclude nothing a later step acts on, so they record nothing.
-
-The exception has its own exception: on `cleanup_path=none` there is no worktree to remove, so the
-log outlives the branch — and a branch name is reusable, which would hand a later `review` on a
-recreated `feat/x` the *old* `feat/x`'s records. `finish` retires the log itself on that path. A later step reads it to be **cheaper and better informed** — never to decide
-whether it is allowed to run. This is `a recorded fact is an input, never a permission`, applied to
-the workflow rather than the gate ledger.
+**4. Leave the trail where git keeps it; never gate on the last one.** A step's conclusions live in what
+it already produces — commit messages (a body says why), the PR body and its review state — not in a side
+log. A later step reads those: `git log <base>..HEAD` and the PR, plus the session. It reads them to be
+**cheaper and better informed**, never to decide whether it is allowed to run: a recorded fact is an
+input, never a permission. A missing source is one fewer input, never a stop. Reasons behind *uncommitted*
+work live only in the session, so they don't survive a compaction; a step working after one describes that
+work from the diff and says the why is lost. `explain` and `recap` are reading aids, not steps: they
+conclude nothing a later step acts on, so they leave nothing behind.
 
 **5. Confidence degrades; the step still completes.** A missing upstream artifact lowers what a
 step can claim, and lowers nothing else. It is never grounds for stopping, and never grounds for
 reporting less than was actually found.
 
-## The worklog
+## Reading what came before
 
-`<toplevel>/.mkit/worklog/<branch>.jsonl` — append-only, one record per finished step, never committed,
-a linked worktree gets its own. Read and written through the binary; no skill parses it by hand.
-
-```
-mkit worklog show --json          # what has run on this branch, and what each concluded
-mkit worklog append --json ...    # one record, at the end of a step
-```
-
-A record carries the step, when it ran, the content fingerprint it ran over, a pointer to whatever
-artifact it produced (an issue URL, a path, a run directory), a one-line gist, and the assumptions
-it made. The gist is what a later step reads instead of re-deriving intent; the fingerprint is what
-tells it whether the gist still describes the tree in front of it.
-
-### Reading it
-
-**Ungated, and never gating.** A step reads the worklog unconditionally. It used to be gated on a
-`mkit_bin=` fact, because the binary was optional and the log was a bonus; since M5 the binary is a
-hard requirement and every repo-scoped skill's first call is `mkit facts` (`review` probes
-`mkit findings` just before it), which stops the run when it is absent or too old. `sandbox-audit`
-is user-wide, opens no run directory and reads no worklog; its first call, `mkit audit sandbox`, is
-its own dependency check. `explain` works from the session (reading a file only to confirm what it names) and makes no `mkit` call; `recap` reads the
-worklog after `mkit facts recap --no-run` and never appends to it. By the time any step reads the log, there is no missing-binary case left to check for.
-
-```bash
-mkit worklog show --json --limit 20
-```
-
-What the log itself reports is still **one fewer input, never a stop** — rule 4 above, applied to
-the record: an empty log, an unreadable one, or a binary that knows `facts` but not `worklog` all leave
-a step less informed rather than blocked. That is what separates this call from `review`'s step-0 `mkit findings` probe: without the
-findings arithmetic there is no review, and without the worklog there is a slightly less informed
-one. What each step does with what it reads is the step's own business, and stays in its `SKILL.md`.
+**Ungated, and never gating.** Since M5 the binary is a hard requirement and every repo-scoped skill's
+first call is `mkit facts` (`review` probes `mkit findings` just before it), which stops the run when it is
+absent or too old; its `commits:` block is `git log --oneline <base>..HEAD`, and `--gh` adds `pr=`.
+`sandbox-audit` is user-wide and opens no run directory; its first call, `mkit audit sandbox`, is its own
+dependency check. `explain` works from the session (reading a file only to confirm what it names) and makes
+no `mkit` call. What each step does with what it reads is the step's own business, and stays in its
+`SKILL.md`.
 
 **Per branch, not per invocation.** A run directory (`<skill>-<timestamp>/`) belongs to one call and
-holds its working files. The worklog spans every call on a branch, which is the unit of work the
-finishing steps act on.
+holds its working files; it is scratch, not a record. The branch's history and its PR span every call,
+which is the unit of work the finishing steps act on.
 
 ## What each step owes
 
-| step | needs | derives when absent | records |
+| step | needs | derives when absent | leaves behind |
 | --- | --- | --- | --- |
 | `brainstorm` | a question | — | the decisions reached, and the ones deferred |
 | `spec` | decisions | reads the conversation and the repo; no re-interview | the spec artifact + task graph |
 | `implement` | a task graph | one slice covering the ask | which slices landed, gate results |
-| `commit` | a dirty tree | — | the commits made, and their scope |
-| `review` | a diff + a goal | goal from a matching `spec`/`implement` gist, then the user, a stale one, branch, commits, ticket | findings, verdicts, fixes applied |
-| `pr` | commits + a branch | commits first, inline | the PR URL, gate verdict |
+| `commit` | a dirty tree | — | the commits, messages saying why |
+| `review` | a diff + a goal | goal from the user or a spec in the session, then branch, commits, ticket | findings, verdicts, fixes applied (in the session and run directory) |
+| `pr` | commits + a branch | commits first, inline | the PR: its body, gate verdict |
 | `finish` | a merged-able branch | commits first, inline | the merge, the cleanup |
 
 A step with nothing to do says so plainly and stops — `commit` on a clean tree, `implement` on an
