@@ -212,7 +212,7 @@ type tool struct {
 // binary has no half-capable mode, so today a missing tool surfaces only here.
 var tools = []tool{
 	{"git", "prerequisites", Fail, "every skill", ""},
-	{"bash", "prerequisites", Fail, "mkit gate run", ""},
+	{"bash", "prerequisites", Fail, "the shell the skills run the gate commands in", ""},
 	{"gh", "prerequisites", Warn, "pr, finish, and cleanup's PR column", "brew install gh, then `gh auth login`"},
 	{"rg", "optional", Warn, "faster searching; grep -E is used otherwise", "brew install ripgrep"},
 	{"wt", "optional", Warn, "worktrunk-managed worktree teardown in finish/cleanup", "brew install worktrunk"},
@@ -417,7 +417,7 @@ func (r *Report) writableSet(toplevel string) {
 
 	if toplevel != "" {
 		r.probe("<toplevel>/.mkit", filepath.Join(toplevel, ".mkit"),
-			"run directories and the gate ledger",
+			"run directories",
 			"nothing to grant — the working directory is writable by default; "+
 				"a refusal here usually means the session is isolated in another worktree")
 	}

@@ -56,6 +56,16 @@ var legacy = []orphan{
 		why: "scratch moved to <toplevel>/.mkit/ (ADR 0002); nothing reads this one",
 	},
 	{
+		name: "old gate ledger",
+		path: func(a orphanAnchors) string {
+			if a.toplevel == "" {
+				return ""
+			}
+			return filepath.Join(a.toplevel, ".mkit", "gate.jsonl")
+		},
+		why: "`mkit gate run` and its ledger were removed; skills run the gate commands directly",
+	},
+	{
 		name: "bootstrap.state",
 		path: func(a orphanAnchors) string { return userFile(a, "bootstrap.state") },
 		why:  "written by the SessionStart hook, removed in 0.15.0",

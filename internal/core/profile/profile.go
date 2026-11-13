@@ -171,10 +171,7 @@ func build(repo *gitrepo.Repo, cfg *repoconfig.Config) *Profile {
 func buildGate(repo *gitrepo.Repo, cfg *repoconfig.Config) Gate {
 	var g Gate
 
-	// The profile is a report, not a gate run: the ledger annotation would cost
-	// a fingerprint on every `repo profile` and say nothing about how the repo
-	// works.
-	d, err := gate.Detect(repo, cfg, gate.DetectOptions{NoCache: true})
+	d, err := gate.Detect(repo, cfg)
 	if err != nil {
 		g.Cause = "gate discovery failed: " + err.Error()
 		return g
