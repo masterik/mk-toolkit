@@ -33,7 +33,6 @@ var reviewed = map[string]struct {
 	"internal/core/scratch/userdir.go":       {4, "~/.mkit (MKIT_HOME): MkdirAll, then a CreateTemp probe and the two Removes that make it net-zero"},
 	"internal/core/gate/ledger.go":           {9, "<toplevel>/.mkit/gate.jsonl: MkdirAll+OpenFile to append, CreateTemp+Remove+Rename to rotate, Mkdir/RemoveAll/Mkdir for the trim lock"},
 	"internal/core/gate/run.go":              {1, "one gate-<step>.log per step, inside the run directory it was handed"},
-	"internal/core/findings/record.go":       {1, "a review run's artefacts, inside the run directory it was handed"},
 	"internal/core/repoconfig/repoconfig.go": {2, "<toplevel>/.mkit/config.toml — the one committed file in the scratch root"},
 	"internal/core/doctor/doctor.go":         {4, "probes writability by creating and removing a temp file in each declared location"},
 	"internal/core/cache/apply.go":           {3, "deletes only what Scan named, home-containment guarded"},
