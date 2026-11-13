@@ -9,8 +9,8 @@
 #   facts.sh review --run --range HEAD~3..HEAD
 #
 # Reports; never acts. The only writes: the run dir `--run` creates under $TMPDIR, and
-# the net-zero writability probe of the user dir. Never reads config: a pinned remote is
-# applied by the skill re-running with `--remote <name>`.
+# the net-zero writability probe of the user dir. Never reads config: a remote named in
+# docs/agents/remote.md is applied by the skill re-running with `--remote <name>`.
 #
 # Output: `key=value` lines, some packing several pairs, then `<name>:` blocks, then a
 # trailing `notes:` block. A cause that needs a sentence goes in `notes:`, never on a

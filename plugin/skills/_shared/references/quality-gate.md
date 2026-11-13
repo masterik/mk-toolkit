@@ -12,7 +12,7 @@ into one sequence.
 
 | # | Source | The gate is |
 | --- | --- | --- |
-| 1 | `docs/agents/gate.md` | the commands it lists, in its order — the user's override; nothing below is consulted |
+| 1 | `docs/agents/gate.md` (`repo-settings.md`) | the commands it lists, in its order — the user's override; nothing below is consulted |
 | 2 | a task-runner `check` or `ci` target | that one command (`just check`, `make ci`, `task check`, `deno task ci`) |
 | 3 | per-step task-runner recipes | laid over row 4, step by step (below) |
 | 4 | the ecosystem default | the manifest table's commands (below) |

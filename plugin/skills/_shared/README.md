@@ -12,11 +12,12 @@ resolved against their own directory. Their tests are `tests/*.bats` at the repo
 
 | Skill | Consumes |
 | --- | --- |
-| `commit` | `conventional-commits`, `git-safety`, `output-discipline`, `agent-delegation`, `quality-gate`, `summary-format`, `workflow-contract` |
-| `review` | `review-severity`, `lenses-correctness`, `lenses-craft`, `triage-reconcile`, `triage-verify`, `fix-checks`, `agent-delegation`, `output-discipline`, `git-safety`, `quality-gate`, `summary-format`, `workflow-contract` |
+| `commit` | `conventional-commits`, `git-safety`, `output-discipline`, `agent-delegation`, `quality-gate`, `summary-format`, `workflow-contract`, `repo-settings` |
+| `review` | `review-severity`, `lenses-correctness`, `lenses-craft`, `triage-reconcile`, `triage-verify`, `fix-checks`, `agent-delegation`, `output-discipline`, `git-safety`, `quality-gate`, `summary-format`, `workflow-contract`, `repo-settings` |
 | `pr` | everything `commit` uses, plus `worktree`, `quality-gate`, `branching`, `remote`, `stacked-prs`, `workflow-contract` |
-| `finish` | `conventional-commits`, `git-safety`, `output-discipline`, `summary-format`, `worktree`, `quality-gate`, `branching`, `remote`, `stacked-prs`, `workflow-contract` |
-| `cleanup` | `worktree`, `branching`, `remote`, `git-safety`, `output-discipline`, `summary-format` |
+| `finish` | `conventional-commits`, `git-safety`, `output-discipline`, `summary-format`, `worktree`, `quality-gate`, `branching`, `remote`, `stacked-prs`, `workflow-contract`, `repo-settings` |
+| `cleanup` | `worktree`, `branching`, `remote`, `git-safety`, `output-discipline`, `summary-format`, `repo-settings` |
+| `setup` | `repo-settings`, `quality-gate`, `summary-format` |
 | `sandbox-audit` | `output-discipline`, `summary-format` |
 | `explain` | `plain-english` |
 | `recap` | `plain-english`, `workflow-contract`, `output-discipline`, `git-safety` |
@@ -34,6 +35,9 @@ sweeping every branch and worktree. The workflow has seven steps, but three of t
 - `git-safety.md`: no force-push, no config edits, no AI attribution, no skipped hooks; confirm before
   any irreversible step.
 - `conventional-commits.md`: message format, type table, scope detection.
+- `repo-settings.md`: the per-repo settings in lazy `docs/agents/<area>.md` files (commit, review, merge,
+  remote, gate, cleanup; the spec store is `issue-tracker.md`): read the file if present, otherwise the
+  discovery rule or default written there, once per area. `setup` writes the files.
 - `quality-gate.md`: find the gate by its precedence table (`docs/agents/gate.md`, runner `check`/`ci`,
   per-step recipes over the ecosystem default, else ask; never hardcoded), run its commands with
   output to a log, the one rule for reusing a pass, and when a failure needs a delegated diagnosis.

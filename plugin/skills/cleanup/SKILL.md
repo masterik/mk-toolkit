@@ -47,7 +47,8 @@ bash ../_shared/scripts/facts.sh cleanup
 bash ../_shared/scripts/branch-status.sh --default <default_branch> [--develop <name>] [--keep <name>]...
 ```
 
-**What the repo keeps.** If `docs/agents/cleanup.md` exists, read it first: every branch it says to keep goes
+**What the repo keeps.** If `docs/agents/cleanup.md` exists, read it first
+(`../_shared/references/repo-settings.md`, "Cleanup"): every branch it says to keep goes
 to the second call as one `--keep <name>` each, and a develop-like branch it names goes as `--develop`. No
 file → no `--keep`; the default and a local `develop`/`development`/`dev` are protected regardless.
 
