@@ -1,6 +1,8 @@
 # ADR 0004 — Worktree helpers live in the binary; `wt` stops being a dependency
 
-**Status:** proposed · **Date:** 2026-10-01 ·
+**Status:** withdrawn by [ADR 0006](0006-standalone-skills-optional-binary.md) (2026-11-13): `wt`
+is optional and skills use `git worktree`; the binary gains no mutating verbs. ·
+**Date:** 2026-10-01 ·
 **Amends** "composition over replacement" for worktrees only; `git`, `gh` and the review tools stay composed.
 
 ## Context
