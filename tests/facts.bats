@@ -336,7 +336,17 @@ teardown() { mkit_teardown_repo; }
 	git remote set-url origin ssh://git@github.com/org/project/
 	run facts pr
 	[ "$(field remote_repo)" = org/project ]
+	git remote set-url origin git@github.com:org/bare
+	run facts pr
+	[ "$(field remote_repo)" = org/bare ]
+	git remote set-url origin https://user@github.com/org/tok.git
+	run facts pr
+	[ "$(field remote_repo)" = org/tok ]
+	# The host is not a substring match: neither of these is GitHub.
 	git remote set-url origin https://evilgithub.com/a/b.git
+	run facts pr
+	[ "$(field remote_repo)" = none ]
+	git remote set-url origin https://github.com.evil.example/a/b.git
 	run facts pr
 	[ "$(field remote_repo)" = none ]
 	git remote set-url origin https://gitlab.com/a/b.git
