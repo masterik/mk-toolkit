@@ -71,8 +71,8 @@ tells it whether the gist still describes the tree in front of it.
 
 **Ungated, and never gating.** A step reads the worklog unconditionally. It used to be gated on a
 `mkit_bin=` fact, because the binary was optional and the log was a bonus; since M5 the binary is a
-hard requirement and every repo-scoped skill's first call is `mkit facts` (`review` probes
-`mkit findings` just before it), which stops the run when it is absent or too old. `sandbox-audit`
+hard requirement and every repo-scoped skill's first call is `mkit facts`, which stops the run
+when it is absent or too old. `sandbox-audit`
 is user-wide, opens no run directory and reads no worklog; its first call, `mkit audit sandbox`, is
 its own dependency check. `explain` works from the session (reading a file only to confirm what it names) and makes no `mkit` call; `recap` reads the
 worklog after `mkit facts recap --no-run` and never appends to it. By the time any step reads the log, there is no missing-binary case left to check for.
@@ -83,9 +83,9 @@ mkit worklog show --json --limit 20
 
 What the log itself reports is still **one fewer input, never a stop** — rule 4 above, applied to
 the record: an empty log, an unreadable one, or a binary that knows `facts` but not `worklog` all leave
-a step less informed rather than blocked. That is what separates this call from `review`'s step-0 `mkit findings` probe: without the
-findings arithmetic there is no review, and without the worklog there is a slightly less informed
-one. What each step does with what it reads is the step's own business, and stays in its `SKILL.md`.
+a step less informed rather than blocked. That is what separates this call from `mkit facts`:
+without the starting facts there is no run, and without the worklog there is a slightly less
+informed one. What each step does with what it reads is the step's own business, and stays in its `SKILL.md`.
 
 **Per branch, not per invocation.** A run directory (`<skill>-<timestamp>/`) belongs to one call and
 holds its working files. The worklog spans every call on a branch, which is the unit of work the
