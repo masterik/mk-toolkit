@@ -1,7 +1,7 @@
 # Run `just` for the list, `just <recipe>` to run one.
 
-# build, vet, test, lint — what CI runs, in one shot
-ci: build vet test lint
+# build, vet, test, lint, bats — what CI runs, in one shot
+ci: build vet test lint bats
 
 build:
 	go build ./...
@@ -14,6 +14,10 @@ test:
 
 lint:
 	golangci-lint run
+
+# the bundled scripts' tests (plugin/skills/_shared/scripts)
+bats:
+	bats tests/
 
 
 # exercise the front-end contract, e.g. `just run version --json`

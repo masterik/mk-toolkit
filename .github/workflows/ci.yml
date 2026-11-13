@@ -30,3 +30,17 @@ jobs:
       - uses: golangci/golangci-lint-action@v9
         with:
           version: v2.12
+
+  # The bundled scripts: bash 5 on Linux, macOS's /bin/bash 3.2 on macOS.
+  bats:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y bats
+      - if: runner.os == 'macOS'
+        run: brew install bats-core
+      - run: bats tests/
