@@ -20,6 +20,7 @@ every time lives in the binary. Background: [concept](docs/concept.md).
 | `pr` | Commit, push, open a GitHub PR, request reviewers. |
 | `finish` | Commit, merge into base (the open PR, or locally), delete the branch and worktree. |
 | `cleanup` | Delete branches and worktrees that are provably merged; ask about the rest. |
+| `setup` | Optional, once per repo: record non-default settings as prose in `docs/agents/`; converts an old `.mkit/config.toml`. Run as `/mkit:setup`. |
 | `sandbox-audit` | Turn sandbox blocks and permission denials into a proposed settings diff. Report-only. |
 | `explain` | Re-explain the last answer or one session item in plain English (`simpler`, `eli5`, `deeper`). |
 | `recap` | Branch status in plain English: done, changed, left, and waiting on you. |
@@ -34,9 +35,10 @@ or call a skill directly as `/mkit:<skill>`, for example `/mkit:review quick`. A
 edit → /mkit:commit → /mkit:review → /mkit:pr   (or /mkit:finish to merge locally)
 ```
 
-Skills discover gate commands, commit scopes, reviewers, merge style and the push remote from the repo
-(`docs/agents/gate.md` overrides the gate). `mkit init` can pin the rest in a committed `.mkit/config.toml`, but that is optional. Skills
-write nothing into your work tree: per-run files live in a temp dir.
+Skills discover gate commands, commit scopes, reviewers and the push remote from the repo (git history,
+`CODEOWNERS`, task runners, manifests); merge style defaults to a merge commit. To change a default,
+`/mkit:setup` writes short prose files in `docs/agents/` (`commit.md`, `review.md`, `merge.md`, `remote.md`,
+`gate.md`, `cleanup.md`); write or edit them by hand just as well. Each is optional. Skills write nothing into your work tree: per-run files live in a temp dir.
 
 ## The binary
 

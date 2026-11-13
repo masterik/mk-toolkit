@@ -59,17 +59,16 @@ a partial review as clean.
 
 ## Optional: repo config
 
-`mkit init` writes a committed `.mkit/config.toml`. It pins two kinds of value:
+Run `/mkit:setup` in any agent: it looks at the repo, proposes answers, and writes a short prose file
+in `docs/agents/` only for a choice that differs from the default — `commit.md` (scopes, subject
+length), `review.md` (default mode), `merge.md` (merge style, reviewers), `remote.md`, `gate.md`,
+`cleanup.md` (branches to keep) — plus a `### mkit workflow` block under `## Agent skills` in
+`CLAUDE.md`/`AGENTS.md`. Edit the files by hand any time. The spec store is mattpocock's
+`docs/agents/issue-tracker.md`. Nothing requires any of it
+([ADR 0006](adr/0006-standalone-skills-optional-binary.md) decision 7).
 
-- **What it discovers:** commit scopes, spec store and merge style, so runs stop
-  re-discovering them.
-- **What discovery can't establish:** subject length, review mode, and the branches `cleanup` must
-  keep.
-
-Reviewers stay discovered per path from CODEOWNERS unless you pin a list. On a terminal, `init` runs a
-short wizard (Spec → Commit → Review → Merge), and every field is also a flag. Nothing requires the
-config ([ADR 0001](adr/0001-per-repo-config-and-init.md)). `mkit repo profile` shows which values are
-discovered and which are pinned. `mkit init --force` re-discovers and reopens the wizard.
+An old `.mkit/config.toml` (from `mkit init`) is read by no skill: `setup` converts it, then
+`git rm` it.
 
 ## Gatekeeper blocks the binary
 
