@@ -21,3 +21,6 @@ starts from evidence instead of re-deriving it. One idea per file; nothing here 
   highlighting and marks risky parts before approving a Bash call; the built-in permission prompt
   can't be redrawn, so it either replaces the prompt via `tool.check` + `$.ui.ask` or adds notes
   around it.
+- [`other-agents.md`](other-agents.md) — whether Codex and Copilot run mkit's SKILL.md skills:
+  discovery paths, frontmatter, bundled scripts, plugins, subagents, structured questions,
+  arguments, sandbox, Windows; yes/no/workaround per agent, with sources (#54).
