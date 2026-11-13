@@ -32,8 +32,8 @@ sweeping every branch and worktree. The workflow has seven steps, but three of t
 - `git-safety.md`: no force-push, no config edits, no AI attribution, no skipped hooks; confirm before
   any irreversible step.
 - `conventional-commits.md`: message format, type table, scope detection.
-- `quality-gate.md`: find the gate with `mkit gate detect` (never hardcoded), run it with
-  `mkit gate run`, and know when a failure needs a delegated diagnosis.
+- `quality-gate.md`: find the gate with `mkit gate detect` (never hardcoded), run its commands with
+  output to a log, the one rule for reusing a pass, and when a failure needs a delegated diagnosis.
 - `worktree.md`: the `cleanup_path` values `mkit facts` reports (`exit-worktree`, `wt`,
   `git-worktree`, `none`) and the teardown for each.
 - `branching.md`: the branch model to assume when a repo documents none.
@@ -54,7 +54,7 @@ sweeping every branch and worktree. The workflow has seven steps, but three of t
   - Fix-checks: the three checks every fix must pass.
 - `agent-delegation.md`: the run dir as transport, subagent return budgets, resolved reference paths,
   one writer per file, model per stage.
-- `output-discipline.md`: `mkit facts` as a run's first call, `mkit gate run`, and bounding output
+- `output-discipline.md`: `mkit facts` as a run's first call, gate logs, and bounding output
   (`--stat` before any diff). Also what must never be capped: a staged diff being approved, or a body
   the user acts on.
 - `summary-format.md`: the form of a skill's closing message and how it asks for a decision. Each skill

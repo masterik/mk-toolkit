@@ -54,7 +54,7 @@ mkit worklog show --json --limit 20
 A `review` record whose `fingerprint` matches the tree in front of you says a review already ran over this
 exact content — worth naming in the deliverable. **Read its `assumptions` before believing it**: a review
 that applied fixes records a fingerprint the reviewers never saw and says so there. It does not gate the
-merge, and it never substitutes for the quality gate, which has its own ledger.
+merge, and it never substitutes for the quality gate.
 
 Keep the `run=` literal; this file writes it as `<run-dir>`. There is no `$RUN_DIR` — a shell variable does
 not survive to the next Bash call — and re-running `mkit facts` opens a second directory instead of returning
@@ -96,22 +96,11 @@ Run the **full quality gate** (`../_shared/references/quality-gate.md`): lint �
 equivalent, stop on first failure. A local merge skips review, so this gate is the only safety net. Report any
 failure; do not merge past it without an explicit user OK.
 
-```bash
-mkit gate detect
-mkit gate run <run-dir> --chain 'lint=<cmd>' 'test=<cmd>' 'build=<cmd>'
-```
-
-One line per passing step; on failure the step, the exit code, the grepped failures and the tail
+`mkit gate detect` names the commands; run each yourself, its output to a log in the run directory. One line
+per passing step; on failure the step, the exit code, the failure lines and the tail
 (`../_shared/references/output-discipline.md`). A failing suite is thousands of lines, none of which change
-the decision ("fix it or get an explicit OK").
-
-`mkit gate detect` also reports what the gate ledger already proved — each step's `cache=` in the
-`full:` block. **This is the strictest consumer in the bundle**, because a local merge skips review and this gate
-is the only safety net: consume a step only on an exact command match, a matching fingerprint and an age
-inside the bound — per step, never a whole chain at once — and print `cached (Nm ago, exit=0)` on that
-step's own line, with the verdict naming how many were cached. `gate=ok` for a step that did not run is not
-an acceptable report here. `failed` means the tree was red on this exact content: say so before starting,
-then run the step anyway — the environment may have moved since.
+the decision ("fix it or get an explicit OK"). Skip the gate only under the reference's one reuse rule, and say
+so — `gate=ok` for a gate that did not run is not an acceptable report here.
 
 Delegate the diagnosis only when that verdict is not enough (`../_shared/references/quality-gate.md`, "when a
 step fails") and give the user what it returns — what failed, probable cause, whether the change caused it,
@@ -377,7 +366,7 @@ removed.` — or where and why it stopped short); form per `../_shared/reference
   degradation.
 - Stacked PR: which PRs merged together (all of them, by number), the `gh stack merge` outcome, and the
   PRs still open above.
-- The gate verdict, naming any step served from the ledger as `cached` and how old that proof was.
+- The gate verdict, or that it was skipped under the reuse rule and at which commit it passed.
 - What merged into what, the resulting base HEAD, and that branch + worktree were removed.
 - Anything left in place on purpose (unmerged commits, dirty tree, a delete the user declined) — say so
   explicitly, each with its path or name and why, or "nothing left behind" so the absence is not ambiguous.

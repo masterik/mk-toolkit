@@ -46,7 +46,7 @@ The exception has its own exception: on `cleanup_path=none` there is no worktree
 log outlives the branch — and a branch name is reusable, which would hand a later `review` on a
 recreated `feat/x` the *old* `feat/x`'s records. `finish` retires the log itself on that path. A later step reads it to be **cheaper and better informed** — never to decide
 whether it is allowed to run. This is `a recorded fact is an input, never a permission`, applied to
-the workflow rather than the gate ledger.
+the workflow.
 
 **5. Confidence degrades; the step still completes.** A missing upstream artifact lowers what a
 step can claim, and lowers nothing else. It is never grounds for stopping, and never grounds for

@@ -76,30 +76,24 @@ Two facts to act on before you stage anything:
 ### Carry the path, not a variable
 
 **There is no `$RUN_DIR`.** Each Bash call is a fresh shell — cwd persists, environment does not. Read
-`run=` once and pass that literal: as `mkit gate run`'s first argument, as `mkit findings`'s run directory, and into every
+`run=` once and pass that literal: as the gate logs' directory, as `mkit findings`'s run directory, and into every
 brief. Bind it inside a single call when one command needs it twice. Never re-run `mkit facts` to get it
 back (a second directory, run scattered), never park it in a fixed pointer file (concurrent runs
 overwrite it).
 
 ## Quality gates
 
-`mkit gate run <run-dir> --chain '<step>=<cmd>' …` runs them. Full output to
-`<run-dir>/gate-<step>.log`, exit code captured before anything can clobber it, chain stopped at the
-first failure, verdict on stdout:
+Each step's full output goes to `<run-dir>/gate-<step>.log`; only a verdict enters context
+(`quality-gate.md` has the run, the excerpt and the one reuse rule):
 
 ```
-lint ok 3s
-test FAIL exit=1 12s log=<run-dir>/gate-test.log
-failures (max 40): 214:FAIL src/api/user.test.ts > rejects a failed write
-tail -30: …
+lint ok
+test FAIL exit=1 log=<run-dir>/gate-test.log
 gate=FAILED step=test exit=1
 ```
 
-- **Pass**: one line per step, then `gate=ok steps=…`. Nothing else enters context.
-- **Failure**: the step, its exit code, the grepped failures and the tail — never the log. The command's
-  own exit status is the failing step's, so a skill can branch on it.
-- `--tail N` / `--grep N` widen the excerpt; `--keep-going` runs past a failure when you deliberately
-  want the whole picture.
+- **Pass**: one line per step, then `gate=ok`. Nothing else enters context.
+- **Failure**: the step, its exit code, the failure lines and the tail — never the whole log.
 - Never re-run a gate to see output you discarded. That is what the log is for. Which commands to run:
   `mkit gate detect` (`quality-gate.md`).
 

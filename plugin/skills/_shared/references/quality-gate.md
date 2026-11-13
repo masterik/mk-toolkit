@@ -10,11 +10,9 @@ mkit gate detect
 # pm=bun
 # ecosystem=node
 # full:
-#   1 source=discovered cache=fresh exit=0 age=6m cmd=bun run lint
-#   2 source=pinned cache=failed exit=1 age=6m cmd=pytest -q || exit 1
-#   3 source=discovered cache=none exit=- age=- cmd=bun run build
-# gate_fingerprint=7c998da01a8a9aa8
-# gate_max_age_min=60
+#   1 source=discovered cmd=bun run lint
+#   2 source=pinned cmd=pytest -q || exit 1
+#   3 source=discovered cmd=bun run build
 # documented=just check
 # scripts=build,dev,format,lint,test,test:e2e,test:unit
 # scripts_state=ok
@@ -44,9 +42,6 @@ and never split the block on `|`: `pytest -q || exit 1` is an ordinary pinned st
 | `pinned` | `[gate.commands]` in the repo config — a human said this one is right |
 | `documented` | the repo's own `check:` target, used because nothing was discovered |
 
-`cache=`, `exit=` and `age=` are that step's ledger verdict, and are all `-` when there is no
-usable ledger — `gate_cache=` then says why, once, instead of repeating the reason per step.
-
 `documented=` appears on its own line when a `check:` target exists *and* a chain was
 discovered anyway. It never replaces that chain — a `check:` that only lints would silently
 drop the repo's tests and build — so it is evidence for an override, not an override.
@@ -64,17 +59,38 @@ complete pre-integration sequence, in order, stopping at the first failure. `com
 `review` used to consume a `fast=` tier; they no longer gate at all, and the tier went with
 them.
 
+## Run it
+
+Run each step yourself, in order, from the repo root of the current worktree, **stopping at the
+first failure**. Send each step's full output to a log in the run directory (`run=` from `mkit
+facts`, passed as a literal — `output-discipline.md`), so it never enters context:
+
 ```bash
-mkit gate run <run-dir> --chain 'lint=bun run lint' 'test=bun run test' 'build=bun run build'
+bun run lint > <run-dir>/gate-lint.log 2>&1; echo "lint exit=$?"
 ```
 
-`mkit gate run` logs each step in full, stops at the first failure, and returns a verdict plus a
-bounded excerpt; its exit status is the failing step's (`output-discipline.md`).
+One line per step in the chat: the step, `ok` or `FAIL exit=N`, and the log path on a failure. On a
+failure, read a short excerpt of that log — the lines naming the failure (`grep -nE
+'FAIL|Error|error:|panic:|not ok |Traceback'`, at most ~40) plus the last ~30 lines — never the whole
+log. Then report `gate=ok` or `gate=FAILED step=<step> exit=<N>`.
+
+### Reusing a pass — one rule
+
+A gate result lives only as long as this session's memory of it. In `pr` or `finish`, **skip the
+gate** only when all three hold:
+
+- a gate passed earlier **in this session** (every step `ok`, same commands);
+- `git rev-parse HEAD` is the commit it ran at;
+- `git status --porcelain` is empty.
+
+Say so in the report — `gate skipped: passed at <short-sha> earlier this session, tree clean` — never
+as `gate=ok`. Anything else runs the gate: a new session, a compacted context you cannot quote the
+result from, a different HEAD, or a dirty tree. A result you can no longer see never counts as a pass.
 
 ## When a step fails
 
-The verdict already carries the failing step, its exit code, the grepped failures and the tail
-— which is usually the whole diagnosis, and a compiler error is always its own.
+The step, its exit code and the excerpt (failure lines plus the tail) are usually the whole
+diagnosis, and a compiler error is always its own.
 
 **Delegate only when that is genuinely not enough**: a long suite whose failures do not name a
 cause, or a failure you cannot attribute to the change. Hand a subagent the log path (it is on
@@ -84,112 +100,13 @@ sentence or two, caused-by-this-change or pre-existing, a concrete suggested fix
 — triage diagnoses, never fixes: what to do about a red gate is the caller's decision, and for
 `finish`/`pr` the user's.
 
-## The gate ledger — what was already proven
-
-`mkit gate run` records every step it finishes into `<toplevel>/.mkit/gate.jsonl`:
-`(step, command, exit code, seconds, fingerprint of the content it ran over)`.
-`mkit gate detect` compares each command it proposes against the newest record for that
-**exact command string** and annotates it. Each step's `cache=`, `exit=` and `age=` in the
-`full:` block are that annotation; `gate_cache=` replaces all three with a single cause when
-there is no usable ledger at all.
-
-**What this saves is wall-clock, not tokens.** There are no token savings here by
-construction — `mkit gate run` already sends full output to a log so it never reaches
-context. What it saves is a re-execution of a 90-second suite over a tree that stopped
-changing — e.g. `pr` gates a step, then `finish` gates the same content again later.
-
-### The governing rule
-
-> The ledger records **what was proven, over which content**. It never decides whether a
-> gate may be skipped, and a skipped step is always reported as skipped.
-
-**A report may never show `gate=ok` for a step that did not run.** A cached step is named
-`cached` with its age, in the same line that would have carried its verdict:
-
-```
-lint   cached (6m ago, exit=0)
-test   ok 91s
-gate=ok (1 step cached)
-```
-
-A run that prints `gate=ok` having executed nothing is worse than any amount of
-re-running: it reports a safety net that was never deployed. Hence `mkit gate run` never
-skips, and you must label.
-
-### Classification
-
-| Class | Means | Do |
-|---|---|---|
-| `fresh` | same content, `exit=0`, within the age bound | skip if you choose — and **label it `cached`** |
-| `failed` | same content, `exit≠0` — **whatever its age** | **say so before running.** Surface the known-red tree, then run the step anyway: a stale environment can turn a real failure green, and the win here is the early warning, not the skip |
-| `drifted` | the content changed | run |
-| `stale` | same content, `exit=0`, older than the age bound | run — the environment may have moved |
-| `unknown-head` | the recorded commit no longer resolves | run; never treat as `fresh` |
-| `none` | no record for this exact command | run |
-
-A step *name* is not identity — the command is. `bun run test` and
-`bun run test --coverage` are different checks. A command you overrode (from `documented`
-or `docs_candidates`) therefore classifies `none` and simply runs, which is the correct
-default for anything unrecognized.
-
-### What the fingerprint cannot see
-
-It covers **tracked repo content only**: the committed tree overlaid with the worktree,
-invariant under staging and committing. Invisible to it — a dependency install, a tool or
-runtime version change, environment variables, generated artifacts under `.gitignore`,
-and **file mode** (`chmod +x` does not change a blob sha; a known, documented gap).
-
-So `fresh` means "the tracked content is identical", not "the environment is identical".
-That gap is what the **age bound** is for: past 60 minutes a matching fingerprint
-classifies `stale` and the step runs. Age is *reported* on every class so you can always
-see how old a proof is; it is only *decisive* for `stale`.
-
-One consequence worth recognizing in the wild: a gate step that *writes* into the tree — a
-build emitting untracked output, a formatter rewriting files, a snapshot test updating
-fixtures — changes the content its own record is keyed on, so the next lookup reads
-`drifted` and everything runs. Correct, and safe; it just means the ledger never helps on
-those repos. Ignore the output (`.gitignore`) and it becomes invisible to the fingerprint
-again.
-
-Note also that `--prune` deletes run directories, so a record can outlive the
-`gate-<step>.log` it names. The ledger stores the verdict; if you need the log, re-run.
-
-### Per-skill posture
-
-Deliberately unequal — `pr` and `finish` do not carry the same risk.
-
-| Skill | Step | Posture |
-|---|---|---|
-| `pr` | full tier | **may consume per step.** A draft PR is recoverable and CI runs remotely anyway |
-| `finish` | full tier | **strictest.** Its gate is the only safety net before a local merge. Consume only on an exact command match, a matching fingerprint, and an age within bound — and **always** print `cached (Nm ago)`. Never cache a whole chain silently |
-
-### When there is nothing to classify
-
-One key, one cause — the same discipline as `scripts_state`:
-
-- `gate_cache=off` — `--no-cache` was passed. This is the answer to "I don't trust it".
-- `gate_cache=empty` — nothing to compare against: no ledger yet, one with no records, or one
-  that could not be read cleanly. A ledger with a malformed line has nothing to say; a
-  confident wrong class is the one answer it may not give.
-- `gate_cache=no-fingerprint` — the content hash could not be computed: no work tree, or git
-  plumbing failed. **Not a missing tool** — the hash is computed in process, so there is
-  nothing to install and no remedy to offer.
-
-`no-hash` and `no-jq` are gone with the forks that needed them: a binary is never
-half-capable. Each surviving cause degrades to the same behavior: detect, then run everything.
-
-The two escape hatches: `mkit gate detect --no-cache` ignores the ledger for one call
-(`gate_cache=off`), and `mkit gate run --no-ledger` stops writing to it. Neither is needed in
-normal use; reach for `--no-cache` when a `fresh` verdict looks wrong and you want the
-question off the table.
-
 ## Rules
 
-- Open the run directory before the first step — `mkit facts` did it; `mkit gate run` refuses a
-  path that does not exist rather than writing a log to `/`.
+- Open the run directory before the first step — `mkit facts` did it. Never write a log to a path
+  that does not exist.
 - Run the gate from the repo root of the current worktree.
 - Report exactly which step failed and its exit code. Never silently continue past a failure.
 - For a **draft** PR or an explicit override, the user may proceed past a failing gate: surface
   it, then respect the decision.
 - Never fabricate a passing result. If a check was skipped — no such script, too slow, user
-  opted out, or **served from the ledger** — say so, and say which.
+  opted out, or **reused under the rule above** — say so, and say which.
