@@ -1,13 +1,12 @@
 // Package ui is the one place mkit's human-facing terminal output is styled.
 //
 // Palette and glyphs follow the tools this is meant to sit beside — gh's quiet
-// tables, cargo's status icons, charm's own rounded panels — and match the
-// `mkit init` wizard (internal/tui/repoinit/theme.go), so a command's report and
-// the wizard read as one program.
+// tables, cargo's status icons, charm's own rounded panels — so every command's
+// report reads as one program.
 //
 // Layering: this only turns data into strings. Whether to use it at all is the
 // caller's call (`cli.Options.Pretty`): a pipe, `--json` and `--no-tui` never
-// reach it, which is what keeps the `key=value` text the skills parse
+// reach it, which is what keeps the plain text `sandbox-audit` parses
 // byte-for-byte unchanged.
 package ui
 

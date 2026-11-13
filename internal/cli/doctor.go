@@ -14,14 +14,13 @@ import (
 func newDoctorCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "doctor",
-		Short: "Report prerequisites, sandbox writability, plugin state and allowlist gaps",
-		Long: "Report what this machine and this repo will let mkit do.\n\n" +
+		Short: "Report prerequisites, plugin state, sandbox grants and old-release leftovers",
+		Long: "Report what this machine and this repo will let the mkit plugin do: the tools\n" +
+			"its skills compose (git, gh, bash, and optional wt/codex/coderabbit), the plugin's\n" +
+			"state, sandbox grants, and what older mkit releases left behind.\n\n" +
 			"Reports; fixes nothing. Every finding carries a remedy you run, and a finding\n" +
 			"with no working remedy says so rather than offering configuration that changes\n" +
-			"nothing.\n\n" +
-			"Two things it cannot report, both accepted: it does not run unprompted at session\n" +
-			"start, and it cannot tell you `mkit` itself is missing. Those were the SessionStart\n" +
-			"hook's job, and the hook was removed in 0.15.0.",
+			"nothing. Human-run: the skills never call it, and need no binary to run.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts := FromContext(cmd)
 			// A missing repo is a state doctor reports, never a reason to fail:
