@@ -11,8 +11,8 @@ This page is for changing the repo. For using mkit, see the [README](README.md) 
 macOS only.
 
 ```bash
-brew install go golangci-lint just
-just ci          # build, vet, test, lint: what CI runs (golangci-lint v2.12)
+brew install go golangci-lint just bats-core
+just ci          # build, vet, test, lint, bats: what CI runs (golangci-lint v2.12)
 just run doctor  # run the binary from source, no install
 ```
 
@@ -39,6 +39,8 @@ To try plugin changes, load the work tree's `plugin/` instead of the installed c
 | `internal/tui/` | Bubble Tea rendering, terminal only | binary |
 | `plugin/skills/<name>/SKILL.md` | skills | plugin |
 | `plugin/skills/_shared/references/` | shared references | plugin |
+| `plugin/skills/_shared/scripts/` | `facts.sh`, `branch-status.sh` (bash 3.2) | plugin |
+| `tests/` | bats tests for the two scripts | — |
 | `docs/` | concept, backlog, prerequisites, ADRs, ideas | — |
 | `tools/` | maintainer scripts (`release.sh`) | — |
 
@@ -47,19 +49,21 @@ To try plugin changes, load the work tree's `plugin/` instead of the installed c
 These are the ones changes break most often. The full list is the
 [invariants](docs/backlog.md#invariants).
 
-- **Judgement in Markdown, mechanics in Go.** Add a command only for something that must run the same
-  way every time, never for a decision. When the line is unclear, the binary reports the
-  candidates and the skill chooses.
-- **The plugin is Markdown only.** No scripts, no hooks.
+- **Judgement in Markdown, mechanics in code.** Code only where it replaces many tool calls (the two
+  scripts) or serves the optional binary's own tools; never for a decision. When the line is unclear,
+  the code reports the candidates and the skill chooses.
+- **The plugin is the product; the binary is optional.** No skill but `sandbox-audit` may call `mkit`
+  ([ADR 0006](docs/adr/0006-standalone-skills-optional-binary.md)).
+- **The plugin is Markdown plus exactly two scripts** (`_shared/scripts/facts.sh`, `branch-status.sh`).
+  No hooks; a third script needs an ADR.
 - **Layering.** `core` returns data, `cli` formats it, `tui` renders it. No logic in a Bubble Tea `Update`.
 - **`--json` on every command, and no TUI off a terminal.** Skills parse the bundled scripts'
   `key=value` output (`plugin/skills/_shared/scripts/`, tested by `tests/*.bats`); change a key there and
   in every skill that reads it, in one commit.
 - **Commands report and run.** They never stage, merge, push, or edit your files.
 - **Nothing writes into the work tree.** Skills keep per-run files in `$TMPDIR` (`facts.sh --run`);
-  `~/.mkit/` holds the `sandbox-audit` ledger. The binary's other writes: `git fetch --prune`
-  (`branch-status.sh`), `.mkit/config.toml` (`init`, until #53), and `cache prune --apply` deleting
-  stale Claude Code / Codex storage.
+  `~/.mkit/` holds the `sandbox-audit` ledger; `branch-status.sh` runs `git fetch --prune`. The
+  binary's only write is `cache prune --apply` deleting stale Claude Code / Codex storage.
 - **Skills are composable.** Each runs alone, in any order, and never sends the user to another
   skill first ([workflow contract](plugin/skills/_shared/references/workflow-contract.md)).
 - **Nothing project-specific is hardcoded.** Gate commands, commit scopes and reviewers are discovered
@@ -71,10 +75,10 @@ Tests sit beside their packages and use `go test`. A test that touches state bui
 under `$TMPDIR` and points `MKIT_HOME` inside it.
 
 - **Never touch the real home directory.** Don't point `HOME`, `MKIT_HOME` or any other variable at
-  it. A suite that reaches user-scoped state sets `MKIT_HOME` in its own helper (see `factsRepo` in
+  it. A suite that reaches user-scoped state sets `MKIT_HOME` in its own helper (see `testRepo` in
   `internal/cli` and `isolate` in `internal/core/doctor`).
 - `internal/cli` tests drive the real command root: argv goes in; stdout and the exit code come out.
-  That is the interface skills call.
+- `tests/*.bats` test the plugin's two scripts the same way, in a throwaway repo (`bats tests/`).
 - Don't simplify an assertion whose comment names a measured failure.
 
 ## Commits and PRs
@@ -90,7 +94,8 @@ under `$TMPDIR` and points `MKIT_HOME` inside it.
 ## Releases (maintainer)
 
 `just release` picks the version, shows the PRs since the last tag, and asks for confirmation. Then it
-bumps `plugin.json`, commits, tags and pushes. The tag triggers GoReleaser, which builds darwin amd64
+bumps every agent's `plugin.json` that exists, commits, tags and pushes; plugin-only changes still get
+a tag. The tag triggers GoReleaser, which builds darwin amd64
 and arm64, writes the Release notes from PR titles, and updates the Homebrew cask. The GitHub Release
 is the changelog; `CHANGELOG.md` is frozen at 0.19.0.
 

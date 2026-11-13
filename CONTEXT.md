@@ -2,6 +2,13 @@
 
 ## Language
 
+**Plugin**:
+The product: the skills, their shared references and the two bundled scripts (`facts.sh`, `branch-status.sh`). Every skill runs on it alone.
+
+**Binary**:
+The optional `mkit` Go program: macOS + Claude Code power tools (`doctor`, `audit sandbox`, `cache prune`). Only `sandbox-audit` needs it.
+_Avoid_: calling it a prerequisite, or "the mechanics under the skills" (its role before ADR 0006)
+
 **Repo setting**:
 A per-repo choice written as short prose in `docs/agents/<area>.md` (commit, review, merge, remote, gate, cleanup), by the `setup` skill or by hand. Lazy: the file exists only where the repo chose something other than the **Discovered value** or **Default**. A skill reads it when present and never stops when it is absent.
 _Avoid_: pinned value, config (both name the retired `.mkit/config.toml`)

@@ -1,42 +1,40 @@
 # Prerequisites
 
-This page covers what the skills and `mkit` need, and how to set them up under Claude Code's sandbox.
-**macOS only** (Intel and Apple Silicon).
+This page covers what the skills and the optional `mkit` binary need, and how to set them up under
+Claude Code's sandbox.
 
 ## Install
-
-```bash
-brew install git masterik/tap/mkit
-```
 
 ```
 /plugin marketplace add masterik/mk-toolkit
 /plugin install mkit@masterik
 ```
 
-You need both, because every skill except `explain` calls `mkit`. If the binary is missing or too
-old, the skill stops and tells you to run `brew install` or `brew upgrade mkit`.
+The plugin is all the skills need. **Optional, macOS only:** the `mkit` binary, which `sandbox-audit`
+needs and which adds a prerequisite report and storage cleanup:
 
 ```bash
+brew install masterik/tap/mkit
 mkit doctor
 ```
 
 `doctor` reports, and never changes anything. It checks:
 
-- whether tools are on `PATH`;
+- whether tools are on `PATH`, and the `bash` version;
 - plugin state, including drift between plugin and binary versions;
 - the sandbox's writable set;
-- missing `additionalDirectories` grants.
+- missing `additionalDirectories` grants;
+- files older mkit releases left behind (`.mkit/`, mkit's lines in `info/exclude`).
 
-It does not check tool versions, `gh` auth, or Bash allow rules.
+It does not check other tool versions, `gh` auth, or Bash allow rules.
 
 ## Required
 
 | Tool | Used by | Why |
 | --- | --- | --- |
 | `git` ≥ 2.30 | everything | `--absolute-git-dir`, `worktree list --porcelain`, `diff --shortstat` |
-| `bash` ≥ 3.2 | `pr`, `finish` | the skills run the repo's gate commands in the shell; macOS's `/bin/bash` is enough |
-| `mkit` | every skill but `explain` | run dir, starting facts, branch classifier |
+| `bash` ≥ 3.2 | every skill but `explain` and `sandbox-audit` | the bundled `facts.sh`/`branch-status.sh`, and the repo's gate commands; macOS's `/bin/bash` is enough |
+| `mkit` | `sandbox-audit` only | reads transcripts and settings (`mkit audit sandbox`) |
 
 ## Recommended
 

@@ -37,7 +37,7 @@ homebrew_casks:
     binaries:
       - mkit
     homepage: "https://github.com/masterik/mk-toolkit"
-    description: "Coding-workflow skills for Claude Code — Go CLI plus a shared Claude Code plugin."
+    description: "Optional macOS power tools (doctor, audit sandbox, cache prune) for the mkit Claude Code plugin."
     license: "MIT"
     # The binary is not notarized, so Gatekeeper blocks a quarantined download on first run.
     hooks:
