@@ -246,9 +246,8 @@ func Gather(repo *gitrepo.Repo, opt Options) (*Facts, error) {
 		}
 	}
 
-	// `.mkit/` unignored is not cosmetic: `git worktree remove` refuses,
-	// `git add -A` would commit run artefacts, and the gate fingerprint sees a
-	// directory that changes while the gate runs. A worktree-isolated session
+	// `.mkit/` unignored is not cosmetic: `git worktree remove` refuses, and
+	// `git add -A` would commit run artefacts. A worktree-isolated session
 	// cannot reach the exclude file, so the answer is a fact.
 	f.RunIgnored = scratch.Ignored(repo)
 	if !f.RunIgnored {

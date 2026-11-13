@@ -54,16 +54,13 @@ func Ignored(repo *gitrepo.Repo) bool {
 // EnsureIgnored makes the scratch ignored, once, and reports whether it now is.
 // Best effort: it returns false rather than an error and never fails a caller.
 //
-// Three things break while the scratch is unignored, all measured, none cosmetic:
+// Two things break while the scratch is unignored, both measured, neither cosmetic:
 //
 //   - worktree teardown. `git status --porcelain` reports `?? .mkit/`, and
 //     `git worktree remove` refuses with "contains modified or untracked files"
 //     — which breaks `finish`/`cleanup` and Claude Code's own sweep.
 //   - `git add -A`, which commits run artefacts into the user's project. Already
 //     happened once, with an improvised helper script.
-//   - the gate cache. Fingerprint enumerates with `ls-files --others
-//     --exclude-standard`, so an unignored scratch enters the fingerprint and
-//     then changes while the gate runs — a run invalidating its own cache entry.
 //
 // Two lines, and the pair is the unit: `.mkit/*` excludes the scratch while
 // leaving `.mkit/` itself includable, and `!.mkit/config.toml` re-includes the
@@ -120,7 +117,7 @@ func EnsureIgnored(repo *gitrepo.Repo) bool {
 //     linked worktree gets its own, so no write of a worktree-isolated session
 //     targets the shared checkout.
 //   - ignored *before* the first write, or the first thing that walks the tree —
-//     `git worktree remove`, `git add -A`, the gate fingerprint — sees run
+//     `git worktree remove`, `git add -A` — sees run
 //     artefacts. Best effort: the write lands in the main checkout's exclude
 //     file, which a worktree-isolated session cannot reach, so the answer is
 //     reported (`scratch_ignored=`) rather than enforced. Opening the run directory

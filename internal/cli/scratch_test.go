@@ -103,9 +103,8 @@ func TestRunOpenALinkedWorktreeGetsItsOwn(t *testing.T) {
 	}
 }
 
-// Unignored, `git worktree remove` refuses, `git add -A` would commit run
-// artefacts, and the gate fingerprint sees a directory that changes while the
-// gate runs.
+// Unignored, `git worktree remove` refuses, and `git add -A` would commit run
+// artefacts.
 func TestRunOpenIgnoresTheScratchBeforeTheFirstWrite(t *testing.T) {
 	repo := factsRepo(t)
 	runOpen(t, "review")

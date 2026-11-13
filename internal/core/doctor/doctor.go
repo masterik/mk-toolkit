@@ -309,8 +309,7 @@ func (r *Report) repo(repo *gitrepo.Repo) {
 	} else {
 		r.add(Check{Group: "repo", Name: "scratch ignored", Status: Fail,
 			Detail: ".mkit/ is not ignored here — `git worktree remove` will refuse, " +
-				"`git add -A` would commit run artefacts, and the gate fingerprint " +
-				"sees a directory that changes while the gate runs",
+				"and `git add -A` would commit run artefacts",
 			Remedy: scratch.IgnoredRemedy(common)})
 	}
 

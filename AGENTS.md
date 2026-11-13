@@ -104,7 +104,7 @@ Shell layer gone (M5); its rules still apply:
     (checkout is `marketplaces/masterik/plugin`). **Work tree before installed copy** — else an old
     install answers for a newer tree, wrong but plausible.
   - `doctor/` (M7): reports, fixes nothing, exit 0. `orphans.go`: closed table of old mkit paths
-    (`.mkit/work/`, `.mkit/worklog/`, `<git-dir>/mkit`, `bootstrap.*`) → `leftovers` warning + `rm`; drop an entry once
+    (`.mkit/work/`, `.mkit/worklog/`, `.mkit/gate.jsonl`, `<git-dir>/mkit`, `bootstrap.*`) → `leftovers` warning + `rm`; drop an entry once
     every machine is past the release that stopped writing it.
   - `scratch/` (M5): owns `.mkit/`; **sole writer of runtime state** in a work tree (`repoconfig` writes
     `config.toml`). `writes_test.go` counts write sites per file. `EnsureIgnored` writes the ignore
@@ -120,7 +120,7 @@ Shell layer gone (M5); its rules still apply:
     (names may contain commas). `merged` match refused unless `headRefOid` is tip or ancestor. Failed
     worktree `git status` → `clean=error`.
   - `gate/` (M5): `Detect` + runner overlay only — proposes commands, never runs them; skills run
-    them (#48). `Fingerprint` remains solely for `worklog`; goes with it (#49).
+    them (#48).
   - `sessionaudit/`: `mkit audit sandbox` (hidden alias `sessions`, one release). Reads
     `<claude home>/projects/**/*.jsonl` (`cache`'s `CLAUDE_HOME` rule). Classifies results the
     sandbox/gate touched: **paired to their call by `tool_use_id`**, never transcript substring (that
@@ -182,7 +182,7 @@ stop calling `mkit`; `.mkit/` goes away.
   - **Work tree, not `<git-dir>/mkit`** ([ADR 0002](docs/adr/0002-state-locations-under-a-sandbox.md)):
     shared `.git` → main checkout, refused by worktree isolation. `--show-toplevel`: one per worktree.
   - Rule written **before** first write: else `git worktree remove` refuses, `git add -A` commits
-    artefacts, fingerprint sees a changing dir. `scratch_ignored=` exists because isolated sessions
+    artefacts. `scratch_ignored=` exists because isolated sessions
     can't write `info/exclude`.
   - `mkit scratch prune` removes only `<skill>-*` dirs.
 - `~/.mkit/` (`MKIT_HOME`) — future user-scoped binary state; binary writes nothing now. Holds
