@@ -204,7 +204,7 @@ the right place. Drop it only where there are no reviewers at all.
 
 ### 8. Create the PR
 
-Body to a temp file, to avoid shell-escaping issues (session scratch dir if available):
+Body to a temp file, to avoid shell-escaping issues (`<run-dir>` if there is one, else `$TMPDIR`):
 
 ```bash
 gh pr create \
@@ -269,7 +269,7 @@ Commits (<base>..HEAD):
 ```
 
 The commit list is step 0's `commits:` block — already in context, and cheap precisely because the diff never
-was. Never just "N commits pushed." Prune with `mkit scratch prune` on the way out.
+was. Never just "N commits pushed."
 
 After the block, say what the reader still has to do or decide, or "nothing needed from you": a remote chosen
 but not recorded (a `docs/agents/remote.md` naming it would end the question),

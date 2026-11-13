@@ -378,7 +378,6 @@ does not reflow wide or nested structure:
   thing on screen.
 
 Do not commit unless asked — leave fixes in the working tree for the user to commit (or chain into `commit`).
-Fold `mkit scratch prune` into step 6's call rather than spending a turn on it.
 
 ## Git safety
 

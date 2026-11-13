@@ -169,19 +169,6 @@ For every branch approved in step 1, step 2, or just vacated in step 3, in this 
    itself** — after it runs, check `git show-ref --verify --quiet refs/heads/<branch>` before step 4.2; if it's
    already gone, you're done with this branch, and running a delete on it anyway is a redundant, avoidable
    error, not a real failure worth reporting as one.
-
-   **A plain `git worktree remove` that refuses on a worktree reported `clean=yes` is old mkit scratch,
-   not the user's work.** `branch-status.sh` excludes `.mkit/` from its cleanliness check, but git does not:
-   where an older mkit left an unignored `.mkit/` run directory, git calls the worktree dirty and refuses. Check **both**
-   `git -C <path> ls-files -- .mkit` and `git -C <path> ls-tree -r --name-only HEAD -- .mkit` **first** — if
-   either names any path, `.mkit/` is tracked, which should never happen and means the exclude pathspec
-   below would hide the user's own changes under it too. `ls-files` alone misses a committed `.mkit` file
-   staged for deletion (`git rm --cached`): it drops out of the index while still sitting in `HEAD`, so only
-   the `HEAD` check catches it. Either hit means treat this the same as any other dirty worktree and never
-   pass `--force`. Only when both come back empty, check
-   `git -C <path> status --porcelain -- . ':(exclude).mkit'`; if that is also empty, `--force` discards only
-   run artefacts, and say exactly that instead of the "discards uncommitted work" sentence, which would be
-   false here. Anything else in the output is the user's, and the normal rule applies.
 2. **Delete the branch, if it still exists.** Always `git branch -D <branch>` here, never plain `-d` — `-d`
    only checks whether the branch is merged into whatever you currently have checked out, which is not what
    any of this skill's own evidence is measured against (a `merged` branch may be an ancestor of `develop`
@@ -242,7 +229,7 @@ as kept. Check the branch row's `upstream=` for whichever branch you land on: no
 
 ## Final report (always)
 
-Prune with `mkit scratch prune` folded into step 6's verification call. Form per
+Form per
 `../_shared/references/summary-format.md`; print the first line below in bold, as the verdict.
 
 ```

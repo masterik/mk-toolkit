@@ -57,7 +57,7 @@ dependency check. `explain` works from the session (reading a file only to confi
 nothing. What each step does with what it reads is the step's own business, and stays in its
 `SKILL.md`.
 
-**Per branch, not per invocation.** A run directory (`<skill>-<timestamp>/`) belongs to one call and
+**Per branch, not per invocation.** A run directory (`mkit-<skill>-XXXXXX` under `$TMPDIR`) belongs to one call and
 holds its working files; it is scratch, not a record. The branch's history and its PR span every call,
 which is the unit of work the finishing steps act on.
 
