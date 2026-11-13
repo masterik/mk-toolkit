@@ -12,6 +12,10 @@ Part of the **mkit** bundle, but outside the edit → commit → review → fini
 is machine gardening, not feature work, and it is **not repo-scoped** — it reads every project's transcripts
 under the Claude home, so it runs the same from any directory, inside a repository or not.
 
+**It needs the `mkit` binary** (`brew install masterik/tap/mkit`), the one mkit skill that does: it audits
+Claude Code's own transcripts and settings, and the binary is macOS-only, so this skill is Claude-only and
+macOS-only by nature. Every other skill runs on the plugin alone.
+
 References: `../_shared/references/output-discipline.md` (bounded output, where a write may land).
 
 ## What this does and does not touch

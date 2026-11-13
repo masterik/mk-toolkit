@@ -12,9 +12,8 @@ description: >-
 # Explain it again, in plain English
 
 Part of the **mkit** bundle, but outside the edit → commit → review → finish/pr line, like `cleanup`. This
-is a reading aid, not a workflow step. It is **the one mkit skill that needs no binary**: it does no
-mechanical work, so it makes no `mkit` call and opens no run directory. It works without `mkit` installed
-and outside a repository.
+is a reading aid, not a workflow step. It does no mechanical work, so it runs no script and opens no run
+directory. It works outside a repository.
 
 How the answer reads (levels, writing rules, visuals, words used, the closing line):
 `../_shared/references/plain-english.md`. Read it before answering. This file only says *what* to explain.
