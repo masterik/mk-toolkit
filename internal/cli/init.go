@@ -27,7 +27,6 @@ type initResult struct {
 
 func newInitCmd() *cobra.Command {
 	var (
-		gate       []string
 		specStore  string
 		specRef    string
 		scopes     []string
@@ -52,8 +51,8 @@ func newInitCmd() *cobra.Command {
 			"there are several remotes): every answer is a choice with a description,\n" +
 			"pre-selected from the pinned value, then the\n" +
 			"discovered one, then a form default (merge style `merge`, review mode `full`).\n" +
-			"What discovery finds is pinned. The gate and the cleanup keep list are written as\n" +
-			"found and can be changed from the review page, which shows the exact file.\n" +
+			"What discovery finds is pinned. The cleanup keep list is written as found and\n" +
+			"can be changed from the review page, which shows the exact file.\n" +
 			"--force opens the wizard on the existing config and re-discovers beside it.\n\n" +
 			"Every field is also a flag, so a skill can drive it. Any flag, --yes, or no\n" +
 			"terminal means no form and no form default: only what was given is pinned.",
@@ -95,7 +94,7 @@ func newInitCmd() *cobra.Command {
 
 			cfg := existing
 			if err := applyFlags(cfg, flagValues{
-				gate: gate, specStore: specStore, specRef: specRef,
+				specStore: specStore, specRef: specRef,
 				scopes: scopes, subjectMax: subjectMax,
 				// Whether the flag was *given* is the fact, not whether it is
 				// non-zero: `--subject-max 0` is a value the user typed, and a
@@ -151,7 +150,6 @@ func newInitCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringArrayVar(&gate, "gate", nil, "pin a gate step as step=command (repeatable)")
 	cmd.Flags().StringVar(&specStore, "spec-store", "", "github-issues | gitlab | files | none")
 	cmd.Flags().StringVar(&specRef, "spec-ref", "", "qualifies --spec-store (owner/repo, or a path)")
 	cmd.Flags().StringArrayVar(&scopes, "scope", nil, "pin a conventional-commit scope (repeatable)")
@@ -180,7 +178,6 @@ func newInitCmd() *cobra.Command {
 // a tenth positional parameter: the list grows with the schema, and a caller that
 // transposes two `[]string` arguments compiles.
 type flagValues struct {
-	gate       []string
 	specStore  string
 	specRef    string
 	scopes     []string
@@ -197,15 +194,8 @@ type flagValues struct {
 }
 
 func applyFlags(cfg *repoconfig.Config, f flagValues) error {
-	gate, store, ref := f.gate, f.specStore, f.specRef
+	store, ref := f.specStore, f.specRef
 	scopes, reviewers, merge, keep := f.scopes, f.reviewers, f.merge, f.keep
-	for _, g := range gate {
-		step, command, err := repoconfig.ParseGatePin(g)
-		if err != nil {
-			return fmt.Errorf("--gate %q: %w", g, err)
-		}
-		cfg.SetGate(step, command)
-	}
 	if store != "" {
 		if err := repoconfig.CheckAllowed("spec.store", store); err != nil {
 			return fmt.Errorf("--spec-store %q: %w", store, err)

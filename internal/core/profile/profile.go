@@ -20,7 +20,6 @@ import (
 	"strings"
 
 	"github.com/masterik/mk-toolkit/internal/core/branchstatus"
-	"github.com/masterik/mk-toolkit/internal/core/gate"
 	"github.com/masterik/mk-toolkit/internal/core/gitrepo"
 	"github.com/masterik/mk-toolkit/internal/core/pluginroot"
 	"github.com/masterik/mk-toolkit/internal/core/repoconfig"
@@ -54,15 +53,6 @@ type List struct {
 	Cause  string   `json:"cause,omitempty"`
 }
 
-// GateStep is one quality-gate command in sequence.
-type GateStep struct {
-	// Step is a short label. Derived from the command for a discovered step —
-	// naming, not deciding: which command to trust stays the skill's call.
-	Step    string `json:"step"`
-	Command string `json:"command"`
-	Source  Source `json:"source"`
-}
-
 // Profile is the merged picture. It is data; formatting is cmd/'s job.
 type Profile struct {
 	Toplevel string            `json:"toplevel"`
@@ -72,7 +62,6 @@ type Profile struct {
 	// unknown key affects no value at all — it is precisely the pin that went
 	// nowhere, and a profile that only tagged values would never mention it.
 	ConfigProblems []repoconfig.Problem `json:"config_problems,omitempty"`
-	Gate           Gate                 `json:"gate"`
 	Spec           Spec                 `json:"spec"`
 	Scopes         List                 `json:"commit_scopes"`
 	// SubjectMax is the longest commit subject this repo accepts. Never
@@ -89,14 +78,6 @@ type Profile struct {
 	// Keep is the branches `cleanup` must never delete.
 	Keep    List        `json:"cleanup_keep"`
 	Payload PayloadInfo `json:"payload"`
-}
-
-// Gate is the quality gate as a sequence.
-type Gate struct {
-	Steps []GateStep `json:"steps"`
-	// Ecosystem is what discovery recognised, e.g. "go,just".
-	Ecosystem string `json:"ecosystem,omitempty"`
-	Cause     string `json:"cause,omitempty"`
 }
 
 // Spec is where specs and task graphs live.
@@ -149,7 +130,6 @@ func build(repo *gitrepo.Repo, cfg *repoconfig.Config) *Profile {
 		p.Payload = PayloadInfo{Remedy: pluginroot.Remedy()}
 	}
 
-	p.Gate = buildGate(repo, cfg)
 	p.Spec = discoverSpec(repo, cfg)
 	p.Scopes = discoverScopes(repo, cfg)
 	p.SubjectMax = subjectMax(cfg)
@@ -159,40 +139,6 @@ func build(repo *gitrepo.Repo, cfg *repoconfig.Config) *Profile {
 	p.Remote = discoverRemote(repo, cfg)
 	p.Keep = discoverKeep(repo, cfg)
 	return p
-}
-
-// buildGate reports the quality gate as a tagged sequence.
-//
-// The merge of pinned over discovered lives in `gate.Detect`, which is what
-// `mkit gate detect` prints — so it exists once, and the profile consumes the
-// tagged result rather than redoing it. Until M5 this delegated to the payload's
-// gate-detect.sh; discovery no longer needs the payload at all, so an unreachable
-// payload is no longer a cause for an empty gate.
-func buildGate(repo *gitrepo.Repo, cfg *repoconfig.Config) Gate {
-	var g Gate
-
-	d, err := gate.Detect(repo, cfg)
-	if err != nil {
-		g.Cause = "gate discovery failed: " + err.Error()
-		return g
-	}
-	g.Ecosystem = strings.Join(d.Ecosystems, ",")
-	// `scripts=none` from an unreadable package.json is not the same answer as a
-	// package.json that declares no scripts. Independent of whether steps were
-	// found: a polyglot repo can yield a Go sequence while the Node half went
-	// uninspected, and an incomplete gate presented as complete is the worse
-	// failure.
-	if d.ScriptsState == "unreadable" {
-		g.Cause = "gate discovery could not read package.json"
-	}
-	for _, s := range d.Steps {
-		src := Discovered
-		if s.Origin == gate.Pinned {
-			src = Pinned
-		}
-		g.Steps = append(g.Steps, GateStep{Step: s.Step, Command: s.Cmd, Source: src})
-	}
-	return g
 }
 
 // discoverSpec reads the store from docs/agents/issue-tracker.md where a repo has

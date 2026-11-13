@@ -62,3 +62,25 @@ func gateRepo(t *testing.T) (repo, rd string) {
 	t.Chdir(repo)
 	return repo, rd
 }
+
+// field reads a `key=value` line out of the output, as the skills do.
+func field(out, key string) string {
+	for _, line := range strings.Split(out, "\n") {
+		if v, ok := strings.CutPrefix(line, key+"="); ok {
+			return v
+		}
+	}
+	return ""
+}
+
+// put writes name under dir, creating its parents.
+func put(t *testing.T, dir, name, content string) {
+	t.Helper()
+	p := filepath.Join(dir, name)
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
