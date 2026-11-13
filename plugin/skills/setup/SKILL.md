@@ -13,10 +13,9 @@ Write the per-repo settings mkit's skills read: short prose files in `docs/agent
 sub-block under the `## Agent skills` heading of `CLAUDE.md` or `AGENTS.md` — the same place and form
 mattpocock's setup uses, so a repo with both packs has one place to look.
 
-This is a prompt-driven skill, not a script. Explore, present what you found, confirm with the user, then
-write. **Optional**: every skill runs without these files, discovering or asking instead
-(`../_shared/references/repo-settings.md`, which is also the one place the readers' rules live). A file is
-written **only for a non-default choice**, so the folder shows exactly what this repo changed.
+Explore, present what you found, confirm with the user, then write. **Optional**: every skill runs without
+these files (`../_shared/references/repo-settings.md` has how they are read). A file is written **only for a
+non-default choice**, so the folder shows exactly what this repo changed.
 
 Areas and the file each writes, from the seed templates in this folder:
 
@@ -42,38 +41,39 @@ The spec store is not mkit's: it is `docs/agents/issue-tracker.md`, mattpocock's
 
 ### 1. Explore
 
-Read whatever exists; don't assume. From the repo root (`git rev-parse --show-toplevel`):
+Read whatever exists, from the repo root (`git rev-parse --show-toplevel`):
 
-- `git remote -v`: how many remotes, and which point at GitHub.
-- Commit history: `git log --format=%s -200` — the scopes in `type(scope):` and how often each is used; the
-  longest subjects. A repo document naming scopes (`CONTRIBUTING.md`, `.commitlintrc*`, `commitlint.config.*`)
-  or a subject limit (commitlint `header-max-length`).
+- `git remote -v`: how many remotes, which point at GitHub.
+- `git log --format=%s -200`: the `type(scope):` scopes and their counts, the longest subjects. A document
+  naming scopes (`CONTRIBUTING.md`, `.commitlintrc*`, `commitlint.config.*`) or a subject limit
+  (`header-max-length`).
 - `CODEOWNERS` (`.github/`, root, `docs/`).
-- The gate as `pr`/`finish` would find it with no file: walk `../_shared/references/quality-gate.md`, "Find
-  the gate" (task runners and manifests). Note any doc naming a different check command.
-- Long-lived local branches: `git branch --format='%(refname:short)'` — anything besides the default and
-  feature branches (`staging`, `release/*`-style names, an integration branch).
-- `docs/agents/`: which of mkit's six files already exist (a re-run), and whether `issue-tracker.md` does.
-- `.mkit/config.toml`: the old config (step 2, "Migration").
-- `CLAUDE.md` and `AGENTS.md` at the root: which exist, whether one is a symlink to the other, and whether
-  either has `## Agent skills` and a `### mkit workflow` sub-block already.
+- The gate as `pr`/`finish` would find it with no file (`../_shared/references/quality-gate.md`, "Find the
+  gate"); any doc naming a different check command.
+- `git branch --format=%(refname:short)`: long-lived branches besides the default and feature branches
+  (`staging`, `release/*`, an integration branch).
+- `docs/agents/`: which of mkit's six files exist (a re-run), and whether `issue-tracker.md` does.
+- `.mkit/config.toml`: the old config ("Migration").
+- Root `CLAUDE.md`/`AGENTS.md`: which exist, whether one symlinks the other, whether either has
+  `## Agent skills` and a `### mkit workflow` sub-block.
 
 ### 2. Present findings and ask
 
-Summarise what's present and what's missing in a few lines. Then take the sections in order: **one section,
-one answer, then the next.** Lead each with the recommended answer so the user can accept it in a word —
-through `AskUserQuestion` where the host has it, else a numbered list (`../_shared/references/summary-format.md`).
-Skip a section exploration already settled. A one-line explainer only where the choice genuinely branches.
+Summarise what's present and missing in a few lines. Then the sections in order: **one section, one answer,
+then the next**, each led by the recommended answer — `AskUserQuestion`, else a numbered list
+(`../_shared/references/summary-format.md`). Skip a section exploration already settled.
 
 An existing file's value (re-run) or a migrated value is the recommended answer for its section. "Keep the
 default" is always an option, and choosing it on a re-run means that file is removed.
 
-**A. Commit.** Scopes: recommend the scopes history uses more than once (a documented list wins), and say
-that with no file `commit` reads history itself — so a file is worth it only to **fix** the list (drop
-one-offs, add a scope history lacks). Subject length: recommend no limit file unless a document or commitlint
-names one.
+**Migration.** `.mkit/config.toml` exists → read [migration.md](migration.md) before section A: its values
+become the recommended answers.
 
-**B. Review mode.** Recommend `full` (no file). Offer `quick` for a team that wants the cheaper roster by default.
+**A. Commit.** Scopes: recommend the scopes history uses more than once (a documented list wins); with no
+file `commit` reads history itself, so a file only **fixes** the list (drop one-offs, add a missing scope).
+Subject length: no file unless a document or commitlint names a limit.
+
+**B. Review mode.** Recommend `full` (no file); offer `quick` as a cheaper default roster.
 
 **C. Merge.** Style: recommend `merge` (no file) unless evidence says otherwise — repo-local `pull.rebase`,
 a `.config/wt.toml` `merge.*` key, or the GitHub repo allowing only one method (`gh repo view --json
@@ -93,28 +93,6 @@ list, and a develop branch only when it is not named `develop`/`development`/`de
 
 **G. Spec store.** Nothing to ask. Report what `docs/agents/issue-tracker.md` says, or that it is absent
 (mattpocock's setup writes it; mkit assumes no store without it).
-
-#### Migration — `.mkit/config.toml`
-
-Written by the old `mkit init`. Read it as text — no tool needed — and carry over every value that differs
-from its area's default, as that section's recommended answer:
-
-| Old key | Goes to |
-| --- | --- |
-| `[commit] scopes`, `subject_max` | `commit.md` |
-| `[review] mode` (not `full`) | `review.md` |
-| `[review] reviewers` | `merge.md`, Reviewers |
-| `[merge] style` (not `merge`) | `merge.md`, Merge style |
-| `[remote] name` | `remote.md` |
-| `[gate.commands]` (step → command) | `gate.md`, in the order `lint`, `typecheck`, `vet`, `test`, `build`, then the rest |
-| `[cleanup] keep` | `cleanup.md`, Keep |
-| `[spec] store`, `ref` | nothing — compare with `issue-tracker.md` and report a mismatch or absence |
-| `version` | nothing |
-
-`mkit init` also copied **discovered** values into the file (history scopes, detected gate commands). Where a
-carried value equals what discovery finds today, say so and recommend dropping it — otherwise the file
-freezes an answer the repo would give anyway. A key not in this table: show it and ask. A file that won't
-read as TOML: show the lines you could read, carry over nothing on a guess, and ask.
 
 ### 3. Confirm and edit
 
@@ -152,9 +130,8 @@ delete each one the user set back to default.
 
 ### 5. Done
 
-Report, per `../_shared/references/summary-format.md`: the files written, removed and left alone, the file
-whose block was edited, and which skills read what (`commit` → `commit.md`; `review` → `review.md`; `pr` and
-`finish` → `merge.md`, `remote.md`, `gate.md`; `cleanup` → `cleanup.md`, `remote.md`). Say the files can be
-edited by hand later; re-running `setup` is optional. After a migration: `.mkit/config.toml` can go —
-`git rm .mkit/config.toml` (plain `rm` if it was never committed); no skill reads it any more. Nothing is
-committed: say so.
+Report, per `../_shared/references/summary-format.md`: files written, removed and left alone, the file
+whose block was edited, and which skills read what (`commit` → `commit.md`; `review` → `review.md`; `pr`,
+`finish` → `merge.md`, `remote.md`, `gate.md`; `cleanup` → `cleanup.md`, `remote.md`). The files can be
+edited by hand later. After a migration, the removal line from `migration.md`. Nothing is committed: say
+so.

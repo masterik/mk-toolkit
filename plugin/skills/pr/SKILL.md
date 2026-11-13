@@ -8,130 +8,69 @@ model: sonnet
 
 # Create a Pull Request (commit → push → PR → reviewers)
 
-Part of the **mkit** bundle. The review path: commit, push, open the PR, request reviewers. For a local merge
-with no review use `finish`.
+The review path. Goal: a PR from a feature branch (never the base), all intended work committed and pushed,
+the gate passed, a title and description saying **what** and **why**, reviewers requested where expected, no
+AI attribution anywhere. A local merge without review is `finish`.
 
-References: `../_shared/references/conventional-commits.md`, `../_shared/references/quality-gate.md`,
-`../_shared/references/worktree.md`, `../_shared/references/git-safety.md`,
-`../_shared/references/branching.md`, `../_shared/references/remote.md`,
-`../_shared/references/output-discipline.md`,
-`../_shared/references/agent-delegation.md`, `../_shared/references/workflow-contract.md`,
-`../_shared/references/stacked-prs.md` (only for a stacked PR).
-
-## Goal
-
-A PR that is easy to review and safe to merge:
-
-- from a feature/bugfix branch, never the base
-- all intended work committed and pushed
-- pre-flight checks pass before the PR is created
-- title and description say **what** changed and **why**
-- reviewers requested when the repo/team expects them
-- no Claude/AI co-authorship attribution anywhere
-
-## Confirm if missing
-
-- **Base branch** — default `main`; ask if unclear. If it is another unmerged feature branch (this
-  branch is a layer on top of it), this is a **stacked PR** — see "Stacked PRs" below.
-- **Draft?** — draft if the work isn't ready for review.
-- **Area prefix** — scoped to one package → prefix the title `[area]` (`[api]`, `[ui]`).
-- **Reviewers** — step 6: named in `docs/agents/merge.md`, from `CODEOWNERS`, or ask.
-- **Remote** — only when step 0 says `remote_choice=ask` (several remotes, none named in
-  `docs/agents/remote.md`): ask which one, default `remote=`. `../_shared/references/remote.md` has the whole
-  rule.
+Confirm if unclear: **base** (default `main`; another open feature branch → stacked, see the end), **draft**
+(work not ready for review), an **`[area]` title prefix** when scoped to one package.
 
 ## Workflow
 
-**Step 0 — one read-only call.** Once the base is settled, it opens the run directory and returns every
-read-only fact this skill needs (`../_shared/references/output-discipline.md`). The same output serves step
-2's pre-flight, step 4's context and the final report, and none of it changes when step 3 pushes:
+**0. One read-only call**, once the base is settled. The path is relative to this skill's directory: resolve
+it and run it absolute. A key or exit not named here: `../_shared/references/output-discipline.md`.
 
 ```bash
 bash ../_shared/scripts/facts.sh pr --run --base <base> --gh
 ```
 
-The path is relative to this skill's directory (`../_shared/references/output-discipline.md` says how to
-resolve it). That covers the branch, the status, `commits:` for `<base>..HEAD`, the stat, `codeowners=` for
-step 6, and `pr=` — whether this branch already has one, which is the check that otherwise gets skipped — and
-the remote: `remote=`, `remote_source=`, `remote_repo=`, `remotes=`, `remote_choice=`. When `remote.md` says
-to (a remote named in `docs/agents/remote.md`, or `remote_choice=ask` and the user's answer), re-run this
-call without `--run` and with `--remote <name>` added — `pr=` and `default_branch=` above describe the
-fallback remote until you do. Keep the `run_dir=` literal; this file writes it as `<run-dir>`, its
-`toplevel=` as `<toplevel>`, and the absolute git binary as `<git>` (`../_shared/references/git-safety.md`).
-There is no `$RUN_DIR` (a shell variable does not survive to the next Bash call), and re-running with
-`--run` opens a second directory instead of returning the first.
-
-Repo settings this skill reads, each only if the file exists (`../_shared/references/repo-settings.md`):
-`docs/agents/remote.md` (now, per `remote.md`), `docs/agents/gate.md` (step 2) and the reviewers in
-`docs/agents/merge.md` (step 6). A missing file is never mentioned and never stops the run.
+Keep `run_dir=` as `<run-dir>` (no shell variable survives; re-running `--run` opens a second directory),
+`toplevel=` as `<toplevel>`, and `command -v git` as `<git>` for calls whose output you parse
+(`../_shared/references/git-safety.md`). It returns the branch, status, `commits:` and `base_stat` for
+`<base>..HEAD`, `codeowners=`, `pr=` and the remote. **Remote:** with `remote_choice=no` and no
+`docs/agents/remote.md`, use `remote=`; otherwise follow `../_shared/references/remote.md` (ask, then
+re-run without `--run`, with `--remote <name>`).
 
 ### 1. Commit remaining work
 
-Dirty tree → run `commit` (logical commits, Conventional Commit messages) so nothing intended is left behind.
-Same inside a worktree — just confirm `git branch --show-current` is the feature branch.
+Dirty tree → do `commit`'s work inline (`../commit/SKILL.md`) so nothing intended is left behind.
 
-### 2. Pre-flight checks
+### 2. Pre-flight
 
-1. **Not on the base branch.** `branch=` equal to `default_branch=` (or `main`/`master`): stop and warn. PRs
-   come from feature/bugfix branches (`../_shared/references/branching.md`).
-2. **Commits exist ahead of base** — `commits_ahead_of_base=0` means nothing to PR. Step 0's count
-   predates step 1, so re-count after committing (`git rev-list --count <base>..HEAD`) before you
-   trust a zero: a branch whose work was all uncommitted reads 0 in the step 0 snapshot.
-3. **Existing PR** — `pr=` is a URL only when one exists. Otherwise it is a sentinel naming why
-   there is none: `none` (no PR yet — the case that justifies creating one), `gh-missing`,
-   `gh-unauthenticated`, `no-remote`. Test for a URL, not for non-emptiness — every
-   sentinel is a non-empty string, so a "non-empty" reading always fires and shows `none` as if it
-   were a PR. Only `none` means proceed; the rest are blocked states to surface, not to push past.
-4. **Full quality gate** (`../_shared/references/quality-gate.md`), in order, stopping at the first failure:
+1. **Not on the base.** `branch=` equal to `default_branch=` (or `main`/`master`) → stop: PRs come from a
+   feature branch.
+2. **Commits ahead of base.** If step 1 committed, re-count (`git rev-list --count <base>..HEAD`) — step 0's
+   `commits_ahead_of_base` predates it. Zero → nothing to PR; stop.
+3. **Existing PR.** `pr=` is a URL only when one exists: show it and stop. `none` → proceed. `gh-missing`,
+   `gh-unauthenticated`, `no-remote` are blocked states: surface them. Test for a URL, not non-emptiness.
+4. **Full quality gate** — `../_shared/references/quality-gate.md`: find the commands, run each to a log in
+   `<run-dir>`, stop at the first failure, one line per step. A failure is the user's call: fix, or proceed
+   as a draft. Skip only under its one reuse rule, and say so.
 
-   Find the commands with the reference's table ("Find the gate"); run each yourself, its output to a log in the run directory.
-   One line per passing step; on failure the step, the exit code, the failure lines and the tail — never
-   the log. The user may proceed anyway for a draft. Delegate the diagnosis only when that verdict is not
-   enough ("when a step fails") — choosing between fixing and opening a draft needs a cause, not a transcript.
-   Skip the gate only under the reference's one reuse rule, and say so.
-
-### 3. Push the branch
+### 3. Push
 
 ```bash
-git push -u <remote> <feature-branch>   # -u on first push; plain git push afterward
+git push -u <remote> <feature-branch>
 ```
 
-`<remote>` is step 0's `remote=` — or the user's answer when `remote_choice=ask` — never a hardcoded
-`origin` (`../_shared/references/remote.md`).
+`<remote>` is the settled `remote=`, never a hardcoded `origin`. `-u` on first push. Diverged → stop and
+surface it; never force-push.
 
-Pushing from a worktree works normally. Never force-push unless asked. If the remote rejects because the
-branch diverged, stop and surface it.
+### 4. Context
 
-### 4. Gather context for the PR
+**Nothing to run**: `commits:` and `base_stat` came from step 0 (re-read the log only if step 1 committed).
+**Commit messages are the source** for title and description. Never load the branch diff here.
 
-**Nothing to run here** — `commits:` and `base_stat` came back from step 0, and pushing changed neither.
-Re-running them spends a turn to reprint context.
+### 5. Draft title + description
 
-**Commit messages are the primary source for the title and description**; the diff is a fallback for the one
-thing they do not explain. **Do not load the branch diff into this session** — on a real branch it is tens of
-thousands of tokens for a dozen lines of prose, and even on the smallest change it is ~100× the log it would
-supplement (`../_shared/references/output-discipline.md`).
+**Small branch** (~≤5 files or ~≤100 changed lines) → draft inline from the log and stat. Otherwise a
+subagent, spawned **in the same message as step 6's lookup**: its brief carries base and branch, the
+`"<git>" -C "<toplevel>" log --oneline <base>..HEAD` output, the stat, the format below and its budget. It
+reads `git diff <base> -- . ":(exclude)*.lock" ":(exclude)*.snap"` itself and **returns at most 25 lines**:
+title, description, anything the commits did not explain. This session owns the final wording.
 
-### 5. Draft title + description — in a subagent
-
-Hand drafting to a subagent that reads what it needs and returns only the draft. Spawn it **in the same
-message as step 6's reviewer lookup** — both read-only and independent.
-
-Its brief carries: base and branch names, the `"<git>" -C "<toplevel>" log --oneline <base>..HEAD`
-output, the `--stat`, the format spec below, and its return budget. It runs the full diff itself
-(`git diff <base> -- . ':(exclude)*.lock' ':(exclude)*.snap'`) and **returns at most 25 lines**: title,
-description, and any note about what it could not explain from the commits. No diff, no file contents, no
-narration.
-
-**Draft inline instead on a small branch** — ~≤5 files or ~≤100 changed lines, where log plus `--stat` tell
-the whole story and the round trip costs more than it saves.
-
-Then review the draft here and fix any drift from the format: **this session owns the wording**, since it is
-what step 7 shows the user and step 8 puts on the PR.
-
-**Title**: imperative, verb-first (`Add`, `Fix`, `Update`, `Remove`, `Refactor`), ~≤70 chars, optional
-`[area]` prefix. Derive from the highest-impact commit. Not a commit-format string (`feat(web): …` is a commit
-subject, not a PR title).
+**Title**: imperative, verb-first, ~≤70 chars, optional `[area]` prefix, from the highest-impact commit. Not
+a commit subject (`feat(web): …`).
 
 **Description**:
 
@@ -149,91 +88,61 @@ subject, not a PR title).
 Closes #<issue> (if applicable)
 ```
 
-Honest and brief. **Never** include co-authorship lines or any mention of AI/Claude assistance.
+Honest and brief. Never co-authorship lines or any mention of AI assistance.
 
-### 6. Determine reviewers
+### 6. Reviewers
 
-Runs alongside step 5 — spawn both in one message, or do it inline when the lookup is a `CODEOWNERS` read and
-nothing more. Figure out who, without hardcoding handles:
+Never hardcode handles. In order:
 
-0. **Reviewers named in `docs/agents/merge.md`** — the repo already answered this. Use that list and
-   **skip 1 entirely**; do not read `CODEOWNERS` to cross-check it — that would be asking a question settled
-   in a committed file. Say where the list came from in the preview and the report (rule 3). A `merge.md`
-   with no reviewers in it is no answer: go on to 1.
-1. `CODEOWNERS` — step 0 reported `codeowners=<path>` or `none`; owners of the changed paths are the natural
-   reviewers.
-2. Repo/team conventions the user or docs mention; a configured default reviewer/team (`gh repo view` — with `<remote_repo>` unless `remote_repo=none`; org
-   settings).
+0. **`docs/agents/merge.md` names reviewers** → exactly those; skip `CODEOWNERS` (no cross-check). One that
+   names none, or none usable → say so in one line and go on.
+1. `CODEOWNERS` (`codeowners=`): owners of the changed paths.
+2. Repo/team conventions in docs or from the user; a configured default
+   (`gh repo view <remote_repo>`, the repo argument only when `remote_repo=` is not `none`).
 3. Reviewers the user named.
-4. None determinable and the change clearly needs review → ask (offer to skip for a draft).
+4. None determinable and the change needs review → ask (offer to skip for a draft).
 
-### 7. Preview before creating
+### 7. Preview
 
-Show the full PR and confirm (unless the user already said "just create it"):
+Show and confirm (unless the user said "just create it"):
 
 ```
 Title:     <title>
 Base:      <base> ← <feature-branch>
-Remote:    <remote> (<named in docs/agents/remote.md | origin | chosen by you | fallback>)  [only with several remotes]
+Remote:    <remote> (<from docs/agents/remote.md | origin | chosen by you | fallback>)  [several remotes only]
 Draft:     <yes/no>
-Reviewers: <handles or "none"> (<from docs/agents/merge.md | from CODEOWNERS | repo/org default |
-           named by you | asked>)
+Reviewers: <handles or "none"> (<from docs/agents/merge.md | from CODEOWNERS | repo default | named by you | asked>)
 
 <description>
 ```
 
-The parenthesis is rule 3 in its shortest form: where the handles came from, so a wrong list is fixed in
-the right place. Drop it only where there are no reviewers at all.
+### 8. Create
 
-### 8. Create the PR
-
-Body to a temp file, to avoid shell-escaping issues (`<run-dir>` if there is one, else `$TMPDIR`):
+Write the body to `<run-dir>/pr-body.md`, then one command:
 
 ```bash
-gh pr create \
-  --title "<title>" \
-  --body-file <path/to/pr-body.md> \
-  --base <base> \
-  [--draft] \
-  [--reviewer <handle> --reviewer <handle>]
+gh pr create --repo <remote_repo> --head <feature-branch> --base <base> --title "<title>" --body-file "<run-dir>/pr-body.md" [--draft] [--reviewer <handle>]...
 ```
 
-Name the repo: `--repo <remote_repo> --head <feature-branch>` whenever `remote_repo=` is not `none` —
-without it `gh` can pick another repo than the one just pushed to, without refusing
-(`../_shared/references/remote.md`, "Using it"). The same goes for `gh repo view` in step 6 (a repo argument only when `remote_repo=` is not `none`).
-
-Then remove the temp file.
-
-### 9. Post-creation
-
-- Add reviewers/labels afterwards if not set at creation:
-  `gh pr edit <url> --add-reviewer <handle> --add-label <label>`.
-- Mention CI will run automatically if applicable.
+Drop `--repo`/`--head` only when `remote_repo=none`. Reviewers or labels not set at creation:
+`gh pr edit <url> --add-reviewer <handle> --add-label <label>`.
 
 ## Stacked PRs
 
-GitHub-native stacks (`../_shared/references/stacked-prs.md`). Applies only when the base is another open
-feature branch, or the base PR's `.stack` is non-null (`stacked-prs.md`, "Detect").
-Otherwise skip this section; never ask about stacks on an ordinary PR.
+Only when the base is another open feature branch or the base PR is stacked
+(`../_shared/references/stacked-prs.md`, "Detect"); never ask about stacks otherwise.
 
-- **Step 2** — the gate and pre-flight are unchanged; run them on this layer only.
-- **Step 3** — the base branch must already be pushed (GitHub rejects a PR against a missing base). Never
-  force-push a lower layer to "fix" the stack.
-- **Step 7** — add a `Stack:` line to the preview: position, size, and the PR below
-  (`#<n> of <size>, on top of #<below>`). Say that merging this PR later also merges everything below it.
-- **Step 8** — needs the `gh stack` extension (`gh extension list`); absent → stop with its install line
-  (`../_shared/references/stacked-prs.md`). Open this PR with `gh pr create --base <lower-branch>` as
-  usual, then `gh stack link` (or `gh stack submit` when the stack is tracked locally) to put it in the
-  stack. Same-repo only. A failed link leaves a plain PR on a non-default base: say so — it reviews fine,
-  it just will not merge as a unit.
-- **Report** — name the stack number and position; the commit list is still `<base>..HEAD` of this layer.
-  Merge is `finish` (`gh stack merge`, not `gh pr merge`).
+- Gate and pre-flight run on this layer only. The base branch must already be pushed; never force-push a
+  lower layer.
+- Preview adds `Stack: #<n> of <size>, on top of #<below>`, and says merging it later merges everything below.
+- Create needs `gh stack` (absent → stop with its install line): `gh pr create --base <lower-branch>`, then
+  `gh stack link` (or `gh stack submit`). A failed link leaves a plain PR on a non-default base: say so.
+- Report the stack number and position. Merging is `finish`.
 
 ## Final report (always)
 
-Close with a full report, even if step 1 made no new commits. Open with a one-line bold verdict
-(`**Verdict:** PR opened, ready for review, 2 reviewers requested.`), then the block below; form per
-`../_shared/references/summary-format.md`:
+Bold verdict (`**Verdict:** PR opened, ready for review, 2 reviewers requested.`), form per
+`../_shared/references/summary-format.md`, then:
 
 ```
 PR:        <url>
@@ -247,33 +156,12 @@ Title: <title>
 
 Commits (<base>..HEAD):
 <short-sha>  <subject>
-<short-sha>  <subject>
 ...
 ```
 
-The commit list is step 0's `commits:` block — already in context, and cheap precisely because the diff never
-was. Never just "N commits pushed."
+Never just "N commits pushed". End with what the user still has to do, or "nothing needed from you": a remote
+chosen but not recorded (a `docs/agents/remote.md` would settle it), CI running, a reviewer not determined, a
+gate skipped under the reuse rule, a `docs/agents/*.md` that did not say what it seemed to mean.
 
-After the block, say what the reader still has to do or decide, or "nothing needed from you": a remote chosen
-but not recorded (a `docs/agents/remote.md` naming it would end the question),
-CI still running, a reviewer that could not be determined, a gate skipped under the reuse rule, a
-`docs/agents/*.md` file that did not say what it seemed to mean. Never leave those implied by the block's fields alone.
-
-## Common failure scenarios
-
-| Situation                           | What to do                                                        |
-| ----------------------------------- | ----------------------------------------------------------------- |
-| No commits ahead of base            | Stop — nothing to PR. Check the user is on the right branch.      |
-| Branch not pushed / push rejected   | Push with `-u`; if diverged, surface it — do not force-push.      |
-| `remote=none`                       | Stop — nothing to push to; say to add a remote.                   |
-| Several remotes, none named         | Ask which (`remote_choice=ask`), then re-run facts with `--remote`. |
-| PR already exists for this branch   | step 0's `pr=` holds a URL — show it (`none`/`gh-missing` are not). |
-| Lint/test/build fails               | Report which step; user decides fix vs proceed-as-draft.          |
-| On the base branch                  | Stop — tell the user to create a feature branch first.            |
-| No reviewers determinable           | Ask, or skip for a draft.                                         |
-| `merge.md` names no usable reviewer | Say so in one line, then fall back to `CODEOWNERS`.               |
-
-## Git safety
-
-Follow `../_shared/references/git-safety.md`: never push to the base branch directly, never force-push without
-an explicit request, never skip hooks unless asked, never add AI attribution to the PR.
+Follow `../_shared/references/git-safety.md`: never push to the base, never force-push unasked, never skip
+hooks, never add AI attribution.
