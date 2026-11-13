@@ -29,15 +29,15 @@ tested binary.
   and the skill picks.
 - **Compose, don't replace.** Orchestrate `git`, `gh`, `wt`, CodeRabbit and Codex. The binary never
   stages, merges, pushes or edits your files. Its writes are limited to:
-  - its own state: run dirs, the gate ledger, the worklog;
+  - its own state: run dirs, the worklog;
   - the `.mkit/*` + `!.mkit/config.toml` pair in `info/exclude`;
   - remote-tracking refs, via `git fetch --prune`;
   - `.mkit/config.toml`, written only by `mkit init`.
 
   The single exception is `mkit cache prune --apply`, which deletes stale Claude Code and Codex
   storage when you ask it to.
-- **A recorded fact is an input, never a permission.** A skill may skip work because the gate ledger or
-  worklog shows it was already done, and it says so (`cached`). A missing record is never a reason to
+- **A recorded fact is an input, never a permission.** A skill may skip work because the worklog — or,
+  for the gate, a pass earlier in the same session — shows it was already done, and it says so. A missing record is never a reason to
   stop.
 - **Composable steps, not a pipeline.** Each skill runs alone, in any order. It derives what is missing
   and names what it assumed. It never sends you to another skill first
@@ -115,7 +115,7 @@ There are three write locations, chosen by lifetime:
 | Where | What | Lifetime |
 | --- | --- | --- |
 | `$TMPDIR` | anything that dies with the command | one call |
-| `<toplevel>/.mkit/` | run dirs, `gate.jsonl`, `worklog/` (all git-ignored); `config.toml` (committed) | across steps and sessions |
+| `<toplevel>/.mkit/` | run dirs, `worklog/` (all git-ignored); `config.toml` (committed) | across steps and sessions |
 | `~/.mkit/` (`MKIT_HOME`) | user-scoped state; today only the `sandbox-audit` ledger | across repos |
 
 mkit also adds the pair `.mkit/*` + `!.mkit/config.toml` to the common dir's `info/exclude`, so

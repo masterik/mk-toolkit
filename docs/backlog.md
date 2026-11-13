@@ -33,7 +33,6 @@ Breaking one is a design error, not a trade-off.
    | Command | Writes |
    | --- | --- |
    | `scratch prune` | removes old run dirs |
-   | `gate run` | appends to `.mkit/gate.jsonl` |
    | `worklog append` | appends to the worklog |
    | `branch status` | runs `git fetch --prune` |
    | `init` | writes `.mkit/config.toml` (the only config writer) |

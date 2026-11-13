@@ -35,7 +35,7 @@ It does not check tool versions, `gh` auth, or Bash allow rules.
 | Tool | Used by | Why |
 | --- | --- | --- |
 | `git` ≥ 2.30 | everything | `--absolute-git-dir`, `worktree list --porcelain`, `diff --shortstat` |
-| `bash` ≥ 3.2 | `mkit gate run` | gate steps run as `bash -c '<command>'`; macOS's `/bin/bash` is enough |
+| `bash` ≥ 3.2 | `pr`, `finish` | the skills run the repo's gate commands in the shell; macOS's `/bin/bash` is enough |
 | `mkit` | every skill but `explain` | run dir, starting facts, gate, branch classifier, findings |
 
 ## Recommended
@@ -97,15 +97,14 @@ Each subcommand is its own Bash pattern. Allow them once in `~/.claude/settings.
       "Bash(mkit findings:*)",
       "Bash(mkit worklog:*)",
       "Bash(mkit branch status:*)",
-      "Bash(mkit gate detect:*)",
-      "Bash(mkit gate run:*)"
+      "Bash(mkit gate detect:*)"
     ]
   }
 }
 ```
 
-`mkit gate run` runs the repo's own lint, test and build. Leave it out of the list if you want to
-approve each gate run.
+The gate itself — the repo's own lint, test and build — runs as those commands, so their own allow
+rules (or prompts) apply.
 
 ## Running under the OS sandbox
 

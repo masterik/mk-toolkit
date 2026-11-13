@@ -69,7 +69,7 @@ Shell layer gone (M5); its rules still apply:
 - Deleted `.bats` **was the spec**; each `go test` ports it. Don't "simplify" an assertion whose
   comment names a measured failure.
 - **One implementation per invariant**; never a second wording of a degradation sentence.
-- Never half-capable: `jq-missing`, `no-hash`, `gate_cache=no-jq`, `gh=no-cache`, `scripts_state=no-jq` stay dead.
+- Never half-capable: `jq-missing`, `no-hash`, `gh=no-cache`, `scripts_state=no-jq` stay dead.
 
 ## Layout
 
@@ -111,7 +111,7 @@ Shell layer gone (M5); its rules still apply:
   - `scratch/` (M5): owns `.mkit/`; **sole writer of runtime state** in a work tree (`repoconfig` writes
     `config.toml`). `writes_test.go` counts write sites per file. `EnsureIgnored` writes the ignore
     pair to `info/exclude` before first create; `Ignored` probes **two** paths (a `*.jsonl` rule hides
-    the ledger, run dirs untracked). Owns `~/.mkit` (`MKIT_HOME`) and its one unwritable remedy sentence.
+    `.mkit` files, run dirs untracked). Owns `~/.mkit` (`MKIT_HOME`) and its one unwritable remedy sentence.
   - `facts/` (M5): all starting facts, one call. `cd` toplevel first (pathspec lists and `--shortstat`
     agree). **Both** `unstaged_stat` and `staged_stat` (fully-staged looks clean otherwise);
     separate `untracked_file_list`; `:(exclude).mkit` everywhere. Unresolvable `--base` →
@@ -121,10 +121,8 @@ Shell layer gone (M5); its rules still apply:
     **One batched `gh` call.** `--default` never re-derived; `$default`/`$develop` tested directly
     (names may contain commas). `merged` match refused unless `headRefOid` is tip or ancestor. Failed
     worktree `git status` → `clean=error`.
-  - `gate/` (M5): `Fingerprint` (staging-/commit-invariant; symlink = target path; file→dir leaves
-    mapping; `.mkit` dropped from HEAD and overlays), `Ledger` (append/classify/rotate), `Run` (full
-    log, bounded excerpt). The two `gate run` forms **normalize the ledger key differently** — that
-    seam enables the `review` → `finish` cache hit.
+  - `gate/` (M5): `Detect` + runner overlay only — proposes commands, never runs them; skills run
+    them (#48). `Fingerprint` remains solely for `worklog`; goes with it (#49).
   - `sessionaudit/`: `mkit audit sandbox` (hidden alias `sessions`, one release). Reads
     `<claude home>/projects/**/*.jsonl` (`cache`'s `CLAUDE_HOME` rule). Classifies results the
     sandbox/gate touched: **paired to their call by `tool_use_id`**, never transcript substring (that
@@ -190,7 +188,7 @@ stop calling `mkit`; `.mkit/` goes away.
   `key=value` line (some pack two pairs).
 - **`mkit doctor` is the prereq report** (human-run). Accepted losses — don't re-add a reporter: no
   session-start run, can't report `mkit` absent. Skills read `facts`, not `doctor`.
-- `<toplevel>/.mkit/` — run dirs, `gate.jsonl` (append-only, back to 200 past 400), `worklog/` (same),
+- `<toplevel>/.mkit/` — run dirs, `worklog/` (append-only, back to 200 past 400),
   **plus committed `config.toml`** ([ADR 0001](docs/adr/0001-per-repo-config-and-init.md#amendment-the-config-path)).
   - Ignore **pair** `.mkit/*` + `!.mkit/config.toml`, always together (git can't re-include under an
     excluded dir; `.mkit/*` alone hides config from `git add`). `.gitignore` **outranks**
@@ -219,8 +217,7 @@ stop calling `mkit`; `.mkit/` goes away.
 ## Conventions
 
 - **macOS-only**; never branch on OS. darwin amd64+arm64 only (casks don't install on Linux).
-  Prefer stdlib over shelling out (testability). Only shell dependency: `mkit gate run` runs
-  `bash -c '<command>'`, so `-- sh -c 'a && b'` keeps its meaning.
+  Prefer stdlib over shelling out (testability).
 - Add a command only for a mechanical invariant, never a decision; unclear → report candidates, skill
   chooses. Hooks may compute the gap, never fill it.
 - Commands report and run; never stage, merge, push, edit. Parse stable output (`--porcelain`,
