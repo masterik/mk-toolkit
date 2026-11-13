@@ -24,76 +24,58 @@ References, read the ones a step calls for: `../_shared/references/worktree.md`,
   `git fetch --prune` is the only network call, and it only updates this repo's own remote-tracking refs
   (`refs/remotes/<remote>/*`) — that is what makes `upstream=gone` mean anything, and it cannot delete anything
   on the remote itself.
-- Keeps exactly what `mkit branch status` reports as `protected=`, and never re-derives that set: the
+- Keeps exactly the branches `branch-status.sh` reports as `protected`, and never re-derives that set: the
   **default branch** (`main`/`master`/`trunk`, whichever the repo resolves to); if one exists **as a local
-  branch**, the first of `develop`/`development`/`dev`; and every branch name the repo pinned under
-  `[cleanup] keep` in `.mkit/config.toml` that exists as a local branch here. A `develop` that exists only as
+  branch**, the first of `develop`/`development`/`dev` (or the one `docs/agents/cleanup.md` names); and every
+  branch name the repo keeps that exists as a local branch here. A `develop` that exists only as
   `origin/develop` and was never checked out locally is not kept — nothing here creates a local branch, only
-  removes them, and the same rule applies to a pinned name.
+  removes them, and the same rule applies to a kept name.
 - **The default branch is protected whether or not the keep list names it.** A keep list that omits it is a
-  mistake, not an instruction: the pinned names are *added* to what cleanup already protects, never
-  substituted for them. This is decided in `mkit branch status`, not here.
-- Ends by switching to one of the kept branches and pulling it up to date with the remote `mkit branch status`
-  resolves (a pin, or what the user chose — never assumed to be named `origin`).
+  mistake, not an instruction: the kept names are *added* to what cleanup already protects, never
+  substituted for them. This is decided in `branch-status.sh`, not here.
+- Ends by switching to one of the kept branches and pulling it up to date with the remote `branch-status.sh`
+  resolves (`origin`, or what the user chose — never assumed to be named `origin`).
 
 ## Preconditions
 
-**Two calls.** The first opens this run's directory and resolves the default branch
-(`../_shared/references/output-discipline.md`); the second needs that branch name, so it runs after:
+**Two calls**, from this skill's directory (`../_shared/references/output-discipline.md` says how to resolve
+the paths). The first resolves the default branch and this checkout's state; the second classifies every
+branch and worktree:
 
 ```bash
-mkit facts cleanup
-mkit branch status --default <default_branch from mkit facts>
+bash ../_shared/scripts/facts.sh cleanup
+bash ../_shared/scripts/branch-status.sh --default <default_branch> [--develop <name>] [--keep <name>]...
 ```
 
-**`remote_choice=ask`** (several remotes, none pinned): ask which remote *before* the second call — it fetches
-and looks PRs up through one — then re-run the first with `--no-run --remote <answer>` (the default branch can
-differ per remote) and pass `--remote <answer>` to the second. `../_shared/references/remote.md` has the rule,
-including why the pin is offered in the final report and never run mid-way.
+**What the repo keeps.** If `docs/agents/cleanup.md` exists, read it first: every branch it says to keep goes
+to the second call as one `--keep <name>` each, and a develop-like branch it names goes as `--develop`. No
+file → no `--keep`; the default and a local `develop`/`development`/`dev` are protected regardless.
 
-`mkit facts` **is** this skill's dependency check. If it fails with `command not found` **or**
-`unknown command "facts"` — absent and too old are the same answer here — **stop** and say:
+**`remote_choice=ask`** (several remotes): ask which remote *before* the second call — it fetches and looks
+PRs up through one — then re-run the first with `--remote <answer>` (the default branch can differ per
+remote) and pass `--remote <answer>` to the second. `../_shared/references/remote.md` has the rule.
 
-> This skill runs on the `mkit` binary. Install it with `brew install masterik/tap/mkit` (or upgrade
-> with `brew upgrade mkit`), then run it again.
-
-Presence only, no declared minimum on either side — a subcommand that does not exist *is* the too-old
-signal.
-
-Keep the `run=` literal; this file writes it as `<run-dir>`. There is no `$RUN_DIR` — a shell variable does
-not survive to the next Bash call.
-
-From `mkit facts`: `branch=` (current branch — cannot be deleted while checked out), `clean=` (is the *current*
+From `facts.sh`: `branch=` (current branch — cannot be deleted while checked out), `clean=` (is the *current*
 worktree dirty right now), `cleanup_path=` (only relevant if this session's own worktree turns out to be one
 of the ones in play — see step 3).
 
-From `mkit branch status` (add `--json` if any branch name contains a comma — `protected=`, `keep=` and
-`keep_unknown=` are comma-joined, and only the JSON arrays carry such a name exactly):
-`protected=` (the whole kept set — use it as given, never rebuild it), `develop=`,
-`keep=` (what `[cleanup] keep` pinned, or `none`), `keep_unknown=` (pinned names with no local branch here —
-**not an error**: a keep list travels with the repo, so a long-lived branch nobody has checked out in this
-clone is the ordinary state. Mention it once in the final report, so a typo in the config is visible without
-being treated as one), `config_problems=` (see below), `remote=` (a `- remote:` line in `notes:` is a pin this clone lacks — report it
-verbatim; it is not a `config_problems=` count), `fetch=` (say if it came back `failed` — classify
-on what you have and note it), `gh=` (`ok | skipped | no-remote | gh-missing | gh-unauthenticated | gh-error`;
-say if it is anything but `ok` — some classes below then rest on git alone, while every branch and worktree
-row is still complete), the `branches:` table and the `worktrees:` table. Full column meaning is in
-`mkit branch status --help`; the short version:
-
-**`config_problems=` is the one that stops you — a pin that went nowhere.** It counts the things this repo's
-`.mkit/config.toml` says that mkit could not honour, with a sentence for each in the trailing `notes:` block:
-a misspelled table (`[cleanp] keep`), a file that is not TOML, a file that could not be read at all. Any count
-above `0` means **`keep=` may be missing names the user pinned**, and this skill deletes branches — so report
-every note verbatim, and treat the keep list as incomplete rather than empty. Do not guess which names are
-missing, and do not offer to fix the config. This is the one place where `keep=none` must not be read as "this
-repo pinned nothing": with a problem reported, the two are indistinguishable, and only one of them is safe.
-`config_problems=0` is the ordinary case and is never mentioned.
+From `branch-status.sh`: `protected=` (the whole kept set, comma-joined for reading — a branch name may
+contain a comma, so the `class` column's `protected` is the exact answer per row; use it as given, never
+rebuild it), `develop=`, `keep=` (the names passed as `--keep`, or `none`), `keep_unknown=` (kept names with
+no local branch here — **not an error**: a keep list travels with the repo, so a long-lived branch nobody has
+checked out in this clone is the ordinary state. Mention it once in the final report, so a typo is visible
+without being treated as one), `remote=`, `fetch=` (say if it came back `failed` — classify on what you have
+and note it), `gh=` (`ok | skipped | no-remote | gh-missing | gh-unauthenticated | gh-error`; say if it is
+anything but `ok` — some classes below then rest on git alone, while every branch and worktree row is still
+complete), the `branches:` table and the `worktrees:` table, and a trailing `notes:` block (a `--remote` or
+`--develop` that named nothing here — report it verbatim). Column meaning is in the script's header comment;
+the short version:
 
 | `class` | means | default handling |
 | --- | --- | --- |
-| `protected` | a branch in `protected=`: the default branch, a develop-like one, or a pinned `[cleanup] keep` name | never a candidate |
+| `protected` | a branch in `protected=`: the default branch, a develop-like one, or a kept name | never a candidate |
 | `current` | whatever is checked out right now | never *directly* touched — see step 1's current-branch note before assuming it's out of scope entirely |
-| `merged` | git proves it: an ancestor of the default or develop branch (`merged_into` names which) — a pinned keep branch is **not** a merge target, so work merged only into `staging` is never auto-deleted on that basis | auto-delete |
+| `merged` | git proves it: an ancestor of the default or develop branch (`merged_into` names which) — a kept branch is **not** a merge target, so work merged only into `staging` is never auto-deleted on that basis | auto-delete |
 | `merged-pr` | not an ancestor locally (squash/rebase merge changes the SHAs), but GitHub says the PR merged, verified against this branch's own content | auto-delete, say how you know |
 | `open-pr` | an open PR exists for this branch | ask |
 | `closed-pr` | a PR exists and was closed without merging | ask |
@@ -106,7 +88,7 @@ repo pinned nothing": with a problem reported, the two are indistinguishable, an
 ### 1. Classify
 
 Walk the `branches:` table. Every `protected` row is out of scope, full stop — never propose deleting a
-branch in `protected=`, and never second-guess that set: a pinned keep name is there because a human decided
+branch in `protected=`, and never second-guess that set: a kept name is there because a human decided
 this repo keeps it. For everything else, sort into:
 
 - **auto-delete**: `merged` or `merged-pr`, **and** (no attached worktree, or its `worktrees:` row is
@@ -120,7 +102,7 @@ this repo keeps it. For everything else, sort into:
   with `clean=missing` (the worktree's directory is already gone; `git worktree prune` is the fix, not a
   removal) is noted but never a delete target.
 
-**The `current` row needs one extra step, not a skip.** `mkit branch status` reports `current` in the `class`
+**The `current` row needs one extra step, not a skip.** `branch-status.sh` reports `current` in the `class`
 column *instead of* what the branch would otherwise classify as — the branch you happen to be standing on is
 never exempt from cleanup just because you started there. Before deciding it is out of scope, derive its real
 disposition from its own `upstream` and `merged_into` columns, using the same priority order the command's own
@@ -169,7 +151,7 @@ Do this **before** anything else in this section. If step 1 flagged the branch y
 once you aren't standing on it anymore. If it was never in scope, skip this and stay put; you'll land somewhere
 in step 5 either way.
 
-`git switch` refuses when the target is already checked out in another worktree (relevant if `mkit facts`'s own
+`git switch` refuses when the target is already checked out in another worktree (relevant if `facts.sh`'s own
 `cleanup_path=` said this session is itself inside a linked or `.claude/worktrees/` checkout, and the default
 branch is checked out in the primary one). Try another branch from `protected=` if one exists and isn't taken
 either; if every protected branch is unavailable, stop and say so rather than forcing anything — this is the
@@ -188,10 +170,9 @@ For every branch approved in step 1, step 2, or just vacated in step 3, in this 
    already gone, you're done with this branch, and running a delete on it anyway is a redundant, avoidable
    error, not a real failure worth reporting as one.
 
-   **A plain `git worktree remove` that refuses on a worktree reported `clean=yes` is mkit's own scratch,
-   not the user's work.** `mkit branch status` excludes `.mkit/` from its cleanliness check, but git does not:
-   where `scratch_ignored=no` — an isolated session, which cannot write the exclude file — an unignored
-   `.mkit/` is enough for git to call the worktree dirty and refuse. Check **both**
+   **A plain `git worktree remove` that refuses on a worktree reported `clean=yes` is old mkit scratch,
+   not the user's work.** `branch-status.sh` excludes `.mkit/` from its cleanliness check, but git does not:
+   where an older mkit left an unignored `.mkit/` run directory, git calls the worktree dirty and refuses. Check **both**
    `git -C <path> ls-files -- .mkit` and `git -C <path> ls-tree -r --name-only HEAD -- .mkit` **first** — if
    either names any path, `.mkit/` is tracked, which should never happen and means the exclude pathspec
    below would hide the user's own changes under it too. `ls-files` alone misses a committed `.mkit` file
@@ -208,7 +189,7 @@ For every branch approved in step 1, step 2, or just vacated in step 3, in this 
    that's what makes it `merged-pr` instead of `merged`). State which proof licenses the `-D` as you run it:
    - `merged` → "verified: an ancestor of `<merged_into>`" (the column already named it — cite the actual
      target, not just the label).
-   - `merged-pr` → "verified: GitHub PR `#<n>` merged" (`mkit branch status` already checked the PR's head commit
+   - `merged-pr` → "verified: GitHub PR `#<n>` merged" (`branch-status.sh` already checked the PR's head commit
      against this branch's own content before reporting the class, so there is no separate check to redo here).
    - anything from the **ask** bucket → cite the user's approval itself as the reason, same as before.
 
@@ -218,8 +199,8 @@ force-delete anything you merely suspect is fine.
 
 ### 5. Switch and pull
 
-Bring the kept branches up to date with the **resolved** remote — the one `mkit branch status` reported as
-`remote=` (pinned, chosen above, or the `origin` fallback), never a hardcoded name, since nothing here is safe to assume about a repo you didn't set up:
+Bring the kept branches up to date with the **resolved** remote — the one `branch-status.sh` reported as
+`remote=` (chosen above, or the `origin` fallback), never a hardcoded name, since nothing here is safe to assume about a repo you didn't set up:
 
 ```bash
 git switch <one of protected=>                            # land on whichever you're ending on
@@ -234,11 +215,11 @@ The `fetch ref:ref` form only succeeds as a fast-forward and only when that bran
 elsewhere (`../_shared/references/worktree.md`, "merge without checkout") — if it fails, say the branch is
 ahead/diverged locally and needs a manual look, don't force it.
 
-**A pinned keep branch may have no remote counterpart at all**, and that is the normal case rather than a
-fault: `[cleanup] keep` names local branches, and step 6 already says such a branch having no upstream is not
+**A kept branch may have no remote counterpart at all**, and that is the normal case rather than a
+fault: the keep list names local branches, and step 6 already says such a branch having no upstream is not
 a finding. `git fetch <remote> <other>:<other>` for one of those fails with `couldn't find remote ref` — which
 is not the ahead/diverged case above, and reporting it as one blames the user for a branch that is behaving
-exactly as pinned. Fetch only the kept branches that have a remote counterpart (the branch row's `upstream=`
+exactly as kept. Fetch only the kept branches that have a remote counterpart (the branch row's `upstream=`
 says), skip the rest silently, and never report a missing remote ref as divergence.
 
 Prefer switching to the **default** branch as the place to land, unless the user's request or standing habit
@@ -247,15 +228,15 @@ command handed you.
 
 **The `git pull --ff-only <remote> <landing-branch>` above is gated on the landing branch having a counterpart
 on `<remote>`, not just on `remote != none`.** It names the resolved remote instead of following the branch's own
-upstream, which can be a different remote. Landing on a pinned keep branch is exactly the case with no remote
+upstream, which can be a different remote. Landing on a kept branch is exactly the case with no remote
 counterpart, and a pull there fails with "couldn't find remote ref" — a failure about a branch that is behaving
-as pinned. Check the branch row's `upstream=` for whichever branch you land on: none, or on another remote than
+as kept. Check the branch row's `upstream=` for whichever branch you land on: none, or on another remote than
 `<remote>`, skip the pull silently, the same as the fetch.
 
 ### 6. Verify
 
 - `git branch -vv` — only the branches in `protected=` remain, and each shows no `ahead`/`behind` against its
-  upstream (a pinned keep branch may have no upstream at all; that is not a finding).
+  upstream (a kept branch may have no upstream at all; that is not a finding).
 - `git worktree list` — every removed worktree is gone; `git worktree prune` first if step 1 saw any
   `clean=missing` stale metadata.
 
@@ -279,7 +260,7 @@ Left alone:
 ...
 
 Note: <branch> is N commits behind <remote>/<branch> — <why it couldn't be fast-forwarded, if it couldn't>
-Note: `[cleanup] keep` pins <name>, which is not a local branch in this checkout — nothing to protect here.
+Note: the keep list names <name>, which is not a local branch in this checkout — nothing to protect here.
 ```
 
 Omit any section with nothing in it, except **Left alone**, which prints "none" when empty. End on what the

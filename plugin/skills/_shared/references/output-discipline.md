@@ -2,7 +2,7 @@
 
 Command output is context you did not choose to load. Bounding it costs nothing and loses nothing.
 
-Used by every mkit skill. Owns the run directory and the `mkit` commands that keep output bounded;
+Used by every mkit skill. Owns `facts.sh`, the run directory and the habits that keep output bounded;
 `agent-delegation.md` covers using the run directory as transport between stages.
 
 Scale, on a *small* markdown-only branch: `git diff <base>` 57 KB · `--stat` 572 B · `git log --oneline`
@@ -10,65 +10,67 @@ Scale, on a *small* markdown-only branch: `git diff <base>` 57 KB · `--stat` 57
 
 ## One call to start
 
-A repo-scoped skill's first act is `mkit facts <skill>` (`explain` makes no `mkit` call). Unless called with `--no-run`, as `recap` does, it opens this run's directory
-**and** returns every read-only fact the skill starts from, as `key=value` lines:
+A repo-scoped skill's first act is `facts.sh` (`explain` runs nothing). It ships with the plugin in
+`_shared/scripts/`; a skill writes the call relative to its own `SKILL.md`, as `bash
+../_shared/scripts/facts.sh <skill> …`. **Resolve that path against the directory of the `SKILL.md` you
+loaded** (Claude Code names it when it loads the skill) and run the absolute path: the shell's working
+directory is the user's repo, and no agent sets an environment variable for the skill's location. Always
+`bash <path>`, never the bare path — that also runs under Git Bash when the agent's shell is PowerShell.
 
-- **`run=`** — this run's directory: unique, absolute, `<toplevel>/.mkit/<skill>-…`, its
-  own per worktree. Every log and run file lives in it.
-- **`tmp=`** — where a file that dies with the command goes. See "Where a write may land".
-- **`scratch_ignored=` `user_dir=` `user_dir_writable=` `git_bin=`** — the four facts about what this
-  machine will let you write and how to call git. See below, and `git-safety.md`.
-- **`refs=`** — the resolved path of this bundle. Hand subagents *that*; `../_shared/references/…` means
-  nothing without the calling skill loaded.
-- **`branch` `upstream` `default_branch` `linked` `worktree_origin` `cleanup_path` `clean` `staged`
-  `unstaged` `untracked` `conflicted`**, plus `status:` and file lists.
+It returns every read-only fact the skill starts from, as `key=value` lines:
+
+- **`run_dir=`** — with `--run` only: this run's directory, fresh and absolute under `$TMPDIR`. Every
+  log and run file lives in it; nothing goes into the work tree.
+- **`user_dir=` `user_dir_writable=`** — the user-scoped directory (`~/.mkit`) and whether it takes a
+  write. See below.
+- **`branch` `upstream` `remote` `default_branch` `linked` `worktree_origin` `cleanup_path` `clean`
+  `staged` `unstaged` `untracked` `conflicted`**, plus `status:` and file lists.
 - **Both diff stats, separately.** A bare `git diff --shortstat` reports nothing when the work is fully
   staged, which reads exactly like a clean tree; `unstaged_stat` and `staged_stat` make that misread
   unavailable.
 - **`notes:`** — the last block, present only when something needs a sentence: a cause and the remedy
   for it. Values with spaces never go on a `key=value` line, because several of those lines pack more
   than one pair.
-- Flags: `--base <branch>` (adds `base..HEAD` commits, stat, `ff_from_base`) · `--range <range>`
-  (an unresolvable one prints `range_state=unresolvable` and exits 1, like `--base`) ·
-  `--gh` (does a PR already exist) · `--no-run` (probe without opening a directory).
-- Nonzero exit says why: 1 outside a work tree or on an unresolvable `--base`, 2 on bad usage.
-  `mkit: command not found` means the binary is missing — stop and say so (`brew install
-  masterik/tap/mkit`); never `mkdir` a substitute for the run directory.
+- Flags: `--run` (open a run directory) · `--base <branch>` (adds `base..HEAD` commits, stat,
+  `ff_from_base`) · `--range <range>` (an unresolvable one prints `range_state=unresolvable` and exits 1,
+  like `--base`) · `--gh` (does a PR already exist: `pr=`, `pr_state=`, `pr_draft=`) · `--remote <name>`
+  (`remote.md`).
+- Nonzero exit says why: 1 outside a work tree, on a failed git query, or on an unresolvable
+  `--base`/`--range`; 2 on bad usage. Never `mkdir` a substitute for the run directory.
+- The output is the skills' own contract: it changes with the skills that parse it, in the
+  same commit.
 
-Then, for the rest of the run: write only inside `run=`; name it in the final summary (it is the record,
-which is what lets the summary stay short); prune with `mkit scratch prune` at the **end**, never the
-start — a concurrent run may be reading the older directories.
+Then, for the rest of the run: write only inside `<run-dir>` (the `run_dir=` value); name it in the
+final summary (it is the record, which is what lets the summary stay short). It lives under `$TMPDIR`,
+so nothing needs pruning.
 
 ## Where a write may land
 
 Three boundaries can refuse a write, independently, and none of them announces itself in advance: the
 OS sandbox (the kernel, over the whole process tree), the permission gate's auto-mode classifier
-(before the tool runs), and the worktree-isolation guard (also before the tool runs). `mkit facts`
-reports what each of them permits **as a starting fact**, so a refusal is something you read at the
-start rather than hit in the middle.
+(before the tool runs), and the worktree-isolation guard (also before the tool runs). `facts.sh`
+reports what it can **as a starting fact**, so a refusal is something you read at the start rather than
+hit in the middle.
 
 **The rule is by lifetime, not by caller.**
 
 | what | where | why |
 | --- | --- | --- |
-| dies with the command — a diff you are about to edit, a scratch list | **`tmp=`** (`$TMPDIR`) | the one location no grant is needed for in a normal session |
-| a later step or a later session reads it — logs, findings, plans, briefs | **`run=`** | inside the working directory, so all three layers permit it |
-| the user's own tracked content | **nowhere** | mkit's only in-tree write is the ignored `.mkit/`; it never touches your files |
+| dies with the command — a diff you are about to edit, a scratch list | **`$TMPDIR`** | the one location no grant is needed for in a normal session |
+| a later step of this run reads it — logs, findings, plans, briefs | **`<run-dir>`** | `facts.sh --run` made it under `$TMPDIR` |
+| the user's own tracked content | **nowhere** | no skill writes into the work tree; it never touches your files |
 
-**Use the `tmp=` value; never write the literal `/tmp`.** They are not the same instruction: `tmp=` is
-whatever `$TMPDIR` resolves to and is where an ephemeral file belongs, while a hardcoded `/tmp` is outside
-every grant this machine makes. A write to `tmp=` can still be refused — say so and stop rather than
+**Use `$TMPDIR`; never write the literal `/tmp`.** They are not the same instruction: `$TMPDIR` is
+where an ephemeral file belongs, while a hardcoded `/tmp` is outside every grant this machine makes. A
+write to `$TMPDIR` can still be refused — say so and stop rather than
 falling back somewhere else. Never `~/.claude/…` either (a protected region — a write there fails even
 when an allowlist entry appears to cover it), never a bare relative path, never a helper script into the
 target repository's working tree. A `mktemp` with no template resolves the Darwin per-user temp
 directory and **ignores `$TMPDIR`** — always give it a path: `mktemp "${TMPDIR:-/tmp}/mkit-x.XXXXXX"`,
-the same fallback `mkit_tmpfile` uses, so a session with `$TMPDIR` unset still lands somewhere real.
+the same fallback `facts.sh` uses, so a session with `$TMPDIR` unset still lands somewhere real.
 
-Two facts to act on before you stage anything:
+One fact to act on:
 
-- **`scratch_ignored=no`** — `.mkit/` is not ignored in this repo, so `git add -A` would sweep run
-  artefacts into a commit and `git worktree remove` would refuse. **Do not run a staging step.** The
-  `notes:` block names the remedy; it has to be applied from the main checkout.
 - **`user_dir_writable=no`** — mkit cannot record what it has already told the user. Report it with
   the remedy from `notes:` and move on. Do not retry the write, and never suggest allowlisting a path
   under `~/.claude`: that region cannot be granted.
@@ -76,8 +78,8 @@ Two facts to act on before you stage anything:
 ### Carry the path, not a variable
 
 **There is no `$RUN_DIR`.** Each Bash call is a fresh shell — cwd persists, environment does not. Read
-`run=` once and pass that literal: as the gate logs' directory, as the home of `review`'s findings files, and
-into every brief. Bind it inside a single call when one command needs it twice. Never re-run `mkit facts` to get it
+`run_dir=` once and pass that literal: as the gate logs' directory, as the home of `review`'s findings files, and
+into every brief. Bind it inside a single call when one command needs it twice. Never re-run `facts.sh --run` to get it
 back (a second directory, run scattered), never park it in a fixed pointer file (concurrent runs
 overwrite it).
 
@@ -99,10 +101,10 @@ gate=FAILED step=test exit=1
 
 ## Diffs
 
-- **`--stat` first**, always — `mkit facts` already returned it. "How big, and where" is what most
+- **`--stat` first**, always — `facts.sh` already returned it. "How big, and where" is what most
   decisions need.
 - **Full diff per file** (`git diff -- <path>`), never the whole tree, and only for files you must judge.
-  `mkit facts`' file lists already exclude `*.lock` and `*.snap`.
+  `facts.sh`'s file lists already exclude `*.lock` and `*.snap`.
 - **Never load a full branch diff to write prose.** Commit messages and `git log --oneline` are the
   source for a PR description or summary; the diff is a fallback for the one thing they do not explain.
 

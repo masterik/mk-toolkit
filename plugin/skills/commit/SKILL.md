@@ -37,24 +37,16 @@ Commits that are easy to review and safe to ship:
 ## Workflow
 
 **Step 0 — one call for everything read-only**, which also opens this run's directory
-(`../_shared/references/output-discipline.md`):
+(`../_shared/references/output-discipline.md`, which says how to resolve the script's path):
 
 ```bash
-mkit facts commit
+bash ../_shared/scripts/facts.sh commit --run
 ```
 
-`mkit facts` **is** this skill's dependency check. If it fails with `command not found` **or**
-`unknown command "facts"` — absent and too old are the same answer here — **stop** and say:
-
-> This skill runs on the `mkit` binary. Install it with `brew install masterik/tap/mkit` (or upgrade
-> with `brew upgrade mkit`), then run it again.
-
-Presence only, no declared minimum on either side — a subcommand that does not exist *is* the too-old
-signal.
-
-Keep the `run=` and `refs=` literals it prints; this file writes the first as `<run-dir>`. There is no
-`$RUN_DIR` — a shell variable does not survive to the next Bash call — and re-running `mkit facts` opens a
-second directory instead of returning the first.
+Keep the `run_dir=` literal it prints; this file writes it as `<run-dir>`. There is no `$RUN_DIR` — a shell
+variable does not survive to the next Bash call — and re-running with `--run` opens a second directory
+instead of returning the first. `<toplevel>` below is its `toplevel=`; `<git>` is the absolute path of
+the real git binary (`../_shared/references/git-safety.md`).
 
 Then how this repo words a commit — one more read-only call, cheap enough to send in the same
 message as the one above:
@@ -85,11 +77,8 @@ it. The exception is a **pin that went nowhere**: a non-empty `config_problems`,
 `cause` names `.mkit/config.toml`. That is the repo asking for something mkit could not honour — report that
 sentence in one line, verbatim, and carry on with what is left. Mind which field carries it: the sentence is `detail` on a `config_problems` entry and `cause` on the value itself — there is no `detail` on a value, and an agent that looks for one reports nothing.
 
-1. **Inspect before staging** — step 0's `mkit facts` returned all of it.
+1. **Inspect before staging** — step 0's `facts.sh` returned all of it.
    - Confirm `branch=` is the intended one; matters inside a worktree (`linked=yes`).
-   - **`scratch_ignored=no` stops this skill before step 3.** mkit's own scratch root is not ignored here,
-     so staging would sweep run artefacts into your commit. Report the `notes:` remedy — it has to be
-     applied from the main checkout — and do not stage.
    - Read **both** stats: `unstaged_stat` and `staged_stat`. They are separate because a bare
      `git diff --stat` reports nothing when the work is already fully staged, which reads exactly like a
      clean tree.
@@ -118,10 +107,10 @@ sentence in one line, verbatim, and carry on with what is left. Mind which field
 3. **Stage only what belongs in the next commit.** A whole file is `git add -- <path>`. A file whose
    changes belong in more than one commit uses the patch recipe below. Do not reach for `git add -p` or
    `git restore --staged -p`: both are interactive, and there is no terminal here.
-4. **Review what will actually be committed.** `"$git_bin" -C "$toplevel" diff --cached --stat` to plan, then
-   `"$git_bin" -C "$toplevel" diff --cached -- "<path>"` **file by file, skipping none** — the one read
+4. **Review what will actually be committed.** `"<git>" -C "<toplevel>" diff --cached --stat` to plan, then
+   `"<git>" -C "<toplevel>" diff --cached -- "<path>"` **file by file, skipping none** — the one read
    that must not be truncated, since the checks below only work on the actual hunks
-   (`../_shared/references/output-discipline.md`). Pinned to `git_bin=` because a hook can hand you a
+   (`../_shared/references/output-discipline.md`). Pinned to the absolute git binary because a hook can hand you a
    *summarized* status or diff that reads exactly like the tree, and approving a commit off a digest is
    the failure that guarantees (`../_shared/references/git-safety.md`). Check for: secrets or tokens,
    accidental debug logging, unrelated formatting churn.
@@ -132,11 +121,10 @@ sentence in one line, verbatim, and carry on with what is left. Mind which field
    does not use, so pick from the list or say why none fits; keep the subject within
    `commit_subject_max` where one is pinned.
    Single line: `git commit -m '<subject>'`. Multi-line: allocate the file with
-   `mktemp "<tmp>/mkit-msg.XXXXXX"`, write the message to the path it prints, then
+   `mktemp "<run-dir>/msg.XXXXXX"`, write the message to the path it prints, then
    `git commit -F "<msgfile>"` — not `-v` (interactive) and not `-F -` with the body on a heredoc,
    which a permission gate has been measured denying because it leaves nothing to judge. **Allocate,
-   never a fixed name**: `<tmp>` is shared by every session on the machine, so a second `commit` run
-   writing `mkit-msg.txt` would overwrite this one's message between writing it and committing it.
+   never a fixed name**: one message per commit, and a reused name commits the previous message.
 7. **Repeat** until the working tree is clean.
 
 ## Patch staging, non-interactively
@@ -147,29 +135,28 @@ because a program assembled at runtime cannot be shown not to be git
 (`../_shared/references/git-safety.md`). Improvising a splitter into the user's working tree is how a
 helper script nearly got committed into someone else's project.
 
-Four steps per mixed file. `<tmp>` is the `tmp=` from `mkit facts`.
+Four steps per mixed file, with the patch in this run's `<run-dir>`.
 
-**Allocate the patch file; never name it after the source file.** `<tmp>` is one directory shared by
-every session on this machine — two `commit` runs over the same path would otherwise pick the same
-`mkit-<f>.patch`, and one would stage the other's selected hunks. Step 1 prints the path it allocated;
-carry that literal into steps 2–4, exactly as you carry `run=` — a shell variable does not survive to
+**Allocate the patch file; never name it after the source file.** Two mixed files cut in one run would
+otherwise reuse a name, and one would stage the other's selected hunks. Step 1 prints the path it allocated;
+carry that literal into steps 2–4, exactly as you carry `run_dir=` — a shell variable does not survive to
 the next Bash call (`../_shared/references/output-discipline.md`, "carry the path, not a variable").
 
 ```bash
 # 1. the file's unstaged diff, on its own, to a freshly allocated file that dies with this run.
 #    Run both; the mktemp prints <patch>, which is what steps 2-4 use.
-mktemp "<tmp>/mkit-patch.XXXXXX"
-"$git_bin" -C "$toplevel" diff -- "<path>" > "<patch>"
+mktemp "<run-dir>/patch.XXXXXX"
+"<git>" -C "<toplevel>" diff -- "<path>" > "<patch>"
 
 # 2. read it, then DROP the hunks that belong in a later commit by editing <patch>:
 #    delete whole `@@ … @@` blocks — header lines (diff/index/---/+++) stay, hunk headers are
 #    left exactly as they are. Never renumber and never hand-edit a `@@` line.
 
 # 3. apply what is left to the index only
-"$git_bin" -C "$toplevel" apply --cached -- "<patch>"
+"<git>" -C "<toplevel>" apply --cached -- "<patch>"
 
 # 4. verify, always — a silent partial apply is the failure mode
-"$git_bin" -C "$toplevel" diff --cached --stat -- "<path>"
+"<git>" -C "<toplevel>" diff --cached --stat -- "<path>"
 ```
 
 - `--cached` touches **only the index**; the working tree keeps every hunk, so the leftovers are still
@@ -179,14 +166,14 @@ mktemp "<tmp>/mkit-patch.XXXXXX"
   produce an intermediate commit that does not build. When a split would require cutting inside a hunk,
   commit the file whole and say so in the final report.
 - `git apply --cached -R -- "<patch>"` unstages exactly what a patch staged. To unstage a whole file:
-  `"$git_bin" -C "$toplevel" restore --staged -- "<path>"`.
-- The patch file lives in `tmp=`, never in the repo. Delete it once step 4 has verified the staging, and
+  `"<git>" -C "<toplevel>" restore --staged -- "<path>"`.
+- The patch file lives in `<run-dir>`, never in the repo. Delete it once step 4 has verified the staging, and
   nothing of this survives the run.
 
 ## Final report (always)
 
 Prune with `mkit scratch prune` on the way out, folded into another call.
-After the last commit run `"$git_bin" -C "$toplevel" log --oneline -n <N>` (N = commits made this run) to
+After the last commit run `"<git>" -C "<toplevel>" log --oneline -n <N>` (N = commits made this run) to
 confirm hashes, then report every commit — never skip this, even for one:
 
 ```

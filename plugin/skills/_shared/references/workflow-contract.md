@@ -50,12 +50,11 @@ reporting less than was actually found.
 
 ## Reading what came before
 
-**Ungated, and never gating.** Since M5 the binary is a hard requirement and every repo-scoped skill's
-first call is `mkit facts`, which stops the run when it is absent or too old; its `commits:` block is
-`git log --oneline <base>..HEAD`, and `--gh` adds `pr=`.
+**Ungated, and never gating.** Every repo-scoped skill's first call is the bundled `facts.sh`
+(`output-discipline.md`); its `commits:` block is `git log --oneline <base>..HEAD`, and `--gh` adds `pr=`.
 `sandbox-audit` is user-wide and opens no run directory; its first call, `mkit audit sandbox`, is its own
-dependency check. `explain` works from the session (reading a file only to confirm what it names) and makes
-no `mkit` call. What each step does with what it reads is the step's own business, and stays in its
+dependency check. `explain` works from the session (reading a file only to confirm what it names) and runs
+nothing. What each step does with what it reads is the step's own business, and stays in its
 `SKILL.md`.
 
 **Per branch, not per invocation.** A run directory (`<skill>-<timestamp>/`) belongs to one call and

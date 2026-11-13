@@ -47,25 +47,19 @@ below, asks who reviews. The same outputs serve step 2's pre-flight, step 4's co
 and none change when step 3 pushes:
 
 ```bash
-mkit facts pr --base <base> --gh
+bash ../_shared/scripts/facts.sh pr --run --base <base> --gh
 ```
 
-`mkit facts` **is** this skill's dependency check. If it fails with `command not found` **or**
-`unknown command "facts"` — absent and too old are the same answer here — **stop** and say:
-
-> This skill runs on the `mkit` binary. Install it with `brew install masterik/tap/mkit` (or upgrade
-> with `brew upgrade mkit`), then run it again.
-
-Presence only, no declared minimum on either side — a subcommand that does not exist *is* the too-old
-signal.
-
-That covers the branch, the status, `commits:` for `<base>..HEAD`, the stat, `codeowners=` for step 6, and
-`pr=` — whether this branch already has one, which is the check that otherwise gets skipped — and the
-remote: `remote=`, `remote_source=`, `remote_repo=`, `remotes=`, `remote_choice=`. On `remote_choice=ask`, ask and then
-re-run this `mkit facts` call with `--no-run --remote <answer>` added, as `remote.md` says — `pr=` and
-`default_branch=` above describe the fallback remote until you do. Keep the `run=`
-literal; this file writes it as `<run-dir>`. There is no `$RUN_DIR` (a shell variable does not survive to the
-next Bash call), and re-running `mkit facts` opens a second directory instead of returning the first.
+The path is relative to this skill's directory (`../_shared/references/output-discipline.md` says how to
+resolve it). That covers the branch, the status, `commits:` for `<base>..HEAD`, the stat, `codeowners=` for
+step 6, and `pr=` — whether this branch already has one, which is the check that otherwise gets skipped — and
+the remote: `remote=`, `remote_source=`, `remote_repo=`, `remotes=`, `remote_choice=`. When `remote.md` says
+to (a remote named in `docs/agents/remote.md`, or `remote_choice=ask` and the user's answer), re-run this
+call without `--run` and with `--remote <name>` added — `pr=` and `default_branch=` above describe the
+fallback remote until you do. Keep the `run_dir=` literal; this file writes it as `<run-dir>`, its
+`toplevel=` as `<toplevel>`, and the absolute git binary as `<git>` (`../_shared/references/git-safety.md`).
+There is no `$RUN_DIR` (a shell variable does not survive to the next Bash call), and re-running with
+`--run` opens a second directory instead of returning the first.
 
 Then who this repo says reviews it — one more read-only call, cheap enough to send in the same
 message as the one above:
@@ -141,7 +135,7 @@ supplement (`../_shared/references/output-discipline.md`).
 Hand drafting to a subagent that reads what it needs and returns only the draft. Spawn it **in the same
 message as step 6's reviewer lookup** — both read-only and independent.
 
-Its brief carries: base and branch names, the `"$git_bin" -C "$toplevel" log --oneline <base>..HEAD`
+Its brief carries: base and branch names, the `"<git>" -C "<toplevel>" log --oneline <base>..HEAD`
 output, the `--stat`, the format spec below, and its return budget. It runs the full diff itself
 (`git diff <base> -- . ':(exclude)*.lock' ':(exclude)*.snap'`) and **returns at most 25 lines**: title,
 description, and any note about what it could not explain from the commits. No diff, no file contents, no
@@ -197,7 +191,7 @@ Show the full PR and confirm (unless the user already said "just create it"):
 ```
 Title:     <title>
 Base:      <base> ← <feature-branch>
-Remote:    <remote> (<pinned in .mkit/config.toml | origin | chosen by you | fallback>)  [only with several remotes]
+Remote:    <remote> (<named in docs/agents/remote.md | origin | chosen by you | fallback>)  [only with several remotes]
 Draft:     <yes/no>
 Reviewers: <handles or "none"> (<pinned in .mkit/config.toml | from CODEOWNERS | repo/org default |
            named by you | asked>)
@@ -278,7 +272,7 @@ The commit list is step 0's `commits:` block — already in context, and cheap p
 was. Never just "N commits pushed." Prune with `mkit scratch prune` on the way out.
 
 After the block, say what the reader still has to do or decide, or "nothing needed from you": a remote chosen
-but not pinned (`mkit init --force --remote <name>`, for the user to run and commit — never run mid-run),
+but not recorded (a `docs/agents/remote.md` naming it would end the question),
 CI still running, a reviewer that could not be determined, a gate skipped under the reuse rule, a pin that went
 nowhere. Never leave those implied by the block's fields alone.
 
@@ -289,7 +283,7 @@ nowhere. Never leave those implied by the block's fields alone.
 | No commits ahead of base            | Stop — nothing to PR. Check the user is on the right branch.      |
 | Branch not pushed / push rejected   | Push with `-u`; if diverged, surface it — do not force-push.      |
 | `remote=none`                       | Stop — nothing to push to; say to add a remote.                   |
-| Several remotes, none pinned        | Ask which (`remote_choice=ask`), offer `mkit init --force --remote`. |
+| Several remotes, none named         | Ask which (`remote_choice=ask`), then re-run facts with `--remote`. |
 | PR already exists for this branch   | step 0's `pr=` holds a URL — show it (`none`/`gh-missing` are not). |
 | Lint/test/build fails               | Report which step; user decides fix vs proceed-as-draft.          |
 | On the base branch                  | Stop — tell the user to create a feature branch first.            |

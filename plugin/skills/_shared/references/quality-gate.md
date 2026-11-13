@@ -62,8 +62,8 @@ them.
 ## Run it
 
 Run each step yourself, in order, from the repo root of the current worktree, **stopping at the
-first failure**. Send each step's full output to a log in the run directory (`run=` from `mkit
-facts`, passed as a literal — `output-discipline.md`), so it never enters context:
+first failure**. Send each step's full output to a log in the run directory (`run_dir=` from `facts.sh
+--run`, passed as a literal — `output-discipline.md`), so it never enters context:
 
 ```bash
 bun run lint > <run-dir>/gate-lint.log 2>&1; echo "lint exit=$?"
@@ -102,7 +102,7 @@ sentence or two, caused-by-this-change or pre-existing, a concrete suggested fix
 
 ## Rules
 
-- Open the run directory before the first step — `mkit facts` did it. Never write a log to a path
+- Open the run directory before the first step — `facts.sh --run` did it. Never write a log to a path
   that does not exist.
 - Run the gate from the repo root of the current worktree.
 - Report exactly which step failed and its exit code. Never silently continue past a failure.

@@ -2,7 +2,9 @@
 
 This is the shared library for mkit's skills. It is not a triggerable skill and has no `SKILL.md`.
 Skills link into `references/` by relative path (`../_shared/references/…`), so each rule lives in
-one place.
+one place. `scripts/` holds the two bundled scripts, `facts.sh` (every skill's starting facts) and
+`branch-status.sh` (`cleanup`'s classifier); skills run them as `bash ../_shared/scripts/<name>.sh`,
+resolved against their own directory. Their tests are `tests/*.bats` at the repo root.
 
 > Keep those relative links intact. They are what make the bundle portable to another repo.
 
@@ -17,7 +19,7 @@ one place.
 | `cleanup` | `worktree`, `branching`, `remote`, `git-safety`, `output-discipline`, `summary-format` |
 | `sandbox-audit` | `output-discipline`, `summary-format` |
 | `explain` | `plain-english` |
-| `recap` | `plain-english`, `workflow-contract` |
+| `recap` | `plain-english`, `workflow-contract`, `output-discipline`, `git-safety` |
 
 `commit` is the shared front end, since both finishers start by committing. Choose a finisher by
 destination: `finish` merges locally, and `pr` pushes for remote review. `cleanup` works repo-wide,
@@ -34,11 +36,11 @@ sweeping every branch and worktree. The workflow has seven steps, but three of t
 - `conventional-commits.md`: message format, type table, scope detection.
 - `quality-gate.md`: find the gate with `mkit gate detect` (never hardcoded), run its commands with
   output to a log, the one rule for reusing a pass, and when a failure needs a delegated diagnosis.
-- `worktree.md`: the `cleanup_path` values `mkit facts` reports (`exit-worktree`, `wt`,
-  `git-worktree`, `none`) and the teardown for each.
+- `worktree.md`: the `cleanup_path` values `facts.sh` reports (`exit-worktree`, `git-worktree`,
+  `none`) and the teardown for each.
 - `branching.md`: the branch model to assume when a repo documents none.
-- `remote.md`: which git remote to push to when a repo has several: the `mkit facts` keys, when to ask, and
-  how a pin (`mkit init --remote`) ends the question.
+- `remote.md`: which git remote to push to when a repo has several: the `facts.sh` keys, when to ask, and
+  how `docs/agents/remote.md` names one.
 - `stacked-prs.md`: detecting a GitHub-native stack and routing around the calls that break on one.
   Without a stack, `pr` and `finish` are unchanged.
 - `review-severity.md`: the severity bar (`critical`, `major`, `minor`; prose findings are minor), the
@@ -55,7 +57,7 @@ sweeping every branch and worktree. The workflow has seven steps, but three of t
   - Fix-checks: the three checks every fix must pass.
 - `agent-delegation.md`: the run dir as transport, subagent return budgets, resolved reference paths,
   one writer per file, model per stage.
-- `output-discipline.md`: `mkit facts` as a run's first call, gate logs, and bounding output
+- `output-discipline.md`: `facts.sh` as a run's first call, gate logs, and bounding output
   (`--stat` before any diff). Also what must never be capped: a staged diff being approved, or a body
   the user acts on.
 - `summary-format.md`: the form of a skill's closing message and how it asks for a decision. Each skill
@@ -73,8 +75,8 @@ sweeping every branch and worktree. The workflow has seven steps, but three of t
   against `review-severity.md`. That is what makes merging their findings and counting corroboration
   meaningful.
 - **The main session holds decisions, not evidence.** Heavy reading runs in subagents. Diffs,
-  transcripts and finding bodies live in a per-run dir under `<toplevel>/.mkit/`. Output is bounded
+  transcripts and finding bodies live in a per-run dir under `$TMPDIR`. Output is bounded
   before it reaches the main session.
-- **A command for a mechanical invariant, never for a decision.** `mkit` owns the steps that are the same
-  every run and fail silently when done by hand. Judgement stays in Markdown
+- **A script for a mechanical invariant, never for a decision.** The bundled scripts own the steps that
+  are the same every run and fail silently when done by hand. Judgement stays in Markdown
   ([concept](../../../docs/concept.md)).

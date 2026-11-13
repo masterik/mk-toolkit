@@ -32,17 +32,11 @@ References, read the ones a step calls for: `../_shared/references/worktree.md`,
 **One call**, which also opens this run's directory (`../_shared/references/output-discipline.md`):
 
 ```bash
-mkit facts finish --base <base> --gh
+bash ../_shared/scripts/facts.sh finish --run --base <base> --gh
 ```
 
-`mkit facts` **is** this skill's dependency check. If it fails with `command not found` **or**
-`unknown command "facts"` — absent and too old are the same answer here — **stop** and say:
-
-> This skill runs on the `mkit` binary. Install it with `brew install masterik/tap/mkit` (or upgrade
-> with `brew upgrade mkit`), then run it again.
-
-Presence only, no declared minimum on either side — a subcommand that does not exist *is* the too-old
-signal.
+The path is relative to this skill's directory (`../_shared/references/output-discipline.md` says how to
+resolve it).
 
 What ran on this branch before comes from the session and `commits:` (`<base>..HEAD`),
 plus the PR when one is open — `../_shared/references/workflow-contract.md`, rule 4. A `review` this session
@@ -50,20 +44,22 @@ ran over the content now being merged is worth naming in the deliverable — but
 actually read: fixes it applied afterwards were not reviewed. It does not gate the merge, and it never
 substitutes for the quality gate.
 
-Keep the `run=` literal; this file writes it as `<run-dir>`. There is no `$RUN_DIR` — a shell variable does
-not survive to the next Bash call — and re-running `mkit facts` opens a second directory instead of returning
-the first. Check four things in what it printed:
+Keep the `run_dir=` literal; this file writes it as `<run-dir>`, its `toplevel=` as `<toplevel>`, and the
+absolute git binary as `<git>` (`../_shared/references/git-safety.md`). There is no `$RUN_DIR` — a shell
+variable does not survive to the next Bash call — and re-running with `--run` opens a second directory
+instead of returning the first. Check four things in what it printed:
 
 1. **Current branch** — `branch=` must be a feature/bugfix branch, not `default_branch=`. On `main`/`master`:
    stop, nothing to finish.
 2. **Base branch** — the branch this feature was cut from, usually `default_branch=`. Ask if ambiguous;
    `../_shared/references/branching.md` covers detecting a repo's own model. Pass it as `--base` so
    `commits:`, `base_stat` and `ff_from_base` come back with everything else.
-3. **Cleanup path** — `cleanup_path=` is `exit-worktree` (the harness's own worktree) · `wt` (linked,
-   worktrunk present) · `git-worktree` (linked, no worktrunk) · `none` (primary checkout). It decides step 4.
-   Read `../_shared/references/worktree.md` there, not now.
-4. **Existing PR** — first the remote: on `remote_choice=ask` (several remotes, none pinned) ask which and re-run
-   this `mkit facts` with `--no-run --remote <answer>` added, **before routing** — `pr=` was computed for the
+3. **Cleanup path** — `cleanup_path=` is `exit-worktree` (the harness's own worktree) · `git-worktree`
+   (any other linked worktree; worktrunk, when `wt` is available, does its teardown) · `none` (primary
+   checkout). It decides step 4. Read `../_shared/references/worktree.md` there, not now.
+4. **Existing PR** — first the remote: when `../_shared/references/remote.md` says to (a remote named in
+   `docs/agents/remote.md`, or `remote_choice=ask` and the user's answer), re-run this call without `--run`
+   and with `--remote <name>` added, **before routing** — `pr=` was computed for the
    fallback remote (`../_shared/references/remote.md`). Then `pr=` is a URL only when one exists, alongside `pr_state=OPEN|CLOSED|MERGED` and
    `pr_draft=true|false`. Sentinels (`none`, `gh-missing`, `gh-unauthenticated`, `no-remote`)
    mean there is nothing to merge remotely — take the **local merge path**. `pr_state=OPEN` (and not
@@ -106,7 +102,7 @@ Before merging or deleting anything, print a one-screen summary and get a go-ahe
 said "finish and clean up" or gave standing authorization). Collect the go-ahead through `AskUserQuestion`
 where the host has it — two options, **merge and clean up** (recommended) and **stop here** — with the
 numbered-list fallback in `../_shared/references/summary-format.md`. Step 0's `commits:` block predates step 1, so if
-step 1 committed, re-read the log (`"$git_bin" -C "$toplevel" log --oneline <base>..HEAD` — pinned, per
+step 1 committed, re-read the log (`"<git>" -C "<toplevel>" log --oneline <base>..HEAD` — pinned, per
 `../_shared/references/git-safety.md`) first — approving a plan that omits the
 commits the merge actually carries is worse than asking twice.
 
@@ -154,8 +150,8 @@ mkit repo profile --json
 `merge_style` is `{"value": "merge|squash|rebase", "source": "pinned|discovered|unavailable"}`.
 Take the value on **`pinned`** (a human wrote it in `.mkit/config.toml`) or **`discovered`** (read from this
 repo's own git config) and stop asking. On `unavailable` — or if the command fails at all, which an older
-binary that knows `facts` but not `repo` will do — there is **no style**: fall through to asking, exactly as
-below. Unlike `mkit facts`, this call never stops the run and is never mentioned when it has nothing to say.
+binary without `repo`, or no binary at all, will do — there is **no style**: fall through to asking, exactly as
+below. This call never stops the run and is never mentioned when it has nothing to say.
 It is one fewer question, not a dependency.
 
 **Silence, with one exception — a pin that went nowhere.** A non-empty `config_problems`, or an
@@ -248,12 +244,13 @@ announce — and it is why the two conditions are written as things to look for 
    requires for that. And because item 3's `--delete-branch` may already have deleted the local branch
    (whenever it wasn't pinned by another worktree), check before you delete — "already gone" means item 3
    did this already, not a failure:
-   - `wt`: `wt remove <feature-branch>` if it's still there; add `-D` if it reports the branch unmerged.
+   - `git-worktree`, worktrunk available: `wt remove <feature-branch>` if it's still there; add `-D` if it
+     reports the branch unmerged.
    - `exit-worktree`: hand back via the **ExitWorktree** tool (`action: "remove"`, `discard_changes: true`
      — a squash/rebase merge leaves the worktree's commits unreachable from the branch it was cut from, and
      the tool refuses removal without it). Never `git worktree remove` the harness's own worktree from
      inside it.
-   - `git-worktree`: `git worktree remove <toplevel>` then, if `git branch --list <feature-branch>` still
+   - `git-worktree`, no worktrunk: `git worktree remove <toplevel>` then, if `git branch --list <feature-branch>` still
      shows it, `git branch -D <feature-branch>`, then `git worktree prune`.
    - `none`: if `git branch --list <feature-branch>` still shows it, `git branch -D <feature-branch>`.
 
@@ -264,7 +261,7 @@ announce — and it is why the two conditions are written as things to look for 
 
 **Local path** (no open PR) — by `cleanup_path`
 
-**`wt`** — delegate; it squash-rebases, fast-forwards the base and removes the worktree in one step, firing
+**`git-worktree`, worktrunk available** (`command -v wt`, or `type wt` for its shell function) — delegate; it squash-rebases, fast-forwards the base and removes the worktree in one step, firing
 the user's hooks:
 
 ```bash
@@ -286,7 +283,7 @@ override the user's config on request.
 cannot be fast-forwarded (`ff_from_base=no`, or it is checked out in the primary worktree), merge from
 `primary=` per `../_shared/references/worktree.md`.
 
-**`git-worktree`**:
+**`git-worktree`, no worktrunk**:
 
 ```bash
 git -C <primary> merge --ff-only <feature-branch>   # or a real merge if ff isn't possible
@@ -313,21 +310,21 @@ as written above. Say which one you used, the same as on the other paths.
 
 ### 5. Verify the cleanup
 
-**`$toplevel` is stale here whenever step 4 removed a worktree — and so may the shell's cwd be**, if it was
-inside that worktree when `git worktree remove` ran. `$toplevel` is the root `mkit facts` resolved at step
+**`<toplevel>` is stale here whenever step 4 removed a worktree — and so may the shell's cwd be**, if it was
+inside that worktree when `git worktree remove` ran. `<toplevel>` is the root `facts.sh` resolved at step
 1 — the *feature* worktree on any linked path — and that directory no longer exists, so a call pinned to it,
 or one run from a cwd still inside it, fails instead of verifying anything. Resolve `<surviving-root>` once
-(`primary=` from `mkit facts`, or re-resolve the root) and put every command below against it — `cd
+(`primary=` from `facts.sh`, or re-resolve the root) and put every command below against it — `cd
 "<surviving-root>"` first, since `pwd` and `git branch --show-current` have no `-C` equivalent, and pass
 `-C "<surviving-root>"` explicitly to the rest, including the pinned log check. On `linked=no` there was
-nothing to remove and `$toplevel`/the cwd are still correct.
+nothing to remove and `<toplevel>`/the cwd are still correct.
 
 - `git -C "<surviving-root>" worktree list` — the feature worktree is gone (if there was one).
 - `git -C "<surviving-root>" branch` — the feature branch is gone (and, PR path, `git ls-remote --heads
   <remote> <feature-branch>` is empty).
 - after `cd "<surviving-root>"`: `git branch --show-current` / `pwd` — you are on the base branch (or back
   in the primary checkout).
-- `"$git_bin" -C "<surviving-root>" log --oneline -5` — the base contains the feature commits (PR path: the
+- `"<git>" -C "<surviving-root>" log --oneline -5` — the base contains the feature commits (PR path: the
   squash/merge/rebase commit `gh pr merge` produced).
 
 ## Deliverable
