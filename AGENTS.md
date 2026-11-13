@@ -2,16 +2,17 @@
 
 This file provides guidance to agents when working with code in this repository.
 
-**mkit** — personal agentic-coding toolkit: **Go binary (`mkit`, Homebrew `masterik/tap/mkit`) +
-Claude Code plugin** (`/plugin marketplace add masterik/mk-toolkit`). Plugin = skills + `_shared/references/`; binary owns the
-mechanical invariants they rely on. Skills orchestrate `git`, `gh`, `wt`, review tools — no new git logic.
+**mkit** — personal agentic-coding toolkit: **plugin** (`/plugin marketplace add masterik/mk-toolkit`)
+of standalone skills + `_shared/` (references, two bash 3.2 scripts `facts.sh`/`branch-status.sh`),
+plus an **optional Go binary** (`mkit`, Homebrew `masterik/tap/mkit`): a macOS + Claude Code power tool
+(`doctor`, `audit sandbox`, `cache prune`), released in lockstep. Skills orchestrate `git`, `gh`, review
+tools — no new git logic; `wt` optional. Targets Claude Code, Codex, Copilot; Windows via Git Bash.
 
-**Next: M8** (`mkit plan`, `spec`/`implement` skills); M1–M7 done (M3 withdrawn). `mkit` is **required
-by every skill but `explain`**; first call `mkit facts <skill>` (`review` probes `mkit findings` first;
-`sandbox-audit` starts with `mkit audit sandbox`). Binary absent *or too old* (`command not found` ≡
-`unknown command "facts"`) = stop with a `brew` remedy; presence only, no declared minimum. Worklog
-(`.mkit/worklog/`): written by `commit`/`review`/`pr`/`finish`, also read by `recap`; missing = **one
-fewer input, never a stop**. Milestones: [`backlog.md`](docs/backlog.md); the *why*: [`concept.md`](docs/concept.md).
+**Direction: [ADR 0006](docs/adr/0006-standalone-skills-optional-binary.md)** (epic #59, before M8):
+no binary dependency, no `.mkit/`, no gate ledger/worklog/findings pipeline, no `mkit init` or pinning;
+config is prose in lazy `docs/agents/*.md`. **In transition**: sections below still describe the
+binary-dependent design until each #59 ticket rewrites its own; where they conflict, ADR 0006 wins.
+Milestones: [`backlog.md`](docs/backlog.md); the *why*: [`concept.md`](docs/concept.md).
 
 ## Rules
 
@@ -49,7 +50,9 @@ changelog**; `CHANGELOG.md` frozen at 0.19.0), cask to `masterik/homebrew-tap`
 
 ## Binary invariants
 
-Breaking one is a design error (full list: `backlog.md`).
+Breaking one is a design error (full list: `backlog.md`). Binary is optional and shrinking to
+`doctor`/`audit sandbox`/`cache prune`; the `facts` and `findings` contracts below go away
+([ADR 0006](docs/adr/0006-standalone-skills-optional-binary.md)).
 
 - **Layering.** `core` returns data · `cmd/` formats · `tui/` renders. No logic in a Bubble Tea `Update`.
 - **No TUI off a TTY** — no ANSI/alt-screen on a pipe; skills pipe the binary.
@@ -158,6 +161,9 @@ Shell layer gone (M5); its rules still apply:
 - `tools/` — non-payload maintainer shell; only `release.sh`.
 
 ### The plugin payload
+Changing per [ADR 0006](docs/adr/0006-standalone-skills-optional-binary.md): "Markdown only" becomes
+Markdown + manifests + **exactly two scripts** (`_shared/scripts/facts.sh`, `branch-status.sh`); skills
+stop calling `mkit`; `.mkit/` goes away.
 - `plugin/` — **Markdown only** (manifest, skills, `_shared/`): no scripts, hooks, `tests/`; nothing
   runs. Homebrew ships **binary only** (no `files:` in `.goreleaser.yaml`; casks have no stable path;
   `~/.claude/settings.json` sandbox-denied). Versions independently, accepted ([ADR 0003](docs/adr/0003-two-distribution-channels.md)).
@@ -224,7 +230,9 @@ Shell layer gone (M5); its rules still apply:
   `init`'s `.mkit/config.toml`, and `cache prune --apply` deleting stale `~/.claude`/`~/.codex` storage.
   State never goes in user files, `/tmp` or `~/.claude`.
   `TestWriteSitesAreOnTheReviewedAllowlist` (`internal/core/scratch`) asserts it against a
-  human-reviewed list — the real boundaries can't exist in a test.
+  human-reviewed list — the real boundaries can't exist in a test. Shrinking per
+  [ADR 0006](docs/adr/0006-standalone-skills-optional-binary.md): `<toplevel>/.mkit/`, its ignore pair
+  and `init`'s config go; per-run files move to a temp dir `facts.sh --run` creates.
 - **Degradation sentences name a working remedy or say "human-run".** (Allowlisting the protected
   `~/.claude/mkit` looked right, did nothing.) Detect at first call as a starting fact; no "reduced" mode.
 - Nothing project-specific hardcoded: gate commands, scopes, reviewers are discovered.

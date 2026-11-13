@@ -1,6 +1,8 @@
 # ADR 0001 — Per-repo configuration, an `init` command, and repo-scoped state
 
-**Status:** accepted · **Date:** 2026-09-09 ·
+**Status:** superseded by [ADR 0006](0006-standalone-skills-optional-binary.md) (2026-11-13): no
+`.mkit/config.toml`, no `mkit init`, no pinning; config is prose in `docs/agents/*.md`. ·
+**Date:** 2026-09-09 ·
 **Partly superseded by** [ADR 0002](0002-state-locations-under-a-sandbox.md): the state-location
 table below, and decision 5's premise. Decisions 1–4 stand.
 **Also by** [ADR 0003](0003-two-distribution-channels.md): every reference below to settling

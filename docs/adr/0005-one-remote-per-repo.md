@@ -1,6 +1,9 @@
 # ADR 0005 — One remote per repo, pinned by name
 
-**Status:** accepted · **Date:** 2026-10-15
+**Status:** accepted · **Date:** 2026-10-15 ·
+**Amended by** [ADR 0006](0006-standalone-skills-optional-binary.md) (2026-11-13): the
+`[remote] name` pin and `mkit init --remote` are gone; the skill applies a choice by re-running
+`facts.sh --remote`. Resolution without the pin stands.
 
 ## Context
 
