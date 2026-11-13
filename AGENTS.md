@@ -147,11 +147,18 @@ apply both ways:
   `commit` → `review` → `pr`/`finish`) plus `cleanup` (branches/worktrees), `sandbox-audit` (user-wide
   → proposed settings diff, never edits), `explain` and `recap` (plain English, share
   `_shared/references/plain-english.md`; `explain` has **no binary dependency**; `recap` read-only,
-  `facts.sh recap --gh` + `git log <base>..HEAD` bodies + the PR, records nothing). **Eight exist**: `commit`, `review`, `pr`, `finish`,
-  `cleanup`, `sandbox-audit`, `explain`, `recap`; `brainstorm`/`spec`/`implement` unbuilt (M8) — never
+  `facts.sh recap --gh` + `git log <base>..HEAD` bodies + the PR, records nothing), `setup` (user-only;
+  writes the repo-settings files below). **Nine exist**: `commit`, `review`, `pr`, `finish`,
+  `cleanup`, `sandbox-audit`, `explain`, `recap`, `setup`; `brainstorm`/`spec`/`implement` unbuilt (M8) — never
   describe as shipping. Steps **composable, not sequential**: entry-capable, any order/subset, derive
   a thin version of what's missing, name assumptions. Never tell the user to run another skill first
   or run a downstream step. Contract: `_shared/references/workflow-contract.md`.
+- **Repo settings** (ADR 0006 decision 7) — lazy prose `docs/agents/{commit,review,merge,remote,gate,cleanup}.md`
+  in the *target* repo, one per non-default choice, listed under `### mkit workflow` in `## Agent skills`.
+  Skills read the file if present, else discover/default — rules once per area in
+  `_shared/references/repo-settings.md`; missing file never stops. Spec store = mattpocock's
+  `issue-tracker.md`. `setup` writes them (templates beside its `SKILL.md`), converts `.mkit/config.toml`,
+  never touches mattpocock's files. No script reads them.
 - `plugin/skills/_shared/` — references and `scripts/`, no `SKILL.md`; **keep `../_shared/…` paths
   relative**. Skills run `bash ../_shared/scripts/<name>.sh`, resolved against their own `SKILL.md`
   directory (no agent sets a skill-root env var in a skill body).
@@ -175,9 +182,9 @@ apply both ways:
 - **`mkit doctor` is the prereq report** (human-run). Accepted losses — don't re-add a reporter: no
   session-start run. Skills read `facts.sh`, not `doctor`.
 - **Nothing writes into the work tree** (ADR 0006 decision 5): no `.mkit/`, no ignore pair, no
-  `info/exclude` write; `git add -A` and `git worktree remove` never meet a run artefact. Until #53
-  deletes them, `mkit init`/`repoconfig` still read and write `.mkit/config.toml` (doctor already
-  calls it a leftover). An old `.mkit/` shows as untracked; `doctor` names the remedy.
+  `info/exclude` write; `git add -A` and `git worktree remove` never meet a run artefact (`setup`'s
+  `docs/agents/*.md` are user-confirmed docs, not state). Until #53 deletes them, `mkit init`/`repoconfig`
+  still read and write `.mkit/config.toml` (no skill reads it; doctor calls it a leftover). An old `.mkit/` shows as untracked; `doctor` names the remedy.
 - `<run-dir>` — `facts.sh --run` → `mktemp -d "$TMPDIR/mkit-<skill>-XXXXXX"`; dies with the session,
   nothing to prune.
 - `~/.mkit/` (`MKIT_HOME`) — future user-scoped binary state; binary writes nothing now. Holds
@@ -229,3 +236,12 @@ Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-
 ### Domain docs
 
 Single-context: `CONTEXT.md` and `docs/adr/` at the repo root, created lazily. See `docs/agents/domain.md`.
+
+### mkit workflow
+
+Settings for mkit's skills; a file not listed means the default, or what the skill discovers. Defaults
+throughout: scopes from history, `full` review, `merge` style, `CODEOWNERS` reviewers, remote by `origin` →
+lone remote → ask, gate detected (`just ci`), cleanup keeps the default and develop branches. Add a
+`docs/agents/<area>.md` file (or re-run `setup`) to change one.
+
+Spec store: `docs/agents/issue-tracker.md`.

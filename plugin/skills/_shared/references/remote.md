@@ -20,9 +20,9 @@ fallback `remote=` already shows.
 
 ## The rule
 
-0. **The repo names one.** If `docs/agents/remote.md` exists and names a remote, re-run the skill's own
-   `facts.sh` call with `--remote <name>` added before anything uses the remote, and say where the name came
-   from. A name this clone lacks falls back (the `notes:` line says so) and the rule below applies.
+0. **The repo names one.** If `docs/agents/remote.md` exists and names a remote (`repo-settings.md`), re-run
+   the skill's own `facts.sh` call with `--remote <name>` added before anything uses the remote, and say
+   where the name came from. A name this clone lacks falls back (the `notes:` line says so) and the rule below applies.
 1. **`remote_choice=no`** — use `remote=`. Do not ask.
 2. **`remote_choice=ask`** — ask once, before the first push or remote call: *which remote?* List `remotes=`
    with their URLs (`git remote -v`), `remote=` first and marked as the default (it is `origin` when `origin`

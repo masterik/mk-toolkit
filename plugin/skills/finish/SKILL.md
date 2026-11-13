@@ -116,13 +116,13 @@ Commits to merge: <the commits: block, re-read if step 1 committed>
 After merge:      delete branch <feature-branch> + remove worktree (if any)
 ```
 
-**PR path** — step 4's opening profile call and its first two items (push, then pick the merge method) run
+**PR path** — step 4's opening read of the merge style and its first two items (push, then pick the merge method) run
 *before* this: fill this block in with the method just picked, get the go-ahead, and only then continue with
 the rest of step 4:
 
 ```
 Finish feature:  <feature-branch>
-Merge via:        GitHub PR <pr-url> (<squash|merge|rebase>, <pinned|discovered|asked>)
+Merge via:        GitHub PR <pr-url> (<squash|merge|rebase>, <from docs/agents/merge.md|default|asked>)
 Base:             <base-branch>
 Worktree:         <cleanup_path> @ <toplevel>
 Commits to merge: <the commits: block, re-read if step 1 committed>
@@ -139,35 +139,16 @@ Stack:            #<n> of <size> — also merges (atomically) the <k> unmerged P
 
 ### 4. Merge back + clean up
 
-**Both paths start here: ask the repo how it merges.** One call, and it is **optional enrichment,
-never a prerequisite** — it answers the question this step used to ask on every run, and when it does not
-answer, this step behaves exactly as it did before the call existed:
+**Both paths start here: how this repo merges.** Read `docs/agents/merge.md` if it exists
+(`../_shared/references/repo-settings.md`, "Merge"):
 
-```bash
-mkit repo profile --json
-```
-
-`merge_style` is `{"value": "merge|squash|rebase", "source": "pinned|discovered|unavailable"}`.
-Take the value on **`pinned`** (a human wrote it in `.mkit/config.toml`) or **`discovered`** (read from this
-repo's own git config) and stop asking. On `unavailable` — or if the command fails at all, which an older
-binary without `repo`, or no binary at all, will do — there is **no style**: fall through to asking, exactly as
-below. This call never stops the run and is never mentioned when it has nothing to say.
-It is one fewer question, not a dependency.
-
-**Silence, with one exception — a pin that went nowhere.** A non-empty `config_problems`, or an
-`unavailable` whose `cause` names `.mkit/config.toml`, is not "no answer": it is this repo pinning a merge
-style mkit could not honour — a misspelled `style`, or a `[merge]` table that never arrived. Report that
-sentence in one line, verbatim, then ask as usual. Mind which field carries it: the sentence is `detail` on
-a `config_problems` entry and `cause` on `merge_style` itself — there is no `detail` on a value, and an agent
-that looks for one reports nothing. Falling silently back to the question is the failure
-shape that validation exists to kill: the config looks applied, and the only symptom is the question the
-pin was supposed to have answered. An `unavailable` carrying nothing but "not discoverable" stays silent.
-
-**A binary whose `repo profile` predates config validation emits neither signal** — there is no
-`config_problems` key, and `merge_style` never carries a `cause` naming the config file. Nothing special is
-needed for that: both conditions are simply false, this paragraph does not fire, and the skill behaves as it
-does with no profile at all. That is the same silence the rule above describes, not a degradation to
-announce — and it is why the two conditions are written as things to look for rather than fields to expect.
+- **It names a style** (`merge`, `squash` or `rebase`) → that is the **repo's style**, used on every path
+  below without asking. Name where it came from — "squash, from `docs/agents/merge.md`".
+- **No file, or one silent on style** → the **default style**, `merge`. A default is not a repo statement: it
+  gives way without comment where the remote refuses it, and never overrides the user's worktrunk config.
+  The missing file is never mentioned.
+- **A style `finish` doesn't know** (`squish`) → say so in one line, then carry on as with no file. Falling
+  silently back would leave the only symptom a merge shape the team thought they had changed.
 
 **PR path** (`pr=<url>`, `pr_state=OPEN`, not draft) — merge on GitHub, then sync locally:
 
@@ -177,22 +158,20 @@ announce — and it is why the two conditions are written as things to look for 
    *some* upstream exists, possibly on another remote, and `ahead=` predates step 1's commits.
    `<remote>` is `remote=` — never a hardcoded `origin` — as settled in step 0.
 2. **Pick the merge method.** `gh repo view [<remote_repo>] --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed`
-   tells you what the remote will accept; `merge_style` above tells you what this repo wants.
+   tells you what the remote will accept; the style above tells you what this repo wants.
    `merge`→`--merge`/`mergeCommitAllowed`, `squash`→`--squash`/`squashMergeAllowed`,
    `rebase`→`--rebase`/`rebaseMergeAllowed`. In order:
 
-   - **Exactly one method allowed** → use it, whatever `merge_style` says. GitHub decides what it will
-     accept; a pin cannot widen that. If the pin named a different one, say so in one line.
-   - **A style, and the remote allows it** → use it and **do not ask**. Name where it came from — "squash,
-     pinned in `.mkit/config.toml`" or "squash, discovered from this repo's git config" — so a wrong pin is
-     visible the first time it is used rather than on the merge it produced.
-   - **A style the remote does not allow** → **report it, never substitute.** Say which value was pinned,
-     what the remote actually allows, and let the user pick; do not quietly fall back to squash. A pinned
-     value cheap to verify gets verified, and the point of verifying is to surface the mismatch, not to
-     paper over it. A pin that is wrong for the repo is worth one interruption; a silent substitution on
-     every run for the rest of the repo's life is not.
-   - **No style** (`unavailable`, or no profile at all) and more than one method allowed → ask, default
-     suggestion squash, as before.
+   - **Exactly one method allowed** → use it, whatever the style says. GitHub decides what it will
+     accept; a file cannot widen that. If the repo's style named a different one, say so in one line.
+   - **The style is allowed** → use it and **do not ask**. Name where it came from — the file or the
+     default — so a wrong setting is visible the first time it is used rather than on the merge it produced.
+   - **The repo's style is not allowed** → **report it, never substitute.** Say what `merge.md` says, what
+     the remote actually allows, and let the user pick; do not quietly fall back. A setting that is wrong for
+     the repo is worth one interruption; a silent substitution on every run for the rest of the repo's life
+     is not.
+   - **The default style is not allowed**, several others are → ask which, without reporting a mismatch:
+     nobody asked for `merge`.
 
    Never pass `--admin` (bypasses branch protection / required reviews) unless the user explicitly asks
    for it.
@@ -270,12 +249,12 @@ wt merge <base>        # add -y only if non-interactive completion is authorized
 
 `wt merge` removes the worktree by default and deletes the branch as part of the flow.
 
-**A `merge_style` from the profile goes on this command line.** worktrunk carries the user's own
-squash/rebase config, and a repo-wide pin outranks a personal default — but `wt merge`'s flags only turn
-defaults *off*, so one direction cannot be forced and is reported instead of fought.
-`../_shared/references/worktree.md`, "A pinned merge style vs. worktrunk's own config", has the mapping
+**The repo's style from `docs/agents/merge.md` goes on this command line.** worktrunk carries the user's
+own squash/rebase config, and a repo-wide setting outranks a personal default — but `wt merge`'s flags only
+turn defaults *off*, so one direction cannot be forced and is reported instead of fought.
+`../_shared/references/worktree.md`, "The repo's merge style vs. worktrunk's own config", has the mapping
 (`squash` → no flag · `rebase` → `--no-squash` · `merge` → `--no-squash --no-ff`) and the reasoning. No
-style → plain `wt merge <base>`, worktrunk's config unchallenged, as today. Use `--no-remove` only to
+file → plain `wt merge <base>`, worktrunk's config unchallenged: the default `merge` is not a repo statement. Use `--no-remove` only to
 override the user's config on request.
 
 **`exit-worktree`** — merge into the base, then hand back via the **ExitWorktree** tool
@@ -303,9 +282,9 @@ git branch -d <feature-branch>
 Update the base against the remote first (`git fetch <remote>` / `git pull --ff-only <remote> <base>`) when one exists, so you
 merge onto current base.
 
-On the three plain-git paths a `merge_style` decides the shape of that merge, with none of worktrunk's
+On the three plain-git paths the style decides the shape of that merge, with none of worktrunk's
 config to contend with: `merge` → `git merge --no-ff` · `rebase` → rebase the feature branch onto `<base>`
-first, then fast-forward · `squash` → `git merge --squash` followed by one commit. No style → the command
+first, then fast-forward · `squash` → `git merge --squash` followed by one commit. No file → the commands
 as written above. Say which one you used, the same as on the other paths.
 
 ### 5. Verify the cleanup
@@ -333,11 +312,10 @@ Open with a one-line bold verdict (`**Verdict:** merged into main, branch and wo
 removed.` — or where and why it stopped short); form per `../_shared/references/summary-format.md`.
 
 - Which path ran — local merge, or GitHub PR merge (name the PR URL and method used), and **where the
-  method came from**: pinned, discovered, or asked. Plus, only when there was something to say: a pinned
-  style the remote refused, a pinned style mkit could not honour at all (`config_problems`, or an
-  `unavailable` whose `cause` names the config file), or a `wt merge` whose output shows the user's
-  worktrunk config overrode the pin. Silence when the profile simply had no answer — that is not a
-  degradation.
+  method came from**: `docs/agents/merge.md`, the default, or asked. Plus, only when there was something to
+  say: a style from the file the remote refused, a style in the file `finish` doesn't know, or a `wt merge`
+  whose output shows the user's worktrunk config overrode the file. Silence when there is no file — that is
+  not a degradation.
 - Stacked PR: which PRs merged together (all of them, by number), the `gh stack merge` outcome, and the
   PRs still open above.
 - The gate verdict, or that it was skipped under the reuse rule and at which commit it passed.

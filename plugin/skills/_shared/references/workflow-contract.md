@@ -8,6 +8,7 @@ brainstorm → spec → implement → commit → review → pr ──┐
                                                         ├─→ (merged)
                                               finish ──┘
 
+setup           optional, once per repo: settings as prose in docs/agents/ (repo-settings.md)
 cleanup         repo-wide gardening, not a step in the line
 sandbox-audit   user-wide: past sessions' sandbox and gate events → a proposed settings diff
 explain         reading aid: the last answer or one session item, in plain English (no binary)
@@ -78,10 +79,10 @@ empty frontier. That is a completed run reporting an empty result, not a failure
 
 ## Where the artifacts live
 
-The spec and task-graph store is **discovered, never assumed**: `mkit repo profile --json` reports
-it, along with everything else discovered or pinned about this repo. Steps read that answer rather
-than each reaching their own, because a spec written to one store and read from another is the one
-failure this contract cannot absorb.
+The spec and task-graph store is **read, never assumed**: `docs/agents/issue-tracker.md` names it, and
+`repo-settings.md` says what to do without that file — along with every other per-repo setting a step
+reads. Steps read that one answer rather than each reaching their own, because a spec written to one
+store and read from another is the one failure this contract cannot absorb.
 
 Under a sandbox, some of what mkit would write is unreachable — `mkit doctor` reports the writable
 set. A step whose artifact store is denied says which path was denied and falls back to the run

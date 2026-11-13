@@ -35,16 +35,16 @@ A PR that is easy to review and safe to merge:
   branch is a layer on top of it), this is a **stacked PR** — see "Stacked PRs" below.
 - **Draft?** — draft if the work isn't ready for review.
 - **Area prefix** — scoped to one package → prefix the title `[area]` (`[api]`, `[ui]`).
-- **Reviewers** — step 6: pinned in the repo config, from `CODEOWNERS`, or ask.
-- **Remote** — only when step 0 says `remote_choice=ask` (several remotes, none pinned): ask which one,
-  default `remote=`, then offer to pin it. `../_shared/references/remote.md` has the whole rule.
+- **Reviewers** — step 6: named in `docs/agents/merge.md`, from `CODEOWNERS`, or ask.
+- **Remote** — only when step 0 says `remote_choice=ask` (several remotes, none named in
+  `docs/agents/remote.md`): ask which one, default `remote=`. `../_shared/references/remote.md` has the whole
+  rule.
 
 ## Workflow
 
-**Step 0 — one message, two read-only calls.** Once the base is settled, the first opens the run directory
-and returns every read-only fact this skill needs (`../_shared/references/output-discipline.md`); the second,
-below, asks who reviews. The same outputs serve step 2's pre-flight, step 4's context and the final report,
-and none change when step 3 pushes:
+**Step 0 — one read-only call.** Once the base is settled, it opens the run directory and returns every
+read-only fact this skill needs (`../_shared/references/output-discipline.md`). The same output serves step
+2's pre-flight, step 4's context and the final report, and none of it changes when step 3 pushes:
 
 ```bash
 bash ../_shared/scripts/facts.sh pr --run --base <base> --gh
@@ -61,27 +61,9 @@ fallback remote until you do. Keep the `run_dir=` literal; this file writes it a
 There is no `$RUN_DIR` (a shell variable does not survive to the next Bash call), and re-running with
 `--run` opens a second directory instead of returning the first.
 
-Then who this repo says reviews it — one more read-only call, cheap enough to send in the same
-message as the one above:
-
-```bash
-mkit repo profile --json
-```
-
-`reviewers`, tagged `pinned` or `discovered`, is step 6's first answer:
-
-- **`pinned`** — the repo's own default reviewers, for exactly the repo that has no `CODEOWNERS`. Use them
-  as given; **do not read `CODEOWNERS` to cross-check them**, and do not re-derive.
-- **`discovered`** — this is `CODEOWNERS` flattened to its owner tokens, with the patterns dropped. That is
-  a worse answer than step 6's own read, which matches owners against *the changed paths*, so take it as
-  confirmation there is a file and do step 6 normally.
-
-**Silence, with one exception.** A failed call, or `unavailable` with nothing but "no CODEOWNERS file and
-nothing pinned" behind it, changes nothing: step 6 runs as it always has and **this skill never mentions
-the binary**. The exception is a **pin that went nowhere** — a non-empty `config_problems`, or an
-`unavailable` whose `cause` names `.mkit/config.toml`. A misspelled `[review]` table is how a pinned
-reviewer list silently becomes no reviewer list, so report that one line verbatim and then fall back.
-Mind which field carries it: the sentence is `detail` on a `config_problems` entry and `cause` on the value itself — there is no `detail` on a value, and an agent that looks for one reports nothing.
+Repo settings this skill reads, each only if the file exists (`../_shared/references/repo-settings.md`):
+`docs/agents/remote.md` (now, per `remote.md`), `docs/agents/gate.md` (step 2) and the reviewers in
+`docs/agents/merge.md` (step 6). A missing file is never mentioned and never stops the run.
 
 ### 1. Commit remaining work
 
@@ -174,9 +156,10 @@ Honest and brief. **Never** include co-authorship lines or any mention of AI/Cla
 Runs alongside step 5 — spawn both in one message, or do it inline when the lookup is a `CODEOWNERS` read and
 nothing more. Figure out who, without hardcoding handles:
 
-0. **`reviewers` tagged `pinned`** in step 0's profile — the repo already answered this. Use that list and
-   **skip 1 entirely**; it is the answer the key exists for, and re-deriving it would be asking a question
-   that has been settled in a committed file. Say it is pinned in the preview and the report (rule 3).
+0. **Reviewers named in `docs/agents/merge.md`** — the repo already answered this. Use that list and
+   **skip 1 entirely**; do not read `CODEOWNERS` to cross-check it — that would be asking a question settled
+   in a committed file. Say where the list came from in the preview and the report (rule 3). A `merge.md`
+   with no reviewers in it is no answer: go on to 1.
 1. `CODEOWNERS` — step 0 reported `codeowners=<path>` or `none`; owners of the changed paths are the natural
    reviewers.
 2. Repo/team conventions the user or docs mention; a configured default reviewer/team (`gh repo view` — with `<remote_repo>` unless `remote_repo=none`; org
@@ -193,7 +176,7 @@ Title:     <title>
 Base:      <base> ← <feature-branch>
 Remote:    <remote> (<named in docs/agents/remote.md | origin | chosen by you | fallback>)  [only with several remotes]
 Draft:     <yes/no>
-Reviewers: <handles or "none"> (<pinned in .mkit/config.toml | from CODEOWNERS | repo/org default |
+Reviewers: <handles or "none"> (<from docs/agents/merge.md | from CODEOWNERS | repo/org default |
            named by you | asked>)
 
 <description>
@@ -273,8 +256,8 @@ was. Never just "N commits pushed."
 
 After the block, say what the reader still has to do or decide, or "nothing needed from you": a remote chosen
 but not recorded (a `docs/agents/remote.md` naming it would end the question),
-CI still running, a reviewer that could not be determined, a gate skipped under the reuse rule, a pin that went
-nowhere. Never leave those implied by the block's fields alone.
+CI still running, a reviewer that could not be determined, a gate skipped under the reuse rule, a
+`docs/agents/*.md` file that did not say what it seemed to mean. Never leave those implied by the block's fields alone.
 
 ## Common failure scenarios
 
@@ -288,7 +271,7 @@ nowhere. Never leave those implied by the block's fields alone.
 | Lint/test/build fails               | Report which step; user decides fix vs proceed-as-draft.          |
 | On the base branch                  | Stop — tell the user to create a feature branch first.            |
 | No reviewers determinable           | Ask, or skip for a draft.                                         |
-| Config problem in the profile       | Report its `detail` verbatim, then fall back to `CODEOWNERS`.      |
+| `merge.md` names no usable reviewer | Say so in one line, then fall back to `CODEOWNERS`.               |
 
 ## Git safety
 

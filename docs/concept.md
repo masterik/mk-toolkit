@@ -46,9 +46,10 @@ tested binary.
   classifier and the worktree guard already allow writes; nothing goes in the work tree. `~/.mkit/`
   needs one grant. A path the sandbox would deny
   is reported up front, with a remedy that works ([ADR 0002](adr/0002-state-locations-under-a-sandbox.md)).
-- **Discover first, configure optionally.** Gate commands, scopes, reviewers and merge style are read
-  from the repo; `docs/agents/gate.md` overrides the gate. `mkit init` can pin the rest in a committed `.mkit/config.toml`; nothing requires it
-  ([ADR 0001](adr/0001-per-repo-config-and-init.md)).
+- **Discover first, configure optionally.** Gate commands, scopes and reviewers are read from the repo;
+  the rest has a default. A repo changes one with a short prose file in `docs/agents/` (written by the
+  `setup` skill or by hand); nothing requires it
+  ([ADR 0006](adr/0006-standalone-skills-optional-binary.md) decision 7).
 - **Narrow on purpose.** macOS and Claude Code only. Other platforms are a packaging question for when
   someone needs them.
 
