@@ -48,9 +48,10 @@ sweeping every branch and worktree. The workflow has seven steps, but three of t
   `impl` and `adversarial` go to Codex. `architecture`, `quality`, `tests`, `docs` and `comments` go to
   the Claude subagent.
 - `triage-reconcile.md`, `triage-verify.md`, `fix-checks.md`: what happens after the reviewers return.
-  - Reconcile: `mkit findings reconcile` does the arithmetic, and the main session judges what is
-    left open.
-  - Verify: five verdicts plus a materiality test, with one subagent per `mkit findings group` group.
+  - Reconcile: the dedupe rule, applied in prose by the main session — merge on same file,
+    overlapping lines and same surface; flag near-duplicates for verify.
+  - Verify: five verdicts plus a materiality test (and `duplicate of` for a flagged near-duplicate),
+    one subagent per batch of files.
   - Fix-checks: the three checks every fix must pass.
 - `agent-delegation.md`: the run dir as transport, subagent return budgets, resolved reference paths,
   one writer per file, model per stage.

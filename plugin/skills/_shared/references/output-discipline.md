@@ -76,8 +76,8 @@ Two facts to act on before you stage anything:
 ### Carry the path, not a variable
 
 **There is no `$RUN_DIR`.** Each Bash call is a fresh shell — cwd persists, environment does not. Read
-`run=` once and pass that literal: as `mkit gate run`'s first argument, as `mkit findings`'s run directory, and into every
-brief. Bind it inside a single call when one command needs it twice. Never re-run `mkit facts` to get it
+`run=` once and pass that literal: as `mkit gate run`'s first argument, as the home of `review`'s findings files, and
+into every brief. Bind it inside a single call when one command needs it twice. Never re-run `mkit facts` to get it
 back (a second directory, run scattered), never park it in a fixed pointer file (concurrent runs
 overwrite it).
 

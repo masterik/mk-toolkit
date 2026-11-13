@@ -1,7 +1,7 @@
 # Agent delegation & context discipline
 
 How a skill runs heavy work without paying for it in context. Used by `review` (two or three
-reviewers depending on mode, a reconciler, verifiers); applies to any stage that reads a lot and
+reviewers depending on mode, verifiers); applies to any stage that reads a lot and
 decides a little.
 
 The rule behind all of it: **the main session holds decisions, not evidence.** Evidence — diffs, tool
@@ -14,8 +14,8 @@ Give every multi-stage run one directory. **`mkit facts <skill>` opens it** and 
 
 - Hand every subagent that **`run=` literal**. Never `$RUN_DIR` (it inherits no shell) and never the
   `mkit facts` command (a subagent must not open its own run directory).
-- **One writer per file.** A fanned-out stage gets one file per branch (`findings-<source>.jsonl`,
-  `verdicts-<group>.jsonl`); the caller aggregates after they return. Concurrent writers to one path interleave
+- **One writer per file.** A fanned-out stage gets one file per branch (`findings-<source>.md`,
+  `verdicts-<batch>.md`); the caller aggregates after they return. Concurrent writers to one path interleave
   or clobber, and a lost verdict reads exactly like a finding nobody raised.
 - A stage reads the files of the stages before it and nothing else. That is what keeps its brief small.
 
@@ -30,7 +30,7 @@ a subagent with no budget returns everything it read.
 | counts, tags, ids, verdicts — a handful of lines | file contents it read to get there |
 | what it could **not** do (a failed tool, ground not covered) | a narration of its steps |
 
-Concretely: `wrote findings-codex.jsonl — 4 findings: 1 [code, major], 3 [code, minor]; lenses bugs, impl,
+Concretely: `wrote findings-codex.md — 4 findings: 1 [code, major], 3 [code, minor]; lenses bugs, impl,
 adversarial all covered`. Ten lines is generous; a hundred means the brief had no budget in it.
 
 ## Writing a brief
@@ -88,9 +88,9 @@ twenty-line return budget, and a plan that compresses it is a plan you have to r
 | stage shape | model |
 | --- | --- |
 | judgement about what is true or worth doing — reviewing, verifying, materiality | the strongest available (Opus) |
-| mechanical text work, answer already in the input — merging, deduping, formatting | a cheaper tier (Sonnet) |
+| mechanical text work, answer already in the input — formatting, summarizing a long output | a cheaper tier (Sonnet) |
 | a bounded search or file sweep | a cheaper tier (Sonnet), precise brief |
-| arithmetic over a stage's output — dedupe, counts, grouping, merging verdicts | **no subagent**: `mkit findings` |
+| bookkeeping over a stage's output — dedupe by a written rule, counts, batching, merging verdicts | **no subagent**: the main session, which already holds the capped output |
 
 ## When a Workflow is appropriate
 

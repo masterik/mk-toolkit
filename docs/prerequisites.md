@@ -36,7 +36,7 @@ It does not check tool versions, `gh` auth, or Bash allow rules.
 | --- | --- | --- |
 | `git` ≥ 2.30 | everything | `--absolute-git-dir`, `worktree list --porcelain`, `diff --shortstat` |
 | `bash` ≥ 3.2 | `mkit gate run` | gate steps run as `bash -c '<command>'`; macOS's `/bin/bash` is enough |
-| `mkit` | every skill but `explain` | run dir, starting facts, gate, branch classifier, findings |
+| `mkit` | every skill but `explain` | run dir, starting facts, gate, branch classifier |
 
 ## Recommended
 
@@ -94,7 +94,6 @@ Each subcommand is its own Bash pattern. Allow them once in `~/.claude/settings.
     "allow": [
       "Bash(mkit facts:*)",
       "Bash(mkit scratch:*)",
-      "Bash(mkit findings:*)",
       "Bash(mkit worklog:*)",
       "Bash(mkit branch status:*)",
       "Bash(mkit gate detect:*)",
