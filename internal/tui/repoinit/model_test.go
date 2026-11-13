@@ -18,7 +18,6 @@ import (
 func testPlan() *initplan.Plan {
 	return initplan.Build(initplan.Input{
 		Discovered: &profile.Profile{
-			Gate:   profile.Gate{Steps: []profile.GateStep{{Step: "test", Command: "go test ./..."}}},
 			Scopes: profile.List{Values: []string{"cli"}, Source: profile.Discovered},
 			Review: profile.List{Values: []string{"@a"}, Source: profile.Discovered},
 			Keep:   profile.List{Values: []string{"main"}, Source: profile.Discovered},
@@ -179,8 +178,8 @@ func TestCustomTextIsValidatedBeforeItAdvances(t *testing.T) {
 	}
 }
 
-// The gate and the keep list are not walked: accepting the four pages pins what
-// was found, and review opens either page, returning to review when it is done.
+// The keep list is not walked: accepting the four pages pins what was found,
+// and review opens the page, returning to review when it is done.
 func TestOptionalPagesOpenFromReviewOnly(t *testing.T) {
 	m := New(testPlan())
 	seen := map[string]bool{}
@@ -191,22 +190,22 @@ func TestOptionalPagesOpenFromReviewOnly(t *testing.T) {
 		}
 		press(m, "enter")
 	}
-	if seen[initplan.GateStepKey("test")] || seen[initplan.KeyKeep] {
+	if seen[initplan.KeyKeep] {
 		t.Fatalf("an optional page was walked: %v", seen)
 	}
-	if !strings.Contains(m.View(), "pins test: go test ./...") {
-		t.Errorf("review does not summarise the gate:\n%s", m.View())
+	if !strings.Contains(m.View(), "keeps ") {
+		t.Errorf("review does not summarise the keep list:\n%s", m.View())
 	}
-	reviewTo(t, m, "Change gate")
-	if m.Current() != initplan.GateStepKey("test") {
-		t.Fatalf("change gate opened %s", m.Current())
+	reviewTo(t, m, "Change cleanup")
+	if m.Current() != initplan.KeyKeep {
+		t.Fatalf("change cleanup opened %s", m.Current())
 	}
 	press(m, "esc")
 	if m.Current() != "review" || m.Done() {
-		t.Fatalf("esc on the gate's first prompt: at %s done=%v, want review", m.Current(), m.Done())
+		t.Fatalf("esc on the keep list's first prompt: at %s done=%v, want review", m.Current(), m.Done())
 	}
-	if a := m.actions()[m.action]; a.label != "Change gate" {
-		t.Errorf("review cursor on %q, want back on Change gate", a.label)
+	if a := m.actions()[m.action]; a.label != "Change cleanup" {
+		t.Errorf("review cursor on %q, want back on Change cleanup", a.label)
 	}
 	reviewTo(t, m, "Change cleanup")
 	press(m, "enter")

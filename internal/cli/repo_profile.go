@@ -15,7 +15,7 @@ import (
 func newRepoProfileCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "profile",
-		Short: "Report gate commands, spec store, commit rules, reviewers, merge style and kept branches",
+		Short: "Report spec store, commit rules, reviewers, merge style and kept branches",
 		Long: "Report how this repo works, merging what mkit discovers with what `mkit init` pinned.\n\n" +
 			"Every value is tagged `discovered` or `pinned`. The distinction is the point: a\n" +
 			"discovered value is re-derived every run and cannot go stale; a pinned one captured\n" +
@@ -55,22 +55,6 @@ func renderProfile(out io.Writer, p *profile.Profile) {
 	// value — being attached to nothing is exactly what is wrong with it.
 	for _, pb := range p.ConfigProblems {
 		_, _ = fmt.Fprintf(out, "  %s %s\n", pb.Detail, tag(string(pb.Kind)))
-	}
-
-	_, _ = fmt.Fprintln(out, "\nquality gate:")
-	if p.Gate.Ecosystem != "" {
-		_, _ = fmt.Fprintf(out, "  ecosystem: %s\n", p.Gate.Ecosystem)
-	}
-	if len(p.Gate.Steps) == 0 {
-		_, _ = fmt.Fprintf(out, "  %s\n", cause(p.Gate.Cause, "no gate commands found or pinned"))
-	} else if p.Gate.Cause != "" {
-		// Pinned steps do not mean discovery worked. Printing the cause alongside
-		// them is the difference between "these are the steps" and "these are the
-		// steps we were told about, having failed to look for others".
-		_, _ = fmt.Fprintf(out, "  discovery: %s %s\n", p.Gate.Cause, tag("unavailable"))
-	}
-	for _, s := range p.Gate.Steps {
-		_, _ = fmt.Fprintf(out, "  %-10s %-40s %s\n", s.Step, s.Command, tag(string(s.Source)))
 	}
 
 	_, _ = fmt.Fprintln(out, "\nspec store:")

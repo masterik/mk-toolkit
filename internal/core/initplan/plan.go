@@ -14,9 +14,7 @@
 package initplan
 
 import (
-	"cmp"
 	"fmt"
-	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -65,8 +63,7 @@ const (
 	ScopesPin      = "pin"
 )
 
-// Keys of the questions whose answers Apply reads. Gate steps are
-// GateStepKey(step).
+// Keys of the questions whose answers Apply reads.
 const (
 	KeySpecStore  = "spec.store"
 	KeySpecRef    = "spec.ref"
@@ -78,12 +75,7 @@ const (
 	KeyMerge      = "merge.style"
 	KeyRemote     = "remote.name"
 	KeyKeep       = "cleanup.keep"
-	KeyGateNew    = "gate.new"
-	gateStepPre   = "gate.step."
 )
-
-// GateStepKey is the question key for one gate step.
-func GateStepKey(step string) string { return gateStepPre + step }
 
 // Option is one choice.
 type Option struct {
@@ -167,16 +159,6 @@ func (pg *Page) question(key string) *Question {
 func (pg *Page) Summary(cfg *repoconfig.Config) string {
 	if cfg == nil {
 		return ""
-	}
-	if pg.question(KeyGateNew) != nil {
-		if len(cfg.Gate.Commands) == 0 {
-			return "nothing pinned; discovered each run"
-		}
-		var pins []string
-		for _, k := range slices.Sorted(maps.Keys(cfg.Gate.Commands)) {
-			pins = append(pins, k+": "+cfg.Gate.Commands[k])
-		}
-		return "pins " + strings.Join(pins, " · ")
 	}
 	if q := pg.question(KeyKeep); q != nil {
 		keep := slices.Clone(q.Locked)
@@ -272,7 +254,6 @@ func Build(in Input) *Plan {
 		pages = append(pages, Page{Title: "Remote", Intro: introRemote, Questions: []Question{remote(in)}})
 	}
 	return &Plan{Pages: append(pages,
-		Page{Title: "Gate", Intro: introGate, Questions: gateQuestions(in), Optional: true},
 		Page{Title: "Cleanup", Intro: introCleanup, Questions: []Question{keep(in)}, Optional: true},
 	)}
 }
@@ -297,11 +278,6 @@ const (
 		"requests; cleanup fetches that same remote and looks its pull requests up. This page appears when several remotes are configured here, or the config already " +
 		"pins one (which this clone may lack). Pin the one to use and they stop asking; " +
 		"unpinned, they offer `origin` where it exists and ask once per run while there are several."
-	introGate = "The quality gate: the commands commit, review, pr and finish run before work " +
-		"integrates — lint, typecheck, vet, test, build. Each step comes from this repo's own " +
-		"task runner (justfile, Makefile, Taskfile, package.json scripts, deno tasks) where it defines one, " +
-		"otherwise the language's standard command. They are pinned as found, so every run uses " +
-		"the same commands; run `mkit init --force` to re-discover."
 	introCleanup = "The cleanup skill deletes branches and worktrees whose work has merged. " +
 		"Branches listed here are never deleted, merged or not; the default branch is always kept."
 )
@@ -369,80 +345,6 @@ func pick(q *Question, pinned, discovered, def string) {
 	default:
 		q.Selected = []string{DontPin}
 	}
-}
-
-func gateQuestions(in Input) []Question {
-	pinned := in.Existing.Gate.Commands
-	var qs []Question
-	seen := map[string]bool{}
-	for _, s := range in.Discovered.Gate.Steps {
-		seen[s.Step] = true
-		qs = append(qs, gateStep(s.Step, s.Command, pinned[s.Step]))
-	}
-	// A pinned step discovery does not know is still this config's to keep.
-	for _, step := range slices.Sorted(maps.Keys(pinned)) {
-		if !seen[step] {
-			qs = append(qs, gateStep(step, "", pinned[step]))
-		}
-	}
-	qs = append(qs, Question{
-		Key: KeyGateNew, Kind: Select, Title: "Add a step",
-		Description: "Pin a step the discovery above did not find — an e2e suite, a schema check.",
-		Options: []Option{
-			{Value: DontPin, Label: "no extra step", Description: "the gate is the steps above"},
-			{Value: CustomValue, Label: "add a step…", Description: "pin one more step as step=command"},
-		},
-		Selected:          []string{DontPin},
-		CustomTitle:       "New gate step",
-		CustomPlaceholder: "step=command, e.g. e2e=npm run e2e",
-	})
-	return qs
-}
-
-// gateStep offers a step's command. A discovered command is pre-selected as a
-// pin, not as "keep discovering": the config records what the gate runs, and
-// re-discovering is the user's act (`mkit init --force`), where a changed
-// suggestion shows up beside the pinned command. There is no "drop": the schema
-// pins commands by step and has no way to say a step must not run, so the form
-// does not invent one.
-func gateStep(step, discovered, pinned string) Question {
-	q := Question{
-		Key: GateStepKey(step), Kind: Select, Title: "Gate step: " + step,
-		CustomTitle: "Command for " + step, CustomPlaceholder: "the command line to run",
-	}
-	switch {
-	case discovered == "":
-		q.Description = "Only the existing config names this step; discovery does not find it."
-	case pinned == "" || pinned == discovered:
-		q.Description = "Discovered: `" + discovered + "`."
-	default:
-		q.Description = "Pinned: `" + pinned + "`. Discovery now suggests `" + discovered + "`."
-	}
-	if pinned != "" {
-		q.Options = append(q.Options, Option{Value: pinned, Label: "pin `" + pinned + "`",
-			Description: "keep the command the config already runs", Provenance: Pinned})
-	}
-	if discovered != "" && discovered != pinned {
-		label := "pin `" + discovered + "`"
-		desc := "run what discovery found, and keep running it until you re-init"
-		if pinned != "" {
-			label = "switch to `" + discovered + "`"
-			desc = "replace the pinned command with discovery's suggestion"
-		}
-		q.Options = append(q.Options, Option{Value: discovered, Label: label, Description: desc,
-			Provenance: Discovered})
-	}
-	q.Options = append(q.Options, Option{Value: CustomValue, Label: "override…",
-		Description: "pin a different command for this step"})
-	if discovered != "" {
-		q.Options = append(q.Options, Option{Value: DontPin, Label: "don't pin",
-			Description: "re-discover the command on every run instead"})
-	} else {
-		q.Options = append(q.Options, Option{Value: DontPin, Label: "drop the pin",
-			Description: "stop running this step; nothing discovers it"})
-	}
-	q.Selected = []string{cmp.Or(pinned, discovered)}
-	return q
 }
 
 var storeDescriptions = map[string]string{
@@ -747,21 +649,18 @@ func keep(in Input) Question {
 // flags apply — one producer per rule, in repoconfig.
 func Validate(key, text string) error {
 	text = strings.TrimSpace(text)
-	switch {
-	case key == KeySubjectMax:
+	switch key {
+	case KeySubjectMax:
 		n, err := strconv.Atoi(text)
 		if err != nil {
 			n = 0
 		}
 		return repoconfig.CheckSubjectMax(n)
-	case key == KeyGateNew:
-		_, _, err := repoconfig.ParseGatePin(text)
-		return err
-	case strings.HasPrefix(key, gateStepPre), key == KeySpecRef:
+	case KeySpecRef:
 		if text == "" {
 			return fmt.Errorf("type a value, or go back and choose another option")
 		}
-	case key == KeyScopes, key == KeyReviewers, key == KeyKeep:
+	case KeyScopes, KeyReviewers, KeyKeep:
 		if len(splitList(text)) == 0 {
 			return fmt.Errorf("type at least one name, or untick + add")
 		}
@@ -819,27 +718,6 @@ func Apply(p *Plan, a Answers) (*repoconfig.Config, error) {
 			}
 		}
 		return out, nil
-	}
-
-	for _, pg := range p.Pages {
-		for _, q := range pg.Questions {
-			if !strings.HasPrefix(q.Key, gateStepPre) {
-				continue
-			}
-			v, err := one(q.Key)
-			if err != nil {
-				return nil, err
-			}
-			if v != "" {
-				cfg.SetGate(strings.TrimPrefix(q.Key, gateStepPre), v)
-			}
-		}
-	}
-	if v, err := one(KeyGateNew); err != nil {
-		return nil, err
-	} else if v != "" {
-		step, command, _ := repoconfig.ParseGatePin(v) // one() validated it
-		cfg.SetGate(step, command)
 	}
 
 	var err error

@@ -36,7 +36,7 @@ It does not check tool versions, `gh` auth, or Bash allow rules.
 | --- | --- | --- |
 | `git` ≥ 2.30 | everything | `--absolute-git-dir`, `worktree list --porcelain`, `diff --shortstat` |
 | `bash` ≥ 3.2 | `pr`, `finish` | the skills run the repo's gate commands in the shell; macOS's `/bin/bash` is enough |
-| `mkit` | every skill but `explain` | run dir, starting facts, gate, branch classifier |
+| `mkit` | every skill but `explain` | run dir, starting facts, branch classifier |
 
 ## Recommended
 
@@ -61,7 +61,7 @@ a partial review as clean.
 
 `mkit init` writes a committed `.mkit/config.toml`. It pins two kinds of value:
 
-- **What it discovers:** gate commands, commit scopes, spec store and merge style, so runs stop
+- **What it discovers:** commit scopes, spec store and merge style, so runs stop
   re-discovering them.
 - **What discovery can't establish:** subject length, review mode, and the branches `cleanup` must
   keep.
@@ -92,8 +92,7 @@ Each subcommand is its own Bash pattern. Allow them once in `~/.claude/settings.
 {
   "permissions": {
     "allow": [
-      "Bash(mkit scratch:*)",
-      "Bash(mkit gate detect:*)"
+      "Bash(mkit scratch:*)"
     ]
   }
 }

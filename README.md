@@ -34,14 +34,13 @@ or call a skill directly as `/mkit:<skill>`, for example `/mkit:review quick`. A
 edit → /mkit:commit → /mkit:review → /mkit:pr   (or /mkit:finish to merge locally)
 ```
 
-Skills discover gate commands, commit scopes, reviewers, merge style and the push remote from the repo. `mkit init`
-can pin them in a committed `.mkit/config.toml`, but that is optional. mkit's scratch state lives in
+Skills discover gate commands, commit scopes, reviewers, merge style and the push remote from the repo
+(`docs/agents/gate.md` overrides the gate). `mkit init` can pin the rest in a committed `.mkit/config.toml`, but that is optional. mkit's scratch state lives in
 `.mkit/` and is git-ignored; `.mkit/config.toml` is committed.
 
 ## The binary
 
 ```
-mkit gate detect | run   find and run the repo's checks; record what passed
 mkit repo profile        discovered vs pinned config (mkit init pins it)
 mkit doctor              prerequisites, sandbox writability, plugin state
 mkit audit sandbox       sandbox and permission-gate events across sessions

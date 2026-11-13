@@ -34,7 +34,8 @@ sweeping every branch and worktree. The workflow has seven steps, but three of t
 - `git-safety.md`: no force-push, no config edits, no AI attribution, no skipped hooks; confirm before
   any irreversible step.
 - `conventional-commits.md`: message format, type table, scope detection.
-- `quality-gate.md`: find the gate with `mkit gate detect` (never hardcoded), run its commands with
+- `quality-gate.md`: find the gate by its precedence table (`docs/agents/gate.md`, runner `check`/`ci`,
+  per-step recipes over the ecosystem default, else ask; never hardcoded), run its commands with
   output to a log, the one rule for reusing a pass, and when a failure needs a delegated diagnosis.
 - `worktree.md`: the `cleanup_path` values `facts.sh` reports (`exit-worktree`, `git-worktree`,
   `none`) and the teardown for each.

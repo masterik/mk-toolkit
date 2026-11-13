@@ -74,3 +74,15 @@ func factsRepo(t *testing.T) string {
 	t.Setenv("MKIT_HOME", filepath.Join(repo, ".mkit-home"))
 	return repo
 }
+
+// put writes name under dir, creating its parents.
+func put(t *testing.T, dir, name, content string) {
+	t.Helper()
+	p := filepath.Join(dir, name)
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}

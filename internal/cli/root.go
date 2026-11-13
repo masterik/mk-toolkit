@@ -14,7 +14,6 @@ import (
 const (
 	groupSetup   = "setup"
 	groupState   = "state"
-	groupReview  = "review"
 	groupCleanup = "cleanup"
 )
 
@@ -65,7 +64,6 @@ func NewRoot() *cobra.Command {
 	root.AddGroup(
 		&cobra.Group{ID: groupSetup, Title: "Setup & health:"},
 		&cobra.Group{ID: groupState, Title: "Repo & branch state:"},
-		&cobra.Group{ID: groupReview, Title: "Quality gate & review:"},
 		&cobra.Group{ID: groupCleanup, Title: "Housekeeping & audit:"},
 	)
 	root.SetHelpCommandGroupID(groupSetup)
@@ -79,7 +77,6 @@ func NewRoot() *cobra.Command {
 	}
 	add(groupSetup, newInitCmd(), newDoctorCmd(), newVersionCmd())
 	add(groupState, newRepoCmd())
-	add(groupReview, newGateCmd())
 	add(groupCleanup, newScratchCmd(), newCacheCmd(), newAuditCmd())
 
 	installPrettyHelp(root)

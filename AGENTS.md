@@ -68,7 +68,7 @@ apply both ways:
 - The old test **was the spec**: pre-M5 `.bats` → Go tests → `tests/*.bats` again. Don't "simplify" an
   assertion whose comment names a measured failure.
 - **One implementation per invariant**; never a second wording of a degradation sentence.
-- Never half-capable: `jq-missing`, `no-hash`, `gh=no-cache`, `scripts_state=no-jq` stay dead.
+- Never half-capable: `jq-missing`, `no-hash`, `gh=no-cache` stay dead.
 
 ## Layout
 
@@ -91,15 +91,12 @@ apply both ways:
     of that sentence; `doctor` never re-words it.
   - `initplan/` (#31): `mkit init` form as data. `Build` (pinned config + `profile.Discover` without
     config, tiers apart + `Gather` candidates → pages); `Apply` (answers → config). Pre-select
-    **pinned → discovered → default**; discovered gets pinned (gate, scopes, spec store, merge style)
+    **pinned → discovered → default**; discovered gets pinned (scopes, spec store, merge style)
     except reviewers (pinned list replaces `pr`'s CODEOWNERS match). Defaults only `merge.style = merge`,
     `review.mode = full`. Pages Spec → Commit → Review → Merge → Remote (only with >1 remote, or a pin to
-    keep); Gate/Cleanup `Optional`, pre-selected,
-    opened from review. Custom text uses `repoconfig`'s flag rules.
-  - `profile/` (M7): merges discovered + pinned, tags each value; consumes `gate.Detect`'s gate
-    result. `gate.Detect` overlays task-runner recipes (`runners.go`: just, make, Taskfile, deno) on
-    the ecosystem chain **per step** — runner `test` replaces `go test ./...`, missing step keeps the
-    ecosystem's, extras (`lint`) join in `GateSteps` order.
+    keep); Cleanup `Optional`, pre-selected, opened from review. No gate page (#48). Custom text uses `repoconfig`'s flag rules.
+  - `profile/` (M7): merges discovered + pinned, tags each value. No gate section: gate detection is
+    prose (`_shared/references/quality-gate.md`).
   - `pluginroot/` (M7): `CLAUDE_PLUGIN_ROOT`, `MKIT_PLUGIN_ROOT` (trusted as given), `plugin/` beside
     the work tree, marketplace checkout. Searched ones matched by **manifest name, never path**
     (checkout is `marketplaces/masterik/plugin`). **Work tree before installed copy** — else an old
@@ -113,8 +110,6 @@ apply both ways:
     `.mkit` files, run dirs untracked). Owns `~/.mkit` (`MKIT_HOME`) and its one unwritable remedy sentence.
   - `branchstatus/`: only `ProtectedSet`/`Develop`, for `profile`; goes with it (#53). The classifier
     is `branch-status.sh`.
-  - `gate/` (M5): `Detect` + runner overlay only — proposes commands, never runs them; skills run
-    them (#48).
   - `sessionaudit/`: `mkit audit sandbox` (hidden alias `sessions`, one release). Reads
     `<claude home>/projects/**/*.jsonl` (`cache`'s `CLAUDE_HOME` rule). Classifies results the
     sandbox/gate touched: **paired to their call by `tool_use_id`**, never transcript substring (that

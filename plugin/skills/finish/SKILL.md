@@ -86,7 +86,7 @@ Run the **full quality gate** (`../_shared/references/quality-gate.md`): lint â†
 equivalent, stop on first failure. A local merge skips review, so this gate is the only safety net. Report any
 failure; do not merge past it without an explicit user OK.
 
-`mkit gate detect` names the commands; run each yourself, its output to a log in the run directory. One line
+The reference's table ("Find the gate") names the commands; run each yourself, its output to a log in the run directory. One line
 per passing step; on failure the step, the exit code, the failure lines and the tail
 (`../_shared/references/output-discipline.md`). A failing suite is thousands of lines, none of which change
 the decision ("fix it or get an explicit OK"). Skip the gate only under the reference's one reuse rule, and say

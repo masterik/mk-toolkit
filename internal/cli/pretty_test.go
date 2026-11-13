@@ -112,7 +112,7 @@ func TestPrettyHelpGroupsCommandsAndListsFlags(t *testing.T) {
 	prettyHelp(&b, root)
 	plain := ansi.ReplaceAllString(b.String(), "")
 	show(t, b.String())
-	for _, want := range []string{"── Setup & health", "── Quality gate & review", "doctor", "── flags", "--json"} {
+	for _, want := range []string{"── Setup & health", "── Housekeeping & audit", "doctor", "── flags", "--json"} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("missing %q in:\n%s", want, plain)
 		}
@@ -138,12 +138,8 @@ func TestHelpIsStockOffATerminal(t *testing.T) {
 
 func fullProfile() *profile.Profile {
 	return &profile.Profile{
-		Toplevel: "/repo",
-		Config:   repoconfig.Status{Path: "/repo/.mkit/config.toml", State: "tracked"},
-		Gate: profile.Gate{Ecosystem: "go,just", Steps: []profile.GateStep{
-			{Step: "test", Command: "just test", Source: profile.Discovered},
-			{Step: "lint", Command: "make lint", Source: profile.Pinned},
-		}},
+		Toplevel:   "/repo",
+		Config:     repoconfig.Status{Path: "/repo/.mkit/config.toml", State: "tracked"},
 		Spec:       profile.Spec{Store: profile.Value{Value: "github-issues", Source: profile.Discovered}, Ref: profile.Value{Value: "o/r", Source: profile.Discovered}},
 		Scopes:     profile.List{Values: []string{"cli", "core"}, Source: profile.Pinned},
 		SubjectMax: profile.Value{Value: "72", Source: profile.Pinned},
@@ -165,8 +161,7 @@ func TestPrettyProfileKeepsEveryValueThePlainFormPrints(t *testing.T) {
 	show(t, b.String())
 	plain := ansi.ReplaceAllString(b.String(), "")
 	for _, want := range []string{
-		"/repo", "/repo/.mkit/config.toml", "tracked", "go,just",
-		"just test", "make lint", "pinned", "discovered",
+		"/repo", "/repo/.mkit/config.toml", "tracked", "pinned", "discovered",
 		"github-issues", "o/r", "cli, core", "72", "no CODEOWNERS file and nothing pinned", "unavailable",
 		"full", "merge", "release", "0.20.0", "/p (work tree)",
 	} {
@@ -176,11 +171,10 @@ func TestPrettyProfileKeepsEveryValueThePlainFormPrints(t *testing.T) {
 	}
 
 	p.Payload = profile.PayloadInfo{Remedy: "install the plugin"}
-	p.Gate = profile.Gate{Cause: "no ecosystem recognised"}
 	b.Reset()
 	prettyProfile(&b, p)
 	plain = ansi.ReplaceAllString(b.String(), "")
-	for _, want := range []string{"not found", "install the plugin", "no ecosystem recognised"} {
+	for _, want := range []string{"not found", "install the plugin"} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("degraded profile missing %q in:\n%s", want, plain)
 		}

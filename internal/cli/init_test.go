@@ -120,7 +120,7 @@ func TestInitKeepsAnExistingConfigWithoutForce(t *testing.T) {
 // none of them would notice it answering false: this asserts it directly, for
 // every local flag, so a new field flag is covered the day it is registered.
 func TestFieldFlagGivenSeesEveryFieldFlag(t *testing.T) {
-	values := map[string]string{"gate": "e2e=make e2e", "subject-max": "0", "force": "true"}
+	values := map[string]string{"subject-max": "0", "force": "true"}
 	if fieldFlagGiven(newInitCmd()) {
 		t.Error("no flags parsed, but a field flag reads as given")
 	}
