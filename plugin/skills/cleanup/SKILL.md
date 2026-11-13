@@ -9,229 +9,133 @@ model: sonnet
 
 # Clean up local branches and worktrees
 
-Part of the **mkit** bundle, but outside the edit → commit → review → finish/pr line: this is repo
-gardening, not feature work. `finish` tears down the *one* branch/worktree it just merged; `cleanup` sweeps
-*every* local branch in the repo, whatever their state.
+Repo gardening, outside the feature line: `finish` tears down the one branch it merged; `cleanup` sweeps
+*every* local branch and its worktree.
 
-References, read the ones a step calls for: `../_shared/references/worktree.md`,
-`../_shared/references/git-safety.md`, `../_shared/references/branching.md`,
-`../_shared/references/output-discipline.md`.
-
-## What this does and does not touch
-
-- Deletes local branches and removes the worktrees attached to them.
-- Never touches a remote branch, never `git push --delete`s, never closes or merges a PR, never force-pushes.
-  `git fetch --prune` is the only network call, and it only updates this repo's own remote-tracking refs
-  (`refs/remotes/<remote>/*`) — that is what makes `upstream=gone` mean anything, and it cannot delete anything
-  on the remote itself.
-- Keeps exactly the branches `branch-status.sh` reports as `protected`, and never re-derives that set: the
-  **default branch** (`main`/`master`/`trunk`, whichever the repo resolves to); if one exists **as a local
-  branch**, the first of `develop`/`development`/`dev` (or the one `docs/agents/cleanup.md` names); and every
-  branch name the repo keeps that exists as a local branch here. A `develop` that exists only as
-  `origin/develop` and was never checked out locally is not kept — nothing here creates a local branch, only
-  removes them, and the same rule applies to a kept name.
-- **The default branch is protected whether or not the keep list names it.** A keep list that omits it is a
-  mistake, not an instruction: the kept names are *added* to what cleanup already protects, never
-  substituted for them. This is decided in `branch-status.sh`, not here.
-- Ends by switching to one of the kept branches and pulling it up to date with the remote `branch-status.sh`
-  resolves (`origin`, or what the user chose — never assumed to be named `origin`).
+- Deletes local branches and their worktrees. **Never touches the remote**: no `push --delete`, no PR
+  changes, no force-push. `git fetch --prune` (inside `branch-status.sh`) only updates remote-tracking refs.
+- **Keeps exactly the `protected` rows** `branch-status.sh` reports — the default branch (always, whatever
+  the keep list says), a local `develop`/`development`/`dev` (or the one `docs/agents/cleanup.md` names), and
+  every kept name that exists locally. Never re-derive or second-guess that set.
+- Ends on a kept branch, pulled from the resolved remote.
 
 ## Preconditions
 
-**Two calls**, from this skill's directory (`../_shared/references/output-discipline.md` says how to resolve
-the paths). The first resolves the default branch and this checkout's state; the second classifies every
-branch and worktree:
+Two calls; paths are relative to this skill's directory — resolve and run them absolute
+(`../_shared/references/output-discipline.md`):
 
 ```bash
 bash ../_shared/scripts/facts.sh cleanup
 bash ../_shared/scripts/branch-status.sh --default <default_branch> [--develop <name>] [--keep <name>]...
 ```
 
-**What the repo keeps.** If `docs/agents/cleanup.md` exists, read it first
-(`../_shared/references/repo-settings.md`, "Cleanup"): every branch it says to keep goes
-to the second call as one `--keep <name>` each, and a develop-like branch it names goes as `--develop`. No
-file → no `--keep`; the default and a local `develop`/`development`/`dev` are protected regardless.
+**Kept branches** (`../_shared/references/repo-settings.md`): if `docs/agents/cleanup.md` exists, each
+branch it keeps goes to the second call as one `--keep <name>` (names, not patterns; added to what is
+protected, never substituted), and a develop branch it names as `--develop <name>`. No file → no `--keep`.
 
-**`remote_choice=ask`** (several remotes): ask which remote *before* the second call — it fetches and looks
-PRs up through one — then re-run the first with `--remote <answer>` (the default branch can differ per
-remote) and pass `--remote <answer>` to the second. `../_shared/references/remote.md` has the rule.
+**Remote**: `remote_choice=ask` → ask *before* the second call, re-run the first with `--remote <answer>`, and
+pass `--remote <answer>` to the second (`../_shared/references/remote.md`).
 
-From `facts.sh`: `branch=` (current branch — cannot be deleted while checked out), `clean=` (is the *current*
-worktree dirty right now), `cleanup_path=` (only relevant if this session's own worktree turns out to be one
-of the ones in play — see step 3).
+From `facts.sh`: `branch=`, `clean=`, `cleanup_path=` (this session's own worktree). From
+`branch-status.sh`: `protected=` (for reading; the per-row `class` is exact), `develop=`, `keep=`,
+`keep_unknown=` (kept names with no local branch — normal, mention once), `remote=`, `fetch=` (`failed` →
+classify on what you have, say so), `gh=` (anything but `ok` → say so; PR-based classes rest on git alone),
+the `branches:` and `worktrees:` tables, and `notes:` (report verbatim).
 
-From `branch-status.sh`: `protected=` (the whole kept set, comma-joined for reading — a branch name may
-contain a comma, so the `class` column's `protected` is the exact answer per row; use it as given, never
-rebuild it), `develop=`, `keep=` (the names passed as `--keep`, or `none`), `keep_unknown=` (kept names with
-no local branch here — **not an error**: a keep list travels with the repo, so a long-lived branch nobody has
-checked out in this clone is the ordinary state. Mention it once in the final report, so a typo is visible
-without being treated as one), `remote=`, `fetch=` (say if it came back `failed` — classify on what you have
-and note it), `gh=` (`ok | skipped | no-remote | gh-missing | gh-unauthenticated | gh-error`; say if it is
-anything but `ok` — some classes below then rest on git alone, while every branch and worktree row is still
-complete), the `branches:` table and the `worktrees:` table, and a trailing `notes:` block (a `--remote` or
-`--develop` that named nothing here — report it verbatim). Column meaning is in the script's header comment;
-the short version:
-
-| `class` | means | default handling |
+| `class` | means | handling |
 | --- | --- | --- |
-| `protected` | a branch in `protected=`: the default branch, a develop-like one, or a kept name | never a candidate |
-| `current` | whatever is checked out right now | never *directly* touched — see step 1's current-branch note before assuming it's out of scope entirely |
-| `merged` | git proves it: an ancestor of the default or develop branch (`merged_into` names which) — a kept branch is **not** a merge target, so work merged only into `staging` is never auto-deleted on that basis | auto-delete |
-| `merged-pr` | not an ancestor locally (squash/rebase merge changes the SHAs), but GitHub says the PR merged, verified against this branch's own content | auto-delete, say how you know |
-| `open-pr` | an open PR exists for this branch | ask |
-| `closed-pr` | a PR exists and was closed without merging | ask |
-| `gone` | had an upstream, it was deleted remotely, no PR trail found | ask |
-| `unpushed` | never had an upstream at all | ask |
-| `tracking` | a live upstream, not merged, no conclusive PR info | ask |
+| `protected` | in `protected=` | never a candidate |
+| `current` | checked out now | derive its real class (below) |
+| `merged` | ancestor of the default or develop branch (`merged_into`); a kept branch is never a merge target | auto-delete |
+| `merged-pr` | GitHub says its PR merged, verified against this branch's content | auto-delete, say how you know |
+| `open-pr` / `closed-pr` | a PR open / closed unmerged | ask |
+| `gone` | upstream deleted, no PR trail | ask |
+| `unpushed` | never had an upstream | ask |
+| `tracking` | live upstream, not merged, no conclusive PR | ask |
 
 ## Workflow
 
 ### 1. Classify
 
-Walk the `branches:` table. Every `protected` row is out of scope, full stop — never propose deleting a
-branch in `protected=`, and never second-guess that set: a kept name is there because a human decided
-this repo keeps it. For everything else, sort into:
+- **auto-delete**: `merged`/`merged-pr` with no worktree, or a `worktrees:` row with `clean=yes`.
+- **ask**: `open-pr`, `closed-pr`, `gone`, `unpushed`, `tracking`, and any `merged`/`merged-pr` whose
+  worktree is `clean=no` **or `clean=error`** (unreadable is not clean).
+- **ask, whatever the class**: a worktree with `origin=claude-code` — some session's own, maybe in use.
+- **never a delete target**: `clean=missing` (directory already gone; `git worktree prune` fixes it).
 
-- **auto-delete**: `merged` or `merged-pr`, **and** (no attached worktree, or its `worktrees:` row is
-  `clean=yes`). A `merged`/`merged-pr` branch whose worktree is `clean=no` **or `clean=error`** moves to
-  **ask** instead — an unreadable worktree is not a proven-clean one, and neither is touched without an
-  explicit go-ahead, merged or not (`../_shared/references/git-safety.md`).
-- **ask**: `open-pr`, `closed-pr`, `gone`, `unpushed`, `tracking` — and any `merged`/`merged-pr` branch that
-  landed here because its worktree is dirty or unreadable.
-- **cannot act automatically**: a `worktrees:` row with `origin=claude-code` (some Claude Code session's own
-  worktree — possibly still in use right now) always moves to **ask**, whatever its branch class, and a row
-  with `clean=missing` (the worktree's directory is already gone; `git worktree prune` is the fix, not a
-  removal) is noted but never a delete target.
+**`current`** is reported *instead of* its real class. Derive that from its `upstream`, `merged_into` and
+`pr` columns in priority `merged` > `merged-pr` > `open-pr`/`closed-pr` > `gone` > `unpushed` > `tracking`,
+sort it like any row, and flag it **"current — switch away first"**.
 
-**The `current` row needs one extra step, not a skip.** `branch-status.sh` reports `current` in the `class`
-column *instead of* what the branch would otherwise classify as — the branch you happen to be standing on is
-never exempt from cleanup just because you started there. Before deciding it is out of scope, derive its real
-disposition from its own `upstream` and `merged_into` columns, using the same priority order the command's own
-header documents (`merged` > `merged-pr` > `open-pr`/`closed-pr` > `gone` > `unpushed` > `tracking` — `pr`'s
-column tells you which of the PR-based ones apply). Sort that derived class into auto-delete/ask exactly like
-any other row, but flag it separately as **"current — switch away first"**: step 3 has to leave it before it
-can act on it, which is the one thing that makes this branch different from the rest of the table.
+### 2. Plan and confirm
 
-### 2. Show the plan and confirm
-
-One screen, grouped exactly like the classification above — this mirrors `finish`'s "show the plan before
-touching anything":
+One screen:
 
 ```
 Cleanup plan:  <n> branch(es) reviewed, keeping <protected list>
-Currently on:  <branch> — <its derived class, if not protected> (will switch away before deleting it, if in scope)
+Currently on:  <branch> — <derived class> (will switch away first, if in scope)
 
 Auto-delete (merged):
   <branch>  (merged into <target>[, worktree removed])
-  ...
 
 Needs your OK:
   <branch>  open PR #<n>, worktree at <path>
   <branch>  unpushed — 1 commit not on any remote, recoverable via reflog for a while
-  ...
 
 Left alone:
   <branch>  worktree is dirty — <path>
   <branch>  origin=claude-code worktree — may still be in use
 ```
 
-Auto-delete branches need no further confirmation beyond this plan (unless the user already gave standing
-authorization to skip even this). For the **ask** group: with four or fewer distinct decisions, use
-**AskUserQuestion** — one question per branch or per small cluster of branches sharing the same reason,
-header = the branch name cut to 12 characters (the full name goes in the question text), options `delete` and
-`keep` (`keep` is the recommended, first option unless the reason is conclusive), each with a one-line
-consequence. With more than four decisions, ask in further calls of up to four, or cluster branches that share a
-reason. Without the tool, one numbered list for the whole group (`../_shared/references/summary-format.md`). Never assume "ask" means "delete" — no response, or an unclear one, means
-that branch is left alone and named in the final report.
+Auto-delete needs no further confirmation. For **ask**: `AskUserQuestion`, one question per branch (or per
+cluster sharing a reason), header = the branch cut to 12 characters, options `keep` (first, recommended
+unless the reason is conclusive) and `delete`; more than four → further calls. Numbered-list fallback per
+`../_shared/references/summary-format.md`. No answer = keep, named in the report.
 
-### 3. Leave the current branch first, if it's in scope
+### 3. Leave the current branch, if in scope
 
-Do this **before** anything else in this section. If step 1 flagged the branch you started on as
-"current — switch away first" (it fell into auto-delete or was approved in the ask group), `git switch
-<default>` now — you cannot delete the branch you are standing on, and there is nothing left to special-case
-once you aren't standing on it anymore. If it was never in scope, skip this and stay put; you'll land somewhere
-in step 5 either way.
+If the starting branch is flagged and approved (or auto-delete), `git switch <default>` first. `git switch`
+refuses when the target is checked out in another worktree: try another protected branch; if none is free,
+stop and say so — never force.
 
-`git switch` refuses when the target is already checked out in another worktree (relevant if `facts.sh`'s own
-`cleanup_path=` said this session is itself inside a linked or `.claude/worktrees/` checkout, and the default
-branch is checked out in the primary one). Try another branch from `protected=` if one exists and isn't taken
-either; if every protected branch is unavailable, stop and say so rather than forcing anything — this is the
-one place in the workflow where "switch away" can fail through no fault of the branch being deleted.
+### 4. Delete — worktree first, then branch
 
-### 4. Delete — worktree first, then branch, always verified, never a blind `-d`
+Per approved branch:
 
-For every branch approved in step 1, step 2, or just vacated in step 3, in this order:
-
-1. **Remove the worktree, if any.** Prefer `wt remove <branch>` when `wt` is on `PATH` — it respects the
-   user's hooks and config (`../_shared/references/worktree.md`). Otherwise `git worktree remove <path>` (add
-   `--force` only for a `clean=no` worktree the user explicitly approved removing anyway — that discards
-   uncommitted work, so say so plainly before doing it). Never do this for an `origin=claude-code` worktree
-   unless the user explicitly approved it knowing what it is. **`wt remove` already deletes a merged branch
-   itself** — after it runs, check `git show-ref --verify --quiet refs/heads/<branch>` before step 4.2; if it's
-   already gone, you're done with this branch, and running a delete on it anyway is a redundant, avoidable
-   error, not a real failure worth reporting as one.
-2. **Delete the branch, if it still exists.** Always `git branch -D <branch>` here, never plain `-d` — `-d`
-   only checks whether the branch is merged into whatever you currently have checked out, which is not what
-   any of this skill's own evidence is measured against (a `merged` branch may be an ancestor of `develop`
-   while you're standing on `main`; a `merged-pr` branch is by definition *not* a local ancestor of anything,
-   that's what makes it `merged-pr` instead of `merged`). State which proof licenses the `-D` as you run it:
-   - `merged` → "verified: an ancestor of `<merged_into>`" (the column already named it — cite the actual
-     target, not just the label).
-   - `merged-pr` → "verified: GitHub PR `#<n>` merged" (`branch-status.sh` already checked the PR's head commit
-     against this branch's own content before reporting the class, so there is no separate check to redo here).
-   - anything from the **ask** bucket → cite the user's approval itself as the reason, same as before.
-
-Never run step 4.2 on a branch nobody approved and whose class isn't `merged`/`merged-pr` — the two per-class
-justifications above are what make `-D` here a **verified** delete rather than a blind force, not a license to
-force-delete anything you merely suspect is fine.
+1. **Worktree**, if any: `wt remove <branch>` when `wt` is available, else `git worktree remove <path>`.
+   `--force` only for a `clean=no` worktree the user approved removing — say plainly it discards uncommitted
+   work. Never an `origin=claude-code` worktree without explicit approval knowing what it is. `wt remove`
+   deletes a merged branch itself: check `git show-ref --verify --quiet refs/heads/<branch>` before 4.2.
+2. **Branch**, if it still exists: always `git branch -D <branch>` (`-d` checks against the current checkout,
+   not this skill's evidence), stating the proof as you run it: `merged` → "verified: ancestor of
+   `<merged_into>`"; `merged-pr` → "verified: PR `#<n>` merged"; ask bucket → the user's approval. Never `-D` a
+   branch without one of these.
 
 ### 5. Switch and pull
 
-Bring the kept branches up to date with the **resolved** remote — the one `branch-status.sh` reported as
-`remote=` (chosen above, or the `origin` fallback), never a hardcoded name, since nothing here is safe to assume about a repo you didn't set up:
+Land on the default branch unless the user's request points at another kept branch (say which, and that it
+was a judgement call). With `remote != none`:
 
 ```bash
-git switch <one of protected=>                            # land on whichever you're ending on
-git pull --ff-only <remote> <landing-branch>              # only if remote != none
-git fetch <remote> <other>:<other>                        # update each other kept branch without checking it out
+git switch <landing-branch>
+git pull --ff-only <remote> <landing-branch>
+git fetch <remote> <other>:<other>
 ```
 
-`remote=none` (no remote configured at all): skip both network calls entirely and say so — there is nothing to
-pull from, and that is not a failure.
-
-The `fetch ref:ref` form only succeeds as a fast-forward and only when that branch is not checked out
-elsewhere (`../_shared/references/worktree.md`, "merge without checkout") — if it fails, say the branch is
-ahead/diverged locally and needs a manual look, don't force it.
-
-**A kept branch may have no remote counterpart at all**, and that is the normal case rather than a
-fault: the keep list names local branches, and step 6 already says such a branch having no upstream is not
-a finding. `git fetch <remote> <other>:<other>` for one of those fails with `couldn't find remote ref` — which
-is not the ahead/diverged case above, and reporting it as one blames the user for a branch that is behaving
-exactly as kept. Fetch only the kept branches that have a remote counterpart (the branch row's `upstream=`
-says), skip the rest silently, and never report a missing remote ref as divergence.
-
-Prefer switching to the **default** branch as the place to land, unless the user's request or standing habit
-points at `develop` or another kept branch instead — say which one you picked and why it was a judgement call, not a fact the
-command handed you.
-
-**The `git pull --ff-only <remote> <landing-branch>` above is gated on the landing branch having a counterpart
-on `<remote>`, not just on `remote != none`.** It names the resolved remote instead of following the branch's own
-upstream, which can be a different remote. Landing on a kept branch is exactly the case with no remote
-counterpart, and a pull there fails with "couldn't find remote ref" — a failure about a branch that is behaving
-as kept. Check the branch row's `upstream=` for whichever branch you land on: none, or on another remote than
-`<remote>`, skip the pull silently, the same as the fetch.
+Pull and fetch only branches whose row has an `upstream` on `<remote>`; skip the rest silently (a kept branch
+without a remote counterpart is normal — never report "couldn't find remote ref" as divergence). A fetch
+`ref:ref` that fails (not a fast-forward, or checked out elsewhere) → the branch is ahead or diverged and
+needs a manual look; never force. `remote=none` → skip both, say so; not a failure.
 
 ### 6. Verify
 
-- `git branch -vv` — only the branches in `protected=` remain, and each shows no `ahead`/`behind` against its
-  upstream (a kept branch may have no upstream at all; that is not a finding).
-- `git worktree list` — every removed worktree is gone; `git worktree prune` first if step 1 saw any
-  `clean=missing` stale metadata.
+- `git branch -vv` — only `protected=` branches remain, none `ahead`/`behind` its upstream (no upstream is
+  fine).
+- `git worktree list` — every removed worktree gone; `git worktree prune` first if any `clean=missing`.
 
 ## Final report (always)
 
-Form per
-`../_shared/references/summary-format.md`; print the first line below in bold, as the verdict.
+Form per `../_shared/references/summary-format.md`; the first line bold, as the verdict:
 
 ```
 Cleanup done — <n> local branch(es) removed, only <protected list> remain.
@@ -240,26 +144,18 @@ Deleted (merged into <target>):
 <branch>[, <branch> (#PR if merged-pr)], ...
 
 Deleted (<reason>, per your choice):
-<branch> — <one-line why: open PR #n / unpushed, 1 commit, recoverable via reflog / ...>
-...
+<branch> — <open PR #n / unpushed, 1 commit, recoverable via reflog / ...>
 
 Left alone:
-<branch> — <why: dirty worktree / declined / claude-code worktree>
-...
+<branch> — <dirty worktree / declined / claude-code worktree>
 
-Note: <branch> is N commits behind <remote>/<branch> — <why it couldn't be fast-forwarded, if it couldn't>
+Note: <branch> is N commits behind <remote>/<branch> — <why it couldn't be fast-forwarded>
 Note: the keep list names <name>, which is not a local branch in this checkout — nothing to protect here.
 ```
 
-Omit any section with nothing in it, except **Left alone**, which prints "none" when empty. End on what the
-user still has to decide (a branch left alone that they may want gone), or "nothing needed from you". Never report a branch as deleted that the user did not either fall into
-the merged auto-delete bucket or explicitly approve.
+Omit empty sections except **Left alone** ("none"). End on what the user still has to decide, or "nothing
+needed from you". Never report a branch deleted that was neither auto-delete nor approved.
 
-## Git safety
-
-Follow `../_shared/references/git-safety.md`: never delete a branch or force-remove a worktree without either
-a clean merge or an explicit go-ahead, never touch anything on the remote, never update git config. `-D` and
-`--force` are the two commands in this skill capable of losing work. Every `-D` needs a stated reason before it
-runs — for `merged`/`merged-pr` that reason is the git/GitHub proof step 2's plan already showed the user, not
-a fresh ask; for anything from the ask bucket it is the user's actual approval, and nothing licenses it without
-one. No exceptions for "it looked stale."
+Follow `../_shared/references/git-safety.md`: `-D` and `--force` are this skill's only work-losing commands,
+and each needs a stated reason before it runs — a merge proof or the user's approval. Never touch the remote,
+never update git config.

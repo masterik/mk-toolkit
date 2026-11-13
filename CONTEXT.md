@@ -33,7 +33,7 @@ The conventional-commit kind (`feat`, `fix`, `docs`, …). A fixed vocabulary fr
 
 ## Relationships
 
-- A setting resolves **Repo setting** → **Discovered value** → **Default**; the rules, once per area, are `plugin/skills/_shared/references/repo-settings.md`.
+- A setting resolves **Repo setting** → **Discovered value** → **Default**; the reading rules and defaults are `plugin/skills/_shared/references/repo-settings.md`; each area's detail sits in the skill that reads it.
 - A gate's **Discovered value** prefers the repo's own task-runner recipe (just, make, Taskfile, deno tasks) over the language's standard command.
 - The same **Remote** also decides which HEAD names the default branch.
 - Reviewers: a list in `merge.md` replaces `pr`'s per-path `CODEOWNERS` match; with none, the match runs.
