@@ -1,20 +1,19 @@
-// Package gitrepo answers the handful of questions about the surrounding git
-// repository that the config and profile surfaces need.
+// Package gitrepo answers the two questions about the surrounding git
+// repository the binary still asks: where the work tree is, and where its
+// common dir is. `doctor` reads both for the leftovers older releases wrote;
+// `claudecfg` uses Open to find a work tree's settings. Every other repo
+// question moved into the plugin's scripts (ADR 0006).
 //
-// It shells out to git rather than linking a git library: the payload's scripts
-// already parse the same plumbing, and matching them exactly is worth more here
-// than avoiding a subprocess. Every call uses stable machine output.
+// It shells out to git rather than linking a git library, with stable machine
+// output only.
 //
 // Layering: returns data, never prints, never assumes a terminal.
 package gitrepo
 
 import (
 	"errors"
-	"fmt"
 	"os/exec"
 	"path/filepath"
-	"regexp"
-	"slices"
 	"strings"
 )
 
@@ -37,89 +36,6 @@ func Open(dir string) (*Repo, error) {
 	return &Repo{Toplevel: out}, nil
 }
 
-// Ignored reports whether path (relative to the work tree root) is excluded, and
-// which file carries the rule.
-//
-// The source matters more than it looks: git reads `.gitignore` at a higher
-// precedence than the common dir's `info/exclude`, so a negation written into the
-// exclude cannot lift a rule that lives in a committed `.gitignore`. A remedy that
-// names the wrong file is a remedy that does nothing.
-//
-// This is pattern matching, not a stat — it answers correctly for a path that does
-// not exist yet, which is the case that matters at first run.
-//
-// Two calls, and the split is not redundant. `check-ignore -v` exits **0 and prints
-// a pattern for a path matched by a *negation* too* — measured:
-//
-//	$ git check-ignore -v .mkit/config.toml
-//	.gitignore:22:!.mkit/config.toml	.mkit/config.toml   (exit 0)
-//	$ git check-ignore -q .mkit/config.toml               (exit 1)
-//
-// So -v answers "which rule decided this", not "is it ignored". Reading truth off
-// -v reports every deliberately re-included file as excluded, which is exactly
-// backwards for the one path this repo negates. `-q` is the boolean; `-v` runs
-// only afterwards, to name the file a remedy must edit.
-func (r *Repo) Ignored(path string) (ignored bool, source string) {
-	ignored, source, _ = r.IgnoreRule(path)
-	return ignored, source
-}
-
-// IgnoreRule additionally returns the pattern that decided the path. A remedy
-// needs both: the file to edit, and which line in it — the fix for a
-// directory-only `.mkit/` is not the fix for a stray `*.toml`.
-func (r *Repo) IgnoreRule(path string) (ignored bool, source, pattern string) {
-	if !r.Excluded(path) {
-		return false, "", ""
-	}
-	// -z, so each field is read whole. Without it the format is
-	// `<source>:<line>:<pattern>\t<path>` and splitting at the first colon
-	// truncates any source path containing one — a core.excludesFile under a
-	// directory with a colon in its name would name the wrong file to edit.
-	//
-	// git refuses `-z` except with `--stdin` ("-z only makes sense with
-	// --stdin"), which is no loss: passing the path as data rather than as an
-	// argument is also what makes a leading dash harmless.
-	out, err := runStdin(r.Toplevel, path+"\x00", "check-ignore", "-v", "-z", "--stdin")
-	if err != nil || out == "" {
-		return true, "", ""
-	}
-	f := strings.Split(out, "\x00")
-	if len(f) >= 3 {
-		return true, f[0], f[2]
-	}
-	if len(f) >= 1 {
-		return true, f[0], ""
-	}
-	return true, "", ""
-}
-
-// Excluded is the boolean half of Ignored — `check-ignore -q` on its own,
-// without the second call that names the rule. Use it where nothing needs a
-// remedy.
-func (r *Repo) Excluded(path string) bool {
-	_, err := run(r.Toplevel, "check-ignore", "-q", "--", path)
-	return err == nil
-}
-
-// ExcludedSet is Excluded for many paths in one call: the subset git ignores,
-// keyed by the path as given. Without -v, check-ignore prints only the ignored
-// paths, so the answer is the boolean, not the rule.
-func (r *Repo) ExcludedSet(paths []string) map[string]bool {
-	set := map[string]bool{}
-	if len(paths) == 0 {
-		return set
-	}
-	// Exit 1 means none is ignored; the output is empty then, so it is read
-	// regardless.
-	out, _ := runStdin(r.Toplevel, strings.Join(paths, "\x00")+"\x00", "check-ignore", "-z", "--stdin")
-	for _, p := range strings.Split(out, "\x00") {
-		if p != "" {
-			set[p] = true
-		}
-	}
-	return set
-}
-
 // CommonDir is the absolute `--git-common-dir`: the repository storage shared by
 // every linked worktree, and where `info/exclude` lives — which `doctor` reads
 // for the ignore pair an older mkit wrote there.
@@ -137,146 +53,6 @@ func (r *Repo) CommonDir() (string, error) {
 	return filepath.Clean(out), nil
 }
 
-// Tracked reports whether path is in the index. A tracked file is unaffected by
-// ignore rules, which is why this is asked separately from Ignored.
-func (r *Repo) Tracked(path string) bool {
-	_, err := run(r.Toplevel, "ls-files", "--error-unmatch", "--", path)
-	return err == nil
-}
-
-// Log returns up to n subject lines from HEAD, newest first. Empty on an unborn
-// branch, which is a normal state and not an error.
-func (r *Repo) Log(n string) []string {
-	out, err := run(r.Toplevel, "log", "--no-merges", "--format=%s", "-n", n)
-	if err != nil || out == "" {
-		return nil
-	}
-	return strings.Split(out, "\n")
-}
-
-// LocalConfigValue reads a key from this repository's own config only, ignoring
-// the user's global and the system files.
-//
-// The distinction is load-bearing wherever a value is reported as *discovered from
-// this repo*: `git config --get` walks system → global → local, so a developer's
-// personal `pull.rebase=true` in ~/.gitconfig would otherwise be presented as a
-// property every repository on the machine had declared. A profile that reports a
-// user's habit as a repo's convention is worse than reporting nothing.
-func (r *Repo) LocalConfigValue(key string) string {
-	out, _ := run(r.Toplevel, "config", "--local", "--get", key)
-	return out
-}
-
-// Where a resolved remote came from.
-const (
-	// RemotePinned — `[remote] name` in the repo config, and it is configured here.
-	RemotePinned = "pinned"
-	// RemoteOrigin — nothing pinned, and a remote named `origin` exists.
-	RemoteOrigin = "origin"
-	// RemoteOnly — nothing pinned, no `origin`, and exactly one remote.
-	RemoteOnly = "only"
-	// RemoteFirst — nothing pinned, no `origin`, several remotes: git's first.
-	// A guess, and the one source a caller must not present as an answer.
-	RemoteFirst = "first"
-	// RemoteNone — no remote is configured, which is a normal state.
-	RemoteNone = "none"
-)
-
-// RemoteChoice is how this checkout's remote was resolved.
-type RemoteChoice struct {
-	// Name is the resolved remote, "" when none is configured.
-	Name string
-	// Source is one of the Remote* constants.
-	Source string
-	// All is every configured remote, in git's order.
-	All []string
-	// PinMissing is the pinned name that is not configured in this checkout, or
-	// "". A pin travels with the repo; a clone that never added that remote still
-	// resolves, to the fallback, and says why.
-	PinMissing string
-}
-
-// Ask reports whether the caller should let the user choose: several remotes and
-// no usable pin. Pinned means decided, and a lone remote has nothing to choose.
-func (c RemoteChoice) Ask() bool {
-	return len(c.All) > 1 && c.Source != RemotePinned
-}
-
-// ResolveRemote picks the remote skills push to and ask GitHub about. A pinned
-// name that is configured wins; otherwise `origin`, otherwise the only remote,
-// otherwise git's first — which is alphabetical, so `fork` would beat `origin`
-// were `origin` not tried first.
-func (r *Repo) ResolveRemote(pinned string) RemoteChoice {
-	c := RemoteChoice{All: r.Remotes(), Source: RemoteNone}
-	has := func(n string) bool { return slices.Contains(c.All, n) }
-	switch {
-	case len(c.All) == 0:
-	case pinned != "" && has(pinned):
-		c.Name, c.Source = pinned, RemotePinned
-		return c
-	case has("origin"):
-		c.Name, c.Source = "origin", RemoteOrigin
-	case len(c.All) == 1:
-		c.Name, c.Source = c.All[0], RemoteOnly
-	default:
-		c.Name, c.Source = c.All[0], RemoteFirst
-	}
-	// Also with no remote at all: a pin on a clone that has none is the clearest
-	// case of a pin that went nowhere, and the one a "len > 0" guard hid.
-	c.PinMissing = pinned
-	return c
-}
-
-// The host is anchored on what can precede it in a remote URL — a scheme's `//`,
-// a user's `@`, or the start of an scp-like address — so `evilgithub.com` and
-// `github.com.evil.example` are not GitHub.
-var githubRepo = regexp.MustCompile(`(?:^|[/@])github\.com[:/]+([^/]+/[^/]+?)(?:\.git)?/?$`)
-
-// GitHubRepo is the `owner/repo` of a GitHub remote, "" for any other host or no
-// such remote. The one producer of the repo `gh` is told to use (`--repo`): left
-// to itself `gh` picks a set default or its own ranking, not the remote mkit
-// pushed to.
-func (r *Repo) GitHubRepo(remote string) string {
-	if remote == "" {
-		return ""
-	}
-	m := githubRepo.FindStringSubmatch(r.RemoteURL(remote))
-	if m == nil {
-		return ""
-	}
-	return m[1]
-}
-
-// PinMissingDetail is the one sentence for a pin this clone lacks, for `repo
-// profile`. "" when nothing is missing.
-func (c RemoteChoice) PinMissingDetail() string {
-	if c.PinMissing == "" {
-		return ""
-	}
-	if c.Name == "" {
-		return fmt.Sprintf("`remote.name` pins %q, which is not configured in this checkout — "+
-			"no remote is configured here at all, so there is nothing to push to", c.PinMissing)
-	}
-	return fmt.Sprintf("`remote.name` pins %q, which is not configured in this checkout — "+
-		"%q is used instead", c.PinMissing, c.Name)
-}
-
-// RemoteURL returns the fetch URL of the named remote, or "".
-func (r *Repo) RemoteURL(remote string) string {
-	out, _ := run(r.Toplevel, "remote", "get-url", remote)
-	return out
-}
-
-func runStdin(dir, stdin string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
-	if dir != "" {
-		cmd.Dir = dir
-	}
-	cmd.Stdin = strings.NewReader(stdin)
-	out, err := cmd.Output()
-	return string(out), err
-}
-
 func run(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	if dir != "" {
@@ -284,71 +60,4 @@ func run(dir string, args ...string) (string, error) {
 	}
 	out, err := cmd.Output()
 	return strings.TrimRight(string(out), "\n"), err
-}
-
-// DefaultBranch resolves this repo's default branch: the HEAD of the remote
-// ResolveRemote(pinned) picks — the config's pin, else `origin` — where there is
-// one and this checkout has that branch, then the first local branch named main,
-// master or trunk, then "unknown". **Always a local branch, or "unknown"**: a
-// name that exists only as a remote-tracking ref is never returned.
-//
-// The plugin's `facts.sh` resolves the same answer for the skills (and
-// `branch-status.sh` takes it from there); `mkit repo profile` needs it to report the branches cleanup protects with nothing pinned. A second
-// resolution here is a second thing to keep true, and the symptom of a
-// disagreement is a cleanup that protects a different branch than the one the
-// facts named.
-//
-// "unknown" rather than an error: a repo with no remote and no conventionally
-// named branch is a normal repo, and every caller reports the answer rather than
-// stopping on it.
-func (r *Repo) DefaultBranch(pinnedRemote string) string {
-	var remoteHead string
-	if remote := r.ResolveRemote(pinnedRemote).Name; remote != "" {
-		if head, err := run(r.Toplevel, "symbolic-ref", "--short", "refs/remotes/"+remote+"/HEAD"); err == nil {
-			remoteHead = strings.TrimPrefix(head, remote+"/")
-		}
-	}
-	// The remote's answer wins only when this checkout actually has that branch.
-	// A stale `origin/HEAD`, or one naming a branch that exists only as a
-	// remote-tracking ref, otherwise wins over a perfectly good local `main`:
-	// `branch-status.sh` refuses a `--default` absent from `refs/heads` before it
-	// fetches anything, so the whole of `cleanup` stops on a name this repo has
-	// never checked out.
-	if remoteHead != "" && r.hasLocalBranch(remoteHead) {
-		return remoteHead
-	}
-	for _, b := range []string{"main", "master", "trunk"} {
-		if r.hasLocalBranch(b) {
-			return b
-		}
-	}
-	// Nothing local matched. Not the remote's name: it is not a branch this
-	// checkout has, and `branch-status.sh` refuses such a `--default` — the
-	// whole of `cleanup` would stop on it where "unknown" is reported and handled.
-	return "unknown"
-}
-
-func (r *Repo) hasLocalBranch(name string) bool {
-	_, err := run(r.Toplevel, "show-ref", "--verify", "--quiet", "refs/heads/"+name)
-	return err == nil
-}
-
-// Remotes returns every configured remote name, in git's order. Empty when there
-// is none, which is a normal state.
-func (r *Repo) Remotes() []string {
-	out, err := run(r.Toplevel, "remote")
-	if err != nil || out == "" {
-		return nil
-	}
-	return strings.Split(out, "\n")
-}
-
-// LocalBranches returns every local branch name, sorted by refname. Empty on a
-// repo with no commits yet.
-func (r *Repo) LocalBranches() []string {
-	out, err := run(r.Toplevel, "for-each-ref", "refs/heads", "--format=%(refname:short)")
-	if err != nil || out == "" {
-		return nil
-	}
-	return strings.Split(out, "\n")
 }

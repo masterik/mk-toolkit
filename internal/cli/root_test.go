@@ -7,7 +7,7 @@ import (
 )
 
 // Tests in this package drive the real cobra root: argv in, stdout and exit
-// code out — the interface the skills call, not the commands' internals.
+// code out — the interface a person or a skill calls, not the commands' internals.
 
 type result struct {
 	stdout string
@@ -32,44 +32,43 @@ func run(t *testing.T, args ...string) result {
 	return res
 }
 
-// `review` dedupes its findings in prose now (#51); the `findings` pipeline is
-// gone, and a binary that still answered it would invite a skill to call it.
-func TestFindingsIsAnUnknownCommand(t *testing.T) {
-	for _, args := range [][]string{{"findings"}, {"findings", "schema", "--json"}} {
+// The binary is optional power tools (#53, ADR 0006): `doctor`, `audit
+// sandbox`, `cache prune`, `version`. Every verb a skill or the TOML config once
+// called is gone, and an old skill calling one must fail loudly with a usage
+// error, never a silent success. Where each went: gate (#48, prose in the shared
+// quality-gate reference), worklog (#49, recap reads git log and the PR),
+// scratch (#50, per-run files live in the temp dir facts.sh creates), findings
+// (#51, review merges in prose), facts and branch (#52, plugin scripts), init
+// and repo (#53, settings live in docs/agents/, written by the setup skill).
+func TestRemovedCommandsAreUnknown(t *testing.T) {
+	for _, args := range [][]string{
+		{"init"}, {"init", "--yes"},
+		{"repo"}, {"repo", "profile", "--json"},
+		{"gate"}, {"gate", "detect"}, {"gate", "run", "--", "true"},
+		{"worklog", "show"}, {"worklog", "append", "--step", "commit"},
+		{"findings"}, {"findings", "schema", "--json"},
+		{"scratch"}, {"scratch", "open", "review"}, {"scratch", "prune"},
+		{"facts", "commit"},
+		{"branch", "status", "--default", "main"},
+	} {
 		got := run(t, args...)
 		if got.code != 2 {
-			t.Fatalf("%v: exit %d, want 2 (usage)\nstdout:\n%s\nstderr:\n%s", args, got.code, got.stdout, got.stderr)
+			t.Errorf("%v: exit %d, want 2 (usage)\nstdout:\n%s\nstderr:\n%s", args, got.code, got.stdout, got.stderr)
+			continue
 		}
-		if !strings.Contains(got.stderr, `unknown command "findings"`) {
+		if want := `unknown command "` + args[0] + `"`; !strings.Contains(got.stderr, want) {
 			t.Errorf("%v: stderr does not name the unknown command:\n%s", args, got.stderr)
 		}
 	}
 }
 
-// The gate left the binary (#48): skills detect it from the shared
-// quality-gate reference and run its commands themselves.
-func TestGateIsAnUnknownCommand(t *testing.T) {
-	for _, args := range [][]string{{"gate"}, {"gate", "detect"}, {"gate", "run", "--", "true"}} {
-		got := run(t, args...)
-		if got.code != 2 {
-			t.Fatalf("%v: exit %d, want 2 (usage)\nstdout:\n%s\nstderr:\n%s", args, got.code, got.stdout, got.stderr)
-		}
-		if !strings.Contains(got.stderr, `unknown command "gate"`) {
-			t.Errorf("%v: stderr does not name the unknown command:\n%s", args, got.stderr)
-		}
-	}
-}
-
-// `.mkit/` left the design (#50): per-run files live in the temp dir
-// `facts.sh --run` creates, so there is nothing to open or prune.
-func TestScratchIsAnUnknownCommand(t *testing.T) {
-	for _, args := range [][]string{{"scratch"}, {"scratch", "open", "review"}, {"scratch", "prune"}} {
-		got := run(t, args...)
-		if got.code != 2 {
-			t.Fatalf("%v: exit %d, want 2 (usage)\nstdout:\n%s\nstderr:\n%s", args, got.code, got.stdout, got.stderr)
-		}
-		if !strings.Contains(got.stderr, `unknown command "scratch"`) {
-			t.Errorf("%v: stderr does not name the unknown command:\n%s", args, got.stderr)
+// What stays still answers, so the test above cannot pass by breaking the root.
+func TestRemainingCommandsAreKnown(t *testing.T) {
+	for _, args := range [][]string{
+		{"version", "--json"}, {"doctor", "--help"}, {"audit", "sandbox", "--help"}, {"cache", "prune", "--help"},
+	} {
+		if got := run(t, args...); got.code != 0 {
+			t.Errorf("%v: exit %d\n%s%s", args, got.code, got.stdout, got.stderr)
 		}
 	}
 }

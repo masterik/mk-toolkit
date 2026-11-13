@@ -10,8 +10,8 @@ brainstorm → spec → implement → commit → review → pr ──┐
 
 setup           optional, once per repo: settings as prose in docs/agents/ (repo-settings.md)
 cleanup         repo-wide gardening, not a step in the line
-sandbox-audit   user-wide: past sessions' sandbox and gate events → a proposed settings diff
-explain         reading aid: the last answer or one session item, in plain English (no binary)
+sandbox-audit   user-wide: past sessions' sandbox and gate events → a proposed settings diff (needs the binary)
+explain         reading aid: the last answer or one session item, in plain English (runs nothing)
 recap           reading aid: the branch's status in plain English (read-only, records nothing)
 ```
 
@@ -53,8 +53,8 @@ reporting less than was actually found.
 
 **Ungated, and never gating.** Every repo-scoped skill's first call is the bundled `facts.sh`
 (`output-discipline.md`); its `commits:` block is `git log --oneline <base>..HEAD`, and `--gh` adds `pr=`.
-`sandbox-audit` is user-wide and opens no run directory; its first call, `mkit audit sandbox`, is its own
-dependency check. `explain` works from the session (reading a file only to confirm what it names) and runs
+No skill needs the `mkit` binary but `sandbox-audit`: it is user-wide, Claude-only and macOS-only by nature,
+opens no run directory, and its first call, `mkit audit sandbox`, is its own dependency check. `explain` works from the session (reading a file only to confirm what it names) and runs
 nothing. What each step does with what it reads is the step's own business, and stays in its
 `SKILL.md`.
 
@@ -84,6 +84,6 @@ The spec and task-graph store is **read, never assumed**: `docs/agents/issue-tra
 reads. Steps read that one answer rather than each reaching their own, because a spec written to one
 store and read from another is the one failure this contract cannot absorb.
 
-Under a sandbox, some of what mkit would write is unreachable — `mkit doctor` reports the writable
-set. A step whose artifact store is denied says which path was denied and falls back to the run
-directory, which is inside the repo and therefore writable.
+Under a sandbox, some of what mkit would write is unreachable — `mkit doctor`, where the optional
+binary is installed, reports the writable set. A step whose artifact store is denied says which path was
+denied and falls back to the run directory, which is under `$TMPDIR` and therefore writable.

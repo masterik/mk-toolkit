@@ -3,13 +3,13 @@
 A **personal toolkit for agentic coding**: the skills and tools I use daily with Claude Code.
 Opinionated, built for one setup (Claude Code, macOS, git + GitHub), shared as-is.
 
-- **Claude Code plugin**: Markdown skills that take work from edits to committed, reviewed and merged.
-- **`mkit` Go binary**: the mechanical layer under the skills, plus housekeeping for the agent's
-  environment.
+- **The plugin** (the product): Markdown skills that take work from edits to committed, reviewed and
+  merged, plus two small bash scripts they share. Needs nothing but `git`, `bash` and (for PRs) `gh`.
+- **The `mkit` binary** (optional): macOS + Claude Code power tools: a prerequisite report, a
+  sandbox audit and storage cleanup. No skill needs it but `sandbox-audit`.
 
-Skills orchestrate `git`, `gh`, [Worktrunk](https://worktrunk.dev) (`wt`), CodeRabbit and Codex
-rather than reimplementing them. Judgement lives in Markdown. Anything that must run identically
-every time lives in the binary. Background: [concept](docs/concept.md).
+Skills orchestrate `git`, `gh`, CodeRabbit, Codex and, if installed, [Worktrunk](https://worktrunk.dev)
+(`wt`) rather than reimplementing them. Judgement lives in Markdown. Background: [concept](docs/concept.md).
 
 ## Skills
 
@@ -21,7 +21,7 @@ every time lives in the binary. Background: [concept](docs/concept.md).
 | `finish` | Commit, merge into base (the open PR, or locally), delete the branch and worktree. |
 | `cleanup` | Delete branches and worktrees that are provably merged; ask about the rest. |
 | `setup` | Optional, once per repo: record non-default settings as prose in `docs/agents/`; converts an old `.mkit/config.toml`. Run as `/mkit:setup`. |
-| `sandbox-audit` | Turn sandbox blocks and permission denials into a proposed settings diff. Report-only. |
+| `sandbox-audit` | Turn sandbox blocks and permission denials into a proposed settings diff. Report-only. Needs the binary. |
 | `explain` | Re-explain the last answer or one session item in plain English (`simpler`, `eli5`, `deeper`). |
 | `recap` | Branch status in plain English: done, changed, left, and waiting on you. |
 
@@ -40,31 +40,32 @@ Skills discover gate commands, commit scopes, reviewers and the push remote from
 `/mkit:setup` writes short prose files in `docs/agents/` (`commit.md`, `review.md`, `merge.md`, `remote.md`,
 `gate.md`, `cleanup.md`); write or edit them by hand just as well. Each is optional. Skills write nothing into your work tree: per-run files live in a temp dir.
 
-## The binary
-
-```
-mkit repo profile        discovered vs pinned config (mkit init pins it)
-mkit doctor              prerequisites, sandbox writability, plugin state
-mkit audit sandbox       sandbox and permission-gate events across sessions
-mkit cache prune         prune stale Claude Code / Codex storage
-```
-
-Every command takes `--json`. On a terminal, some show a TUI. A skill's starting facts and `cleanup`'s
-branch classifier ship with the plugin instead, as two bash scripts (`facts.sh`, `branch-status.sh`).
-
 ## Install
-
-```bash
-brew install masterik/tap/mkit
-```
 
 ```
 /plugin marketplace add masterik/mk-toolkit
 /plugin install mkit@masterik
 ```
 
-You need both, because every skill except `explain` calls the binary. Then run `mkit doctor`. For
-optional tools, sandbox setup and a permission allowlist, see [Prerequisites](docs/prerequisites.md).
+That is all the skills need. For optional tools, sandbox setup and a permission allowlist, see
+[Prerequisites](docs/prerequisites.md).
+
+## The binary (optional)
+
+macOS only, for Claude Code users:
+
+```bash
+brew install masterik/tap/mkit
+```
+
+```
+mkit doctor              prerequisites, plugin state, sandbox grants, leftovers from old releases
+mkit audit sandbox       sandbox and permission-gate events across sessions (sandbox-audit runs it)
+mkit cache prune         prune stale Claude Code / Codex storage
+```
+
+Every command takes `--json`. On a terminal, the reports are styled and `cache prune --apply` shows a
+tick-list. Plugin and binary are released together under one version tag.
 
 ## Docs
 
