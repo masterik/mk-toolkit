@@ -79,7 +79,7 @@ delegation, output discipline and plain-English writing.
  skills/*/SKILL.md           when & how: judgement
    │  link into
    ▼
- _shared/references/*.md     safety · conventions · gate · worktrees · review
+ _shared/references/*.md     safety · facts · gate · worktrees · review
    +
  _shared/scripts/            bash, bundled with the plugin
    facts.sh                  all starting facts (+ a run dir under $TMPDIR)

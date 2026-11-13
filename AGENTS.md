@@ -11,7 +11,7 @@ tools — no new git logic; `wt` optional. Targets Claude Code, Codex, Copilot; 
 **Plugin = product, binary = optional tools** ([ADR 0006](docs/adr/0006-standalone-skills-optional-binary.md),
 epic #59): **no skill needs `mkit` but `sandbox-audit`** (it stops with a `brew` remedy; absent ≡ too
 old). No `.mkit/`, no gate ledger/worklog/findings pipeline, no `mkit init` or pinning; config is prose
-in lazy `docs/agents/*.md`, written by `setup`. Still open in #59: prose diet (#47), Codex/Copilot
+in lazy `docs/agents/*.md`, written by `setup`. Still open in #59: Codex/Copilot
 ports (#54–#57), Windows (#58). **Next: M8** (`spec`/`implement` skills). Milestones:
 [`backlog.md`](docs/backlog.md); the *why*: [`concept.md`](docs/concept.md).
 
@@ -147,10 +147,15 @@ apply both ways:
   or run a downstream step. Contract: `_shared/references/workflow-contract.md`.
 - **Repo settings** (ADR 0006 decision 7) — lazy prose `docs/agents/{commit,review,merge,remote,gate,cleanup}.md`
   in the *target* repo, one per non-default choice, listed under `### mkit workflow` in `## Agent skills`.
-  Skills read the file if present, else discover/default — rules once per area in
-  `_shared/references/repo-settings.md`; missing file never stops. Spec store = mattpocock's
+  Skills read the file if present, else discover/default — reading rules + defaults in
+  `_shared/references/repo-settings.md`, each area's detail in the skill that reads it; missing file never stops. Spec store = mattpocock's
   `issue-tracker.md`. `setup` writes them (templates beside its `SKILL.md`), converts `.mkit/config.toml`,
   never touches mattpocock's files. No script reads them.
+- **Skill prose** (#47): `SKILL.md` ≤ ~8 KB of instructions; a happy-path `commit`/`pr`/`finish` loads
+  ≤ ~6K tokens of skill text. No up-front reference list: each link at the step that uses it. A branch only
+  one skill takes lives beside its `SKILL.md` (`finish/pr-merge.md`, `review/reviewers.md`). Inline shell =
+  plain `git`/`gh` calls, no `$(…)`/pipes/heredocs/`&&`. Rationale and the invariant checklist:
+  [`docs/skill-invariants.md`](docs/skill-invariants.md) — cutting or moving a rule updates its row.
 - `plugin/skills/_shared/` — references and `scripts/`, no `SKILL.md`; **keep `../_shared/…` paths
   relative**. Skills run `bash ../_shared/scripts/<name>.sh`, resolved against their own `SKILL.md`
   directory (no agent sets a skill-root env var in a skill body).
@@ -186,7 +191,7 @@ apply both ways:
 
 ### Docs and tests
 - `README.md` (users) and `CONTRIBUTING.md` (contributors) — short, pointing here.
-- `docs/` (not shipped) — `concept.md` (direction), `backlog.md` (work + invariants),
+- `docs/` (not shipped) — `concept.md` (direction), `backlog.md` (work + invariants), `skill-invariants.md` (skill rules → enforcing line, and their why),
   `prerequisites.md` (tooling, allowlist, sandbox grants), `adr/` (one per decision; `0006` supersedes
   `0001`/`0002`, amends `0003`/`0005`, withdraws `0004`), `ideas/` (researched, unscheduled).
 - `CONTEXT.md` — domain glossary (repo setting, discovered value, default, remote, plugin, binary).

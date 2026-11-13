@@ -75,7 +75,7 @@ the branch's commits.
 
 ### Also open
 
-- **Rest of epic [#59](https://github.com/masterik/mk-toolkit/issues/59)**: the prose diet (#47),
+- **Rest of epic [#59](https://github.com/masterik/mk-toolkit/issues/59)**:
   Codex and Copilot ports (#54–#57), Windows via Git Bash (#58).
 - **Signing and notarization**: [#28](https://github.com/masterik/mk-toolkit/issues/28). Until then,
   the cask strips the quarantine flag on install
@@ -110,7 +110,7 @@ linked issues, the [Releases](https://github.com/masterik/mk-toolkit/releases) a
 | M7 | `repo profile`, `init`, `doctor` ([#3](https://github.com/masterik/mk-toolkit/issues/3)) | `init`, `repo profile` and `.mkit/config.toml` removed in #53; `doctor` stays. |
 | — | `audit sandbox` + `sandbox-audit` ([#36](https://github.com/masterik/mk-toolkit/issues/36)) | |
 | — | `explain` + `recap` ([#43](https://github.com/masterik/mk-toolkit/issues/43)) | |
-| — | Standalone skills, optional binary (epic [#59](https://github.com/masterik/mk-toolkit/issues/59): #48–#53, #60, #61) | [ADR 0006](adr/0006-standalone-skills-optional-binary.md). Gate, worklog, findings, `.mkit/`, `facts`/`branch status`, `init`/`repo profile` left the binary; `setup` skill and two bundled scripts in. |
+| — | Standalone skills, optional binary (epic [#59](https://github.com/masterik/mk-toolkit/issues/59): #48–#53, #60, #61, #47) | [ADR 0006](adr/0006-standalone-skills-optional-binary.md). Gate, worklog, findings, `.mkit/`, `facts`/`branch status`, `init`/`repo profile` left the binary; `setup` skill and two bundled scripts in; skill prose cut to ≤ ~8 KB per `SKILL.md` ([checklist](skill-invariants.md)). |
 
 ## Accepted gaps
 
