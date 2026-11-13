@@ -90,7 +90,6 @@ delegation, output discipline and plain-English writing.
    gate detect | run         the repo's checks; run, log, record
    findings                  validate · reconcile · group review findings
    branch status             classify branches/worktrees for cleanup
-   worklog show | append     what each step concluded on this branch
    repo profile · init       discovered vs pinned config
    doctor                    prerequisites, sandbox, plugin state
    audit sandbox · cache prune · scratch prune     housekeeping
@@ -133,9 +132,9 @@ cleanup · sandbox-audit · explain · recap   (outside the line)
 ```
 
 This is the common path, not a required one. A bug fix starts at `implement`, someone else's branch
-starts at `review`, and most changes are just `commit`. The **worklog** keeps one file per branch under
-`.mkit/worklog/`. It records what each step concluded and over which content, so the next step can reuse
-a goal or a gate result instead of re-deriving it.
+starts at `review`, and most changes are just `commit`. A step learns what came before from the branch's
+commits and its PR (subjects, bodies, review state), so the next step can reuse a goal instead of
+re-deriving it.
 
 ## Distribution
 
