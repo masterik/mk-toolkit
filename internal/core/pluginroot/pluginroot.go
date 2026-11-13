@@ -3,8 +3,8 @@
 // mkit ships over two deliberately independent channels (ADR 0003) — the binary
 // via Homebrew, the payload via the GitHub marketplace — so the binary has to find
 // the payload rather than assume it. Since M5 the payload is skills and references
-// only: nothing in it is executed, and `mkit facts` reports where it is so a skill
-// can link into `_shared/references/…`.
+// plus the two scripts skills run (`facts.sh`, `branch-status.sh`); the binary
+// runs none of it, and `mkit doctor` reports where it is.
 //
 // The payload is not on any stable path (a cask has no opt/ symlink and Caskroom is
 // version-pinned), so finding it is a search with named fallbacks and an honest
@@ -164,7 +164,7 @@ func marketplaceBases() []string {
 // The markers must be things the payload still has. Until M5 this also required
 // `scripts/lib/common.sh`, and when that file went with the shell layer the test
 // rejected every correct checkout — including an explicit CLAUDE_PLUGIN_ROOT —
-// so `mkit facts` printed `plugin=none` and the search fell through to whatever
+// so `mkit facts` (since moved to the plugin) printed `plugin=none` and the search fell through to whatever
 // stale installed copy still carried a script. The payload runs nothing now;
 // only the manifest and skills/ are load-bearing.
 func isPayload(dir string) bool {

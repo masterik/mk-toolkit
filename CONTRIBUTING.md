@@ -52,11 +52,12 @@ These are the ones changes break most often. The full list is the
   candidates and the skill chooses.
 - **The plugin is Markdown only.** No scripts, no hooks.
 - **Layering.** `core` returns data, `cli` formats it, `tui` renders it. No logic in a Bubble Tea `Update`.
-- **`--json` on every command, and no TUI off a terminal.** Skills parse the `key=value` text output,
-  so treat it as an API.
+- **`--json` on every command, and no TUI off a terminal.** Skills parse the bundled scripts'
+  `key=value` output (`plugin/skills/_shared/scripts/`, tested by `tests/*.bats`); change a key there and
+  in every skill that reads it, in one commit.
 - **Commands report and run.** They never stage, merge, push, or edit your files.
 - **State goes to three places only:** `$TMPDIR`, `<toplevel>/.mkit/` and `~/.mkit/`. The bounded
-  exceptions: the `.mkit/` ignore pair in `info/exclude`, `git fetch --prune` (`branch status`),
+  exceptions: the `.mkit/` ignore pair in `info/exclude`, `git fetch --prune` (`branch-status.sh`),
   `.mkit/config.toml` (`init`), and `cache prune --apply` deleting stale Claude Code / Codex storage.
   `TestWriteSitesAreOnTheReviewedAllowlist` checks every Go file that writes against a reviewed list;
   a new write site needs a reviewed edit to it.

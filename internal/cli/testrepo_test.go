@@ -62,3 +62,15 @@ func gateRepo(t *testing.T) (repo, rd string) {
 	t.Chdir(repo)
 	return repo, rd
 }
+
+// factsRepo is a throwaway repo with the user-scoped dir pointed inside it, so no
+// run can read or write a developer's real state.
+func factsRepo(t *testing.T) string {
+	t.Helper()
+	repo, _ := gateRepo(t)
+	if err := os.RemoveAll(filepath.Join(repo, ".mkit")); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("MKIT_HOME", filepath.Join(repo, ".mkit-home"))
+	return repo
+}

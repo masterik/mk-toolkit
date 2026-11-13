@@ -224,7 +224,7 @@ func TestDefaultBranchFollowsThePinnedRemote(t *testing.T) {
 	}
 }
 
-func TestChooseRemoteAndGitHubRepo(t *testing.T) {
+func TestGitHubRepo(t *testing.T) {
 	repo := newRepo(t)
 	git(t, repo, "remote", "add", "origin", "https://github.com/me/fork.git")
 	git(t, repo, "remote", "add", "up", "git@github.com:org/project")
@@ -234,12 +234,6 @@ func TestChooseRemoteAndGitHubRepo(t *testing.T) {
 	git(t, repo, "remote", "add", "evil2", "https://github.com.evil.example/acme/repo.git")
 	git(t, repo, "remote", "add", "tok", "https://user@github.com/org/tok.git")
 
-	if c, err := repo.ChooseRemote("up"); err != nil || c.Name != "up" || c.Source != RemoteChosen || c.Ask() {
-		t.Errorf("a configured remote is decided: %+v %v", c, err)
-	}
-	if _, err := repo.ChooseRemote("nope"); err == nil {
-		t.Error("an unconfigured name was accepted instead of refused")
-	}
 	for remote, want := range map[string]string{"origin": "me/fork", "up": "org/project", "lab": "", "": "", "nope": "",
 		"evil": "", "evil2": "", "tok": "org/tok"} {
 		if got := repo.GitHubRepo(remote); got != want {

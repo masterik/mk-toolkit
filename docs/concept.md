@@ -24,7 +24,7 @@ tested binary.
 ## Design principles
 
 - **Judgement in Markdown, mechanics in the binary.** Skills decide commit boundaries, severity, and
-  whether a fix is safe. `mkit` gathers facts, runs and records the gate, and classifies branches;
+  whether a fix is safe. Two bundled scripts gather facts and classify branches; `mkit` detects the gate;
   `review` dedupes its findings in prose. When the split is unclear, the binary reports candidates
   and the skill picks.
 - **Compose, don't replace.** Orchestrate `git`, `gh`, `wt`, CodeRabbit and Codex. The binary never
@@ -85,10 +85,12 @@ delegation, output discipline and plain-English writing.
    ▼
  _shared/references/*.md     safety · conventions · gate · worktrees · review
    +
+ _shared/scripts/            bash, bundled with the plugin
+   facts.sh                  all starting facts (+ a run dir under $TMPDIR)
+   branch-status.sh          classify branches/worktrees for cleanup
+   +
  mkit (Go)                   mechanics, --json on every command
-   facts                     run dir + all starting facts
    gate detect | run         the repo's checks; run, log, record
-   branch status             classify branches/worktrees for cleanup
    repo profile · init       discovered vs pinned config
    doctor                    prerequisites, sandbox, plugin state
    audit sandbox · cache prune · scratch prune     housekeeping
@@ -97,10 +99,10 @@ delegation, output discipline and plain-English writing.
  git · gh · wt · coderabbit · codex
 ```
 
-Each repo-scoped skill starts with `mkit facts <skill>`. The exceptions:
+Each repo-scoped skill starts with the bundled `facts.sh <skill>`. The exceptions:
 
 - `sandbox-audit` starts with `mkit audit sandbox`.
-- `explain` calls no `mkit` command.
+- `explain` runs nothing.
 
 A missing or too-old binary stops the skill with a `brew` remedy. Neither side declares a version
 range: a subcommand that doesn't exist *is* the too-old signal.
