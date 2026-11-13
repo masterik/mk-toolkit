@@ -108,20 +108,11 @@ Same inside a worktree — just confirm `git branch --show-current` is the featu
    were a PR. Only `none` means proceed; the rest are blocked states to surface, not to push past.
 4. **Full quality gate** (`../_shared/references/quality-gate.md`), in order, stopping at the first failure:
 
-   ```bash
-   mkit gate detect
-   mkit gate run <run-dir> --chain 'lint=<cmd>' 'test=<cmd>' 'build=<cmd>'
-   ```
-
-   One line per passing step; on failure the step, the exit code, the grepped failures and the tail — never
+   `mkit gate detect` names the commands; run each yourself, its output to a log in the run directory.
+   One line per passing step; on failure the step, the exit code, the failure lines and the tail — never
    the log. The user may proceed anyway for a draft. Delegate the diagnosis only when that verdict is not
    enough ("when a step fails") — choosing between fixing and opening a draft needs a cause, not a transcript.
-
-   Each step's `cache=` (from `mkit gate detect`'s `full:` block) may be consumed **per step**, and
-   **only when it is `fresh`**: a draft PR is the recoverable case and CI runs remotely anyway. Every
-   other class means run the step — `failed` says the tree was red on this exact content, which is a
-   thing to report before starting, not a result to reuse. Each step served from the ledger is
-   `cached (Nm ago)` on its own line — never a pass. Never cache a whole chain in one go.
+   Skip the gate only under the reference's one reuse rule, and say so.
 
 ### 3. Push the branch
 
@@ -288,7 +279,7 @@ was. Never just "N commits pushed." Prune with `mkit scratch prune` on the way o
 
 After the block, say what the reader still has to do or decide, or "nothing needed from you": a remote chosen
 but not pinned (`mkit init --force --remote <name>`, for the user to run and commit — never run mid-run),
-CI still running, a reviewer that could not be determined, a check served from the ledger as `cached`, a pin that went
+CI still running, a reviewer that could not be determined, a gate skipped under the reuse rule, a pin that went
 nowhere. Never leave those implied by the block's fields alone.
 
 ## Common failure scenarios

@@ -33,7 +33,6 @@ Breaking one is a design error, not a trade-off.
    | Command | Writes |
    | --- | --- |
    | `scratch prune` | removes old run dirs |
-   | `gate run` | appends to `.mkit/gate.jsonl` |
    | `branch status` | runs `git fetch --prune` |
    | `init` | writes `.mkit/config.toml` (the only config writer) |
    | `cache prune --apply` | deletes stale Claude Code / Codex storage, and only with `--apply` |

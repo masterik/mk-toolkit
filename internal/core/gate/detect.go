@@ -1,3 +1,8 @@
+// Package gate proposes a repo's quality-gate commands: the ecosystem discovery
+// and the task-runner overlay. It never runs them — skills run the commands
+// themselves.
+//
+// Layering: returns data, never prints, never assumes a terminal.
 package gate
 
 import (
@@ -11,7 +16,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/masterik/mk-toolkit/internal/core/gitrepo"
 	"github.com/masterik/mk-toolkit/internal/core/repoconfig"
@@ -38,8 +42,6 @@ type Proposal struct {
 	Step   string
 	Cmd    string
 	Origin Origin
-	// Cache is what the ledger knows about Cmd. Zero when caching is off.
-	Cache Lookup
 }
 
 // Detection is everything a skill needs to know before running a gate.
@@ -62,21 +64,6 @@ type Detection struct {
 	// naming a check command. Candidates — "the canonical check" is a judgement
 	// the skill makes, not a grep result.
 	Docs []string
-
-	// Fingerprint identifies the content a gate command would read now. Empty
-	// when CacheCause says why there is nothing to classify against.
-	Fingerprint string
-	// CacheCause is one of off, empty, no-fingerprint. Empty when the ledger
-	// answered.
-	CacheCause string
-}
-
-// DetectOptions are `gate detect`'s knobs.
-type DetectOptions struct {
-	// NoCache drops the ledger annotation entirely.
-	NoCache bool
-	// Now is the clock the age bound is measured against. Zero means time.Now.
-	Now time.Time
 }
 
 // scriptsState values.
@@ -101,7 +88,7 @@ const DocsMaxPerFile = 4
 // The mapping from lockfile to package manager and from script names to the
 // sequence is a table, and reading it here keeps a 25-script package.json (~700
 // tokens) out of context.
-func Detect(repo *gitrepo.Repo, cfg *repoconfig.Config, opt DetectOptions) (*Detection, error) {
+func Detect(repo *gitrepo.Repo, cfg *repoconfig.Config) (*Detection, error) {
 	root := repo.Toplevel
 	d := &Detection{ScriptsState: scriptsNA}
 
@@ -215,8 +202,6 @@ func Detect(repo *gitrepo.Repo, cfg *repoconfig.Config, opt DetectOptions) (*Det
 	}
 	d.mergePinned(cfg)
 	d.Docs = scanDocs(root)
-
-	d.annotate(repo, opt)
 	return d, nil
 }
 
@@ -247,52 +232,6 @@ func (d *Detection) mergePinned(cfg *repoconfig.Config) {
 		if !replaced {
 			d.Steps = append(d.Steps, Proposal{Step: name, Cmd: cmd, Origin: Pinned})
 		}
-	}
-}
-
-// annotate asks the ledger what it already proved about each proposed command.
-//
-// Annotating a proposal is all this ever does. Nothing here skips anything: that
-// trade-off — latency against a safety net — is the SKILL.md's, and a skipped
-// step must be reported as `cached`, never as a pass.
-func (d *Detection) annotate(repo *gitrepo.Repo, opt DetectOptions) {
-	// One value per distinct cause, per the `pr=gh-missing` / `pr=none` lesson:
-	// only some of these mean "there was nothing to use".
-	if opt.NoCache {
-		d.CacheCause = "off"
-		return
-	}
-	fp, err := Fingerprint(repo)
-	if err != nil || fp == "" {
-		// No work tree, or git plumbing failed. Not a missing tool: the hash is
-		// computed in process now, so there is nothing to install.
-		d.CacheCause = "no-fingerprint"
-		return
-	}
-	ledger := OpenLedger(repo)
-	if fi, serr := os.Stat(ledger.Path); serr != nil || fi.Size() == 0 {
-		d.CacheCause = "empty"
-		return
-	}
-	d.Fingerprint = fp
-
-	cmds := make([]string, 0, len(d.Steps))
-	for _, s := range d.Steps {
-		cmds = append(cmds, s.Cmd)
-	}
-	now := opt.Now
-	if now.IsZero() {
-		now = time.Now()
-	}
-	lookups, err := ledger.Classify(cmds, fp, now)
-	if err != nil {
-		// A ledger that cannot be read cleanly is a ledger with nothing to say;
-		// a confident wrong class is the one answer it may not give.
-		d.Fingerprint, d.CacheCause = "", "empty"
-		return
-	}
-	for i := range d.Steps {
-		d.Steps[i].Cache = lookups[i]
 	}
 }
 

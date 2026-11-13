@@ -1,9 +1,8 @@
-// Package gate is the quality gate: the content fingerprint a proof is keyed on,
-// the ledger that records what was proven, the ecosystem discovery that proposes
-// commands, and the runner that executes them.
-//
-// Layering: returns data, never prints, never assumes a terminal.
 package gate
+
+// Fingerprint outlived the gate ledger it was written for (#48): its last caller
+// is `worklog`, and it goes when the worklog does (#49). Nothing in this package
+// uses it.
 
 import (
 	"bytes"

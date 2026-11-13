@@ -24,8 +24,8 @@ subject.
 - **One idea per sentence.** Aim for under 20 words. Split a sentence at "which", "because" or a semicolon.
 - **Common words over precise ones** when the meaning survives: "use" over "leverage", "check" over
   "validate", "stops" over "terminates". Keep a precise word when the meaning would change without it.
-- **Define a term once, where it first appears,** in plain words and in passing: "the gate ledger (a log of
-  which checks passed for which version of the code)". Don't define it again later in the same answer.
+- **Define a term once, where it first appears,** in plain words and in passing: "the quality gate (the
+  checks — lint, tests, build — that must pass before a merge)". Don't define it again later in the same answer.
 - **Concrete before abstract.** Give the example first, then the rule it shows.
 - **Active voice, named actors.** "`finish` deletes the branch", not "the branch is deleted".
 - **No copying.** Never reuse the original answer's sentences. If the reader could have understood those

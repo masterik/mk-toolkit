@@ -248,6 +248,19 @@ func TestDroppedWorklogIsALeftover(t *testing.T) {
 	}
 }
 
+// The gate ledger went with `gate run` (#48); an old one is a leftover.
+func TestOldGateLedgerIsAnOrphan(t *testing.T) {
+	isolate(t)
+	repo := newRepo(t)
+	ledger := filepath.Join(repo.Toplevel, ".mkit", "gate.jsonl")
+	writeFile(t, filepath.Dir(ledger), "gate.jsonl", "{}\n")
+
+	c := find(t, Run(Options{Repo: repo}), "old gate ledger")
+	if c.Status != Warn || c.Remedy != "rm -r '"+ledger+"'" {
+		t.Errorf("gate ledger orphan = %+v", c)
+	}
+}
+
 func TestNoOrphansIsOneOKRow(t *testing.T) {
 	isolate(t)
 	repo := newRepo(t)
