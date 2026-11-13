@@ -95,7 +95,7 @@ gate=FAILED step=test exit=1
 - **Pass**: one line per step, then `gate=ok`. Nothing else enters context.
 - **Failure**: the step, its exit code, the failure lines and the tail — never the whole log.
 - Never re-run a gate to see output you discarded. That is what the log is for. Which commands to run:
-  `mkit gate detect` (`quality-gate.md`).
+  `quality-gate.md`, "Find the gate".
 
 ## Diffs
 
