@@ -7,7 +7,6 @@ import (
 
 	"github.com/masterik/mk-toolkit/internal/core/gitrepo"
 	"github.com/masterik/mk-toolkit/internal/core/scratch"
-	"github.com/masterik/mk-toolkit/internal/core/worklog"
 )
 
 // leftoverGroup is the report group the orphan checks live in.
@@ -30,6 +29,10 @@ type orphanAnchors struct {
 	userDir   string
 }
 
+// worklogDropped is why both worklog locations (the pre-M6 `.mkit/work/` and
+// the later `.mkit/worklog/`) are leftovers.
+const worklogDropped = "the worklog was dropped (recap reads git log and the PR); nothing reads this one"
+
 // legacy is the table to prune. An entry is dead weight once every machine has
 // run a release past the one that stopped writing it — the way the one-shot
 // migration scripts were deleted — so each `why` names its replacement, which
@@ -43,7 +46,17 @@ var legacy = []orphan{
 			}
 			return filepath.Join(a.toplevel, ".mkit", "work")
 		},
-		why: "worklogs moved to " + filepath.Join(".mkit", filepath.Base(worklog.Dir("x"))) + "; nothing reads this one",
+		why: worklogDropped,
+	},
+	{
+		name: "worklog directory",
+		path: func(a orphanAnchors) string {
+			if a.toplevel == "" {
+				return ""
+			}
+			return filepath.Join(a.toplevel, ".mkit", "worklog")
+		},
+		why: worklogDropped,
 	},
 	{
 		name: "git-dir scratch",

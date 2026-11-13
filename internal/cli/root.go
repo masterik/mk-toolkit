@@ -78,7 +78,7 @@ func NewRoot() *cobra.Command {
 		}
 	}
 	add(groupSetup, newInitCmd(), newDoctorCmd(), newVersionCmd())
-	add(groupState, newFactsCmd(), newRepoCmd(), newBranchCmd(), newWorklogCmd())
+	add(groupState, newFactsCmd(), newRepoCmd(), newBranchCmd())
 	add(groupReview, newGateCmd(), newFindingsCmd())
 	add(groupCleanup, newScratchCmd(), newCacheCmd(), newAuditCmd())
 
