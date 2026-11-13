@@ -24,8 +24,8 @@ tested binary.
 ## Design principles
 
 - **Judgement in Markdown, mechanics in the binary.** Skills decide commit boundaries, severity, and
-  whether a fix is safe. `mkit` gathers facts, runs and records the gate, classifies branches, and
-  does the arithmetic on review findings. When the split is unclear, the binary reports candidates
+  whether a fix is safe. `mkit` gathers facts, runs and records the gate, and classifies branches;
+  `review` dedupes its findings in prose. When the split is unclear, the binary reports candidates
   and the skill picks.
 - **Compose, don't replace.** Orchestrate `git`, `gh`, `wt`, CodeRabbit and Codex. The binary never
   stages, merges, pushes or edits your files. Its writes are limited to:
@@ -88,7 +88,6 @@ delegation, output discipline and plain-English writing.
  mkit (Go)                   mechanics, --json on every command
    facts                     run dir + all starting facts
    gate detect | run         the repo's checks; run, log, record
-   findings                  validate · reconcile · group review findings
    branch status             classify branches/worktrees for cleanup
    worklog show | append     what each step concluded on this branch
    repo profile · init       discovered vs pinned config
@@ -101,7 +100,6 @@ delegation, output discipline and plain-English writing.
 
 Each repo-scoped skill starts with `mkit facts <skill>`. The exceptions:
 
-- `review` first probes `mkit findings`.
 - `sandbox-audit` starts with `mkit audit sandbox`.
 - `explain` calls no `mkit` command.
 

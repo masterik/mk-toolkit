@@ -51,14 +51,13 @@ changelog**; `CHANGELOG.md` frozen at 0.19.0), cask to `masterik/homebrew-tap`
 ## Binary invariants
 
 Breaking one is a design error (full list: `backlog.md`). Binary is optional and shrinking to
-`doctor`/`audit sandbox`/`cache prune`; the `facts` and `findings` contracts below go away
+`doctor`/`audit sandbox`/`cache prune`; the `facts` contract below goes away
 ([ADR 0006](docs/adr/0006-standalone-skills-optional-binary.md)).
 
 - **Layering.** `core` returns data · `cmd/` formats · `tui/` renders. No logic in a Bubble Tea `Update`.
 - **No TUI off a TTY** — no ANSI/alt-screen on a pipe; skills pipe the binary.
 - **Every command non-interactive-capable, `--json` on all.** Live contracts: fact commands' `key=value`
-  text (byte-for-byte the old scripts', parsed by every skill); `mkit findings --json` (`review` steps
-  3, 4, 6). Others migrate to `--json`; nothing reads it yet.
+  text (byte-for-byte the old scripts', parsed by every skill). Others migrate to `--json`; nothing reads it yet.
 - **Judgement stays in Markdown**; binary does mechanical invariants only.
 - **Skills stay as files**, never `embed.FS` — diffable.
 
@@ -139,12 +138,6 @@ Shell layer gone (M5); its rules still apply:
     tree top (linked worktree its own, removed skipped). `Judge` matches
     `allowedDomains`/`allowWrite`/`additionalDirectories`; protected paths (`settings*.json`, hooks,
     skills, plugins) are inert. `keys.go` flags unknown `sandbox`/`permissions`/`autoMode` keys; may lag docs — a hint, not a verdict.
-  - `findings/` (M4): validate, similarity, reconcile, group, report. **Order-preserving `Record`**, not
-    a struct (re-serialized wholesale; a struct drops `fix`, `also`, extras). `json.Number` (`42.5`
-    stays non-integer). `toFixed2` rounds half **away from zero** on the exact binary value, like JS
-    (Go is half-to-even); at 0.125 `sim` vs `--sim`/`--band` decides thin-merge flag or re-review —
-    location decides the merge. `sort.SliceStable` throughout; ids from a sort with ties. Writes
-    artefacts, prints nothing.
   - `worklog/` (M6): `.mkit/worklog/<branch>.jsonl`. **`FileName` is the one mapping both verbs use**
     (drift shows as an empty log). `%XX`-escape + **full** SHA-256 of the exact branch on **every**
     name (macOS case-insensitive; partial or truncated digest still collides). Budgeted to `NAME_MAX`,

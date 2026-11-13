@@ -24,9 +24,9 @@ Breaking one is a design error, not a trade-off.
 1. **Layering.** `core` returns data and never prints or assumes a terminal. `cli` formats; `tui`
    renders. There is no logic in a Bubble Tea `Update`.
 2. **No TUI off a TTY.** If stdout is not a terminal, emit no ANSI and no alt-screen.
-3. **Every command is non-interactive-capable and takes `--json`.** Two output contracts are live:
-   skills parse the `key=value` text of the fact-reporting commands, and `review` reads
-   `mkit findings --json`. The other commands migrate to `--json` over time.
+3. **Every command is non-interactive-capable and takes `--json`.** One output contract is live:
+   skills parse the `key=value` text of the fact-reporting commands (`review`'s `mkit findings --json`
+   went in #51). The other commands migrate to `--json` over time.
 4. **Commands report and run; they never integrate.** No staging, merging, pushing, or editing your
    files. Each command's writes are bounded:
 
