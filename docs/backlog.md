@@ -32,7 +32,6 @@ Breaking one is a design error, not a trade-off.
 
    | Command | Writes |
    | --- | --- |
-   | `scratch prune` | removes old run dirs |
    | `init` | writes `.mkit/config.toml` (the only config writer) |
    | `cache prune --apply` | deletes stale Claude Code / Codex storage, and only with `--apply` |
 
@@ -43,10 +42,10 @@ Breaking one is a design error, not a trade-off.
 7. **Every workflow step is entry-capable.** A step runs alone, in any order, derives what's missing,
    names its assumptions, and never sends the user to another step
    ([workflow contract](../plugin/skills/_shared/references/workflow-contract.md)).
-8. **Three write locations, chosen by lifetime:** `$TMPDIR`, `<toplevel>/.mkit/` and `~/.mkit/`. The one
-   exception is the common dir's `info/exclude`. No state is kept in `~/.claude` or your files
-   (`cache prune --apply` only deletes there). `TestWriteSitesAreOnTheReviewedAllowlist` asserts this
-   ([ADR 0002](adr/0002-state-locations-under-a-sandbox.md)).
+8. **Write locations, chosen by lifetime:** `$TMPDIR` (per-run files) and `~/.mkit/`. Nothing in the
+   work tree, no `info/exclude` write. No state is kept in `~/.claude` or your files
+   (`cache prune --apply` only deletes there)
+   ([ADR 0006](adr/0006-standalone-skills-optional-binary.md) decision 5).
 9. **Degradation is named, never hit.** A path the sandbox would deny is reported with a working
    remedy, or the command says it is human-run. Each such sentence has one producer.
 10. **Config is an input, never a permission.** Everything runs without `.mkit/config.toml`. A problem

@@ -56,11 +56,10 @@ These are the ones changes break most often. The full list is the
   `key=value` output (`plugin/skills/_shared/scripts/`, tested by `tests/*.bats`); change a key there and
   in every skill that reads it, in one commit.
 - **Commands report and run.** They never stage, merge, push, or edit your files.
-- **State goes to three places only:** `$TMPDIR`, `<toplevel>/.mkit/` and `~/.mkit/`. The bounded
-  exceptions: the `.mkit/` ignore pair in `info/exclude`, `git fetch --prune` (`branch-status.sh`),
-  `.mkit/config.toml` (`init`), and `cache prune --apply` deleting stale Claude Code / Codex storage.
-  `TestWriteSitesAreOnTheReviewedAllowlist` checks every Go file that writes against a reviewed list;
-  a new write site needs a reviewed edit to it.
+- **Nothing writes into the work tree.** Skills keep per-run files in `$TMPDIR` (`facts.sh --run`);
+  `~/.mkit/` holds the `sandbox-audit` ledger. The binary's other writes: `git fetch --prune`
+  (`branch-status.sh`), `.mkit/config.toml` (`init`, until #53), and `cache prune --apply` deleting
+  stale Claude Code / Codex storage.
 - **Skills are composable.** Each runs alone, in any order, and never sends the user to another
   skill first ([workflow contract](plugin/skills/_shared/references/workflow-contract.md)).
 - **Nothing project-specific is hardcoded.** Gate commands, commit scopes and reviewers are discovered

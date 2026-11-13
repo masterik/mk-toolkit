@@ -121,8 +121,8 @@ func (r *Repo) ExcludedSet(paths []string) map[string]bool {
 }
 
 // CommonDir is the absolute `--git-common-dir`: the repository storage shared by
-// every linked worktree. It is where the one file mkit writes outside its own
-// three locations lives — `info/exclude`.
+// every linked worktree, and where `info/exclude` lives — which `doctor` reads
+// for the ignore pair an older mkit wrote there.
 //
 // git answers relatively when asked from inside the work tree, so the result is
 // resolved against Toplevel rather than returned as given.

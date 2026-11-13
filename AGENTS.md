@@ -102,12 +102,12 @@ apply both ways:
     (checkout is `marketplaces/masterik/plugin`). **Work tree before installed copy** — else an old
     install answers for a newer tree, wrong but plausible.
   - `doctor/` (M7): reports, fixes nothing, exit 0. `orphans.go`: closed table of old mkit paths
-    (`.mkit/work/`, `.mkit/worklog/`, `.mkit/gate.jsonl`, `<git-dir>/mkit`, `bootstrap.*`) → `leftovers` warning + `rm`; drop an entry once
-    every machine is past the release that stopped writing it.
-  - `scratch/` (M5): owns `.mkit/`; **sole writer of runtime state** in a work tree (`repoconfig` writes
-    `config.toml`). `writes_test.go` counts write sites per file. `EnsureIgnored` writes the ignore
-    pair to `info/exclude` before first create; `Ignored` probes **two** paths (a `*.jsonl` rule hides
-    `.mkit` files, run dirs untracked). Owns `~/.mkit` (`MKIT_HOME`) and its one unwritable remedy sentence.
+    (`.mkit/work/`, `.mkit/worklog/`, `.mkit/gate.jsonl`, `.mkit/config.toml`, `<git-dir>/mkit`,
+    `bootstrap.*`) → `leftovers` warning + `rm` (`config.toml`: run `setup`, then `git rm`); plus
+    `.mkit/<skill>-<UTC>-*` run dirs (matched by name shape, one finding) and mkit's exact lines in
+    `info/exclude` (remedy: delete them). Drop an entry once every machine is past the release that
+    stopped writing it.
+  - `userdir/`: `~/.mkit` (`MKIT_HOME`), its net-zero write probe and its one unwritable remedy sentence.
   - `branchstatus/`: only `ProtectedSet`/`Develop`, for `profile`; goes with it (#53). The classifier
     is `branch-status.sh`.
   - `sessionaudit/`: `mkit audit sandbox` (hidden alias `sessions`, one release). Reads
@@ -134,7 +134,6 @@ apply both ways:
 - `tools/` — non-payload maintainer shell; only `release.sh`.
 
 ### The plugin payload
-Changing per [ADR 0006](docs/adr/0006-standalone-skills-optional-binary.md): `.mkit/` goes away.
 - `plugin/` — Markdown + manifest + **exactly two scripts** (`_shared/scripts/facts.sh`,
   `branch-status.sh`; a third needs an ADR): no hooks, no `tests/`. Homebrew ships **binary only** (no `files:` in `.goreleaser.yaml`; casks have no stable path;
   `~/.claude/settings.json` sandbox-denied). Versions independently, accepted ([ADR 0003](docs/adr/0003-two-distribution-channels.md)).
@@ -159,7 +158,7 @@ Changing per [ADR 0006](docs/adr/0006-standalone-skills-optional-binary.md): `.m
 - `facts.sh <skill> [--run] [--gh] [--base] [--range] [--remote]` — every starting fact, one call;
   **never reads config**. `--run` → `run_dir=` under `$TMPDIR`. `cd` toplevel first (pathspec lists and
   `--shortstat` agree). **Both** `unstaged_stat` and `staged_stat` (fully-staged looks clean otherwise);
-  separate `untracked_file_list`; `.mkit` run dirs excluded until #50. Unresolvable `--base`/`--range` →
+  separate `untracked_file_list`. Unresolvable `--base`/`--range` →
   `*_state=unresolvable` **+ exit 1**. Failed git query = error, never empty (`git status` failing ≠
   `clean=yes`). Remote: `--remote` → `origin` → lone → first; `remote_choice=ask` → the skill asks, re-runs
   with `--remote` (`_shared/references/remote.md`); a `--remote` naming nothing falls back + `notes:`.
@@ -175,17 +174,12 @@ Changing per [ADR 0006](docs/adr/0006-standalone-skills-optional-binary.md): `.m
   Tests: `tests/*.bats`, throwaway repo under `$TMPDIR`, `commit_here` asserts the toplevel first.
 - **`mkit doctor` is the prereq report** (human-run). Accepted losses — don't re-add a reporter: no
   session-start run. Skills read `facts.sh`, not `doctor`.
-- `<toplevel>/.mkit/` — run dirs
-  **plus committed `config.toml`** ([ADR 0001](docs/adr/0001-per-repo-config-and-init.md#amendment-the-config-path)).
-  - Ignore **pair** `.mkit/*` + `!.mkit/config.toml`, always together (git can't re-include under an
-    excluded dir; `.mkit/*` alone hides config from `git add`). `.gitignore` **outranks**
-    `info/exclude`; remedy names the file git reported.
-  - **Work tree, not `<git-dir>/mkit`** ([ADR 0002](docs/adr/0002-state-locations-under-a-sandbox.md)):
-    shared `.git` → main checkout, refused by worktree isolation. `--show-toplevel`: one per worktree.
-  - Rule written **before** first write: else `git worktree remove` refuses, `git add -A` commits
-    artefacts. `scratch_ignored=` exists because isolated sessions
-    can't write `info/exclude`.
-  - `mkit scratch prune` removes only `<skill>-*` dirs.
+- **Nothing writes into the work tree** (ADR 0006 decision 5): no `.mkit/`, no ignore pair, no
+  `info/exclude` write; `git add -A` and `git worktree remove` never meet a run artefact. Until #53
+  deletes them, `mkit init`/`repoconfig` still read and write `.mkit/config.toml` (doctor already
+  calls it a leftover). An old `.mkit/` shows as untracked; `doctor` names the remedy.
+- `<run-dir>` — `facts.sh --run` → `mktemp -d "$TMPDIR/mkit-<skill>-XXXXXX"`; dies with the session,
+  nothing to prune.
 - `~/.mkit/` (`MKIT_HOME`) — future user-scoped binary state; binary writes nothing now. Holds
   `sandbox-audit.md` (agent-written ledger). `facts.sh` probes it. **Not `~/.claude/mkit/`**: protected
   region, allowlists inert; here one `permissions.additionalDirectories` entry works.
@@ -212,14 +206,12 @@ Changing per [ADR 0006](docs/adr/0006-standalone-skills-optional-binary.md): `.m
 - Commands and bundled scripts report and run; never stage, merge, push, edit. Parse stable output
   (`--porcelain`, `--shortstat`/`--name-only`, `--format`, `--json`); never call `rtk`. Scripts: no OS
   branching except where Git Bash forces it (#58).
-- **Three write locations, by lifetime:** `$TMPDIR`, `<toplevel>/.mkit/`, `~/.mkit/`; bounded exceptions:
-  the `.mkit/` ignore pair in the common dir's `info/exclude`, `git fetch --prune` (`branch-status.sh`),
-  `init`'s `.mkit/config.toml`, and `cache prune --apply` deleting stale `~/.claude`/`~/.codex` storage.
-  State never goes in user files, `/tmp` or `~/.claude`.
-  `TestWriteSitesAreOnTheReviewedAllowlist` (`internal/core/scratch`) asserts it against a
-  human-reviewed list — the real boundaries can't exist in a test. Shrinking per
-  [ADR 0006](docs/adr/0006-standalone-skills-optional-binary.md): `<toplevel>/.mkit/`, its ignore pair
-  and `init`'s config go; per-run files move to a temp dir `facts.sh --run` creates.
+- **Write locations, by lifetime:** skills write only to `$TMPDIR` (per-run files in `<run-dir>`);
+  `~/.mkit/` holds the agent-written `sandbox-audit` ledger. The binary's writes: `cache prune --apply`
+  deleting stale `~/.claude`/`~/.codex` storage (home-guarded, own tests), the net-zero `~/.mkit` and
+  `$TMPDIR` probes, and `git fetch --prune` (`branch-status.sh`). `init`'s `.mkit/config.toml` stays
+  until #53. State never goes in the work tree, user files, `/tmp` or `~/.claude`. No write-sites
+  allowlist test any more (retired with `scratch`, ADR 0006).
 - **Degradation sentences name a working remedy or say "human-run".** (Allowlisting the protected
   `~/.claude/mkit` looked right, did nothing.) Detect at first call as a starting fact; no "reduced" mode.
 - Nothing project-specific hardcoded: gate commands, scopes, reviewers are discovered.
