@@ -116,32 +116,6 @@ func prettyProfile(out io.Writer, p *profile.Profile) {
 		_, _ = fmt.Fprintf(out, "  %s %s %s\n", s.Icon("warn"), wrapIndent(pb.Detail, s.Width()-6, 4), s.Dim(string(pb.Kind)))
 	}
 
-	_, _ = fmt.Fprintf(out, "\n%s\n", s.Section("quality gate"))
-	if p.Gate.Ecosystem != "" {
-		_, _ = fmt.Fprintln(out, s.KV("ecosystem", p.Gate.Ecosystem, lw))
-	}
-	if len(p.Gate.Steps) == 0 {
-		_, _ = fmt.Fprintf(out, "  %s %s\n", s.Icon("warn"), s.Warn(cause(p.Gate.Cause, "no gate commands found or pinned")))
-	} else {
-		if p.Gate.Cause != "" {
-			_, _ = fmt.Fprintf(out, "  %s discovery: %s\n", s.Icon("warn"), s.Warn(p.Gate.Cause))
-		}
-		rows := make([][]string, 0, len(p.Gate.Steps))
-		for _, step := range p.Gate.Steps {
-			rows = append(rows, []string{step.Step, step.Command, string(step.Source)})
-		}
-		_, _ = fmt.Fprintln(out, indentBlock(s.Table([]string{"STEP", "COMMAND", "SOURCE"}, rows,
-			func(_, col int, text string) lipgloss.Style {
-				if col == 2 {
-					return sourceStyle(s, text)
-				}
-				if col == 0 {
-					return s.AccentStyle()
-				}
-				return s.Style()
-			}), 2))
-	}
-
 	_, _ = fmt.Fprintf(out, "\n%s\n", s.Section("conventions"))
 	profValue(out, s, "spec store", p.Spec.Store, lw)
 	profValue(out, s, "spec ref", p.Spec.Ref, lw)
@@ -166,16 +140,6 @@ func prettyProfile(out io.Writer, p *profile.Profile) {
 	}
 }
 
-func sourceStyle(s *ui.S, source string) lipgloss.Style {
-	switch source {
-	case "pinned":
-		return s.VioletStyle()
-	case "unavailable":
-		return s.WarnStyle()
-	}
-	return s.DimStyle()
-}
-
 func profValue(out io.Writer, s *ui.S, label string, v profile.Value, lw int) {
 	if v.Source == profile.Unavailable {
 		_, _ = fmt.Fprintln(out, s.KV(label, s.Dim(cause(v.Cause, "none"))+"  "+s.Tag("unavailable"), lw))
@@ -190,15 +154,6 @@ func profList(out io.Writer, s *ui.S, label string, l profile.List, lw int) {
 		return
 	}
 	_, _ = fmt.Fprintln(out, s.KV(label, strings.Join(l.Values, ", ")+"  "+s.Tag(string(l.Source)), lw))
-}
-
-func indentBlock(block string, n int) string {
-	pad := strings.Repeat(" ", n)
-	lines := strings.Split(block, "\n")
-	for i := range lines {
-		lines[i] = pad + lines[i]
-	}
-	return strings.Join(lines, "\n")
 }
 
 func prettyBranchStatus(out io.Writer, sc *branchstatus.Scan) {

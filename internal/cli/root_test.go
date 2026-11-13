@@ -45,3 +45,17 @@ func TestFindingsIsAnUnknownCommand(t *testing.T) {
 		}
 	}
 }
+
+// The gate left the binary (#48): skills detect it from the shared
+// quality-gate reference and run its commands themselves.
+func TestGateIsAnUnknownCommand(t *testing.T) {
+	for _, args := range [][]string{{"gate"}, {"gate", "detect"}, {"gate", "run", "--", "true"}} {
+		got := run(t, args...)
+		if got.code != 2 {
+			t.Fatalf("%v: exit %d, want 2 (usage)\nstdout:\n%s\nstderr:\n%s", args, got.code, got.stdout, got.stderr)
+		}
+		if !strings.Contains(got.stderr, `unknown command "gate"`) {
+			t.Errorf("%v: stderr does not name the unknown command:\n%s", args, got.stderr)
+		}
+	}
+}

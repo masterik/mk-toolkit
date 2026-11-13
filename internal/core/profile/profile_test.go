@@ -13,7 +13,7 @@ import (
 
 func newRepo(t *testing.T) *gitrepo.Repo {
 	t.Helper()
-	// Neither a payload nor a harness plugin root, so gate discovery reports its
+	// Neither a payload nor a harness plugin root, so payload discovery reports its
 	// cause instead of picking up whatever is installed on the developer's
 	// machine — a test that reads the real environment measures the developer.
 	t.Setenv("CLAUDE_PLUGIN_ROOT", "")
@@ -157,28 +157,6 @@ func TestReviewersComeFromCodeowners(t *testing.T) {
 	}
 	if got := strings.Join(p.Review.Values, ","); got != "@team/core,@alice" {
 		t.Errorf("reviewers = %q, want @team/core,@alice (deduped, comments ignored)", got)
-	}
-}
-
-// Discovery no longer needs the payload — a reachable payload changes nothing
-// about the gate, and the pinned half answers either way.
-func TestGateHonoursPinsWithoutAPayload(t *testing.T) {
-	repo := newRepo(t)
-	if err := repoconfig.Write(repo.Toplevel, &repoconfig.Config{
-		Gate: repoconfig.Gate{Commands: map[string]string{"test": "go test ./..."}},
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	p, err := Build(repo)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if p.Gate.Cause != "" {
-		t.Errorf("cause = %q, want none — discovery ran", p.Gate.Cause)
-	}
-	if len(p.Gate.Steps) != 1 || p.Gate.Steps[0].Source != Pinned {
-		t.Fatalf("steps = %+v, want the one pinned step", p.Gate.Steps)
 	}
 }
 

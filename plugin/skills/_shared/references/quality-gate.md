@@ -1,63 +1,66 @@
 # Quality gate
 
-Shared by `finish` and `pr`, both full tier. `commit` and `review` don't gate — they work
-directly on the diff. **Nothing is hardcoded** — the commands are detected from the target repo.
+Shared by `finish` and `pr`, both full tier, once each before merge/PR. `commit` and `review` don't
+gate — they work directly on the diff. **Nothing is hardcoded** — the commands come from the target
+repo. Read "Find the gate" when the gate is about to run, not before: the manifests it reads cost
+context nothing earlier needs.
 
-## Detect, then choose
+## Find the gate
 
-```bash
-mkit gate detect
-# pm=bun
-# ecosystem=node
-# full:
-#   1 source=discovered cmd=bun run lint
-#   2 source=pinned cmd=pytest -q || exit 1
-#   3 source=discovered cmd=bun run build
-# documented=just check
-# scripts=build,dev,format,lint,test,test:e2e,test:unit
-# scripts_state=ok
-# workspaces=yes
-# docs_candidates:
-#   CLAUDE.md:21:`bun run check` runs formatting, lint, typecheck, and tests
-```
+Walk the table top to bottom; the first row that yields commands is the gate. Rows 3 and 4 combine
+into one sequence.
 
-It reads the lockfile, `package.json` scripts, `Cargo.toml`, `go.mod`, `pyproject.toml`, a
-`Makefile`/`justfile` `check` target and the repo's own docs — which keeps a 25-script
-`package.json` (~700 tokens) out of context.
+| # | Source | The gate is |
+| --- | --- | --- |
+| 1 | `docs/agents/gate.md` | the commands it lists, in its order — the user's override; nothing below is consulted |
+| 2 | a task-runner `check` or `ci` target | that one command (`just check`, `make ci`, `task check`, `deno task ci`) |
+| 3 | per-step task-runner recipes | laid over row 4, step by step (below) |
+| 4 | the ecosystem default | the manifest table's commands (below) |
+| 5 | nothing | ask the user which commands to run; never invent one |
 
-**`full` is a proposal; `documented` and `docs_candidates` are why.** What a repo calls its
-canonical check is a claim in its own prose, not something a lockfile settles — so when either
-names a command the chain missed, prefer it and say which you used. Anything reported absent
-stays absent: never invent a step.
+Say which row the gate came from in the report (`gate from: just check`, `gate from: go.mod + justfile`).
 
-**One step per line, in order, and `cmd=` runs to the end of the line** — so a command may
-contain spaces, pipes or `||` without any escaping. Read the fields by name, never by position,
-and never split the block on `|`: `pytest -q || exit 1` is an ordinary pinned step.
+**Task runners**, in this order: `justfile` (also `Justfile`, `.justfile`), `Makefile` (`makefile`,
+`GNUmakefile`), `Taskfile.yml`/`.yaml`, `deno.json`/`.jsonc` `tasks`. A recipe counts only if it runs
+bare — a just recipe with a required parameter (`release version:`) cannot stand in for a step. The
+first runner that has a recipe wins for that name. Grep the runner file for the names you need; don't
+read it whole.
 
-**`source=` says where that step came from**:
+**Row 2 — read the recipe first.** A `check` that only lints would silently drop the tests and build.
+If its body plainly covers less than rows 3–4 would run, it is not the whole gate: fall through to
+rows 3–4 and say why.
 
-| value | meaning |
+**Row 4 — the ecosystem table.** Every manifest present at the repo root contributes, in this table's
+order:
+
+| Manifest | Steps, in order |
 | --- | --- |
-| `discovered` | inferred from a manifest this run; cannot go stale |
-| `pinned` | `[gate.commands]` in the repo config — a human said this one is right |
-| `documented` | the repo's own `check:` target, used because nothing was discovered |
+| `package.json` | `<pm> run <s>` for each of `lint`, `typecheck`, `test`, `build` that is a script; `<pm>` from the lockfile: `bun.lock`/`bun.lockb` → bun, `pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn, none → npm |
+| `deno.json`/`deno.jsonc` | `deno lint`, `deno test` |
+| `Cargo.toml` | `cargo clippy --all-targets -- -D warnings`, `cargo test`, `cargo build` |
+| `go.mod` | `go vet ./...`, `go test ./...`, `go build ./...` |
+| `pyproject.toml`/`setup.cfg`/`tox.ini` | `ruff check .` (`python -m flake8` without ruff), `pytest -q`, `mypy .` if `pyproject.toml` has `[tool.mypy]` |
+| `*.sln`/`*.csproj` | `dotnet build --nologo`, `dotnet test --nologo` |
 
-`documented=` appears on its own line when a `check:` target exists *and* a chain was
-discovered anyway. It never replaces that chain — a `check:` that only lints would silently
-drop the repo's tests and build — so it is evidence for an override, not an override.
+Read `package.json` scripts with `jq -r '.scripts | keys[]' package.json` (or grep its `"scripts"`
+block), never the whole file. Unparseable =
+the gate is **undetected**, not absent: say so, never report it as a pass.
 
-**Check `scripts_state` before believing `scripts=none`.** `ok` means the list is real;
-`unreadable` means detection was blind, not that the repo declares nothing. On a blind read, say
-the gate was undetected rather than absent, and never report a skipped gate as a pass. `n-a` is
-the honest no-package.json case: a repo with no declared check (this plugin is one) has no gate
-to run, and saying so beats substituting a command the repo never named.
+**Row 3 over row 4 — the overlay**, for the steps `lint`, `typecheck`, `vet`, `test`, `build`:
 
-## One tier, two consumers
+- a runner recipe named for a step **replaces** that step's ecosystem command (`just test` over
+  `go test ./...`); in a polyglot repo it replaces every ecosystem's command for that step, once;
+- a step the runner lacks **keeps** the ecosystem's command;
+- a runner step no ecosystem proposes (a Go repo's `just lint`) **joins** the sequence in the order
+  `lint` → `typecheck` → `vet` → `test` → `build`.
 
-There is one tier — the `full:` block — used **by `finish` and `pr`, once each, before merge/PR**: the
-complete pre-integration sequence, in order, stopping at the first failure. `commit` and
-`review` used to consume a `fast=` tier; they no longer gate at all, and the tier went with
-them.
+Example: `go.mod` + a justfile with `lint` and `test` → `just lint`, `go vet ./...`, `just test`,
+`go build ./...`.
+
+A repo's own docs (`CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`) naming a different check command is
+evidence, not an override: run what the table gives, report the mismatch, and suggest
+`docs/agents/gate.md` to settle it. A repo with no checks at all (Markdown only) has no gate: say
+`no gate`, never `gate=ok`.
 
 ## Run it
 
@@ -68,6 +71,9 @@ facts`, passed as a literal — `output-discipline.md`), so it never enters cont
 ```bash
 bun run lint > <run-dir>/gate-lint.log 2>&1; echo "lint exit=$?"
 ```
+
+`<step>` is the step's name (`lint`, `test`…); a row 1–2 command gets a short label of its own
+(`check`). A name already used gets `-2`, `-3`.
 
 One line per step in the chat: the step, `ok` or `FAIL exit=N`, and the log path on a failure. On a
 failure, read a short excerpt of that log — the lines naming the failure (`grep -nE

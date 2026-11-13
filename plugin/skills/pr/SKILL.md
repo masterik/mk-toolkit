@@ -108,7 +108,7 @@ Same inside a worktree — just confirm `git branch --show-current` is the featu
    were a PR. Only `none` means proceed; the rest are blocked states to surface, not to push past.
 4. **Full quality gate** (`../_shared/references/quality-gate.md`), in order, stopping at the first failure:
 
-   `mkit gate detect` names the commands; run each yourself, its output to a log in the run directory.
+   Find the commands with the reference's table ("Find the gate"); run each yourself, its output to a log in the run directory.
    One line per passing step; on failure the step, the exit code, the failure lines and the tail — never
    the log. The user may proceed anyway for a draft. Delegate the diagnosis only when that verdict is not
    enough ("when a step fails") — choosing between fixing and opening a draft needs a cause, not a transcript.

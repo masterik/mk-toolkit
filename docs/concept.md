@@ -24,7 +24,7 @@ tested binary.
 ## Design principles
 
 - **Judgement in Markdown, mechanics in the binary.** Skills decide commit boundaries, severity, and
-  whether a fix is safe. `mkit` gathers facts, runs and records the gate, and classifies branches;
+  whether a fix is safe. `mkit` gathers facts and classifies branches; skills find and run the gate themselves;
   `review` dedupes its findings in prose. When the split is unclear, the binary reports candidates
   and the skill picks.
 - **Compose, don't replace.** Orchestrate `git`, `gh`, `wt`, CodeRabbit and Codex. The binary never
@@ -49,7 +49,7 @@ tested binary.
   needs one grant. A path the sandbox would deny
   is reported up front, with a remedy that works ([ADR 0002](adr/0002-state-locations-under-a-sandbox.md)).
 - **Discover first, configure optionally.** Gate commands, scopes, reviewers and merge style are read
-  from the repo. `mkit init` can pin them in a committed `.mkit/config.toml`; nothing requires it
+  from the repo; `docs/agents/gate.md` overrides the gate. `mkit init` can pin the rest in a committed `.mkit/config.toml`; nothing requires it
   ([ADR 0001](adr/0001-per-repo-config-and-init.md)).
 - **Narrow on purpose.** macOS and Claude Code only. Other platforms are a packaging question for when
   someone needs them.
@@ -87,7 +87,6 @@ delegation, output discipline and plain-English writing.
    +
  mkit (Go)                   mechanics, --json on every command
    facts                     run dir + all starting facts
-   gate detect | run         the repo's checks; run, log, record
    branch status             classify branches/worktrees for cleanup
    repo profile · init       discovered vs pinned config
    doctor                    prerequisites, sandbox, plugin state
