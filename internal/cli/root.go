@@ -76,7 +76,7 @@ func NewRoot() *cobra.Command {
 		}
 	}
 	add(groupSetup, newInitCmd(), newDoctorCmd(), newVersionCmd())
-	add(groupState, newFactsCmd(), newRepoCmd(), newBranchCmd())
+	add(groupState, newRepoCmd())
 	add(groupCleanup, newScratchCmd(), newCacheCmd(), newAuditCmd())
 
 	installPrettyHelp(root)

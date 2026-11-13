@@ -26,7 +26,7 @@ References: `../_shared/references/output-discipline.md` (bounded output, where 
 ## Preconditions
 
 **One call, and it is the dependency check.** This skill has no run directory and no repository, so it does
-not start with `mkit facts`; the command it needs *is* the probe:
+not start with `facts.sh`; the command it needs *is* the probe:
 
 ```bash
 mkit audit sandbox --days <N, default 14>

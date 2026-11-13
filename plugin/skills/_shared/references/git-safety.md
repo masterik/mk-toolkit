@@ -19,19 +19,20 @@ Shared by every mkit skill. "The git safety protocol" means this file.
 
 ## Pin the git calls whose output you parse or judge
 
-`mkit facts` reports **`git_bin=`** — the absolute path of the real git binary. Any git call whose output
-a skill *parses or judges* uses it, with the repository root spelled out:
+Any git call whose output a skill *parses or judges* uses the **absolute path of the real git binary**,
+with the repository root spelled out. Resolve it once per session (`command -v git`, e.g. `/usr/bin/git`)
+and substitute it for `<git>`:
 
 ```
-"$git_bin" -C "$toplevel" diff --cached -- "<path>"
-"$git_bin" -C "$toplevel" status --porcelain
-"$git_bin" -C "$toplevel" log --oneline <base>..HEAD
+"<git>" -C "<toplevel>" diff --cached -- "<path>"
+"<git>" -C "<toplevel>" status --porcelain
+"<git>" -C "<toplevel>" log --oneline <base>..HEAD
 ```
 
 **Keep the quotes when you substitute.** These are recipes an agent fills in and runs literally, and
 both values are arbitrary paths: a checkout under `~/My Projects/thing` splits `-C` across two operands,
 and git then fails with `cannot change to '/Users/you/My'` or — worse — succeeds against the wrong root.
-Same for every `<path>` and every scratch file. `mkit facts` emits one pair per line precisely so a value
+Same for every `<path>` and every scratch file. `facts.sh` emits one pair per line precisely so a value
 containing a space survives being read; dropping the quotes here throws that away at the point of use.
 
 Both sides of this are measured, and both bite.
@@ -58,5 +59,5 @@ the same reason it refuses a wrapper — *"feeds python a program assembled at r
 cannot be shown not to be git"*. Any recipe built on a heredoc'd interpreter is dead on arrival in an
 isolated session, which is exactly the kind of session these skills are driven from.
 
-Use `mkit`'s own commands, plain git plumbing, or a file written to `tmp=` and then read by a named
-tool. Never improvise a helper into the target repository's working tree — see `output-discipline.md`.
+Use the bundled `facts.sh`/`branch-status.sh`, plain git plumbing, or a file written to `$TMPDIR` and
+then read by a named tool. Never improvise a helper into the target repository's working tree — see `output-discipline.md`.

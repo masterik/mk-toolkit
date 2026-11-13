@@ -8,7 +8,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/masterik/mk-toolkit/internal/buildinfo"
-	"github.com/masterik/mk-toolkit/internal/core/branchstatus"
 	"github.com/masterik/mk-toolkit/internal/core/doctor"
 	"github.com/masterik/mk-toolkit/internal/core/profile"
 	"github.com/masterik/mk-toolkit/internal/tui/ui"
@@ -154,102 +153,6 @@ func profList(out io.Writer, s *ui.S, label string, l profile.List, lw int) {
 		return
 	}
 	_, _ = fmt.Fprintln(out, s.KV(label, strings.Join(l.Values, ", ")+"  "+s.Tag(string(l.Source)), lw))
-}
-
-func prettyBranchStatus(out io.Writer, sc *branchstatus.Scan) {
-	s := ui.New(out)
-	_, _ = fmt.Fprintln(out, s.Title("mkit branch status", ""))
-	const lw = 10
-
-	state := func(v, ok string) string {
-		if v == ok {
-			return s.Good(v)
-		}
-		return s.Warn(v)
-	}
-	_, _ = fmt.Fprintln(out, s.Panel(
-		s.KV("default", s.Accent(sc.Default), lw),
-		s.KV("develop", orNone(sc.Develop), lw),
-		s.KV("remote", orNone(sc.Remote), lw),
-		s.KV("fetch", state(sc.Fetch, "ok"), lw),
-		s.KV("gh", state(sc.GH, "ok"), lw),
-		s.KV("protected", s.Violet(strings.Join(sc.Protected, "  ")), lw),
-		s.KV("keep", orNone(strings.Join(sc.Keep, "  ")), lw),
-	))
-	if len(sc.KeepUnknown) > 0 {
-		_, _ = fmt.Fprintf(out, "%s %s\n", s.Icon("warn"),
-			s.Dim("pinned to keep, no local branch: ")+strings.Join(sc.KeepUnknown, ", "))
-	}
-
-	_, _ = fmt.Fprintf(out, "\n%s\n", s.Section(fmt.Sprintf("branches (%d)", len(sc.Branches))))
-	brows := make([][]string, 0, len(sc.Branches))
-	for _, b := range sc.Branches {
-		brows = append(brows, []string{b.Name, string(b.Class), b.Upstream,
-			dashIfEmpty(strings.Join(b.MergedInto, ",")), dashIfEmpty(b.PR)})
-	}
-	_, _ = fmt.Fprintln(out, s.Table([]string{"BRANCH", "STATE", "UPSTREAM", "MERGED INTO", "PR"}, brows,
-		func(_, col int, text string) lipgloss.Style {
-			switch col {
-			case 1:
-				return classStyle(s, text)
-			case 2, 3, 4:
-				if text == "-" || text == "none" {
-					return s.DimStyle()
-				}
-				if text == "gone" {
-					return s.WarnStyle()
-				}
-			}
-			return s.Style()
-		}))
-
-	_, _ = fmt.Fprintf(out, "\n%s\n", s.Section(fmt.Sprintf("worktrees (%d)", len(sc.Worktrees))))
-	if sc.WorktreesState != "ok" && sc.WorktreesState != "" {
-		_, _ = fmt.Fprintf(out, "%s worktree list: %s\n", s.Icon("warn"), s.Warn(sc.WorktreesState))
-	}
-	wrows := make([][]string, 0, len(sc.Worktrees))
-	for _, w := range sc.Worktrees {
-		wrows = append(wrows, []string{w.Branch, w.Origin, w.Clean, w.Path})
-	}
-	_, _ = fmt.Fprintln(out, s.Table([]string{"BRANCH", "ORIGIN", "CLEAN", "PATH"}, wrows,
-		func(_, col int, text string) lipgloss.Style {
-			switch col {
-			case 2:
-				switch text {
-				case "yes":
-					return s.GoodStyle()
-				case "no":
-					return s.WarnStyle()
-				}
-				return s.BadStyle()
-			case 3:
-				return s.DimStyle()
-			}
-			return s.Style()
-		}))
-
-	if len(sc.ConfigProblems) > 0 {
-		_, _ = fmt.Fprintf(out, "\n%s\n", s.Section("notes"))
-		for _, n := range sc.ConfigProblems {
-			_, _ = fmt.Fprintf(out, "  %s %s\n", s.Icon("warn"), wrapIndent(n, s.Width()-6, 4))
-		}
-	}
-}
-
-func classStyle(s *ui.S, class string) lipgloss.Style {
-	switch branchstatus.Class(class) {
-	case branchstatus.Protected:
-		return s.VioletStyle().Bold(true)
-	case branchstatus.Current:
-		return s.AccentStyle().Bold(true)
-	case branchstatus.Merged, branchstatus.MergedPR:
-		return s.GoodStyle()
-	case branchstatus.OpenPR:
-		return s.AccentStyle()
-	case branchstatus.ClosedPR, branchstatus.Gone, branchstatus.Unpushed:
-		return s.WarnStyle()
-	}
-	return s.Style()
 }
 
 func prettyInit(out io.Writer, res initResult) {

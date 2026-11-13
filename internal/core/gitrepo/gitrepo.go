@@ -181,9 +181,6 @@ const (
 	RemoteFirst = "first"
 	// RemoteNone — no remote is configured, which is a normal state.
 	RemoteNone = "none"
-	// RemoteChosen — named for this one call (`--remote`), by a user who was just
-	// asked. Decided like a pin, but it comes from no file.
-	RemoteChosen = "chosen"
 )
 
 // RemoteChoice is how this checkout's remote was resolved.
@@ -203,7 +200,7 @@ type RemoteChoice struct {
 // Ask reports whether the caller should let the user choose: several remotes and
 // no usable pin. Pinned means decided, and a lone remote has nothing to choose.
 func (c RemoteChoice) Ask() bool {
-	return len(c.All) > 1 && c.Source != RemotePinned && c.Source != RemoteChosen
+	return len(c.All) > 1 && c.Source != RemotePinned
 }
 
 // ResolveRemote picks the remote skills push to and ask GitHub about. A pinned
@@ -231,33 +228,6 @@ func (r *Repo) ResolveRemote(pinned string) RemoteChoice {
 	return c
 }
 
-// UnknownRemoteError is a remote named for this call that is not configured — a
-// usage mistake, exit 2, unlike a pin from the config, which falls back.
-type UnknownRemoteError struct {
-	Name string
-	All  []string
-}
-
-func (e *UnknownRemoteError) Error() string {
-	have := "none"
-	if len(e.All) > 0 {
-		have = strings.Join(e.All, ", ")
-	}
-	return fmt.Sprintf("--remote %q is not a remote configured here (have: %s)", e.Name, have)
-}
-
-// ChooseRemote is ResolveRemote for a name given for one call. A pin the clone
-// lacks is a fallback and a note; a name typed on the command line that is not a
-// remote is a mistake, and is refused rather than quietly replaced by `origin`.
-func (r *Repo) ChooseRemote(name string) (RemoteChoice, error) {
-	c := r.ResolveRemote(name)
-	if c.Source != RemotePinned {
-		return c, &UnknownRemoteError{Name: name, All: c.All}
-	}
-	c.Source = RemoteChosen
-	return c, nil
-}
-
 // The host is anchored on what can precede it in a remote URL — a scheme's `//`,
 // a user's `@`, or the start of an scp-like address — so `evilgithub.com` and
 // `github.com.evil.example` are not GitHub.
@@ -278,8 +248,8 @@ func (r *Repo) GitHubRepo(remote string) string {
 	return m[1]
 }
 
-// PinMissingDetail is the one sentence for a pin this clone lacks, so `facts` and
-// `repo profile` cannot word it twice. "" when nothing is missing.
+// PinMissingDetail is the one sentence for a pin this clone lacks, for `repo
+// profile`. "" when nothing is missing.
 func (c RemoteChoice) PinMissingDetail() string {
 	if c.PinMissing == "" {
 		return ""
@@ -323,9 +293,8 @@ func run(dir string, args ...string) (string, error) {
 // master or trunk, then "unknown". **Always a local branch, or "unknown"**: a
 // name that exists only as a remote-tracking ref is never returned.
 //
-// **One implementation**: `mkit facts` prints it as `default_branch=`, `mkit
-// branch status` is handed it rather than re-deriving it, and `mkit repo profile`
-// needs it to report the branches cleanup protects with nothing pinned. A second
+// The plugin's `facts.sh` resolves the same answer for the skills (and
+// `branch-status.sh` takes it from there); `mkit repo profile` needs it to report the branches cleanup protects with nothing pinned. A second
 // resolution here is a second thing to keep true, and the symptom of a
 // disagreement is a cleanup that protects a different branch than the one the
 // facts named.
@@ -343,7 +312,7 @@ func (r *Repo) DefaultBranch(pinnedRemote string) string {
 	// The remote's answer wins only when this checkout actually has that branch.
 	// A stale `origin/HEAD`, or one naming a branch that exists only as a
 	// remote-tracking ref, otherwise wins over a perfectly good local `main`:
-	// `mkit branch status` refuses a `--default` absent from `refs/heads` before it
+	// `branch-status.sh` refuses a `--default` absent from `refs/heads` before it
 	// fetches anything, so the whole of `cleanup` stops on a name this repo has
 	// never checked out.
 	if remoteHead != "" && r.hasLocalBranch(remoteHead) {
@@ -355,7 +324,7 @@ func (r *Repo) DefaultBranch(pinnedRemote string) string {
 		}
 	}
 	// Nothing local matched. Not the remote's name: it is not a branch this
-	// checkout has, and `mkit branch status` refuses such a `--default` — the
+	// checkout has, and `branch-status.sh` refuses such a `--default` — the
 	// whole of `cleanup` would stop on it where "unknown" is reported and handled.
 	return "unknown"
 }

@@ -63,14 +63,16 @@ func gateRepo(t *testing.T) (repo, rd string) {
 	return repo, rd
 }
 
-// field reads a `key=value` line out of the output, as the skills do.
-func field(out, key string) string {
-	for _, line := range strings.Split(out, "\n") {
-		if v, ok := strings.CutPrefix(line, key+"="); ok {
-			return v
-		}
+// factsRepo is a throwaway repo with the user-scoped dir pointed inside it, so no
+// run can read or write a developer's real state.
+func factsRepo(t *testing.T) string {
+	t.Helper()
+	repo, _ := gateRepo(t)
+	if err := os.RemoveAll(filepath.Join(repo, ".mkit")); err != nil {
+		t.Fatal(err)
 	}
-	return ""
+	t.Setenv("MKIT_HOME", filepath.Join(repo, ".mkit-home"))
+	return repo
 }
 
 // put writes name under dir, creating its parents.

@@ -41,15 +41,14 @@ Skills discover gate commands, commit scopes, reviewers, merge style and the pus
 ## The binary
 
 ```
-mkit facts <skill>       all starting facts a skill needs, in one call
-mkit branch status       classify every local branch and worktree
 mkit repo profile        discovered vs pinned config (mkit init pins it)
 mkit doctor              prerequisites, sandbox writability, plugin state
 mkit audit sandbox       sandbox and permission-gate events across sessions
 mkit cache prune         prune stale Claude Code / Codex storage
 ```
 
-Every command takes `--json`. On a terminal, some show a TUI.
+Every command takes `--json`. On a terminal, some show a TUI. A skill's starting facts and `cleanup`'s
+branch classifier ship with the plugin instead, as two bash scripts (`facts.sh`, `branch-status.sh`).
 
 ## Install
 

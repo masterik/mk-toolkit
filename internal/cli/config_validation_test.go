@@ -39,7 +39,6 @@ func TestEveryCommandRunsWithAMalformedConfig(t *testing.T) {
 		{"doctor"},
 		{"repo", "profile"},
 		{"repo", "profile", "--json"},
-		{"facts", "commit", "--no-run"},
 		{"init", "--yes"},
 	} {
 		if res := run(t, args...); res.code != 0 {

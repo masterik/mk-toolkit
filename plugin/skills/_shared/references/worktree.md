@@ -5,22 +5,21 @@ sibling directories, and Claude Code agents commonly run inside one. The finishi
 clean up the right way for the one they are in.
 
 `cleanup` is the one consumer that looks at every worktree in the repo rather than just the one it
-is running in — `mkit branch status` reports `origin=primary|claude-code|linked` per worktree,
-the same three-way split as `mkit facts`'s `cleanup_path`, but as a table instead of a single answer.
+is running in — `branch-status.sh` reports `origin=primary|claude-code|linked` per worktree,
+the same three-way split as `facts.sh`'s `worktree_origin`, but as a table instead of a single answer.
 The teardown below still applies row by row: never remove an `origin=claude-code` worktree with
 plain `git worktree remove` if this session happens to be the one running inside it — hand it back
 with **ExitWorktree** instead — and treat any other `claude-code` row (some other session's
 worktree) as a reason to ask before touching it, not a reason to skip it silently.
 
-## Ask `mkit facts`, not the layout
+## Ask `facts.sh`, not the layout
 
-`mkit facts` already answered this (`output-discipline.md`):
+`facts.sh` already answered this (`output-discipline.md`):
 
 ```
 linked=yes            git_dir != common_dir — this is not the primary checkout
 worktree_origin=claude-code | linked | primary
-cleanup_path=exit-worktree | wt | git-worktree | none
-wt_lists_this=yes     worktrunk can see this repo
+cleanup_path=exit-worktree | git-worktree | none
 primary=/Users/you/repo
 ```
 
@@ -31,32 +30,23 @@ hand-made worktree — and nothing needs to. What differs is the teardown.
 | `cleanup_path` | Meaning | Teardown |
 | --- | --- | --- |
 | `exit-worktree` | the harness's own (`/.claude/worktrees/`) | merge, then the **ExitWorktree** tool — never `git worktree remove` it from inside itself |
-| `wt` | a linked worktree, worktrunk present | `wt merge` — it respects the user's hooks and squash/rebase config |
-| `git-worktree` | a linked worktree, no worktrunk | plain git, below |
+| `git-worktree` | any other linked worktree | `wt merge` when worktrunk is available (it respects the user's hooks and squash/rebase config); plain git, below, otherwise |
 | `none` | the primary checkout | nothing to tear down |
 
-`wt_bin=none` is **advisory**: worktrunk's shell integration installs `wt` as a shell function,
-which a script may not inherit even though the agent's own shell has it. Treat a missing `wt`
-as "check before concluding", not as proof.
+worktrunk is optional. Check for it in the agent's own shell (`command -v wt`, or `type wt`):
+its shell integration installs `wt` as a shell function, which a script does not inherit, so the
+scripts never report it.
 
 **Every one of these teardown paths stays fully capable.** `exit-worktree` in particular is not a
 degraded fallback — it is the correct teardown for a supported environment, and a machine configured
 differently from the author's depends on it.
 
-## Two things a worktree changes about writing
+## Writing from a worktree
 
-- **Your run directory is inside the worktree you are in.** `<toplevel>/.mkit/`, so a write of
-  yours never targets the shared checkout. That is not a nicety: in a session Claude Code has marked
-  as worktree-isolated, every write to a path in the main checkout is refused — *"This session is
-  isolated in the worktree …; edit the worktree copy of this file instead of the shared-checkout
-  path"* — and the run directory is the first thing any skill opens.
-- **`scratch_ignored=` is the one thing you cannot fix from here.** The ignore rule lives in the *common
-  dir's* `info/exclude`, which is in the main checkout. `mkit scratch open` writes it when it can; from an
-  isolated session it cannot. While `scratch_ignored=no`, mkit's scratch shows up in
-  `git status --porcelain`, `git worktree remove` refuses without `--force`, and `git add -A` would
-  commit run artefacts — so **do not stage, and do not tear a worktree down with `--force` to get
-  around it.** Report the remedy from the `notes:` block; it has to be applied from the main
-  checkout.
+**Your run directory is outside every worktree.** `facts.sh --run` makes it under `$TMPDIR`, so a
+write of yours never targets the shared checkout. That is not a nicety: in a session Claude Code has
+marked as worktree-isolated, every write to a path in the main checkout is refused — *"This session is
+isolated in the worktree …; edit the worktree copy of this file instead of the shared-checkout path"*.
 
 ## worktrunk (`wt`)
 
@@ -111,7 +101,7 @@ other — report the contradiction and let the user settle it; do not pick a win
 ## Merge back with plain git
 
 `git checkout <base>` fails inside a worktree when the base is checked out in the primary one.
-Two safe options, and `mkit facts` already gave you `primary=`:
+Two safe options, and `facts.sh` already gave you `primary=`:
 
 - **Merge from the primary worktree** (preferred):
   ```bash
@@ -138,6 +128,6 @@ git worktree prune                  # tidy stale metadata
 - Determine the **base branch** before finishing — the branch the feature was cut from (often
   `default_branch`). Confirm with the user if ambiguous.
 - Never remove a worktree or delete a branch with **uncommitted changes** or **unmerged commits**
-  without an explicit request. `mkit facts` reports `clean=` and `commits_ahead_of_base=`.
+  without an explicit request. `facts.sh` reports `clean=` and `commits_ahead_of_base=`.
 - After removal verify: `git worktree list` no longer shows it, `git branch` no longer lists it.
 - Respect `git-safety.md` throughout.

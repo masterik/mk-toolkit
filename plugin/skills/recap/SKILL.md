@@ -23,21 +23,19 @@ How the answer reads (levels, writing rules, visuals, words used, the closing li
 **First call, on its own:**
 
 ```bash
-mkit facts recap --no-run --gh
+bash ../_shared/scripts/facts.sh recap --gh
 ```
 
-`mkit facts` **is** this skill's dependency check. If it fails with `command not found` **or**
-`unknown command "facts"` (absent and too old are the same answer here), **stop** and say:
-
-> This skill runs on the `mkit` binary. Install it with `brew install masterik/tap/mkit` (or upgrade
-> with `brew upgrade mkit`), then run it again.
+The path is relative to this skill's directory (`../_shared/references/output-discipline.md` says how to
+resolve it). No `--run`: recap writes nothing.
 
 If it exits 1 because this isn't a git work tree, stop and say that recap reports on a repository's
 branch, so it needs to run inside one. `/mkit:explain` covers the session alone.
 
-From `mkit facts`: `branch=`, `default_branch=`, `detached=`, `upstream=`, `pushed=`, `ahead=`/`behind=`,
+From `facts.sh`: `branch=`, `default_branch=`, `detached=`, `upstream=`, `pushed=`, `ahead=`/`behind=`,
 `clean=`, the `staged= unstaged= untracked= conflicted=` counts, `status:`, the stats, `pr=` with
-`pr_state=`/`pr_draft=`, `remote_repo=`, and `git_bin=` for the calls below.
+`pr_state=`/`pr_draft=`, `remote_repo=`, and `toplevel=` (`<toplevel>` below; `<git>` is the absolute git
+binary, `../_shared/references/git-safety.md`).
 **`pushed=` only says whether an upstream is set.** With an upstream, commits are published only when
 `ahead=0`; with `ahead=2`, say two commits are still local. With `upstream=none`, say no upstream is set,
 so whether the branch was pushed is unknown — never "not pushed".
@@ -46,11 +44,11 @@ so whether the branch was pushed is unknown — never "not pushed".
 the PR's base says the branch is stacked on another one. Then use that parent, because measuring from the
 default would list the parent's commits as this branch's work. Skip this step when the branch **is** the
 base, when `detached=yes`, or when `default_branch=unknown`. Otherwise read what this branch has committed,
-subjects **and bodies** — the body is where a commit says why — with the git it named, bounded so a
+subjects **and bodies** — the body is where a commit says why — bounded so a
 long-lived branch can't flood the context:
 
 ```bash
-<git_bin> log --no-decorate -n 30 --format='%h %s%n%b' <base>..HEAD
+"<git>" -C "<toplevel>" log --no-decorate -n 30 --format='%h %s%n%b' <base>..HEAD
 ```
 
 If that fails (a base that exists only on the remote, for instance), or the step was skipped, say in one

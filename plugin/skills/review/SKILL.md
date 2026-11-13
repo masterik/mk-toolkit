@@ -19,10 +19,11 @@ applies safe fixes, asks before risky ones, hands back a findings + fixes summar
 the default.
 
 **Read nothing up front.** Most of these references are what the *reviewers* are held to, not what this
-session runs on — they go to subagents as paths under `refs=` (below), and a copy here buys nothing. Later
-steps name them by bare filename:
+session runs on — they go to subagents as paths under `<refs>`, the absolute path of
+`../_shared/references/` resolved against this skill's directory (`agent-delegation.md`), and a copy here buys
+nothing. Later steps name them by bare filename:
 
-| reference, under `refs=` | who reads it | when |
+| reference, under `<refs>` | who reads it | when |
 | --- | --- | --- |
 | `review-severity.md` | every reviewer | handed over in step 2 |
 | `lenses-correctness.md` / `lenses-craft.md` | Codex / the Claude reviewer | handed over in step 2 |
@@ -54,7 +55,7 @@ established facts — range, shortstat, file list, goal, mode — so the subagen
 
 | stage | who runs it | model | enters this session |
 | --- | --- | --- | --- |
-| 1 scope | this session — **one** `mkit facts` call | — | run dir, refs path, branch, stat, file list |
+| 1 scope | this session — **one** `facts.sh` call | — | run dir, branch, stat, file list |
 | 2 find | 2 (quick) or 3 (full) subagents, parallel | Opus | one ≤10-line reply per subagent: path written + counts by tag + lenses not covered |
 | 3 reconcile | this session, in prose — merges by `triage-reconcile.md`'s rule | — | the capped findings themselves; out: `reconciled.md` + a tally |
 | 4 verify | 1 subagent per batch of files, parallel — or this session, on a handful | Opus | one line per finding: id + verdict (+ corrected fields) |
@@ -62,24 +63,12 @@ established facts — range, shortstat, file list, goal, mode — so the subagen
 | 5a sweep | this session when the shape greps; 1 subagent per shape when it does not | Sonnet | the occurrence list |
 | 6 report | this session — verdicts onto `reconciled.md`, then prose | — | the summary itself |
 
-**Never read a diff into this session.** Subagents read the diff; this session reads what `mkit facts` returned.
-Never paste a reference into a brief either — hand over its path under `refs=` and have the subagent read it.
+**Never read a diff into this session.** Subagents read the diff; this session reads what `facts.sh` returned.
+Never paste a reference into a brief either — hand over its path under `<refs>` and have the subagent read it.
 
 **One writer per file, throughout.** Every fanned-out stage writes one file per subagent —
 `findings-<source>.md` per reviewer, `verdicts-<batch>.md` per batch — and this session aggregates after they
 return. The files are the transport and the audit trail; no code parses them.
-
-## 0. Check `mkit` is there
-
-Step 1's `mkit facts` is this skill's dependency check, as in every other repo-scoped skill: if it fails
-with `command not found` **or** `unknown command "facts"`, **stop** before any reviewer runs and say:
-
-> `review` needs the `mkit` binary for its starting facts, and it is either not installed or too old.
-> Install it with `brew install masterik/tap/mkit` (or upgrade with `brew upgrade mkit`), then run the
-> review again.
-
-Nothing after step 1 needs the binary for the findings: reconciling, batching and reporting them are this
-session's own work, in prose.
 
 ## 1. Establish the review scope
 
@@ -117,11 +106,12 @@ described.
 Then one call, which also opens the run directory:
 
 ```bash
-mkit facts review --range <range>     # omit --range for a dirty tree
+bash ../_shared/scripts/facts.sh review --run --range <range>     # omit --range for a dirty tree
 ```
 
-Keep the `run=` and `refs=` literals; every later step and every brief needs them, and re-running `mkit facts`
-opens a second directory (`output-discipline.md`).
+The path is relative to this skill's directory (`output-discipline.md` says how to resolve it). Keep the
+`run_dir=` literal — this file writes it as `<run-dir>` — and the `<refs>` path; every later step and every
+brief needs them, and re-running with `--run` opens a second directory (`output-discipline.md`).
 
 **Also capture the goal** — what the change is trying to achieve, one or two lines. In this order:
 
@@ -161,7 +151,7 @@ already tells it not to run the tests, build or linter, and not to report anythi
 | **Claude** (full only) | a subagent over the same diff — or the built-in `code-review` skill at a high effort level | `architecture`, `quality`, `tests`, `docs`, `comments` |
 
 Each brief carries: `<run-dir>/scope.md`, the paths of `review-severity.md` and of **its own lens file** under
-`refs=` — `lenses-correctness.md` for Codex (and, in quick mode, for CodeRabbit too, so its best-effort
+`<refs>` — `lenses-correctness.md` for Codex (and, in quick mode, for CodeRabbit too, so its best-effort
 narrowing has something to narrow against), `lenses-craft.md` for Claude — with an instruction to read them.
 A reviewer gets the lens file it carries and not the other; hand over both only when it is covering for a
 missing reviewer.
@@ -394,6 +384,6 @@ Fold `mkit scratch prune` into step 6's call rather than spending a turn on it.
 
 Follow `git-safety.md`. Apply only fixes to the working tree; never rewrite pushed history, never force-push,
 never commit or push as a side effect of the review unless explicitly asked. Everything this skill writes of
-its own goes in `run=` (`<toplevel>/.mkit/…`, which is ignored) or in `tmp=` if it dies with the command —
-never anywhere else in the working tree. `output-discipline.md` has the rule; a fix applied to a source file
+its own goes in `<run-dir>` (under `$TMPDIR`) or straight in `$TMPDIR` if it dies with the command —
+never anywhere in the working tree. `output-discipline.md` has the rule; a fix applied to a source file
 is the user's change, not the skill's scratch.

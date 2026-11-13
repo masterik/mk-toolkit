@@ -52,8 +52,8 @@ func UserDir() string {
 // directory that exists and takes a MkdirAll but refuses a create.
 //
 // Net-zero by construction: the probe file always goes, and every directory this
-// had to create is removed again. `mkit facts` calls this, and `facts` writes
-// nothing outside the run directory it opens — creating user-scoped state as a
+// had to create is removed again (the plugin's `facts.sh` probes the same way).
+// `mkit doctor` reports and writes nothing — creating user-scoped state as a
 // side effect of reporting on it would make the report the thing that changed the
 // answer.
 //
@@ -118,7 +118,7 @@ func UserDirWritable() bool {
 }
 
 // UserDirRemedy is the one sentence for an unwritable user-scoped directory. One
-// producer, so `mkit doctor` and `mkit facts` cannot word it differently.
+// producer in the binary; the plugin's `facts.sh` carries the same wording.
 //
 // `permissions.additionalDirectories` rather than `sandbox.filesystem.allowWrite`:
 // the former grants the sandbox write *and* makes the path a working directory,
@@ -171,8 +171,8 @@ func ShellQuote(s string) string {
 //
 // It has to name `commonDir` rather than a fixed path: under a linked worktree
 // the exclude file lives in the main checkout, which is exactly the session that
-// cannot reach it. Both callers — `mkit facts`' `scratch_ignored=no` note and `mkit
-// doctor`'s scratch check — read this rather than wording it again; the pair of
+// cannot reach it. `mkit doctor`'s scratch check reads this rather than wording it
+// again; the pair of
 // lines is the rule, and a caller that wrote only `.mkit/*` would hide repo
 // config from `git add`.
 func IgnoredRemedy(commonDir string) string {

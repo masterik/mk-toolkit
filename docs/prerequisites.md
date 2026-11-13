@@ -92,9 +92,7 @@ Each subcommand is its own Bash pattern. Allow them once in `~/.claude/settings.
 {
   "permissions": {
     "allow": [
-      "Bash(mkit facts:*)",
-      "Bash(mkit scratch:*)",
-      "Bash(mkit branch status:*)"
+      "Bash(mkit scratch:*)"
     ]
   }
 }
@@ -147,8 +145,8 @@ export GOCACHE="$TMPDIR/go-build" GOMODCACHE="$TMPDIR/go-mod" GOLANGCI_LINT_CACH
 
 | Skill / command | Hosts |
 | --- | --- |
-| `pr`, `finish`, `cleanup`, `mkit branch status` | `api.github.com`, `github.com` |
-| `mkit facts <skill> --gh` | `api.github.com` |
+| `pr`, `finish`, `cleanup` (`branch-status.sh`) | `api.github.com`, `github.com` |
+| `facts.sh <skill> --gh` | `api.github.com` |
 | `pr`, `finish`, `cleanup` | your remote's host |
 | `review`'s external reviewers | whatever `codex` and `coderabbit` call |
 
@@ -161,8 +159,8 @@ If GitHub is unreachable, `cleanup` still classifies from git. It reports `fetch
 - **`mktemp` without a template ignores `$TMPDIR`** on macOS, and the write is denied. Always pass a
   template.
 - **`.git/config` and `.git/hooks` are protected**, so `git config` writes fail.
-- **`wt` is usually a shell function.** `mkit facts` looks for the real binary on `PATH` and reports
-  `wt_bin=none` as advisory.
+- **`wt` is usually a shell function.** A script does not inherit it, so skills check for `wt` in their
+  own shell (`type wt`), never through `facts.sh`.
 - **mkit never calls `rtk`.** `rtk` reshapes output for reading, which breaks a parser.
 
 ## Development

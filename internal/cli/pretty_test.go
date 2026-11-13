@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/masterik/mk-toolkit/internal/core/branchstatus"
 	"github.com/masterik/mk-toolkit/internal/core/cache"
 	"github.com/masterik/mk-toolkit/internal/core/doctor"
 	"github.com/masterik/mk-toolkit/internal/core/profile"
@@ -47,28 +46,6 @@ func TestPrettyDoctorIsStyledAndKeepsEveryFinding(t *testing.T) {
 	plain := ansi.ReplaceAllString(b.String(), "")
 	show(t, b.String())
 	for _, want := range []string{"✔", "✖", "▲", "plugin payload", "→ brew install x", "rm -r '/r/.mkit/work'", "1 ok", "1 warn", "1 fail"} {
-		if !strings.Contains(plain, want) {
-			t.Errorf("missing %q in:\n%s", want, plain)
-		}
-	}
-}
-
-func TestPrettyBranchStatusListsBranchesAndWorktrees(t *testing.T) {
-	forceColour(t)
-	sc := &branchstatus.Scan{
-		Default: "main", Protected: []string{"main"}, Remote: "origin", Fetch: "ok", GH: "ok", WorktreesState: "ok",
-		Branches: []branchstatus.Branch{
-			{Name: "main", Class: branchstatus.Protected, Upstream: "origin/main"},
-			{Name: "feat/x", Class: branchstatus.MergedPR, Upstream: "gone", MergedInto: []string{"main"}, PR: "merged#7"},
-		},
-		Worktrees:      []branchstatus.Worktree{{Branch: "main", Path: "/r", Origin: "primary", Clean: "yes"}},
-		ConfigProblems: []string{"a pin that went nowhere"},
-	}
-	var b bytes.Buffer
-	prettyBranchStatus(&b, sc)
-	plain := ansi.ReplaceAllString(b.String(), "")
-	show(t, b.String())
-	for _, want := range []string{"branches (2)", "feat/x", "merged-pr", "merged#7", "worktrees (1)", "primary", "a pin that went nowhere"} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("missing %q in:\n%s", want, plain)
 		}
@@ -140,13 +117,13 @@ func TestPrettyHelpGroupsCommandsAndListsFlags(t *testing.T) {
 			t.Errorf("missing %q in:\n%s", want, plain)
 		}
 	}
-	sub, _, err := root.Find([]string{"branch", "status"})
+	sub, _, err := root.Find([]string{"audit", "sandbox"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	b.Reset()
 	prettyHelp(&b, sub)
-	if p := ansi.ReplaceAllString(b.String(), ""); !strings.Contains(p, "--default string") || !strings.Contains(p, "── usage") || !strings.Contains(p, "── global flags") {
+	if p := ansi.ReplaceAllString(b.String(), ""); !strings.Contains(p, "--days int") || !strings.Contains(p, "── usage") || !strings.Contains(p, "── global flags") {
 		t.Errorf("subcommand help incomplete:\n%s", p)
 	}
 }
@@ -235,16 +212,6 @@ func TestPrettyInitCarriesEveryLabelThePlainFormPrints(t *testing.T) {
 	_ = emitInit(&b, Options{}, initResult{Path: "/p", Written: true})
 	if b.String() != "wrote /p\n" {
 		t.Errorf("plain init form changed: %q", b.String())
-	}
-}
-
-func TestPrettyBranchStatusShowsTheKeepList(t *testing.T) {
-	forceColour(t)
-	sc := &branchstatus.Scan{Default: "main", Protected: []string{"main", "release"}, Keep: []string{"release"}, WorktreesState: "ok"}
-	var b bytes.Buffer
-	prettyBranchStatus(&b, sc)
-	if p := ansi.ReplaceAllString(b.String(), ""); !strings.Contains(p, "keep") || !strings.Contains(p, "release") {
-		t.Errorf("keep row missing:\n%s", p)
 	}
 }
 

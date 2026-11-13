@@ -16,3 +16,15 @@ func TestWorklogCommandIsGone(t *testing.T) {
 		}
 	}
 }
+
+// `mkit facts` and `mkit branch status` moved into the plugin as facts.sh and
+// branch-status.sh (#52). An old skill calling either must fail loudly.
+func TestFactsAndBranchStatusAreGone(t *testing.T) {
+	for _, args := range [][]string{{"facts", "commit"}, {"branch", "status", "--default", "main"}} {
+		res := run(t, args...)
+		if res.code == 0 || !strings.Contains(res.stderr+res.stdout, "unknown command") {
+			t.Errorf("mkit %s: exit %d, want an unknown-command error\n%s%s",
+				strings.Join(args, " "), res.code, res.stdout, res.stderr)
+		}
+	}
+}

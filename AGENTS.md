@@ -31,14 +31,15 @@ Milestones: [`backlog.md`](docs/backlog.md); the *why*: [`concept.md`](docs/conc
 `just` wraps these (`just --list`).
 
 ```bash
-just ci                          # build, vet, test, lint — what CI runs
+just ci                          # build, vet, test, lint, bats — what CI runs
 just build / vet / test          # go build|vet|test ./...
 just lint                        # golangci-lint (CI pins v2.12)
+just bats                        # bats tests/ — the bundled scripts
 just run version --json          # front-end contract
 just run doctor                  # prerequisites, sandbox writability, plugin state
 just run repo profile --json     # discovered|pinned|unavailable
-just run facts commit --no-run   # starting facts, no run dir
 just run audit sandbox --days 14 # sandbox/gate events, all sessions, vs current settings
+bash plugin/skills/_shared/scripts/facts.sh commit   # starting facts, no run dir
 ```
 
 **Release**: `just release` (`tools/release.sh`), needs a terminal. Picks version (auto: breaking/`feat` → minor pre-1.0, else patch; or `patch|minor|major|X.Y.Z`), shows PRs
@@ -50,22 +51,22 @@ changelog**; `CHANGELOG.md` frozen at 0.19.0), cask to `masterik/homebrew-tap`
 ## Binary invariants
 
 Breaking one is a design error (full list: `backlog.md`). Binary is optional and shrinking to
-`doctor`/`audit sandbox`/`cache prune`; the `facts` contract below goes away
-([ADR 0006](docs/adr/0006-standalone-skills-optional-binary.md)).
+`doctor`/`audit sandbox`/`cache prune` ([ADR 0006](docs/adr/0006-standalone-skills-optional-binary.md)).
 
 - **Layering.** `core` returns data · `cmd/` formats · `tui/` renders. No logic in a Bubble Tea `Update`.
-- **No TUI off a TTY** — no ANSI/alt-screen on a pipe; skills pipe the binary.
-- **Every command non-interactive-capable, `--json` on all.** Live contracts: fact commands' `key=value`
-  text (byte-for-byte the old scripts', parsed by every skill). Others migrate to `--json`; nothing reads it yet.
+- **No TUI off a TTY** — no ANSI/alt-screen on a pipe.
+- **Every command non-interactive-capable, `--json` on all.** No skill parses the binary's output; the
+  skills' live contract is the bundled scripts' `key=value` text (below).
 - **Judgement stays in Markdown**; binary does mechanical invariants only.
 - **Skills stay as files**, never `embed.FS` — diffable.
 
 ## The port, and what it left behind
 
-Shell layer gone (M5); its rules still apply:
+Shell layer gone (M5), two scripts back (#52, `facts`/`branch status` → `_shared/scripts/`); the rules
+apply both ways:
 
-- Deleted `.bats` **was the spec**; each `go test` ports it. Don't "simplify" an assertion whose
-  comment names a measured failure.
+- The old test **was the spec**: pre-M5 `.bats` → Go tests → `tests/*.bats` again. Don't "simplify" an
+  assertion whose comment names a measured failure.
 - **One implementation per invariant**; never a second wording of a degradation sentence.
 - Never half-capable: `jq-missing`, `no-hash`, `gh=no-cache` stay dead.
 
@@ -82,12 +83,12 @@ Shell layer gone (M5); its rules still apply:
     (answers "which rule", not "ignored?"); `-q` is the boolean, then `-v` names the file to edit.
     **`ResolveRemote` is the one remote resolver** ([ADR 0005](docs/adr/0005-one-remote-per-repo.md)) (`[remote] name` pin → `origin` → lone remote → git's
     first, a guess): `git remote` is alphabetical, so "first" alone picks `fork` over `origin`. `Ask()` =
-    several remotes without a usable pin or a `--remote` choice. `facts`, `branchstatus`, `profile` all call it; a pin this clone lacks
-    falls back and is reported, never an error.
+    several remotes without a usable pin. `profile` calls it; `facts.sh` carries the same order (minus the
+    pin) for skills. A pin this clone lacks falls back and is reported, never an error.
   - `repoconfig/` (M7): `.mkit/config.toml`. `Stat` → `tracked|untracked|shadowed|absent`
     (**shadowed** = legacy dir-only `.mkit/` rule; config would never travel). `Write` renders a
     **commented template** (no Go TOML marshaller keeps comments). `ShadowedRemedy` = **sole producer**
-    of that sentence; `doctor`/`facts` never re-word it.
+    of that sentence; `doctor` never re-words it.
   - `initplan/` (#31): `mkit init` form as data. `Build` (pinned config + `profile.Discover` without
     config, tiers apart + `Gather` candidates → pages); `Apply` (answers → config). Pre-select
     **pinned → discovered → default**; discovered gets pinned (scopes, spec store, merge style)
@@ -107,15 +108,8 @@ Shell layer gone (M5); its rules still apply:
     `config.toml`). `writes_test.go` counts write sites per file. `EnsureIgnored` writes the ignore
     pair to `info/exclude` before first create; `Ignored` probes **two** paths (a `*.jsonl` rule hides
     `.mkit` files, run dirs untracked). Owns `~/.mkit` (`MKIT_HOME`) and its one unwritable remedy sentence.
-  - `facts/` (M5): all starting facts, one call. `cd` toplevel first (pathspec lists and `--shortstat`
-    agree). **Both** `unstaged_stat` and `staged_stat` (fully-staged looks clean otherwise);
-    separate `untracked_file_list`; `:(exclude).mkit` everywhere. Unresolvable `--base` →
-    `base_state=unresolvable` **+ exit 1**; same for `--range` (empty + exit 0 looks like an empty range).
-    Failed git query = error, never empty (`git status` failing ≠ `clean=yes`).
-  - `branchstatus/` (M5): `cleanup`'s classifier (branch merge/upstream/PR, worktree origin/clean).
-    **One batched `gh` call.** `--default` never re-derived; `$default`/`$develop` tested directly
-    (names may contain commas). `merged` match refused unless `headRefOid` is tip or ancestor. Failed
-    worktree `git status` → `clean=error`.
+  - `branchstatus/`: only `ProtectedSet`/`Develop`, for `profile`; goes with it (#53). The classifier
+    is `branch-status.sh`.
   - `sessionaudit/`: `mkit audit sandbox` (hidden alias `sessions`, one release). Reads
     `<claude home>/projects/**/*.jsonl` (`cache`'s `CLAUDE_HOME` rule). Classifies results the
     sandbox/gate touched: **paired to their call by `tool_use_id`**, never transcript substring (that
@@ -131,7 +125,7 @@ Shell layer gone (M5); its rules still apply:
     `allowedDomains`/`allowWrite`/`additionalDirectories`; protected paths (`settings*.json`, hooks,
     skills, plugins) are inert. `keys.go` flags unknown `sandbox`/`permissions`/`autoMode` keys; may lag docs — a hint, not a verdict.
 - `internal/tui/` — Bubble Tea over `core`. `ui/`: shared lipgloss for human forms (`doctor`, `repo
-  profile`, `branch status`, `cache prune`, `audit sandbox`, `init`, `version`), only when
+  profile`, `cache prune`, `audit sandbox`, `init`, `version`), only when
   `Options.Pretty` (TTY, no `--json`/`--no-tui`). `cacheprune/`: tick-list for `cache prune --apply`.
   `repoinit/`: `init` wizard over `initplan.Plan`, clack style. Plain Bubble Tea, not `huh`: Esc backs
   up (aborts on first prompt only), locked branch cursor-unreachable, Back from review → last prompt,
@@ -140,11 +134,9 @@ Shell layer gone (M5); its rules still apply:
 - `tools/` — non-payload maintainer shell; only `release.sh`.
 
 ### The plugin payload
-Changing per [ADR 0006](docs/adr/0006-standalone-skills-optional-binary.md): "Markdown only" becomes
-Markdown + manifests + **exactly two scripts** (`_shared/scripts/facts.sh`, `branch-status.sh`); skills
-stop calling `mkit`; `.mkit/` goes away.
-- `plugin/` — **Markdown only** (manifest, skills, `_shared/`): no scripts, hooks, `tests/`; nothing
-  runs. Homebrew ships **binary only** (no `files:` in `.goreleaser.yaml`; casks have no stable path;
+Changing per [ADR 0006](docs/adr/0006-standalone-skills-optional-binary.md): `.mkit/` goes away.
+- `plugin/` — Markdown + manifest + **exactly two scripts** (`_shared/scripts/facts.sh`,
+  `branch-status.sh`; a third needs an ADR): no hooks, no `tests/`. Homebrew ships **binary only** (no `files:` in `.goreleaser.yaml`; casks have no stable path;
   `~/.claude/settings.json` sandbox-denied). Versions independently, accepted ([ADR 0003](docs/adr/0003-two-distribution-channels.md)).
 - `plugin/.claude-plugin/plugin.json` — manifest, skills auto-discovered. `marketplace.json`
   (`source: "./plugin"`) at **repo-root** `.claude-plugin/`: `/plugin marketplace add owner/repo`
@@ -156,19 +148,33 @@ stop calling `mkit`; `.mkit/` goes away.
   `commit` → `review` → `pr`/`finish`) plus `cleanup` (branches/worktrees), `sandbox-audit` (user-wide
   → proposed settings diff, never edits), `explain` and `recap` (plain English, share
   `_shared/references/plain-english.md`; `explain` has **no binary dependency**; `recap` read-only,
-  `mkit facts recap --no-run --gh` + `git log <base>..HEAD` bodies + the PR, records nothing). **Eight exist**: `commit`, `review`, `pr`, `finish`,
+  `facts.sh recap --gh` + `git log <base>..HEAD` bodies + the PR, records nothing). **Eight exist**: `commit`, `review`, `pr`, `finish`,
   `cleanup`, `sandbox-audit`, `explain`, `recap`; `brainstorm`/`spec`/`implement` unbuilt (M8) — never
   describe as shipping. Steps **composable, not sequential**: entry-capable, any order/subset, derive
   a thin version of what's missing, name assumptions. Never tell the user to run another skill first
   or run a downstream step. Contract: `_shared/references/workflow-contract.md`.
-- `plugin/skills/_shared/` — references, no `SKILL.md`; **keep `../_shared/references/…` paths relative**.
-- `mkit facts <skill>` opens a run dir and reports what the machine allows: `scratch_ignored=`,
-  `user_dir_writable=`, `config_state=`, `git_bin=` (absolute git for parsed calls — a reshaping hook
-  can summarize output), `remote=`/`remote_source=`/`remote_repo=`/`remotes=`/`remote_choice=` (`ask` → the
-  skill asks which remote, then re-runs with `--remote`; rule in `_shared/references/remote.md`). Causes go in trailing `notes:`, never on a
-  `key=value` line (some pack two pairs).
+- `plugin/skills/_shared/` — references and `scripts/`, no `SKILL.md`; **keep `../_shared/…` paths
+  relative**. Skills run `bash ../_shared/scripts/<name>.sh`, resolved against their own `SKILL.md`
+  directory (no agent sets a skill-root env var in a skill body).
+- `facts.sh <skill> [--run] [--gh] [--base] [--range] [--remote]` — every starting fact, one call;
+  **never reads config**. `--run` → `run_dir=` under `$TMPDIR`. `cd` toplevel first (pathspec lists and
+  `--shortstat` agree). **Both** `unstaged_stat` and `staged_stat` (fully-staged looks clean otherwise);
+  separate `untracked_file_list`; `.mkit` run dirs excluded until #50. Unresolvable `--base`/`--range` →
+  `*_state=unresolvable` **+ exit 1**. Failed git query = error, never empty (`git status` failing ≠
+  `clean=yes`). Remote: `--remote` → `origin` → lone → first; `remote_choice=ask` → the skill asks, re-runs
+  with `--remote` (`_shared/references/remote.md`); a `--remote` naming nothing falls back + `notes:`.
+  `user_dir_writable=` is a net-zero write probe. Causes go in trailing `notes:`, never on a `key=value`
+  line (some pack two pairs).
+- `branch-status.sh [--default] [--develop] [--keep]… [--remote] [--no-fetch] [--no-gh]` — `cleanup`'s
+  classifier. Default/remote come from `facts.sh` (one resolver); `--keep` is what
+  `docs/agents/cleanup.md` keeps. **One batched `gh` call** (`--jq`, no `jq`). Default/develop tested by
+  name (may contain commas); a kept branch is never a merge target. `merged` PR refused unless the branch
+  tip is its `headRefOid` or an ancestor of it. Failed worktree `git status` → `clean=error`.
+- Script contract is internal (ADR 0006 decision 4): change a key in the script and every parsing skill
+  in one commit. bash 3.2 (`/bin/bash` on macOS) and Git Bash's 5: no assoc arrays, `${1+"$@"}`.
+  Tests: `tests/*.bats`, throwaway repo under `$TMPDIR`, `commit_here` asserts the toplevel first.
 - **`mkit doctor` is the prereq report** (human-run). Accepted losses — don't re-add a reporter: no
-  session-start run, can't report `mkit` absent. Skills read `facts`, not `doctor`.
+  session-start run. Skills read `facts.sh`, not `doctor`.
 - `<toplevel>/.mkit/` — run dirs
   **plus committed `config.toml`** ([ADR 0001](docs/adr/0001-per-repo-config-and-init.md#amendment-the-config-path)).
   - Ignore **pair** `.mkit/*` + `!.mkit/config.toml`, always together (git can't re-include under an
@@ -181,7 +187,7 @@ stop calling `mkit`; `.mkit/` goes away.
     can't write `info/exclude`.
   - `mkit scratch prune` removes only `<skill>-*` dirs.
 - `~/.mkit/` (`MKIT_HOME`) — future user-scoped binary state; binary writes nothing now. Holds
-  `sandbox-audit.md` (agent-written ledger). `facts` probes it. **Not `~/.claude/mkit/`**: protected
+  `sandbox-audit.md` (agent-written ledger). `facts.sh` probes it. **Not `~/.claude/mkit/`**: protected
   region, allowlists inert; here one `permissions.additionalDirectories` entry works.
 - `$TMPDIR` — dies with the command. Go honours it; the Darwin per-user temp dir fails under sandbox.
 
@@ -194,6 +200,8 @@ stop calling `mkit`; `.mkit/` goes away.
 - **Go tests beside packages** (ported `.bats`). Stateful tests use a throwaway `$TMPDIR` repo with
   `MKIT_HOME` inside; never `HOME`. `internal/cli` tests drive the real cobra root (argv → stdout,
   exit code).
+- **`tests/*.bats`** — the bundled scripts (argv → stdout, exit status); CI runs them on Linux (bash 5)
+  and macOS (`/bin/bash` 3.2).
 
 ## Conventions
 
@@ -201,10 +209,11 @@ stop calling `mkit`; `.mkit/` goes away.
   Prefer stdlib over shelling out (testability).
 - Add a command only for a mechanical invariant, never a decision; unclear → report candidates, skill
   chooses. Hooks may compute the gap, never fill it.
-- Commands report and run; never stage, merge, push, edit. Parse stable output (`--porcelain`,
-  `--shortstat`/`--name-only`, `--format=json`); never call `rtk`.
+- Commands and bundled scripts report and run; never stage, merge, push, edit. Parse stable output
+  (`--porcelain`, `--shortstat`/`--name-only`, `--format`, `--json`); never call `rtk`. Scripts: no OS
+  branching except where Git Bash forces it (#58).
 - **Three write locations, by lifetime:** `$TMPDIR`, `<toplevel>/.mkit/`, `~/.mkit/`; bounded exceptions:
-  the `.mkit/` ignore pair in the common dir's `info/exclude`, `git fetch --prune` (`branch status`),
+  the `.mkit/` ignore pair in the common dir's `info/exclude`, `git fetch --prune` (`branch-status.sh`),
   `init`'s `.mkit/config.toml`, and `cache prune --apply` deleting stale `~/.claude`/`~/.codex` storage.
   State never goes in user files, `/tmp` or `~/.claude`.
   `TestWriteSitesAreOnTheReviewedAllowlist` (`internal/core/scratch`) asserts it against a
