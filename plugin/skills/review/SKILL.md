@@ -56,40 +56,30 @@ established facts — range, shortstat, file list, goal, mode — so the subagen
 | --- | --- | --- | --- |
 | 1 scope | this session — **one** `mkit facts` call | — | run dir, refs path, branch, stat, file list |
 | 2 find | 2 (quick) or 3 (full) subagents, parallel | Opus | one ≤10-line reply per subagent: path written + counts by tag + lenses not covered |
-| 3 reconcile | this session — `mkit findings reconcile --json` | — | counts, merges, drops, undecided pairs |
-| 4 verify | 1 subagent per group from `mkit findings group --json`, parallel | Opus | one line per finding: id + verdict (+ corrected fields) |
+| 3 reconcile | this session, in prose — merges by `triage-reconcile.md`'s rule | — | the capped findings themselves; out: `reconciled.md` + a tally |
+| 4 verify | 1 subagent per batch of files, parallel — or this session, on a handful | Opus | one line per finding: id + verdict (+ corrected fields) |
 | 5 fix | this session, bodies read from disk on demand | — | the findings being acted on, in full |
 | 5a sweep | this session when the shape greps; 1 subagent per shape when it does not | Sonnet | the occurrence list |
-| 6 report | this session — `mkit findings report --json`, then prose | — | the summary itself |
+| 6 report | this session — verdicts onto `reconciled.md`, then prose | — | the summary itself |
 
 **Never read a diff into this session.** Subagents read the diff; this session reads what `mkit facts` returned.
 Never paste a reference into a brief either — hand over its path under `refs=` and have the subagent read it.
 
 **One writer per file, throughout.** Every fanned-out stage writes one file per subagent —
-`findings-<source>.jsonl` per reviewer, `verdicts-<group>.jsonl` per group — and `mkit findings` aggregates
-after they return.
+`findings-<source>.md` per reviewer, `verdicts-<batch>.md` per batch — and this session aggregates after they
+return. The files are the transport and the audit trail; no code parses them.
 
 ## 0. Check `mkit` is there
 
-```bash
-command -v mkit >/dev/null && mkit findings schema --json >/dev/null
-```
+Step 1's `mkit facts` is this skill's dependency check, as in every other repo-scoped skill: if it fails
+with `command not found` **or** `unknown command "facts"`, **stop** before any reviewer runs and say:
 
-Both halves matter. The first says the binary is installed — which step 1's `mkit facts` needs too,
-and every other skill now needs at its own first call; the second says *this* binary knows `findings`
-— a subcommand that does not exist is what "too old" looks like, and asking for it here surfaces it
-before a reviewer has run rather than at step 3 with a full run behind it. Nothing is compared against
-a declared range: any `mkit` that answers is current enough, and neither side declares a minimum.
+> `review` needs the `mkit` binary for its starting facts, and it is either not installed or too old.
+> Install it with `brew install masterik/tap/mkit` (or upgrade with `brew upgrade mkit`), then run the
+> review again.
 
-If either half fails, **stop** — do not start the reviewers. Say:
-
-> `review` needs the `mkit` binary for the findings arithmetic at steps 3, 4 and 6, and it is either
-> not installed or too old to know `mkit findings`. Install it with `brew install masterik/tap/mkit`
-> (or upgrade with `brew upgrade mkit`), then run the review again.
-
-This is the one place `review` is deliberately not entry-capable. Without the arithmetic there is no
-reconcile, no groups, and no ids for verdicts to reference; doing it by hand would put back into
-judgement exactly what this stage exists to remove.
+Nothing after step 1 needs the binary for the findings: reconciling, batching and reporting them are this
+session's own work, in prose.
 
 ## 1. Establish the review scope
 
@@ -139,12 +129,11 @@ Then read what already ran on this branch:
 mkit worklog show --json --limit 20
 ```
 
-**Unconditional, here and everywhere else** (`workflow-contract.md`, "Reading it"). Step 0 already
-stopped the run if the binary was missing, and since M5 every other skill's first call does the same —
-so no skill has a missing-binary case left to check for.
+**Unconditional, here and everywhere else** (`workflow-contract.md`, "Reading it"). `mkit facts` already
+stopped the run if the binary was missing, so there is no missing-binary case left to check for.
 
-What step 0 did *not* establish is that this binary knows `worklog` — it proved `findings` — and a binary from
-before the worklog landed answers one and not the other. So the second half of the shared rule still holds:
+What `mkit facts` did *not* establish is that this binary knows `worklog`, and a binary from before the
+worklog landed answers one and not the other. So the second half of the shared rule still holds:
 **a nonzero exit is not a stop**, carry on without the log and say so in step 6. Read what it printed before
 naming the cause: an unknown subcommand is that skew, while a log it found and could not read is a different
 fact and worth reporting as one. A branch nothing has run on is different again — zero records and exit 0,
@@ -173,7 +162,7 @@ this step already performs when there is no spec.
 
 Write `<run-dir>/scope.md`: the range, the command producing the diff, the stat, the file list, the goal, and
 **the mode**. Later stages read that file instead of being told again — step 2's roster and step 3's
-`--sources-expected` both key off the mode recorded here.
+count of expected sources both key off the mode recorded here.
 
 ## 2. Run the reviewers in parallel
 
@@ -206,26 +195,32 @@ subagent and never asks Codex to cover `adversarial` — that is the mode workin
 say so in mode-neutral language. "Availability & fallback" below is for a reviewer that was *launched* and
 then errored, went silent, or came back unusable — a different situation, reported a different way.
 
-Each reviewer **writes `<run-dir>/findings-<source>.jsonl`, one JSON object per line**:
+Each reviewer **writes `<run-dir>/findings-<source>.md`, one entry per finding**, in this shape:
 
-```json
-{"surface":"code","severity":"major","confidence":85,"file":"src/api/user.ts","line":42,
- "lens":["bugs"],"title":"names the mechanism","body":"trigger + consequence","fix":"concrete fix"}
+```markdown
+### Missing await on the user lookup
+- file: src/api/user.ts
+- line: 42-44
+- surface: code · severity: major · confidence: 85 · lens: bugs
+- body: trigger + consequence
+- fix: concrete fix
 ```
 
-`surface`, `severity`, `file`, `title` required; `class` is `finding` (default), `open_question` or
-`pre_existing`. Full shape: `mkit findings schema` (`--json` for the machine-readable form). Cap it: **at most 15 findings, body
-under 80 words**; a reviewer at the cap says so and keeps the worst. JSONL because step 3 is a command — a
-reviewer that writes prose costs a re-spawn, so the brief says "one JSON object per line, nothing else".
+`file`, `surface`, `severity` and the title are required; a line or range wherever there is one — step 3
+merges on location, and a finding without one is never merged. `class: open_question` or
+`class: pre_existing` goes on the tag line for a non-finding (default `finding`). Cap it: **at most 15
+findings, body under 80 words**; a reviewer at the cap says so and keeps the worst. The shape is prose for
+this session to read, not a schema: a reviewer that strays from it is read for the same fields, never
+re-spawned.
 
 Each reviewer **returns at most ten lines**: the path it wrote, counts by `[surface, severity]`, and any lens
 it could not cover. No diff, no file contents, no narration.
 
 **The file is the completion signal, not the reply.** A reviewer is done when
-`findings-<source>.jsonl` exists — so the brief must say: found nothing at or above the bar → **write an empty
+`findings-<source>.md` exists — so the brief must say: found nothing at or above the bar → **write an empty
 file and say so**. The two states are not the same downstream, and only the reviewer can tell them apart:
-present-and-empty means that source reported zero and keeps the drop rule armed; absent means it never
-reported and disarms it. An agent that finishes its turn with no file has reported nothing, whatever its reply
+present-and-empty means that source looked and found nothing; absent means it never reported, and the summary
+must say its lenses went uncovered. An agent that finishes its turn with no file has reported nothing, whatever its reply
 says.
 
 **Read-only, every reviewer run.** No reviewer edits, stages or commits anything — including the built-in
@@ -245,11 +240,11 @@ review that did not happen.
 
 **Codex's sandbox is set by the invocation, not by the brief.** `codex:codex-rescue` runs the companion under
 Codex's *own* sandbox, and two invocation details — neither expressible in prose inside the brief — decide
-whether it can write `findings-codex.jsonl` at all:
+whether it can write `findings-codex.md` at all:
 
 - **`--write`, or the whole run is read-only.** Without that token the companion starts Codex in `read-only`
   mode, and the findings write fails with *"session filesystem policy prohibits writes"* — a review that
-  completed, found things, and reported none of them, which step 3 reads as a missing source.
+  completed, found things, and reported none of them, which step 3 sees as a missing source.
   `codex-cli-runtime` defaults to *dropping* `--write` for review, diagnosis and research, so a review brief
   lands squarely in that exclusion; appending it explicitly is what overrides the default. It is not a licence
   to edit — "Read-only, every reviewer run" above still holds and the brief must keep saying so; the
@@ -269,63 +264,50 @@ corroboration still means something. Never claim a tool ran if it did not, and n
 anything, and step 3 cannot start without the full set. Ask a silent source once what happened —
 distinguishing *job errored* / *ran but did not write* / *returned prose* / *genuinely zero* — and if the file
 is still missing after roughly ten minutes, declare that source **missing**, redistribute its lenses, and go on
-with a lower `--sources-expected`. Do not poll it repeatedly, and do not hold the run open indefinitely; a slow
+without it. Do not poll it repeatedly, and do not hold the run open indefinitely; a slow
 source blocking every later stage costs more than the corroboration it would have added. Say in the summary
 that it was dropped and which lenses went uncovered.
 
 ## 3. Reconcile the lists
 
-```bash
-mkit findings reconcile <run-dir> --sources-expected <N> --json
-```
+Read `triage-reconcile.md`, then every `findings-<source>.md` that exists — capped at 15 entries each, so
+this is the one point where finding bodies enter this session in bulk, and the merge needs them. Apply the
+reference's rule — **the** dedupe rule, written there and nowhere else: what merges, what is only flagged as
+a possible duplicate, what is set aside, how ids are numbered. Write `<run-dir>/reconciled.md`.
 
-`N` is the number of reviewers you **launched**, not the number that answered — it is what switches the
-weak-singleton drop rule off when a source is missing. That follows the mode recorded in `scope.md`: **2** for
-quick (CodeRabbit + Codex), **3** for full. **Never create an empty `findings-<source>.jsonl` to
-make the count line up**: `mkit findings` reads a present file as that source reporting zero, which re-arms the drop
-rule and silently deletes exactly the single-source findings the missing reviewer would have corroborated. A
-source that never wrote a file is missing; lower `N` and say so. Then read `triage-reconcile.md` and settle the two things the
-binary deliberately leaves open, because both are judgement and it owns mechanical invariants only:
+No subagent and no reading the code: an opinion about the code formed here contaminates the list the verifier
+is handed. In doubt whether two entries are one problem, keep both and flag — the verifier has the code in
+front of it, this stage does not.
 
-- **`low_sim`** — a merge whose two members barely share wording. They were merged on location, not text.
-  Read both titles (the merged-away one rides along in `also`) and check it really is one problem; split it
-  in `reconciled.jsonl` if it is two.
-- **`review_pairs`** — same file, similar wording, different lines. One shape at two sites, or two findings?
-  Your call, and the binary does not make it.
-
-No subagent: the merge is arithmetic, and forming an opinion here contaminates the set the verifier is handed.
-
-If a reviewer wrote prose instead of JSONL, `mkit findings validate <run-dir>` names the lines; convert it
-here rather than re-spawning.
+**Count the sources honestly.** Expected is the number of reviewers you **launched** — **2** for quick, **3**
+for full, from `scope.md` — not the number that answered. A source that never wrote a file is missing; never
+create an empty `findings-<source>.md` to make the count line up, since an empty file claims a reviewer looked
+and found nothing.
 
 ## 4. Verify the survivors
 
-```bash
-mkit findings group <run-dir> --json
-```
+Batch the `F` findings **by file**: all of a file's findings go in one batch — so a flagged near-duplicate
+always sits with the finding it may duplicate — and small files fold together until each batch holds at least
+three, about eight batches at most. A handful in total (about five or fewer): verify them here, after reading
+`triage-verify.md`, and write `verdicts-all.md` — a lone subagent buys independence you already have.
+Otherwise write each batch to `<run-dir>/verify-<batch>.md` (ids, locations, every source's wording, the
+reviewers, any flag) and spawn **one subagent per batch in a single message**; each gets only its own batch
+file — a verifier seeing the whole set anchors on it — plus `scope.md` and the path to `triage-verify.md`.
 
-It groups by directory, folds groups too small to be worth a round trip, writes `verify-<group>.jsonl`, and
-reports `suggest`. `suggest` is the documented threshold applied, not a decision: `inline` means a handful of
-findings in one group — verify them here and write `verdicts-all.jsonl`, since a lone subagent buys
-independence you already have; `fanout` means one verifier per group. Either way the call is yours. On fan-out, spawn **one subagent per group in a single message**; each gets only
-its own group file — a verifier seeing the whole set anchors on it — plus `scope.md` and the path to
-`triage-verify.md`.
-
-Each verifier **writes `<run-dir>/verdicts-<group>.jsonl`** (never a shared file: parallel writers to one path
+Each verifier **writes `<run-dir>/verdicts-<batch>.md`** (never a shared file: parallel writers to one path
 interleave, and a lost verdict is indistinguishable from a finding nobody raised) and returns one line per
-finding: `id → confirmed | refined | rejected | immaterial | pre_existing`, with corrected fields on a
-`refined` and one clause of reasoning on a `rejected` or `immaterial`. Verification applies the materiality
-test only after a finding is confirmed real, and **does not look for new problems**.
+finding: `id → confirmed | refined | rejected | immaterial | pre_existing | duplicate of F<n>`, with corrected
+fields on a `refined` and one clause of reasoning on a `rejected` or `immaterial`. Verification applies the
+materiality test only after a finding is confirmed real, collapses a flagged near-duplicate only when it judges
+the two the same defect, and **does not look for new problems**.
 
-On `suggest=inline`, verify here and write `verdicts-all.jsonl` — there is only one writer.
-
-`rejected` findings leave the report entirely. `immaterial` and `pre_existing` get their own summary sections,
-**out of the counts**.
+`rejected` findings leave the report entirely; a `duplicate of F<n>` folds into `F<n>`, its reviewers joining
+`F<n>`'s list. `immaterial` and `pre_existing` get their own summary sections, **out of the counts**.
 
 ## 5. Triage and fix — auto-fix safe, ask on risky
 
 This session fixes: the user is in the loop, and two subagents editing one tree collide. Read bodies back from
-`reconciled.jsonl` **only for findings being acted on** — the first point where full detail earns its place.
+`reconciled.md` **only for findings being acted on** — the first point where full detail earns its place.
 
 - **Safe → fix automatically**: unambiguous, low-risk, behavior-preserving. Typos, a clearly correct missing
   nil/error check, an obvious off-by-one, dead code, lint/style, a missing `await`, a stale comment,
@@ -357,16 +339,11 @@ conclusions they should re-derive.
 
 ## 6. Summarize (the deliverable)
 
-```bash
-mkit findings report <run-dir> --json
-```
-
-It merges the verdicts onto the findings (applying `refined` corrections), writes `final.jsonl`, and returns
-the counts, the reportable set, the gating count, and — the ones that matter — `unverified` ids and
-`orphans`. **Never write the summary while `unverified` is non-empty**: a lost verdict reads exactly like a
-finding nobody raised. Go back and verify those ids — inline is fine, it is a handful by definition — and
-re-run `report`. Only an id whose verifier cannot be re-run at all is reported unverified, named individually
-and above the counts, never folded into them.
+Put the verdicts onto `reconciled.md`'s findings: apply each `refined` correction, drop `rejected`, fold each
+`duplicate of F<n>` into `F<n>`, split any `F3a`/`F3b`. **Every `F` id needs exactly one verdict before the
+summary is written**: a lost verdict reads exactly like a finding nobody raised. An id with none goes back to
+verification — inline is fine, it is a handful by definition. Only an id whose verifier cannot be re-run at
+all is reported unverified, named individually and above the counts, never folded into them.
 
 Then the prose, in this order. It is a **decision brief**: the reader has not seen the run and must be able to
 tell, from this message alone, what was found, what was done about each finding, and what is still open. The
@@ -385,8 +362,8 @@ finding the user could ask "what was that?" about gets a self-contained entry (w
    title | status` where status is `fixed`, `needs decision` or `skipped`. Open questions get no row: they are not
    findings, and item 10 lists them. Then, grouped by
    severity, each finding headed `F<id> [surface, severity] Title` (the id as it appears in the table) with **trigger, consequence,
-   and what was done or proposed**, in full sentences. Mark any finding more than one source raised, and any
-   that was `refined`. This is the one place a finding's body appears; later sections refer to it by id.
+   and what was done or proposed**, in full sentences. Name the reviewers behind any finding more than one
+   source raised, and mark any that was `refined`. Rows and entries go by severity, then file. This is the one place a finding's body appears; later sections refer to it by id.
 7. **Fixed automatically** — per fix: the id, the file, what changed, and why it was safe to apply unasked.
 8. **Needs your decision** — each risky finding with the question phrased as a choice: the proposed fix, the
    alternative if there is one, and what happens if left alone. The written entry stays in the summary; the
