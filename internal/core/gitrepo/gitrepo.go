@@ -95,8 +95,7 @@ func (r *Repo) IgnoreRule(path string) (ignored bool, source, pattern string) {
 
 // Excluded is the boolean half of Ignored — `check-ignore -q` on its own,
 // without the second call that names the rule. Use it where nothing needs a
-// remedy: the scratch probes ask twice per call, and doubling that to name a
-// file no one reads is two forks on every skill's first call.
+// remedy.
 func (r *Repo) Excluded(path string) bool {
 	_, err := run(r.Toplevel, "check-ignore", "-q", "--", path)
 	return err == nil

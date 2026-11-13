@@ -1,4 +1,9 @@
-package scratch
+// Package userdir owns `~/.mkit` (`MKIT_HOME`): where it is, whether it takes a
+// write, and the one remedy sentence when it does not. All that is left of the
+// old `scratch` package once `.mkit/` left the work tree (#50).
+//
+// Layering: returns data, never prints.
+package userdir
 
 import (
 	"fmt"
@@ -7,7 +12,7 @@ import (
 	"strings"
 )
 
-// UserDir is the user-scoped state directory — where mkit state that outlives a
+// Dir is the user-scoped state directory — where mkit state that outlives a
 // repo goes. `MKIT_HOME` overrides it, and tests set it so a run can never read
 // or write a developer's real state.
 //
@@ -25,7 +30,7 @@ import (
 // point. Not `$TMPDIR` either: that is the location for what dies with the
 // command, and sandboxed and unsandboxed commands do not even resolve it to the
 // same directory.
-func UserDir() string {
+func Dir() string {
 	if h := os.Getenv("MKIT_HOME"); h != "" {
 		return h
 	}
@@ -43,7 +48,7 @@ func UserDir() string {
 	return filepath.Join(home, ".mkit")
 }
 
-// UserDirWritable reports whether the user-scoped directory actually takes a
+// Writable reports whether the user-scoped directory actually takes a
 // write. A fact, reported at the first call, so a blocked write is a starting
 // fact rather than a mid-run "Operation not permitted".
 //
@@ -61,8 +66,8 @@ func UserDir() string {
 // setting a flag: MKIT_HOME need not have an existing parent, MkdirAll creates
 // the whole chain, and one Remove at the end takes only the leaf. That left
 // structure behind on disk while still returning success.
-func UserDirWritable() bool {
-	dir := UserDir()
+func Writable() bool {
+	dir := Dir()
 	if dir == "" {
 		return false
 	}
@@ -117,7 +122,7 @@ func UserDirWritable() bool {
 	return ok
 }
 
-// UserDirRemedy is the one sentence for an unwritable user-scoped directory. One
+// Remedy is the one sentence for an unwritable user-scoped directory. One
 // producer in the binary; the plugin's `facts.sh` carries the same wording.
 //
 // `permissions.additionalDirectories` rather than `sandbox.filesystem.allowWrite`:
@@ -133,8 +138,8 @@ func UserDirWritable() bool {
 // the exact failure ADR 0002 was written about, one level down. The `mkdir` half
 // is human-run by construction: no sandboxed session can perform it, so it is
 // spelled with the `!` prefix that runs a command in the user's own shell.
-func UserDirRemedy() string {
-	dir := UserDir()
+func Remedy() string {
+	dir := Dir()
 	if dir == "" {
 		return "$HOME is unset, so there is no user-scoped directory to grant — " +
 			"set MKIT_HOME to an absolute path, or run with HOME set"
@@ -164,18 +169,4 @@ func ShellQuote(s string) string {
 		return s
 	}
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
-}
-
-// IgnoredRemedy is the one producer of the unignored-scratch sentence, the
-// counterpart to UserDirRemedy above.
-//
-// It has to name `commonDir` rather than a fixed path: under a linked worktree
-// the exclude file lives in the main checkout, which is exactly the session that
-// cannot reach it. `mkit doctor`'s scratch check reads this rather than wording it
-// again; the pair of
-// lines is the rule, and a caller that wrote only `.mkit/*` would hide repo
-// config from `git add`.
-func IgnoredRemedy(commonDir string) string {
-	return fmt.Sprintf("from the main checkout, add `.mkit/*` and `!.mkit/config.toml` "+
-		"to %s/info/exclude, or to .gitignore", commonDir)
 }

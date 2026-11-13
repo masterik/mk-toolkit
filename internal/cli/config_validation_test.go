@@ -17,16 +17,14 @@ import (
 // with every environment lookup pointed inside it — never the developer's home.
 func brokenConfigRepo(t *testing.T) string {
 	t.Helper()
-	repo, _ := gateRepo(t)
+	repo := testRepo(t)
 	t.Setenv("MKIT_HOME", filepath.Join(repo, ".mkit-home"))
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	t.Setenv("CLAUDE_PLUGIN_ROOT", "")
 	t.Setenv("MKIT_PLUGIN_ROOT", "")
 	put(t, repo, ".gitignore", ".mkit/*\n!.mkit/config.toml\n")
-	if err := os.WriteFile(filepath.Join(repo, ".mkit", "config.toml"), []byte(
-		"version = 1\n\n[reviewers]\nreviewers = [\"@a\"]\n\n[merge]\nstyle = \"sqaush\"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	put(t, repo, filepath.Join(".mkit", "config.toml"),
+		"version = 1\n\n[reviewers]\nreviewers = [\"@a\"]\n\n[merge]\nstyle = \"sqaush\"\n")
 	return repo
 }
 

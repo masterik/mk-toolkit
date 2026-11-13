@@ -49,7 +49,7 @@ func profileOf(t *testing.T) profileJSON {
 // pointed inside it — never the developer's home.
 func configRepo(t *testing.T) string {
 	t.Helper()
-	repo, _ := gateRepo(t)
+	repo := testRepo(t)
 	t.Setenv("MKIT_HOME", filepath.Join(repo, ".mkit-home"))
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	t.Setenv("CLAUDE_PLUGIN_ROOT", "")
