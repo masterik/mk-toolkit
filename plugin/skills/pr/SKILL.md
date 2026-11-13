@@ -59,16 +59,6 @@ mkit facts pr --base <base> --gh
 Presence only, no declared minimum on either side — a subcommand that does not exist *is* the too-old
 signal.
 
-Then read what ran on this branch before, and what each step concluded — never a stop:
-`../_shared/references/workflow-contract.md`, "Reading it".
-
-```bash
-mkit worklog show --json --limit 20
-```
-
-Step 5 drafts the "why" from those gists where they exist, rather than re-deriving intent from the commit
-subjects alone.
-
 That covers the branch, the status, `commits:` for `<base>..HEAD`, the stat, `codeowners=` for step 6, and
 `pr=` — whether this branch already has one, which is the check that otherwise gets skipped — and the
 remote: `remote=`, `remote_source=`, `remote_repo=`, `remotes=`, `remote_choice=`. On `remote_choice=ask`, ask and then
@@ -300,18 +290,6 @@ After the block, say what the reader still has to do or decide, or "nothing need
 but not pinned (`mkit init --force --remote <name>`, for the user to run and commit — never run mid-run),
 CI still running, a reviewer that could not be determined, a check served from the ledger as `cached`, a pin that went
 nowhere. Never leave those implied by the block's fields alone.
-
-Then record the run:
-
-```bash
-mkit worklog append --step pr --gist '<one line: what this run concluded>' \
-  [--artifact '<pr-url>'] [--assume '<what this run derived rather than found>']...
-```
-
-After the report is produced, and it never changes the report: a failed append is one line of note, not a
-failed run. **A run that opened no PR still records** — a branch that already had one, or a run that
-stopped at the pre-flight — with the reason as the gist and no `--artifact`. One record per finished step;
-a completed no-op is a fact, and is not what an absent record says.
 
 ## Common failure scenarios
 

@@ -94,7 +94,6 @@ Each subcommand is its own Bash pattern. Allow them once in `~/.claude/settings.
     "allow": [
       "Bash(mkit facts:*)",
       "Bash(mkit scratch:*)",
-      "Bash(mkit worklog:*)",
       "Bash(mkit branch status:*)",
       "Bash(mkit gate detect:*)",
       "Bash(mkit gate run:*)"

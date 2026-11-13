@@ -44,17 +44,11 @@ mkit facts finish --base <base> --gh
 Presence only, no declared minimum on either side — a subcommand that does not exist *is* the too-old
 signal.
 
-Then read what ran on this branch before, and what each step concluded — never a stop:
-`../_shared/references/workflow-contract.md`, "Reading it".
-
-```bash
-mkit worklog show --json --limit 20
-```
-
-A `review` record whose `fingerprint` matches the tree in front of you says a review already ran over this
-exact content — worth naming in the deliverable. **Read its `assumptions` before believing it**: a review
-that applied fixes records a fingerprint the reviewers never saw and says so there. It does not gate the
-merge, and it never substitutes for the quality gate, which has its own ledger.
+What ran on this branch before comes from the session and `commits:` (`<base>..HEAD`),
+plus the PR when one is open — `../_shared/references/workflow-contract.md`, rule 4. A `review` this session
+ran over the content now being merged is worth naming in the deliverable — but only for the content it
+actually read: fixes it applied afterwards were not reviewed. It does not gate the merge, and it never
+substitutes for the quality gate.
 
 Keep the `run=` literal; this file writes it as `<run-dir>`. There is no `$RUN_DIR` — a shell variable does
 not survive to the next Bash call — and re-running `mkit facts` opens a second directory instead of returning
@@ -272,8 +266,7 @@ announce — and it is why the two conditions are written as things to look for 
      inside it.
    - `git-worktree`: `git worktree remove <toplevel>` then, if `git branch --list <feature-branch>` still
      shows it, `git branch -D <feature-branch>`, then `git worktree prune`.
-   - `none`: if `git branch --list <feature-branch>` still shows it, `git branch -D <feature-branch>`,
-     then retire the worklog per **Retiring the worklog** below.
+   - `none`: if `git branch --list <feature-branch>` still shows it, `git branch -D <feature-branch>`.
 
    **Stacked: sync what is left.** The PRs above this one were rebased and retargeted on GitHub; the
    local branches for them are behind. If a local stack is tracked, ask before running `gh stack sync` (it force-pushes the rebased branches), then run it (from the surviving root, after the cleanup above); otherwise tell the user
@@ -329,21 +322,6 @@ config to contend with: `merge` → `git merge --no-ff` · `rebase` → rebase t
 first, then fast-forward · `squash` → `git merge --squash` followed by one commit. No style → the command
 as written above. Say which one you used, the same as on the other paths.
 
-#### Retiring the worklog
-
-**Both paths, and only where `cleanup_path=none`.** The worklog lives in the work tree, so every other
-cleanup path carries it off with the worktree it removes. `none` removes no worktree, so the log outlives
-the branch it is keyed on — and a branch name is reusable, which hands a later `review` on a recreated
-`feat/x` the *old* `feat/x`'s gists, a goal for work that no longer exists. Ask the binary for the path
-rather than deriving the filename, which carries a digest:
-
-```bash
-p=$(mkit worklog show --branch <feature-branch> --path) && rm -f "$p"
-```
-
-Best effort, like every other `mkit worklog` call here: a path it cannot produce is one line of note. And skip
-the append on this path — the record would go straight into the file being retired.
-
 ### 5. Verify the cleanup
 
 **`$toplevel` is stale here whenever step 4 removed a worktree — and so may the shell's cwd be**, if it was
@@ -383,24 +361,6 @@ removed.` — or where and why it stopped short); form per `../_shared/reference
   explicitly, each with its path or name and why, or "nothing left behind" so the absence is not ambiguous.
 - What is needed from the user, as the last line: how to continue where the run stopped short, or
   "nothing needed from you" when it completed.
-
-Then record the run — from wherever this session ends up, and **only if that is still a work tree with
-this branch's log in it**. `finish` is the one step that usually destroys its own log: the worklog lives in
-the worktree it removes, and the branch it is keyed on is deleted a moment later. So the append is worth
-doing where the run stopped short — a declined merge, a failed gate, a PR not ready — and worth skipping
-where the cleanup actually ran. Skipping it is not a degradation to report:
-
-```bash
-mkit worklog append --step finish --gist '<one line: what this run concluded>' \
-  [--artifact '<merge-sha>'] [--assume '<what this run derived rather than found>']...
-```
-
-`--artifact` only where a merge happened; a run that stopped short has no sha to name, and the gist is
-where the reason goes.
-
-After the report is produced, and it never changes the report: a failed append is one line of note, not a
-failed run. A run that merged nothing still records where the log survives — the reason is exactly what the
-next `finish` wants to know.
 
 ## Git safety
 

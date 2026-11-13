@@ -34,7 +34,6 @@ Breaking one is a design error, not a trade-off.
    | --- | --- |
    | `scratch prune` | removes old run dirs |
    | `gate run` | appends to `.mkit/gate.jsonl` |
-   | `worklog append` | appends to the worklog |
    | `branch status` | runs `git fetch --prune` |
    | `init` | writes `.mkit/config.toml` (the only config writer) |
    | `cache prune --apply` | deletes stale Claude Code / Codex storage, and only with `--apply` |
@@ -71,7 +70,7 @@ This is the workflow's front half. `brainstorm` needs no binary support, so it c
   collide. Parallel worktrees need `[implement] worktrees = true` pinned in config.
 
 **Done when** `implement`, in a fresh session, can work a spec from `spec` using only the artifact and
-the worklog.
+the branch's commits.
 
 ### Also open
 
@@ -107,7 +106,7 @@ linked issues, the [Releases](https://github.com/masterik/mk-toolkit/releases) a
 | M3 | ~~`install`/`status`/`uninstall`~~ | Withdrawn ([ADR 0003](adr/0003-two-distribution-channels.md)); `status` folded into `doctor`. |
 | M4 | `mkit findings` ([#6](https://github.com/masterik/mk-toolkit/issues/6)) | Review arithmetic ported from JS. |
 | M5 | The `jq` consumers ([#7](https://github.com/masterik/mk-toolkit/issues/7)) | `facts`, `gate`, `branch status`, `scratch`; the payload became Markdown only. |
-| M6 | `mkit worklog` + workflow contract ([#8](https://github.com/masterik/mk-toolkit/issues/8)) | Written by `commit`, `review`, `pr`, `finish`. |
+| M6 | `mkit worklog` + workflow contract ([#8](https://github.com/masterik/mk-toolkit/issues/8)) | Worklog dropped in [#49](https://github.com/masterik/mk-toolkit/issues/49) (epic #59): `recap` reads `git log` and the PR; the contract stays. |
 | M7 | `repo profile`, `init`, `doctor` ([#3](https://github.com/masterik/mk-toolkit/issues/3)) | Committed `.mkit/config.toml`; consumers in #17–#20. |
 | — | `audit sandbox` + `sandbox-audit` ([#36](https://github.com/masterik/mk-toolkit/issues/36)) | |
 | — | `explain` + `recap` ([#43](https://github.com/masterik/mk-toolkit/issues/43)) | |

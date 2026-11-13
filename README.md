@@ -44,7 +44,6 @@ can pin them in a committed `.mkit/config.toml`, but that is optional. mkit's sc
 mkit facts <skill>       all starting facts a skill needs, in one call
 mkit gate detect | run   find and run the repo's checks; record what passed
 mkit branch status       classify every local branch and worktree
-mkit worklog show        what each step concluded on this branch
 mkit repo profile        discovered vs pinned config (mkit init pins it)
 mkit doctor              prerequisites, sandbox writability, plugin state
 mkit audit sandbox       sandbox and permission-gate events across sessions

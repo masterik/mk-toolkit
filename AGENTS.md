@@ -36,7 +36,6 @@ just build / vet / test          # go build|vet|test ./...
 just lint                        # golangci-lint (CI pins v2.12)
 just run version --json          # front-end contract
 just run doctor                  # prerequisites, sandbox writability, plugin state
-just run worklog show --json     # this branch's worklog
 just run repo profile --json     # discovered|pinned|unavailable
 just run facts commit --no-run   # starting facts, no run dir
 just run audit sandbox --days 14 # sandbox/gate events, all sessions, vs current settings
@@ -105,7 +104,7 @@ Shell layer gone (M5); its rules still apply:
     (checkout is `marketplaces/masterik/plugin`). **Work tree before installed copy** — else an old
     install answers for a newer tree, wrong but plausible.
   - `doctor/` (M7): reports, fixes nothing, exit 0. `orphans.go`: closed table of old mkit paths
-    (`.mkit/work/`, `<git-dir>/mkit`, `bootstrap.*`) → `leftovers` warning + `rm`; drop an entry once
+    (`.mkit/work/`, `.mkit/worklog/`, `<git-dir>/mkit`, `bootstrap.*`) → `leftovers` warning + `rm`; drop an entry once
     every machine is past the release that stopped writing it.
   - `scratch/` (M5): owns `.mkit/`; **sole writer of runtime state** in a work tree (`repoconfig` writes
     `config.toml`). `writes_test.go` counts write sites per file. `EnsureIgnored` writes the ignore
@@ -138,12 +137,6 @@ Shell layer gone (M5); its rules still apply:
     tree top (linked worktree its own, removed skipped). `Judge` matches
     `allowedDomains`/`allowWrite`/`additionalDirectories`; protected paths (`settings*.json`, hooks,
     skills, plugins) are inert. `keys.go` flags unknown `sandbox`/`permissions`/`autoMode` keys; may lag docs — a hint, not a verdict.
-  - `worklog/` (M6): `.mkit/worklog/<branch>.jsonl`. **`FileName` is the one mapping both verbs use**
-    (drift shows as an empty log). `%XX`-escape + **full** SHA-256 of the exact branch on **every**
-    name (macOS case-insensitive; partial or truncated digest still collides). Budgeted to `NAME_MAX`,
-    cutting the **readable half, never the digest** (else ENAMETOOLONG, no record). Rotation = gate
-    ledger's (`Keep = 200`, trim past `Keep*2`, dead heads first, mkdir lock, 60-min stale break);
-    **can't read cleanly → don't rotate.** Uses **`gate.Fingerprint`**.
 - `internal/tui/` — Bubble Tea over `core`. `ui/`: shared lipgloss for human forms (`doctor`, `repo
   profile`, `branch status`, `cache prune`, `audit sandbox`, `init`, `version`), only when
   `Options.Pretty` (TTY, no `--json`/`--no-tui`). `cacheprune/`: tick-list for `cache prune --apply`.
@@ -170,7 +163,7 @@ stop calling `mkit`; `.mkit/` goes away.
   `commit` → `review` → `pr`/`finish`) plus `cleanup` (branches/worktrees), `sandbox-audit` (user-wide
   → proposed settings diff, never edits), `explain` and `recap` (plain English, share
   `_shared/references/plain-english.md`; `explain` has **no binary dependency**; `recap` read-only,
-  `mkit facts recap --no-run`, no worklog record). **Eight exist**: `commit`, `review`, `pr`, `finish`,
+  `mkit facts recap --no-run --gh` + `git log <base>..HEAD` bodies + the PR, records nothing). **Eight exist**: `commit`, `review`, `pr`, `finish`,
   `cleanup`, `sandbox-audit`, `explain`, `recap`; `brainstorm`/`spec`/`implement` unbuilt (M8) — never
   describe as shipping. Steps **composable, not sequential**: entry-capable, any order/subset, derive
   a thin version of what's missing, name assumptions. Never tell the user to run another skill first
@@ -183,7 +176,7 @@ stop calling `mkit`; `.mkit/` goes away.
   `key=value` line (some pack two pairs).
 - **`mkit doctor` is the prereq report** (human-run). Accepted losses — don't re-add a reporter: no
   session-start run, can't report `mkit` absent. Skills read `facts`, not `doctor`.
-- `<toplevel>/.mkit/` — run dirs, `gate.jsonl` (append-only, back to 200 past 400), `worklog/` (same),
+- `<toplevel>/.mkit/` — run dirs, `gate.jsonl` (append-only, back to 200 past 400),
   **plus committed `config.toml`** ([ADR 0001](docs/adr/0001-per-repo-config-and-init.md#amendment-the-config-path)).
   - Ignore **pair** `.mkit/*` + `!.mkit/config.toml`, always together (git can't re-include under an
     excluded dir; `.mkit/*` alone hides config from `git add`). `.gitignore` **outranks**
@@ -193,7 +186,7 @@ stop calling `mkit`; `.mkit/` goes away.
   - Rule written **before** first write: else `git worktree remove` refuses, `git add -A` commits
     artefacts, fingerprint sees a changing dir. `scratch_ignored=` exists because isolated sessions
     can't write `info/exclude`.
-  - `mkit scratch prune` removes only `<skill>-*` dirs. Worklog needs no rule of its own.
+  - `mkit scratch prune` removes only `<skill>-*` dirs.
 - `~/.mkit/` (`MKIT_HOME`) — future user-scoped binary state; binary writes nothing now. Holds
   `sandbox-audit.md` (agent-written ledger). `facts` probes it. **Not `~/.claude/mkit/`**: protected
   region, allowlists inert; here one `permissions.additionalDirectories` entry works.

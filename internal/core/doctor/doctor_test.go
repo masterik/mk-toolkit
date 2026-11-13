@@ -234,6 +234,20 @@ func TestOrphansAreReportedAndLeftInPlace(t *testing.T) {
 	}
 }
 
+// The worklog was dropped: a `.mkit/worklog/` from an older release is a
+// leftover like any other.
+func TestDroppedWorklogIsALeftover(t *testing.T) {
+	isolate(t)
+	repo := newRepo(t)
+	old := filepath.Join(repo.Toplevel, ".mkit", "worklog")
+	writeFile(t, old, "main.jsonl", "{}\n")
+
+	c := find(t, Run(Options{Repo: repo}), "worklog directory")
+	if c.Status != Warn || c.Remedy != "rm -r '"+old+"'" {
+		t.Errorf("worklog leftover = %+v", c)
+	}
+}
+
 func TestNoOrphansIsOneOKRow(t *testing.T) {
 	isolate(t)
 	repo := newRepo(t)
