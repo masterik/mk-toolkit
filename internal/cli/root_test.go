@@ -59,3 +59,17 @@ func TestGateIsAnUnknownCommand(t *testing.T) {
 		}
 	}
 }
+
+// `.mkit/` left the design (#50): per-run files live in the temp dir
+// `facts.sh --run` creates, so there is nothing to open or prune.
+func TestScratchIsAnUnknownCommand(t *testing.T) {
+	for _, args := range [][]string{{"scratch"}, {"scratch", "open", "review"}, {"scratch", "prune"}} {
+		got := run(t, args...)
+		if got.code != 2 {
+			t.Fatalf("%v: exit %d, want 2 (usage)\nstdout:\n%s\nstderr:\n%s", args, got.code, got.stdout, got.stderr)
+		}
+		if !strings.Contains(got.stderr, `unknown command "scratch"`) {
+			t.Errorf("%v: stderr does not name the unknown command:\n%s", args, got.stderr)
+		}
+	}
+}

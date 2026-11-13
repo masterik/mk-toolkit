@@ -234,11 +234,9 @@ if [ -n "$upstream" ]; then
 fi
 
 # --- working tree ------------------------------------------------------------------------
-# `.mkit/` run dirs and the old gate ledger are excluded until #50 retires `.mkit/`;
-# `.mkit/config.toml` is the user's own file and stays visible.
 # A failing `git status` is an error, never an empty answer: `clean=yes` is what a skill
 # skips work on.
-porcelain="$(git status --porcelain -- . ':(exclude,glob).mkit/*/**' ':(exclude).mkit/gate.jsonl')" ||
+porcelain="$(git status --porcelain -- .)" ||
 	die 'git status failed, so there is no answer about the working tree (an empty one would read as clean)' 1
 count() { printf '%s' "$1" | grep -c . || true; }
 staged=0 unstaged=0 untracked=0 total=0
@@ -302,7 +300,7 @@ elif [ "$clean" = no ]; then
 	scope staged --cached
 	# `git diff` never lists an untracked file: its own block, or a commit or review scope
 	# silently omits every new file.
-	list="$(git ls-files --others --exclude-standard -- "${noise[@]}" ':(exclude).mkit')" ||
+	list="$(git ls-files --others --exclude-standard -- "${noise[@]}")" ||
 		die 'git ls-files --others failed' 1
 	print_list untracked "$list"
 fi

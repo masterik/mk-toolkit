@@ -95,8 +95,7 @@ func (r *Repo) IgnoreRule(path string) (ignored bool, source, pattern string) {
 
 // Excluded is the boolean half of Ignored — `check-ignore -q` on its own,
 // without the second call that names the rule. Use it where nothing needs a
-// remedy: the scratch probes ask twice per call, and doubling that to name a
-// file no one reads is two forks on every skill's first call.
+// remedy.
 func (r *Repo) Excluded(path string) bool {
 	_, err := run(r.Toplevel, "check-ignore", "-q", "--", path)
 	return err == nil
@@ -122,8 +121,8 @@ func (r *Repo) ExcludedSet(paths []string) map[string]bool {
 }
 
 // CommonDir is the absolute `--git-common-dir`: the repository storage shared by
-// every linked worktree. It is where the one file mkit writes outside its own
-// three locations lives — `info/exclude`.
+// every linked worktree, and where `info/exclude` lives — which `doctor` reads
+// for the ignore pair an older mkit wrote there.
 //
 // git answers relatively when asked from inside the work tree, so the result is
 // resolved against Toplevel rather than returned as given.

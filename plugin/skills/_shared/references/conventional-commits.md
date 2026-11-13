@@ -50,4 +50,4 @@ Write to a temp file, commit with `-F`:
 git commit -F "$TMP/commit-msg.txt"
 ```
 
-Use the session scratch dir when there is one; clean up afterward.
+Use `<run-dir>` when there is one, else `$TMPDIR`; clean up afterward.

@@ -54,7 +54,7 @@ func isolate(t *testing.T) string {
 	t.Setenv("CLAUDE_PLUGIN_ROOT", "")
 	t.Setenv("MKIT_PLUGIN_ROOT", "")
 	// MKIT_HOME too, and this one is not about measurement: the user-state check
-	// calls scratch.UserDirWritable, which *creates* the directory when it is
+	// calls userdir.Writable, which *creates* the directory when it is
 	// absent and removes it again. Unset, that probe ran in the developer's real
 	// home on every run of this suite.
 	t.Setenv("MKIT_HOME", filepath.Join(t.TempDir(), ".mkit"))
@@ -103,19 +103,6 @@ func TestAbsentConfigIsNotAFinding(t *testing.T) {
 	}
 }
 
-func TestUnignoredScratchIsAFail(t *testing.T) {
-	isolate(t)
-	repo := newRepo(t)
-
-	c := find(t, Run(Options{Repo: repo}), "scratch ignored")
-	if c.Status != Fail {
-		t.Errorf("status = %q, want fail", c.Status)
-	}
-	if c.Remedy == "" {
-		t.Error("want a remedy")
-	}
-}
-
 // Doctor is useful outside a work tree; the repo group is skipped, not fatal.
 func TestRunsWithoutARepo(t *testing.T) {
 	isolate(t)
@@ -143,7 +130,7 @@ func TestMissingPayloadIsNamedWithARemedy(t *testing.T) {
 		t.Errorf("remedy must name the install step: %q", c.Remedy)
 	}
 	// The user-dir check no longer depends on it: both the probe and its remedy
-	// live in internal/core/scratch.
+	// live in internal/core/userdir.
 	if u := find(t, r, "user state dir"); u.Status == Unknown {
 		t.Error("the user dir check should answer without a payload")
 	}

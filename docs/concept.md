@@ -29,8 +29,6 @@ tested binary.
   and the skill picks.
 - **Compose, don't replace.** Orchestrate `git`, `gh`, `wt`, CodeRabbit and Codex. The binary never
   stages, merges, pushes or edits your files. Its writes are limited to:
-  - its own state: run dirs;
-  - the `.mkit/*` + `!.mkit/config.toml` pair in `info/exclude`;
   - remote-tracking refs, via `git fetch --prune`;
   - `.mkit/config.toml`, written only by `mkit init`.
 
@@ -44,8 +42,8 @@ tested binary.
   ([workflow contract](../plugin/skills/_shared/references/workflow-contract.md)).
 - **Safe by default.** Force-push, branch delete, history rewrite and skipping hooks all go through one
   shared safety protocol.
-- **Sandbox-aware.** Repo and per-call state lives where the OS sandbox, the permission
-  classifier and the worktree guard already allow writes (`<toplevel>/.mkit/`, `$TMPDIR`); `~/.mkit/`
+- **Sandbox-aware.** Per-run files live in `$TMPDIR`, where the OS sandbox, the permission
+  classifier and the worktree guard already allow writes; nothing goes in the work tree. `~/.mkit/`
   needs one grant. A path the sandbox would deny
   is reported up front, with a remedy that works ([ADR 0002](adr/0002-state-locations-under-a-sandbox.md)).
 - **Discover first, configure optionally.** Gate commands, scopes, reviewers and merge style are read
@@ -92,7 +90,7 @@ delegation, output discipline and plain-English writing.
  mkit (Go)                   mechanics, --json on every command
    repo profile · init       discovered vs pinned config
    doctor                    prerequisites, sandbox, plugin state
-   audit sandbox · cache prune · scratch prune     housekeeping
+   audit sandbox · cache prune     housekeeping
    │  drive
    ▼
  git · gh · wt · coderabbit · codex
@@ -108,17 +106,16 @@ range: a subcommand that doesn't exist *is* the too-old signal.
 
 ## State
 
-There are three write locations, chosen by lifetime:
+Two write locations, chosen by lifetime:
 
 | Where | What | Lifetime |
 | --- | --- | --- |
-| `$TMPDIR` | anything that dies with the command | one call |
-| `<toplevel>/.mkit/` | run dirs (git-ignored); `config.toml` (committed) | across steps and sessions |
+| `$TMPDIR` | per-run files (`facts.sh --run`'s run dir) and anything that dies with the command | one session |
 | `~/.mkit/` (`MKIT_HOME`) | user-scoped state; today only the `sandbox-audit` ledger | across repos |
 
-mkit also adds the pair `.mkit/*` + `!.mkit/config.toml` to the common dir's `info/exclude`, so
-scratch stays ignored and the config stays addable. It never stores
-state in your files or in `~/.claude`, which is sandbox-protected, so no allowlist entry can open it.
+Nothing goes in the work tree, so there is no ignore rule to write and nothing to prune
+([ADR 0006](adr/0006-standalone-skills-optional-binary.md) decision 5). Until `mkit init` goes (#53),
+it still writes `.mkit/config.toml`. mkit never stores state in your files or in `~/.claude`, which is sandbox-protected, so no allowlist entry can open it.
 `cache prune --apply` deletes stale storage in `~/.claude` and `~/.codex`, and only when you ask.
 
 ## Workflow

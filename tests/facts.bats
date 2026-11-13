@@ -91,27 +91,24 @@ teardown() { mkit_teardown_repo; }
 	[ "$(field clean)" != yes ]
 }
 
-# --- .mkit scratch, until #50 ----------------------------------------------------------
+# --- .mkit is no special case ---------------------------------------------------------
 
-@test "old .mkit run dirs are not the user's work; the user's own untracked file is" {
+# `.mkit/` left the design (#50): an old one is untracked like any other directory, so
+# the user sees it (doctor names the remedy) rather than facts hiding it.
+@test "an old .mkit dir is reported like any other untracked path" {
 	mkdir -p .mkit/review-x
 	printf 'log\n' >.mkit/review-x/step.log
-	printf '{}\n' >.mkit/gate.jsonl
-	run facts commit
-	[ "$(field clean)" = yes ]
-	printf 'real\n' >notes.txt
 	run facts commit
 	[ "$(field clean)" = no ]
 	[ "$(field untracked)" = 1 ]
-	[[ "$(facts_only)" == *"notes.txt"* ]]
-	[[ "$(facts_only)" != *"step.log"* ]]
-	[[ "$(facts_only)" != *"gate.jsonl"* ]]
+	[[ "$(facts_only)" == *".mkit/"* ]]
 }
 
 # --- the run dir -----------------------------------------------------------------------
 
 @test "--run creates a run dir under TMPDIR and writes nothing into the work tree" {
 	before="$(git status --porcelain --ignored)"
+	exclude_before="$(cat .git/info/exclude)"
 	export TMPDIR="$TEST_TMP/tmp/"
 	mkdir -p "$TMPDIR"
 	run facts commit --run
@@ -120,6 +117,7 @@ teardown() { mkit_teardown_repo; }
 	[ -d "$dir" ]
 	[[ "$dir" == "$TEST_TMP/tmp/mkit-commit-"* ]]
 	[ "$(git status --porcelain --ignored)" = "$before" ]
+	[ "$(cat .git/info/exclude)" = "$exclude_before" ]
 	[ ! -e .mkit ]
 }
 

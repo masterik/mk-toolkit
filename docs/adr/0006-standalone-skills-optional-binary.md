@@ -97,6 +97,12 @@ payload.
 - `AGENTS.md`'s binary invariants, payload rules and "three write locations" describe a shrinking
   binary; they point here, and each simplify ticket (#48–#53, #61, #47) rewrites its own section
   when it makes the change real.
+- The write-sites allowlist test (`TestWriteSitesAreOnTheReviewedAllowlist`) is retired with the
+  `scratch` package (#50). It guarded the work-tree writer; what is left writes only `~/.mkit` (a
+  net-zero probe) and `cache prune --apply` (home-guarded, with its own tests), so a counted list
+  of write sites no longer buys anything.
+- An old `.mkit/` (run dirs, worklog, ledger, `config.toml`) and mkit's lines in `info/exclude` stay
+  until the user removes them; `mkit doctor` names each with its remedy.
 - Users with `.mkit/config.toml` need a one-time migration to `docs/agents/*.md`, owned by the
   `setup` ticket (#61).
 - Codex's default sandbox has network off and `.git` read-only, so `gh` and `git commit` need

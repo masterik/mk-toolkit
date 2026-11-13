@@ -329,8 +329,7 @@ nothing to remove and `<toplevel>`/the cwd are still correct.
 
 ## Deliverable
 
-Prune with `mkit scratch prune` on the way out, folded into step 5's
-verification call. Open with a one-line bold verdict (`**Verdict:** merged into main, branch and worktree
+Open with a one-line bold verdict (`**Verdict:** merged into main, branch and worktree
 removed.` — or where and why it stopped short); form per `../_shared/references/summary-format.md`.
 
 - Which path ran — local merge, or GitHub PR merge (name the PR URL and method used), and **where the

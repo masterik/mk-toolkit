@@ -35,8 +35,8 @@ edit → /mkit:commit → /mkit:review → /mkit:pr   (or /mkit:finish to merge 
 ```
 
 Skills discover gate commands, commit scopes, reviewers, merge style and the push remote from the repo
-(`docs/agents/gate.md` overrides the gate). `mkit init` can pin the rest in a committed `.mkit/config.toml`, but that is optional. mkit's scratch state lives in
-`.mkit/` and is git-ignored; `.mkit/config.toml` is committed.
+(`docs/agents/gate.md` overrides the gate). `mkit init` can pin the rest in a committed `.mkit/config.toml`, but that is optional. Skills
+write nothing into your work tree: per-run files live in a temp dir.
 
 ## The binary
 

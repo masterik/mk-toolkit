@@ -92,7 +92,7 @@ Each subcommand is its own Bash pattern. Allow them once in `~/.claude/settings.
 {
   "permissions": {
     "allow": [
-      "Bash(mkit scratch:*)"
+      "Bash(mkit audit sandbox:*)"
     ]
   }
 }
@@ -103,8 +103,8 @@ rules (or prompts) apply.
 
 ## Running under the OS sandbox
 
-State lives in `<toplevel>/.mkit/` and `$TMPDIR`, both already writable, so **most of mkit needs no
-grant** ([ADR 0002](adr/0002-state-locations-under-a-sandbox.md)).
+Per-run files live in `$TMPDIR`, already writable, and nothing goes in the work tree, so **most of
+mkit needs no grant** ([ADR 0006](adr/0006-standalone-skills-optional-binary.md) decision 5).
 
 ### `~/.mkit`: two steps, in order
 

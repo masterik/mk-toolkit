@@ -267,11 +267,10 @@ if [ "$worktrees_state" = ok ]; then
 		else
 			case "$path" in */.claude/worktrees/*) origin=claude-code ;; esac
 		fi
-		# `.mkit` excluded until #50: a worktree holding only old run dirs is clean. A
-		# failed status and an empty one never collapse into the same answer.
+		# A failed status and an empty one never collapse into the same answer.
 		if [ ! -d "$path" ]; then
 			clean=missing
-		elif st="$(git -C "$path" status --porcelain -- . ':(exclude).mkit' 2>/dev/null)"; then
+		elif st="$(git -C "$path" status --porcelain 2>/dev/null)"; then
 			if [ -z "$st" ]; then clean=yes; else clean=no; fi
 		else
 			clean=error

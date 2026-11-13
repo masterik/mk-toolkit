@@ -172,7 +172,6 @@ mktemp "<run-dir>/patch.XXXXXX"
 
 ## Final report (always)
 
-Prune with `mkit scratch prune` on the way out, folded into another call.
 After the last commit run `"<git>" -C "<toplevel>" log --oneline -n <N>` (N = commits made this run) to
 confirm hashes, then report every commit — never skip this, even for one:
 

@@ -12,8 +12,8 @@
 //
 // Every degradation sentence has exactly one producer. Until M5 the shell was it
 // and this fetched from `lib/common.sh`; since the payload's last script went,
-// the producer is the Go package that owns the surface — `scratch` for the
-// user-scoped directory and for an unignored scratch root, `repoconfig` for a
+// the producer is the Go package that owns the surface — `userdir` for the
+// user-scoped directory, `repoconfig` for a
 // shadowed config.
 //
 // Layering: returns data, never prints, never assumes a terminal.
@@ -31,7 +31,7 @@ import (
 	"github.com/masterik/mk-toolkit/internal/core/gitrepo"
 	"github.com/masterik/mk-toolkit/internal/core/pluginroot"
 	"github.com/masterik/mk-toolkit/internal/core/repoconfig"
-	"github.com/masterik/mk-toolkit/internal/core/scratch"
+	"github.com/masterik/mk-toolkit/internal/core/userdir"
 )
 
 // Status is a check's verdict.
@@ -115,7 +115,7 @@ func Run(opts Options) *Report {
 			Detail: "not inside a git repository — the repo checks were skipped"})
 	}
 	r.orphans(opts.Repo)
-	r.writableSet(toplevel)
+	r.writableSet()
 	r.allowlist(toplevel)
 	return r
 }
@@ -267,20 +267,20 @@ func (r *Report) ghStack() {
 // whose rows rename themselves by branch cannot be diffed or matched against.
 const userDirCheck = "user state dir"
 
-// userDir reports both halves from `internal/core/scratch`: the probe (net-zero
+// userDir reports both halves from `internal/core/userdir`: the probe (net-zero
 // by construction) and the sentence (which must name creating the directory *and*
 // granting it). One producer for each — until M5 both were fetched from the
 // payload's lib/common.sh, and re-wording the sentence is how the original
 // one-grant mistake survived three files.
 func (r *Report) userDir() {
-	dir := scratch.UserDir()
+	dir := userdir.Dir()
 	if dir == "" {
 		r.add(Check{Group: "sandbox", Name: userDirCheck, Status: Warn,
 			Detail: "no user-scoped directory: $HOME is unset and MKIT_HOME is not set",
-			Remedy: scratch.UserDirRemedy()})
+			Remedy: userdir.Remedy()})
 		return
 	}
-	if scratch.UserDirWritable() {
+	if userdir.Writable() {
 		r.add(Check{Group: "sandbox", Name: userDirCheck, Status: OK, Detail: dir + " is writable"})
 		return
 	}
@@ -290,28 +290,11 @@ func (r *Report) userDir() {
 	// would fail.
 	r.add(Check{Group: "sandbox", Name: userDirCheck, Status: Warn,
 		Detail: dir + " is not writable; the sandbox-audit ledger cannot be kept, and a later user-scoped write would fail",
-		Remedy: scratch.UserDirRemedy()})
+		Remedy: userdir.Remedy()})
 }
 
 func (r *Report) repo(repo *gitrepo.Repo) {
 	r.add(Check{Group: "repo", Name: "work tree", Status: OK, Detail: repo.Toplevel})
-
-	// The remedy names this file rather than a fixed `.git/info/exclude`: under a
-	// linked worktree the exclude lives in the main checkout.
-	common, _ := repo.CommonDir()
-
-	// scratch.Ignored, not a single check-ignore: it probes the ledger *and* a
-	// run directory, because an unrelated `*.jsonl` rule hides the first while
-	// leaving the second untracked. facts reads the same producer.
-	if scratch.Ignored(repo) {
-		r.add(Check{Group: "repo", Name: "scratch ignored", Status: OK,
-			Detail: ".mkit/ scratch is excluded"})
-	} else {
-		r.add(Check{Group: "repo", Name: "scratch ignored", Status: Fail,
-			Detail: ".mkit/ is not ignored here — `git worktree remove` will refuse, " +
-				"and `git add -A` would commit run artefacts",
-			Remedy: scratch.IgnoredRemedy(common)})
-	}
 
 	st := repoconfig.Stat(repo)
 	switch st.State {
@@ -403,30 +386,23 @@ func configRemedy(pb repoconfig.Problem) string {
 	}
 }
 
-// writableSet reports the three locations the project declares, by writing to
-// them. Probed rather than inferred: the sandbox leaves the mode bits saying yes
-// while denying the write, so `[ -w ]` and os.Stat both lie here.
-func (r *Report) writableSet(toplevel string) {
+// writableSet reports the one write location the skills use, by writing to it.
+// Probed rather than inferred: the sandbox leaves the mode bits saying yes while
+// denying the write, so `[ -w ]` and os.Stat both lie here. `<toplevel>/.mkit`
+// is no longer one (#50): per-run files live under $TMPDIR.
+func (r *Report) writableSet() {
 	tmp := os.Getenv("TMPDIR")
 	if tmp == "" {
 		tmp = os.TempDir()
 	}
-	r.probe("$TMPDIR", tmp, "anything that dies with the command",
+	r.probe("$TMPDIR", tmp, "per-run files, which die with the session",
 		"nothing to grant — a denied $TMPDIR means the sandbox is configured unusually")
-
-	if toplevel != "" {
-		r.probe("<toplevel>/.mkit", filepath.Join(toplevel, ".mkit"),
-			"run directories",
-			"nothing to grant — the working directory is writable by default; "+
-				"a refusal here usually means the session is isolated in another worktree")
-	}
 }
 
 func (r *Report) probe(label, dir, what, cannotFix string) {
 	// doctor reports and fixes nothing, and that includes leaving the filesystem
-	// as it found it: on a fresh clone `<toplevel>/.mkit` does not exist yet, and
-	// a probe that creates it has made the repo dirty to answer a question about
-	// it. Only directories this call created are removed, and only if still empty
+	// as it found it: a probe that creates the directory it asks about has
+	// changed the answer to report it. Only directories this call created are removed, and only if still empty
 	// — never one that was already there, and never one another process has since
 	// written into.
 	created := createdDirs(dir)
