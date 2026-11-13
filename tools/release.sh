@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cut a release: bump plugin.json, commit `chore(release): X.Y.Z`, tag vX.Y.Z, push both.
+# Cut a release: bump every agent's plugin.json, commit `chore(release): X.Y.Z`, tag vX.Y.Z, push both.
 # The tag starts GoReleaser, which builds the cask and writes the GitHub Release notes.
 #
 #   tools/release.sh [auto|patch|minor|major|X.Y.Z]    (default: auto)
@@ -10,7 +10,12 @@
 set -euo pipefail
 
 bump=${1:-auto}
-manifest=plugin/.claude-plugin/plugin.json
+# Every agent's plugin manifest that exists (Claude Code's always; Codex's and Copilot's once
+# they ship, #56) — one tree, one version, bumped together.
+manifests=()
+for f in plugin/plugin.json plugin/.[!.]*/plugin.json plugin/.[!.]*/*/plugin.json; do
+  if [[ -f $f ]]; then manifests+=("$f"); fi
+done
 
 die() { echo "release: $*" >&2; exit 1; }
 semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
@@ -23,6 +28,7 @@ below() {
 }
 
 cd "$(git rev-parse --show-toplevel)"
+[[ -f plugin/.claude-plugin/plugin.json ]] || die "plugin/.claude-plugin/plugin.json is missing"
 [[ -t 0 ]] || die "needs a terminal to confirm on"
 [[ $(git branch --show-current) == main ]] || die "release from main only"
 dirty=$(git status --porcelain --untracked-files=no)
@@ -64,10 +70,12 @@ case $bump in
 esac
 ! git rev-parse -q --verify "refs/tags/v$version" >/dev/null || die "tag v$version exists"
 # plugin.json can be ahead of the last tag (bumped by hand, never tagged); never release below it
-manifest_version=$(sed -nE 's/^  "version": "([^"]+)",$/\1/p' "$manifest")
-[[ $manifest_version =~ $semver ]] || die "cannot read the version in $manifest"
-! below "$version" "$manifest_version" ||
-  die "v$version is below $manifest's $manifest_version, which no tag released; run: just release $manifest_version"
+for manifest in "${manifests[@]}"; do
+  manifest_version=$(sed -nE 's/^  "version": "([^"]+)",$/\1/p' "$manifest")
+  [[ $manifest_version =~ $semver ]] || die "cannot read the version in $manifest"
+  ! below "$version" "$manifest_version" ||
+    die "v$version is below $manifest's $manifest_version, which no tag released; run: just release $manifest_version"
+done
 
 # `feat: 3, fix: 5, docs: 2` — what the version was decided from
 counts=$(sed -nE 's/^([a-z]+)(\([^)]*\))?!?:.*/\1/p' <<<"$subjects" |
@@ -80,9 +88,11 @@ git log "$last"..HEAD --first-parent --merges --format='%s%x1f%b%x1e' |
 read -r -p "release v$version and push to origin? [y/N] " answer
 [[ $answer == [yY] ]] || die "aborted; nothing changed"
 
-sed -i '' -E "s/^(  \"version\": \")[^\"]+(\",)$/\1$version\2/" "$manifest"
-grep -q "\"version\": \"$version\"" "$manifest" || die "could not bump $manifest"
-git add "$manifest"
+for manifest in "${manifests[@]}"; do
+  sed -i '' -E "s/^(  \"version\": \")[^\"]+(\",)$/\1$version\2/" "$manifest"
+  grep -q "\"version\": \"$version\"" "$manifest" || die "could not bump $manifest"
+done
+git add "${manifests[@]}"
 # --allow-empty: releasing the version plugin.json already carries changes no file
 git commit -q --allow-empty -m "chore(release): $version"
 git tag -a "v$version" -m "v$version"
