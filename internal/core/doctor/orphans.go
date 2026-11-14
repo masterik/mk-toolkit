@@ -44,23 +44,13 @@ const worklogDropped = "the worklog was dropped (recap reads git log and the PR)
 var legacy = []orphan{
 	{
 		name: "old worklog directory",
-		path: func(a orphanAnchors) string {
-			if a.toplevel == "" {
-				return ""
-			}
-			return filepath.Join(a.toplevel, ".mkit", "work")
-		},
-		why: worklogDropped,
+		path: func(a orphanAnchors) string { return mkitFile(a, "work") },
+		why:  worklogDropped,
 	},
 	{
 		name: "worklog directory",
-		path: func(a orphanAnchors) string {
-			if a.toplevel == "" {
-				return ""
-			}
-			return filepath.Join(a.toplevel, ".mkit", "worklog")
-		},
-		why: worklogDropped,
+		path: func(a orphanAnchors) string { return mkitFile(a, "worklog") },
+		why:  worklogDropped,
 	},
 	{
 		name: "git-dir scratch",
@@ -74,23 +64,13 @@ var legacy = []orphan{
 	},
 	{
 		name: "old gate ledger",
-		path: func(a orphanAnchors) string {
-			if a.toplevel == "" {
-				return ""
-			}
-			return filepath.Join(a.toplevel, ".mkit", "gate.jsonl")
-		},
-		why: "`mkit gate run` and its ledger were removed; skills run the gate commands directly",
+		path: func(a orphanAnchors) string { return mkitFile(a, "gate.jsonl") },
+		why:  "`mkit gate run` and its ledger were removed; skills run the gate commands directly",
 	},
 	{
 		name: "old repo config",
-		path: func(a orphanAnchors) string {
-			if a.toplevel == "" {
-				return ""
-			}
-			return filepath.Join(a.toplevel, ".mkit", "config.toml")
-		},
-		why: "repo settings moved to prose files under docs/agents/, which the `setup` skill writes",
+		path: func(a orphanAnchors) string { return mkitFile(a, "config.toml") },
+		why:  "repo settings moved to prose files under docs/agents/, which the `setup` skill writes",
 		remedy: func(p string) string {
 			return "run the `setup` skill to carry its settings into docs/agents/, then git rm " +
 				shellQuote(p) + " (plain rm if it was never committed)"
@@ -108,6 +88,15 @@ var legacy = []orphan{
 	},
 }
 
+// mkitFile is <toplevel>/.mkit/<name>, or "" outside a repo.
+func mkitFile(a orphanAnchors, name string) string {
+	if a.toplevel == "" {
+		return ""
+	}
+	return filepath.Join(a.toplevel, ".mkit", name)
+}
+
+// userFile is <user dir>/<name>, or "" when there is no user directory.
 func userFile(a orphanAnchors, name string) string {
 	if a.userDir == "" {
 		return ""
