@@ -3,8 +3,8 @@
 For `pr=<url>`, `pr_state=OPEN`, not draft: the branch is merged on GitHub, never with a local `git merge`.
 Items 1–2 run before `finish`'s plan (step 4); items 3–5 only after its go-ahead.
 
-**Stacked?** Probe once (`../_shared/references/stacked-prs.md`, "Detect"); a failed or empty probe means not
-stacked. A stack changes item 3 (**`gh stack merge`, never `gh pr merge`**) and the plan: every unmerged PR
+**Stacked?** Probe once (`../_shared/references/stacked-prs.md`, "Detect"): only `null`, absent or a 404 means
+not stacked; any other failure stops there. A stack changes item 3 (**`gh stack merge`, never `gh pr merge`**) and the plan: every unmerged PR
 below this one merges with it.
 
 1. **Push what step 1 committed** — `gh pr merge` merges what is on GitHub. `pushed=no` →
@@ -13,12 +13,11 @@ below this one merges with it.
 2. **Pick the method.** `gh repo view <remote_repo> --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed`
    (repo argument only when `remote_repo=` is not `none`) says what the remote accepts; `merge` →
    `--merge`, `squash` → `--squash`, `rebase` → `--rebase`. In order:
-   - **Exactly one allowed** → use it, whatever the style; if the repo's style named another, say so in one
-     line.
    - **The style is allowed** → use it, **do not ask**, and name where it came from.
-   - **The repo's style (from `merge.md`) is not allowed** → **report it, never substitute**: what `merge.md`
-     says, what the remote allows; the user picks.
-   - **The default style is not allowed**, several others are → ask which, without reporting a mismatch.
+   - **The repo's style (from `merge.md`) is not allowed** → **report it, never substitute**, even when only
+     one method is allowed: what `merge.md` says, what the remote allows; the user picks.
+   - **The default style is not allowed** → exactly one other allowed: use it; several: ask which. Either
+     way without reporting a mismatch.
 
    Never `--admin` unless the user explicitly asks. **Now show `finish`'s plan with this method and get the
    go-ahead.**
@@ -55,9 +54,15 @@ below this one merges with it.
      unmerged.
    - `exit-worktree`: the **ExitWorktree** tool, `action: "remove"`, `discard_changes: true`. Never
      `git worktree remove` it from inside.
-   - `git-worktree`, no worktrunk: `git worktree remove "<toplevel>"`, then `git branch -D <feature-branch>`
-     if `git branch --list <feature-branch>` still shows it, then `git worktree prune`.
+   - `git-worktree`, no worktrunk, each call as `git -C "<primary>"` (the removal may delete the cwd):
+     `worktree remove "<toplevel>"`, then `branch -D <feature-branch>` if `branch --list <feature-branch>`
+     still shows it, then `worktree prune`.
    - `none`: `git branch -D <feature-branch>` if it still exists.
+
+   **Stacked — every PR the merge carried**, this one included, one at a time: `gh pr view <n> --json
+   state,headRefName`; only `state=MERGED` → `git push <remote> --delete <headRefName>`, then
+   `git branch -D <headRefName>` if it still exists and no other worktree has it checked out (one that does
+   stays, named under "left behind"). Not merged → delete nothing of it; say so.
 
    **Stacked:** the PRs above were rebased and retargeted on GitHub; their local branches are behind. With a
    local stack tracked, ask before `gh stack sync` (it force-pushes), then run it from the surviving root;

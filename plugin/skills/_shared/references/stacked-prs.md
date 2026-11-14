@@ -16,8 +16,10 @@ A PR is stacked when its REST resource carries a non-null `stack` object (number
 gh api -H "X-GitHub-Api-Version: 2026-03-10" repos/<remote_repo>/pulls/<n> --jq .stack
 ```
 
-`null`, absent, a 404 or a failed probe → not stacked. A PR whose base is another feature branch is a
-**stack candidate** even without the object.
+`remote_repo=none` → write the path as `repos/{owner}/{repo}/pulls/<n>` (gh fills the placeholders from this
+checkout), never `repos/none/…`. `null`, absent or a 404 → not stacked. Any other failure (auth, network,
+5xx) → **unknown, not "not stacked"**: report its message and stop; go on as not stacked only on the user's
+word. A PR whose base is another feature branch is a **stack candidate** even without the object.
 
 ## What changes on a stack
 
