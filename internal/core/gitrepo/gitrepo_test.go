@@ -4,7 +4,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -36,80 +35,6 @@ func newRepo(t *testing.T) *Repo {
 	return repo
 }
 
-func write(t *testing.T, repo *Repo, rel, content string) {
-	t.Helper()
-	path := filepath.Join(repo.Toplevel, rel)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
-// The regression this package exists to avoid. `git check-ignore -v` exits 0 and
-// prints a pattern for a *negated* path too, so reading truth off -v reports every
-// deliberately re-included file as excluded — which is exactly backwards for
-// `.mkit/config.toml`, the one path mkit negates.
-func TestIgnoredDistinguishesNegationFromExclusion(t *testing.T) {
-	repo := newRepo(t)
-	write(t, repo, ".gitignore", ".mkit/*\n!.mkit/config.toml\n")
-
-	if ignored, _ := repo.Ignored(".mkit/config.toml"); ignored {
-		t.Error("config.toml reported ignored, but a negation re-includes it")
-	}
-	if ignored, _ := repo.Ignored(".mkit/gate.jsonl"); !ignored {
-		t.Error("gate.jsonl reported not ignored, but .mkit/* excludes it")
-	}
-}
-
-// The answer must be right before anything exists on disk: this is pattern
-// matching, and the first call is the one that has to get it right.
-func TestIgnoredAnswersForAbsentPaths(t *testing.T) {
-	repo := newRepo(t)
-	write(t, repo, ".gitignore", ".mkit/*\n!.mkit/config.toml\n")
-
-	if _, err := os.Stat(filepath.Join(repo.Toplevel, ".mkit")); !os.IsNotExist(err) {
-		t.Fatal("precondition: .mkit/ must not exist")
-	}
-	if ignored, _ := repo.Ignored(".mkit/gate.jsonl"); !ignored {
-		t.Error("want ignored for a path that does not exist yet")
-	}
-}
-
-// The source names the file a remedy must edit, and getting it wrong produces a
-// remedy that changes nothing.
-func TestIgnoredNamesTheRuleSource(t *testing.T) {
-	repo := newRepo(t)
-	write(t, repo, ".gitignore", ".mkit/\n")
-
-	ignored, source := repo.Ignored(".mkit/config.toml")
-	if !ignored {
-		t.Fatal("want ignored under a directory-only rule")
-	}
-	if source != ".gitignore" {
-		t.Errorf("source = %q, want .gitignore", source)
-	}
-}
-
-func TestTracked(t *testing.T) {
-	repo := newRepo(t)
-	write(t, repo, "a.txt", "hi")
-	if repo.Tracked("a.txt") {
-		t.Error("an unstaged file is not tracked")
-	}
-	cmd := exec.Command("git", "add", "a.txt")
-	cmd.Dir = repo.Toplevel
-	cmd.Env = append(os.Environ(),
-		"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git add: %v\n%s", err, out)
-	}
-	if !repo.Tracked("a.txt") {
-		t.Error("a staged file is tracked")
-	}
-}
-
 func TestOpenOutsideARepo(t *testing.T) {
 	// t.TempDir() is not a work tree; a parent that happens to be one would make
 	// this vacuous, so the check is that Open reports rather than guesses.
@@ -121,173 +46,18 @@ func TestOpenOutsideARepo(t *testing.T) {
 	}
 }
 
-// AliveCommits fails **open**, and the worklog's rotation is why that matters: it
-// drops every record whose head this map does not call alive. Invert the fallback and
-// the first rotation past Keep*2 discards the whole log instead of nothing — a silent
-// data loss with no test failing anywhere. So the fallback is pinned here, at the one
-// place that decides it.
-func TestAliveCommitsFailsOpen(t *testing.T) {
-	heads := []string{"deadbeef", "cafebabe"}
-
-	// A Repo whose work tree does not exist: `git cat-file` cannot run at all, which
-	// is the shape of every failure the fallback is for — no git, no repo, no HEAD.
-	broken := &Repo{Toplevel: filepath.Join(t.TempDir(), "no-such-work-tree")}
-	alive := broken.AliveCommits(heads)
-	for _, h := range heads {
-		if !alive[h] {
-			t.Errorf("a batch that could not run reported %s dead; rotation would drop it", h)
-		}
-	}
-
-	// The empty case stays empty — nothing asked about, nothing to keep alive.
-	if got := broken.AliveCommits(nil); len(got) != 0 {
-		t.Errorf("AliveCommits(nil) = %v, want empty", got)
-	}
-}
-
-// The counterpart to the fail-open test: a batch that *did* answer must still tell
-// alive from dead. A guard that fails open too eagerly is invisible — rotation simply
-// stops dropping anything, and the log grows with records pointing at gone commits.
-func TestAliveCommitsDistinguishesWhenTheBatchAnswers(t *testing.T) {
+// git answers `--git-common-dir` relative to the work tree; CommonDir must hand
+// back an absolute path, or doctor's `info/exclude` lookup lands in the cwd.
+func TestCommonDirIsAbsolute(t *testing.T) {
 	repo := newRepo(t)
-	head := repo.Head()
-	if head == "" {
-		t.Fatal("no HEAD in the throwaway repo")
+	got, err := repo.CommonDir()
+	if err != nil {
+		t.Fatal(err)
 	}
-	const gone = "0000000000000000000000000000000000000001"
-
-	alive := repo.AliveCommits([]string{head, gone})
-	if !alive[head] {
-		t.Errorf("HEAD %s reported dead", head)
+	if !filepath.IsAbs(got) {
+		t.Errorf("CommonDir = %q, want absolute", got)
 	}
-	if alive[gone] {
-		t.Error("a commit that does not exist reported alive")
-	}
-}
-
-// git runs a command in the repo, failing the test on error.
-func git(t *testing.T, repo *Repo, args ...string) {
-	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = repo.Toplevel
-	cmd.Env = append(os.Environ(),
-		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t",
-		"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, out)
-	}
-}
-
-// A stale `origin/HEAD` — or one naming a branch that exists only as a
-// remote-tracking ref — must not beat a local branch that is actually here.
-// `mkit branch status` refuses a --default absent from refs/heads before it
-// fetches, so returning the non-local name stops the whole of `cleanup` on a
-// branch this checkout has never had.
-func TestDefaultBranchPrefersALocalBranchOverAStaleRemoteHead(t *testing.T) {
-	repo := newRepo(t)
-	git(t, repo, "branch", "-M", "main")
-	git(t, repo, "remote", "add", "origin", "https://example.invalid/r.git")
-	// origin/HEAD -> origin/develop, with no local develop anywhere.
-	git(t, repo, "update-ref", "refs/remotes/origin/develop", "HEAD")
-	git(t, repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/develop")
-
-	if got := repo.DefaultBranch(""); got != "main" {
-		t.Errorf("DefaultBranch() = %q, want main: the remote's answer names no local branch", got)
-	}
-
-	// No local main either: the remote-only name is still not returned.
-	git(t, repo, "branch", "-m", "main", "work")
-	if got := repo.DefaultBranch(""); got != "unknown" {
-		t.Errorf("DefaultBranch() = %q, want unknown: a name only the remote has is not a branch here", got)
-	}
-	git(t, repo, "branch", "-m", "work", "main")
-
-	// With the branch actually present, the remote's answer is the right one.
-	git(t, repo, "branch", "develop")
-	if got := repo.DefaultBranch(""); got != "develop" {
-		t.Errorf("DefaultBranch() = %q, want develop once it exists locally", got)
-	}
-}
-
-// `git remote` is alphabetical, so a fork workflow's `fork` sorts before
-// `origin`: taking git's first made `fork` the answer. `origin` wins when
-// nothing is pinned, and only a pin that is configured here beats it.
-func TestResolveRemote(t *testing.T) {
-	repo := newRepo(t)
-	if c := repo.ResolveRemote(""); c.Name != "" || c.Source != RemoteNone || c.Ask() {
-		t.Errorf("no remote: %+v", c)
-	}
-	// A pin on a clone with no remote at all still went nowhere, and says so in
-	// words that do not name an empty fallback.
-	c := repo.ResolveRemote("fork")
-	if c.PinMissing != "fork" || !strings.Contains(c.PinMissingDetail(), "no remote is configured") {
-		t.Errorf("a pin with no remotes configured: %+v / %q", c, c.PinMissingDetail())
-	}
-
-	git(t, repo, "remote", "add", "upstream", "https://example.invalid/u.git")
-	if c := repo.ResolveRemote(""); c.Name != "upstream" || c.Source != RemoteOnly || c.Ask() {
-		t.Errorf("a lone remote is the answer, not a question: %+v", c)
-	}
-
-	git(t, repo, "remote", "add", "fork", "https://example.invalid/f.git")
-	if c := repo.ResolveRemote(""); c.Name != "fork" || c.Source != RemoteFirst || !c.Ask() {
-		t.Errorf("several, none origin: %+v, want git's first as a guess to ask about", c)
-	}
-
-	git(t, repo, "remote", "add", "origin", "https://example.invalid/o.git")
-	if c := repo.ResolveRemote(""); c.Name != "origin" || c.Source != RemoteOrigin || !c.Ask() {
-		t.Errorf("origin must beat the alphabetically first remote: %+v", c)
-	}
-	if c := repo.ResolveRemote("upstream"); c.Name != "upstream" || c.Source != RemotePinned || c.Ask() || c.PinMissing != "" {
-		t.Errorf("a pin configured here is decided: %+v", c)
-	}
-	// A pin travels with the repo; a clone without the remote falls back and says so.
-	if c := repo.ResolveRemote("gone"); c.Name != "origin" || c.PinMissing != "gone" || !c.Ask() {
-		t.Errorf("a pin this clone lacks: %+v", c)
-	}
-}
-
-// In a fork workflow the pinned remote's HEAD is the project's, not the fork's.
-func TestDefaultBranchFollowsThePinnedRemote(t *testing.T) {
-	repo := newRepo(t)
-	git(t, repo, "branch", "-M", "main")
-	git(t, repo, "branch", "develop")
-	for _, r := range []string{"origin", "upstream"} {
-		git(t, repo, "remote", "add", r, "https://example.invalid/"+r+".git")
-	}
-	git(t, repo, "update-ref", "refs/remotes/origin/main", "HEAD")
-	git(t, repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
-	git(t, repo, "update-ref", "refs/remotes/upstream/develop", "HEAD")
-	git(t, repo, "symbolic-ref", "refs/remotes/upstream/HEAD", "refs/remotes/upstream/develop")
-
-	if got := repo.DefaultBranch(""); got != "main" {
-		t.Errorf("unpinned DefaultBranch = %q, want origin's main", got)
-	}
-	if got := repo.DefaultBranch("upstream"); got != "develop" {
-		t.Errorf("pinned DefaultBranch = %q, want upstream's develop", got)
-	}
-}
-
-func TestChooseRemoteAndGitHubRepo(t *testing.T) {
-	repo := newRepo(t)
-	git(t, repo, "remote", "add", "origin", "https://github.com/me/fork.git")
-	git(t, repo, "remote", "add", "up", "git@github.com:org/project")
-	git(t, repo, "remote", "add", "lab", "https://gitlab.com/g/p.git")
-	// The host is not a substring match: neither of these is GitHub.
-	git(t, repo, "remote", "add", "evil", "https://evilgithub.com/acme/repo.git")
-	git(t, repo, "remote", "add", "evil2", "https://github.com.evil.example/acme/repo.git")
-	git(t, repo, "remote", "add", "tok", "https://user@github.com/org/tok.git")
-
-	if c, err := repo.ChooseRemote("up"); err != nil || c.Name != "up" || c.Source != RemoteChosen || c.Ask() {
-		t.Errorf("a configured remote is decided: %+v %v", c, err)
-	}
-	if _, err := repo.ChooseRemote("nope"); err == nil {
-		t.Error("an unconfigured name was accepted instead of refused")
-	}
-	for remote, want := range map[string]string{"origin": "me/fork", "up": "org/project", "lab": "", "": "", "nope": "",
-		"evil": "", "evil2": "", "tok": "org/tok"} {
-		if got := repo.GitHubRepo(remote); got != want {
-			t.Errorf("GitHubRepo(%q) = %q, want %q", remote, got, want)
-		}
+	if _, err := os.Stat(filepath.Join(got, "HEAD")); err != nil {
+		t.Errorf("CommonDir = %q is not the repository storage: %v", got, err)
 	}
 }

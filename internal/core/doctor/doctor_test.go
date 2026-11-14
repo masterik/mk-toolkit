@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/masterik/mk-toolkit/internal/buildinfo"
 	"github.com/masterik/mk-toolkit/internal/core/gitrepo"
 )
 
@@ -54,7 +55,7 @@ func isolate(t *testing.T) string {
 	t.Setenv("CLAUDE_PLUGIN_ROOT", "")
 	t.Setenv("MKIT_PLUGIN_ROOT", "")
 	// MKIT_HOME too, and this one is not about measurement: the user-state check
-	// calls scratch.UserDirWritable, which *creates* the directory when it is
+	// calls userdir.Writable, which *creates* the directory when it is
 	// absent and removes it again. Unset, that probe ran in the developer's real
 	// home on every run of this suite.
 	t.Setenv("MKIT_HOME", filepath.Join(t.TempDir(), ".mkit"))
@@ -72,47 +73,86 @@ func find(t *testing.T, r *Report, name string) Check {
 	return Check{}
 }
 
-// The finding M7 exists to produce: a config path that is shadowed would let
-// `mkit init` write a file that never travels.
-func TestShadowedConfigIsAFailWithAWorkingRemedy(t *testing.T) {
+// The TOML config is gone (#53): repo settings live in docs/agents/. An old
+// `.mkit/config.toml` is a leftover with the `setup` remedy, never a config row
+// that calls it fine — the two used to contradict each other in one report.
+func TestOldConfigIsOnlyALeftover(t *testing.T) {
 	isolate(t)
 	repo := newRepo(t)
 	writeFile(t, repo.Toplevel, ".gitignore", ".mkit/\n")
+	writeFile(t, repo.Toplevel, filepath.Join(".mkit", "config.toml"), "version = 1\n[merge]\nstyle = \"sqaush\"\n")
 
-	c := find(t, Run(Options{Repo: repo}), "config")
-	if c.Status != Fail {
-		t.Errorf("status = %q, want fail", c.Status)
+	r := Run(Options{Repo: repo})
+	for _, c := range r.Checks {
+		if c.Name == "config" || c.Name == "config values" {
+			t.Errorf("config check still reported: %+v", c)
+		}
 	}
-	if !strings.Contains(c.Remedy, "!.mkit/config.toml") {
-		t.Errorf("remedy must name the negation: %q", c.Remedy)
-	}
-	if !strings.Contains(c.Remedy, ".gitignore") {
-		t.Errorf("remedy must name the file carrying the rule: %q", c.Remedy)
-	}
-}
-
-// Absent is a normal state, not a finding: config is an input, never a
-// permission (ADR 0001 decision 3).
-func TestAbsentConfigIsNotAFinding(t *testing.T) {
-	isolate(t)
-	repo := newRepo(t)
-	writeFile(t, repo.Toplevel, ".gitignore", ".mkit/*\n!.mkit/config.toml\n")
-
-	if c := find(t, Run(Options{Repo: repo}), "config"); c.Status != OK {
-		t.Errorf("status = %q, want ok — running with no config is supported", c.Status)
+	c := find(t, r, "old repo config")
+	if c.Status != Warn || !strings.Contains(c.Remedy, "`setup`") {
+		t.Errorf("old repo config = %+v, want a warn naming the setup skill", c)
 	}
 }
 
-func TestUnignoredScratchIsAFail(t *testing.T) {
+// The scripts the skills run need bash 3.2+, so the row names the version, not
+// just a path.
+func TestBashReportsItsVersion(t *testing.T) {
 	isolate(t)
-	repo := newRepo(t)
-
-	c := find(t, Run(Options{Repo: repo}), "scratch ignored")
-	if c.Status != Fail {
-		t.Errorf("status = %q, want fail", c.Status)
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash not on PATH here")
 	}
-	if c.Remedy == "" {
-		t.Error("want a remedy")
+	c := find(t, Run(Options{}), "bash")
+	if c.Status != OK {
+		t.Fatalf("bash on PATH but not OK: %+v", c)
+	}
+	if !strings.Contains(c.Detail, "bash ") || !strings.ContainsAny(c.Detail, "0123456789") {
+		t.Errorf("bash detail must name the version: %q", c.Detail)
+	}
+}
+
+// Below 3.2 is a Fail, and a bash whose version cannot be read is never OK.
+func TestBashCheckJudgesTheVersion(t *testing.T) {
+	dir := t.TempDir()
+	fake := func(name, body string) string {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	for _, tc := range []struct {
+		name, body string
+		want       Status
+	}{
+		{"old", "printf 3.1.17", Fail},
+		{"min", "printf 3.2.57", OK},
+		{"new", "printf 5.2.37", OK},
+		{"mute", "exit 0", Unknown},
+		{"broken", "exit 1", Unknown},
+	} {
+		if c := bashCheck(fake(tc.name, tc.body)); c.Status != tc.want {
+			t.Errorf("%s: status = %v, want %v (%+v)", tc.name, c.Status, tc.want, c)
+		}
+	}
+}
+
+// Binary and payload drift is reported with the binary named optional: nothing
+// in the plugin but sandbox-audit needs it.
+func TestDriftNamesTheBinaryOptional(t *testing.T) {
+	isolate(t)
+	payload := t.TempDir()
+	writeFile(t, payload, filepath.Join(".claude-plugin", "plugin.json"), `{"name":"mkit","version":"0.0.1"}`)
+	if err := os.MkdirAll(filepath.Join(payload, "skills"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("MKIT_PLUGIN_ROOT", payload)
+	old := buildinfo.Version
+	buildinfo.Version = "9.9.9"
+	t.Cleanup(func() { buildinfo.Version = old })
+
+	c := find(t, Run(Options{}), "plugin payload")
+	if c.Status != Warn || !strings.Contains(c.Detail, "optional") {
+		t.Errorf("drift = %+v, want a warn calling the binary optional", c)
 	}
 }
 
@@ -143,7 +183,7 @@ func TestMissingPayloadIsNamedWithARemedy(t *testing.T) {
 		t.Errorf("remedy must name the install step: %q", c.Remedy)
 	}
 	// The user-dir check no longer depends on it: both the probe and its remedy
-	// live in internal/core/scratch.
+	// live in internal/core/userdir.
 	if u := find(t, r, "user state dir"); u.Status == Unknown {
 		t.Error("the user dir check should answer without a payload")
 	}
@@ -231,6 +271,33 @@ func TestOrphansAreReportedAndLeftInPlace(t *testing.T) {
 	}
 	if _, err := os.Stat(old); err != nil {
 		t.Errorf("doctor must not remove anything: %v", err)
+	}
+}
+
+// The worklog was dropped: a `.mkit/worklog/` from an older release is a
+// leftover like any other.
+func TestDroppedWorklogIsALeftover(t *testing.T) {
+	isolate(t)
+	repo := newRepo(t)
+	old := filepath.Join(repo.Toplevel, ".mkit", "worklog")
+	writeFile(t, old, "main.jsonl", "{}\n")
+
+	c := find(t, Run(Options{Repo: repo}), "worklog directory")
+	if c.Status != Warn || c.Remedy != "rm -r '"+old+"'" {
+		t.Errorf("worklog leftover = %+v", c)
+	}
+}
+
+// The gate ledger went with `gate run` (#48); an old one is a leftover.
+func TestOldGateLedgerIsAnOrphan(t *testing.T) {
+	isolate(t)
+	repo := newRepo(t)
+	ledger := filepath.Join(repo.Toplevel, ".mkit", "gate.jsonl")
+	writeFile(t, filepath.Dir(ledger), "gate.jsonl", "{}\n")
+
+	c := find(t, Run(Options{Repo: repo}), "old gate ledger")
+	if c.Status != Warn || c.Remedy != "rm -r '"+ledger+"'" {
+		t.Errorf("gate ledger orphan = %+v", c)
 	}
 }
 

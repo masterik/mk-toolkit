@@ -1,195 +1,84 @@
 # Quality gate
 
-Shared by `finish` and `pr`, both full tier. `commit` and `review` don't gate — they work
-directly on the diff. **Nothing is hardcoded** — the commands are detected from the target repo.
+Run by `pr` and `finish`, once each, before the PR or the merge. **Nothing is hardcoded** — the commands come
+from the target repo.
 
-## Detect, then choose
+## Find the gate
 
-```bash
-mkit gate detect
-# pm=bun
-# ecosystem=node
-# full:
-#   1 source=discovered cache=fresh exit=0 age=6m cmd=bun run lint
-#   2 source=pinned cache=failed exit=1 age=6m cmd=pytest -q || exit 1
-#   3 source=discovered cache=none exit=- age=- cmd=bun run build
-# gate_fingerprint=7c998da01a8a9aa8
-# gate_max_age_min=60
-# documented=just check
-# scripts=build,dev,format,lint,test,test:e2e,test:unit
-# scripts_state=ok
-# workspaces=yes
-# docs_candidates:
-#   CLAUDE.md:21:`bun run check` runs formatting, lint, typecheck, and tests
-```
+Walk the table top to bottom; the first row that yields commands is the gate (rows 3 and 4 combine).
 
-It reads the lockfile, `package.json` scripts, `Cargo.toml`, `go.mod`, `pyproject.toml`, a
-`Makefile`/`justfile` `check` target and the repo's own docs — which keeps a 25-script
-`package.json` (~700 tokens) out of context.
+| # | Source | The gate is |
+| --- | --- | --- |
+| 1 | `docs/agents/gate.md` | the commands it lists, in its order; nothing below is consulted |
+| 2 | a task-runner `check` or `ci` target | that one command (`just check`, `make ci`, `task check`, `deno task ci`) |
+| 3 | per-step task-runner recipes | laid over row 4, step by step (below) |
+| 4 | the ecosystem default | the manifest table's commands (below) |
+| 5 | nothing | code to check → ask the user which commands to run, never invent one; no code (Markdown only) → say `no gate`, never `gate=ok` |
 
-**`full` is a proposal; `documented` and `docs_candidates` are why.** What a repo calls its
-canonical check is a claim in its own prose, not something a lockfile settles — so when either
-names a command the chain missed, prefer it and say which you used. Anything reported absent
-stays absent: never invent a step.
+Say which row it came from in the report (`gate from: just check`, `gate from: go.mod + justfile`).
 
-**One step per line, in order, and `cmd=` runs to the end of the line** — so a command may
-contain spaces, pipes or `||` without any escaping. Read the fields by name, never by position,
-and never split the block on `|`: `pytest -q || exit 1` is an ordinary pinned step.
+**Task runners**, in this order: `justfile`/`Justfile`/`.justfile`, `Makefile`/`makefile`/`GNUmakefile`,
+`Taskfile.yml`/`.yaml`, `deno.json`/`.jsonc` `tasks`. Grep the file for the names you need — except Deno's:
+parse its `tasks` object after stripping JSONC comments and trailing commas (a grep matches a commented-out
+task). A recipe counts only if it runs bare (no required parameter); the first runner with a recipe wins for
+that name.
 
-**`source=` says where that step came from**:
+**Row 2 — read the recipe first.** A `check` whose body plainly covers less than rows 3–4 (lint only) is not
+the whole gate: fall through to rows 3–4 and say why.
 
-| value | meaning |
+**Row 4 — every manifest at the repo root contributes, in this order:**
+
+| Manifest | Steps, in order |
 | --- | --- |
-| `discovered` | inferred from a manifest this run; cannot go stale |
-| `pinned` | `[gate.commands]` in the repo config — a human said this one is right |
-| `documented` | the repo's own `check:` target, used because nothing was discovered |
+| `package.json` | `<pm> run <s>` for each of `lint`, `typecheck`, `test`, `build` that is a script; `<pm>`: `bun.lock`/`bun.lockb` → bun, `pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn, else npm |
+| `deno.json`/`deno.jsonc` | `deno lint`, `deno test` |
+| `Cargo.toml` | `cargo clippy --all-targets -- -D warnings`, `cargo test`, `cargo build` |
+| `go.mod` | `go vet ./...`, `go test ./...`, `go build ./...` |
+| `pyproject.toml`/`setup.cfg`/`tox.ini` | `ruff check .` (`python -m flake8` without ruff), `pytest -q`, `mypy .` if `pyproject.toml` has `[tool.mypy]` |
+| `*.sln`/`*.csproj` | `dotnet build --nologo`, `dotnet test --nologo` |
 
-`cache=`, `exit=` and `age=` are that step's ledger verdict, and are all `-` when there is no
-usable ledger — `gate_cache=` then says why, once, instead of repeating the reason per step.
+Read only `package.json`'s `"scripts"` block. Unparseable = the gate is **undetected**, never a pass.
 
-`documented=` appears on its own line when a `check:` target exists *and* a chain was
-discovered anyway. It never replaces that chain — a `check:` that only lints would silently
-drop the repo's tests and build — so it is evidence for an override, not an override.
+**Row 3 over row 4**, for the steps `lint`, `typecheck`, `vet`, `test`, `build`: a runner recipe named for a
+step **replaces** that step's ecosystem command (once, in a polyglot repo); a step the runner lacks **keeps**
+the ecosystem's; a runner step no ecosystem proposes **joins** in that step order. Example: `go.mod` + a
+justfile with `lint` and `test` → `just lint`, `go vet ./...`, `just test`, `go build ./...`.
 
-**Check `scripts_state` before believing `scripts=none`.** `ok` means the list is real;
-`unreadable` means detection was blind, not that the repo declares nothing. On a blind read, say
-the gate was undetected rather than absent, and never report a skipped gate as a pass. `n-a` is
-the honest no-package.json case: a repo with no declared check (this plugin is one) has no gate
-to run, and saying so beats substituting a command the repo never named.
+A repo doc (`CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`) naming another check command is evidence, not an
+override: run what the table gives, report the mismatch, suggest `docs/agents/gate.md`.
 
-## One tier, two consumers
+## Run it
 
-There is one tier — the `full:` block — used **by `finish` and `pr`, once each, before merge/PR**: the
-complete pre-integration sequence, in order, stopping at the first failure. `commit` and
-`review` used to consume a `fast=` tier; they no longer gate at all, and the tier went with
-them.
+From the repo root of the current worktree, each step in order, **stopping at the first failure**, its full
+output to a log in the run directory:
 
 ```bash
-mkit gate run <run-dir> --chain 'lint=bun run lint' 'test=bun run test' 'build=bun run build'
+bun run lint > "<run-dir>/gate-lint.log" 2>&1
 ```
 
-`mkit gate run` logs each step in full, stops at the first failure, and returns a verdict plus a
-bounded excerpt; its exit status is the failing step's (`output-discipline.md`).
+The tool result gives the exit status. `<step>` is the step's name; a row 1–2 command gets its own short
+label (`check`); a repeated name gets `-2`, `-3`.
+
+One line per step in chat: `lint ok`, or `test FAIL exit=1 log=<run-dir>/gate-test.log`. On a failure read
+only an excerpt — the failure lines (`grep -nE 'FAIL|Error|error:|panic:|not ok |Traceback'`, at most ~40)
+plus the last ~30 lines. Then `gate=ok` or `gate=FAILED step=<step> exit=<N>`. Never re-run a gate to see
+output you discarded; the log has it.
+
+### Reusing a pass — one rule
+
+Skip the gate only when all three hold: a gate passed earlier **in this session** (every step `ok`, same
+commands); `git rev-parse HEAD` is the commit it ran at; `git status --porcelain` is empty. Report it as
+`gate skipped: passed at <short-sha> earlier this session, tree clean`, never as `gate=ok`. A result you can
+no longer see (new session, compacted context) never counts.
 
 ## When a step fails
 
-The verdict already carries the failing step, its exit code, the grepped failures and the tail
-— which is usually the whole diagnosis, and a compiler error is always its own.
+The step, exit code and excerpt are usually the whole diagnosis. **Delegate only when they are not enough**
+(a long suite whose failures name no cause, a failure you cannot attribute to the change): hand a subagent
+the log path, step, exit code and changed-file list; it reads the log and only the sources needed and
+**returns at most 15 lines** — what failed, probable root cause, caused-by-this-change or pre-existing, a
+suggested fix. **Read-only**: what to do about a red gate is the user's decision.
 
-**Delegate only when that is genuinely not enough**: a long suite whose failures do not name a
-cause, or a failure you cannot attribute to the change. Hand a subagent the log path (it is on
-disk), the step, the exit code and the changed-file list; it reads the log and only the sources
-needed, and **returns at most 15 lines**: what failed by name, probable root cause in a
-sentence or two, caused-by-this-change or pre-existing, a concrete suggested fix. **Read-only**
-— triage diagnoses, never fixes: what to do about a red gate is the caller's decision, and for
-`finish`/`pr` the user's.
-
-## The gate ledger — what was already proven
-
-`mkit gate run` records every step it finishes into `<toplevel>/.mkit/gate.jsonl`:
-`(step, command, exit code, seconds, fingerprint of the content it ran over)`.
-`mkit gate detect` compares each command it proposes against the newest record for that
-**exact command string** and annotates it. Each step's `cache=`, `exit=` and `age=` in the
-`full:` block are that annotation; `gate_cache=` replaces all three with a single cause when
-there is no usable ledger at all.
-
-**What this saves is wall-clock, not tokens.** There are no token savings here by
-construction — `mkit gate run` already sends full output to a log so it never reaches
-context. What it saves is a re-execution of a 90-second suite over a tree that stopped
-changing — e.g. `pr` gates a step, then `finish` gates the same content again later.
-
-### The governing rule
-
-> The ledger records **what was proven, over which content**. It never decides whether a
-> gate may be skipped, and a skipped step is always reported as skipped.
-
-**A report may never show `gate=ok` for a step that did not run.** A cached step is named
-`cached` with its age, in the same line that would have carried its verdict:
-
-```
-lint   cached (6m ago, exit=0)
-test   ok 91s
-gate=ok (1 step cached)
-```
-
-A run that prints `gate=ok` having executed nothing is worse than any amount of
-re-running: it reports a safety net that was never deployed. Hence `mkit gate run` never
-skips, and you must label.
-
-### Classification
-
-| Class | Means | Do |
-|---|---|---|
-| `fresh` | same content, `exit=0`, within the age bound | skip if you choose — and **label it `cached`** |
-| `failed` | same content, `exit≠0` — **whatever its age** | **say so before running.** Surface the known-red tree, then run the step anyway: a stale environment can turn a real failure green, and the win here is the early warning, not the skip |
-| `drifted` | the content changed | run |
-| `stale` | same content, `exit=0`, older than the age bound | run — the environment may have moved |
-| `unknown-head` | the recorded commit no longer resolves | run; never treat as `fresh` |
-| `none` | no record for this exact command | run |
-
-A step *name* is not identity — the command is. `bun run test` and
-`bun run test --coverage` are different checks. A command you overrode (from `documented`
-or `docs_candidates`) therefore classifies `none` and simply runs, which is the correct
-default for anything unrecognized.
-
-### What the fingerprint cannot see
-
-It covers **tracked repo content only**: the committed tree overlaid with the worktree,
-invariant under staging and committing. Invisible to it — a dependency install, a tool or
-runtime version change, environment variables, generated artifacts under `.gitignore`,
-and **file mode** (`chmod +x` does not change a blob sha; a known, documented gap).
-
-So `fresh` means "the tracked content is identical", not "the environment is identical".
-That gap is what the **age bound** is for: past 60 minutes a matching fingerprint
-classifies `stale` and the step runs. Age is *reported* on every class so you can always
-see how old a proof is; it is only *decisive* for `stale`.
-
-One consequence worth recognizing in the wild: a gate step that *writes* into the tree — a
-build emitting untracked output, a formatter rewriting files, a snapshot test updating
-fixtures — changes the content its own record is keyed on, so the next lookup reads
-`drifted` and everything runs. Correct, and safe; it just means the ledger never helps on
-those repos. Ignore the output (`.gitignore`) and it becomes invisible to the fingerprint
-again.
-
-Note also that `--prune` deletes run directories, so a record can outlive the
-`gate-<step>.log` it names. The ledger stores the verdict; if you need the log, re-run.
-
-### Per-skill posture
-
-Deliberately unequal — `pr` and `finish` do not carry the same risk.
-
-| Skill | Step | Posture |
-|---|---|---|
-| `pr` | full tier | **may consume per step.** A draft PR is recoverable and CI runs remotely anyway |
-| `finish` | full tier | **strictest.** Its gate is the only safety net before a local merge. Consume only on an exact command match, a matching fingerprint, and an age within bound — and **always** print `cached (Nm ago)`. Never cache a whole chain silently |
-
-### When there is nothing to classify
-
-One key, one cause — the same discipline as `scripts_state`:
-
-- `gate_cache=off` — `--no-cache` was passed. This is the answer to "I don't trust it".
-- `gate_cache=empty` — nothing to compare against: no ledger yet, one with no records, or one
-  that could not be read cleanly. A ledger with a malformed line has nothing to say; a
-  confident wrong class is the one answer it may not give.
-- `gate_cache=no-fingerprint` — the content hash could not be computed: no work tree, or git
-  plumbing failed. **Not a missing tool** — the hash is computed in process, so there is
-  nothing to install and no remedy to offer.
-
-`no-hash` and `no-jq` are gone with the forks that needed them: a binary is never
-half-capable. Each surviving cause degrades to the same behavior: detect, then run everything.
-
-The two escape hatches: `mkit gate detect --no-cache` ignores the ledger for one call
-(`gate_cache=off`), and `mkit gate run --no-ledger` stops writing to it. Neither is needed in
-normal use; reach for `--no-cache` when a `fresh` verdict looks wrong and you want the
-question off the table.
-
-## Rules
-
-- Open the run directory before the first step — `mkit facts` did it; `mkit gate run` refuses a
-  path that does not exist rather than writing a log to `/`.
-- Run the gate from the repo root of the current worktree.
-- Report exactly which step failed and its exit code. Never silently continue past a failure.
-- For a **draft** PR or an explicit override, the user may proceed past a failing gate: surface
-  it, then respect the decision.
-- Never fabricate a passing result. If a check was skipped — no such script, too slow, user
-  opted out, or **served from the ledger** — say so, and say which.
+Never continue silently past a failure; for a **draft** PR or an explicit override the user may proceed —
+surface it, then respect the decision. Never fabricate a pass: a skipped check (no such script, user opted
+out, the reuse rule) is reported as skipped, and which.

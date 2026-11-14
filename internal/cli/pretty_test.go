@@ -7,11 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/masterik/mk-toolkit/internal/core/branchstatus"
 	"github.com/masterik/mk-toolkit/internal/core/cache"
 	"github.com/masterik/mk-toolkit/internal/core/doctor"
-	"github.com/masterik/mk-toolkit/internal/core/profile"
-	"github.com/masterik/mk-toolkit/internal/core/repoconfig"
 	"github.com/masterik/mk-toolkit/internal/core/sessionaudit"
 )
 
@@ -47,28 +44,6 @@ func TestPrettyDoctorIsStyledAndKeepsEveryFinding(t *testing.T) {
 	plain := ansi.ReplaceAllString(b.String(), "")
 	show(t, b.String())
 	for _, want := range []string{"✔", "✖", "▲", "plugin payload", "→ brew install x", "rm -r '/r/.mkit/work'", "1 ok", "1 warn", "1 fail"} {
-		if !strings.Contains(plain, want) {
-			t.Errorf("missing %q in:\n%s", want, plain)
-		}
-	}
-}
-
-func TestPrettyBranchStatusListsBranchesAndWorktrees(t *testing.T) {
-	forceColour(t)
-	sc := &branchstatus.Scan{
-		Default: "main", Protected: []string{"main"}, Remote: "origin", Fetch: "ok", GH: "ok", WorktreesState: "ok",
-		Branches: []branchstatus.Branch{
-			{Name: "main", Class: branchstatus.Protected, Upstream: "origin/main"},
-			{Name: "feat/x", Class: branchstatus.MergedPR, Upstream: "gone", MergedInto: []string{"main"}, PR: "merged#7"},
-		},
-		Worktrees:      []branchstatus.Worktree{{Branch: "main", Path: "/r", Origin: "primary", Clean: "yes"}},
-		ConfigProblems: []string{"a pin that went nowhere"},
-	}
-	var b bytes.Buffer
-	prettyBranchStatus(&b, sc)
-	plain := ansi.ReplaceAllString(b.String(), "")
-	show(t, b.String())
-	for _, want := range []string{"branches (2)", "feat/x", "merged-pr", "merged#7", "worktrees (1)", "primary", "a pin that went nowhere"} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("missing %q in:\n%s", want, plain)
 		}
@@ -135,18 +110,18 @@ func TestPrettyHelpGroupsCommandsAndListsFlags(t *testing.T) {
 	prettyHelp(&b, root)
 	plain := ansi.ReplaceAllString(b.String(), "")
 	show(t, b.String())
-	for _, want := range []string{"── Setup & health", "── Quality gate & review", "doctor", "── flags", "--json"} {
+	for _, want := range []string{"── Setup & health", "── Housekeeping & audit", "doctor", "── flags", "--json"} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("missing %q in:\n%s", want, plain)
 		}
 	}
-	sub, _, err := root.Find([]string{"branch", "status"})
+	sub, _, err := root.Find([]string{"audit", "sandbox"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	b.Reset()
 	prettyHelp(&b, sub)
-	if p := ansi.ReplaceAllString(b.String(), ""); !strings.Contains(p, "--default string") || !strings.Contains(p, "── usage") || !strings.Contains(p, "── global flags") {
+	if p := ansi.ReplaceAllString(b.String(), ""); !strings.Contains(p, "--days int") || !strings.Contains(p, "── usage") || !strings.Contains(p, "── global flags") {
 		t.Errorf("subcommand help incomplete:\n%s", p)
 	}
 }
@@ -156,101 +131,6 @@ func TestHelpIsStockOffATerminal(t *testing.T) {
 	res := run(t, "--help")
 	if ansi.MatchString(res.stdout) || !strings.Contains(res.stdout, "Available Commands:") && !strings.Contains(res.stdout, "Setup & health:") {
 		t.Errorf("help changed off a terminal:\n%s", res.stdout)
-	}
-}
-
-func fullProfile() *profile.Profile {
-	return &profile.Profile{
-		Toplevel: "/repo",
-		Config:   repoconfig.Status{Path: "/repo/.mkit/config.toml", State: "tracked"},
-		Gate: profile.Gate{Ecosystem: "go,just", Steps: []profile.GateStep{
-			{Step: "test", Command: "just test", Source: profile.Discovered},
-			{Step: "lint", Command: "make lint", Source: profile.Pinned},
-		}},
-		Spec:       profile.Spec{Store: profile.Value{Value: "github-issues", Source: profile.Discovered}, Ref: profile.Value{Value: "o/r", Source: profile.Discovered}},
-		Scopes:     profile.List{Values: []string{"cli", "core"}, Source: profile.Pinned},
-		SubjectMax: profile.Value{Value: "72", Source: profile.Pinned},
-		Review:     profile.List{Source: profile.Unavailable, Cause: "no CODEOWNERS file and nothing pinned"},
-		ReviewMode: profile.Value{Value: "full", Source: profile.Pinned},
-		Merge:      profile.Value{Value: "merge", Source: profile.Pinned},
-		Keep:       profile.List{Values: []string{"release"}, Source: profile.Pinned},
-		Payload:    profile.PayloadInfo{Found: true, Version: "0.20.0", Dir: "/p", Via: "work tree"},
-	}
-}
-
-// The pretty form must carry every value the plain one prints: a dropped field
-// is invisible on a terminal and exactly what nobody would notice.
-func TestPrettyProfileKeepsEveryValueThePlainFormPrints(t *testing.T) {
-	forceColour(t)
-	p := fullProfile()
-	var b bytes.Buffer
-	prettyProfile(&b, p)
-	show(t, b.String())
-	plain := ansi.ReplaceAllString(b.String(), "")
-	for _, want := range []string{
-		"/repo", "/repo/.mkit/config.toml", "tracked", "go,just",
-		"just test", "make lint", "pinned", "discovered",
-		"github-issues", "o/r", "cli, core", "72", "no CODEOWNERS file and nothing pinned", "unavailable",
-		"full", "merge", "release", "0.20.0", "/p (work tree)",
-	} {
-		if !strings.Contains(plain, want) {
-			t.Errorf("missing %q in:\n%s", want, plain)
-		}
-	}
-
-	p.Payload = profile.PayloadInfo{Remedy: "install the plugin"}
-	p.Gate = profile.Gate{Cause: "no ecosystem recognised"}
-	b.Reset()
-	prettyProfile(&b, p)
-	plain = ansi.ReplaceAllString(b.String(), "")
-	for _, want := range []string{"not found", "install the plugin", "no ecosystem recognised"} {
-		if !strings.Contains(plain, want) {
-			t.Errorf("degraded profile missing %q in:\n%s", want, plain)
-		}
-	}
-}
-
-func TestPrettyInitCarriesEveryLabelThePlainFormPrints(t *testing.T) {
-	forceColour(t)
-	cases := []struct {
-		name string
-		res  initResult
-		want []string
-	}{
-		{"wrote", initResult{Path: "/r/.mkit/config.toml", Written: true, State: "tracked"}, []string{"wrote", "/r/.mkit/config.toml"}},
-		{"shadowed", initResult{Path: "/r/.mkit/config.toml", State: "shadowed", Detail: "a legacy rule hides it", Remedy: "edit .gitignore"},
-			[]string{"/r/.mkit/config.toml", "shadowed", "a legacy rule hides it", "→ edit .gitignore"}},
-	}
-	for _, c := range cases {
-		var b bytes.Buffer
-		if err := emitInit(&b, Options{Pretty: true}, c.res); err != nil {
-			t.Fatal(err)
-		}
-		plain := ansi.ReplaceAllString(b.String(), "")
-		if !ansi.MatchString(b.String()) {
-			t.Errorf("%s: expected colour escapes", c.name)
-		}
-		for _, w := range c.want {
-			if !strings.Contains(plain, w) {
-				t.Errorf("%s: missing %q in:\n%s", c.name, w, plain)
-			}
-		}
-	}
-	// The pipe path is untouched.
-	var b bytes.Buffer
-	_ = emitInit(&b, Options{}, initResult{Path: "/p", Written: true})
-	if b.String() != "wrote /p\n" {
-		t.Errorf("plain init form changed: %q", b.String())
-	}
-}
-
-func TestPrettyBranchStatusShowsTheKeepList(t *testing.T) {
-	forceColour(t)
-	sc := &branchstatus.Scan{Default: "main", Protected: []string{"main", "release"}, Keep: []string{"release"}, WorktreesState: "ok"}
-	var b bytes.Buffer
-	prettyBranchStatus(&b, sc)
-	if p := ansi.ReplaceAllString(b.String(), ""); !strings.Contains(p, "keep") || !strings.Contains(p, "release") {
-		t.Errorf("keep row missing:\n%s", p)
 	}
 }
 

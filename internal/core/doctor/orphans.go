@@ -3,11 +3,12 @@ package doctor
 import (
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/masterik/mk-toolkit/internal/core/gitrepo"
-	"github.com/masterik/mk-toolkit/internal/core/scratch"
-	"github.com/masterik/mk-toolkit/internal/core/worklog"
+	"github.com/masterik/mk-toolkit/internal/core/userdir"
 )
 
 // leftoverGroup is the report group the orphan checks live in.
@@ -22,6 +23,8 @@ type orphan struct {
 	// directory) is unknown — an orphan that cannot be located is not reported.
 	path func(a orphanAnchors) string
 	why  string
+	// remedy words the fix for a path; nil means `rm -r <path>`.
+	remedy func(p string) string
 }
 
 type orphanAnchors struct {
@@ -30,6 +33,10 @@ type orphanAnchors struct {
 	userDir   string
 }
 
+// worklogDropped is why both worklog locations (the pre-M6 `.mkit/work/` and
+// the later `.mkit/worklog/`) are leftovers.
+const worklogDropped = "the worklog was dropped (recap reads git log and the PR); nothing reads this one"
+
 // legacy is the table to prune. An entry is dead weight once every machine has
 // run a release past the one that stopped writing it — the way the one-shot
 // migration scripts were deleted — so each `why` names its replacement, which
@@ -37,13 +44,13 @@ type orphanAnchors struct {
 var legacy = []orphan{
 	{
 		name: "old worklog directory",
-		path: func(a orphanAnchors) string {
-			if a.toplevel == "" {
-				return ""
-			}
-			return filepath.Join(a.toplevel, ".mkit", "work")
-		},
-		why: "worklogs moved to " + filepath.Join(".mkit", filepath.Base(worklog.Dir("x"))) + "; nothing reads this one",
+		path: func(a orphanAnchors) string { return mkitFile(a, "work") },
+		why:  worklogDropped,
+	},
+	{
+		name: "worklog directory",
+		path: func(a orphanAnchors) string { return mkitFile(a, "worklog") },
+		why:  worklogDropped,
 	},
 	{
 		name: "git-dir scratch",
@@ -53,7 +60,21 @@ var legacy = []orphan{
 			}
 			return filepath.Join(a.commonDir, "mkit")
 		},
-		why: "scratch moved to <toplevel>/.mkit/ (ADR 0002); nothing reads this one",
+		why: "mkit keeps no per-repo state since `.mkit/` was retired; nothing reads this one",
+	},
+	{
+		name: "old gate ledger",
+		path: func(a orphanAnchors) string { return mkitFile(a, "gate.jsonl") },
+		why:  "`mkit gate run` and its ledger were removed; skills run the gate commands directly",
+	},
+	{
+		name: "old repo config",
+		path: func(a orphanAnchors) string { return mkitFile(a, "config.toml") },
+		why:  "repo settings moved to prose files under docs/agents/, which the `setup` skill writes",
+		remedy: func(p string) string {
+			return "run the `setup` skill to carry its settings into docs/agents/, then git rm " +
+				shellQuote(p) + " (plain rm if it was never committed)"
+		},
 	},
 	{
 		name: "bootstrap.state",
@@ -67,6 +88,15 @@ var legacy = []orphan{
 	},
 }
 
+// mkitFile is <toplevel>/.mkit/<name>, or "" outside a repo.
+func mkitFile(a orphanAnchors, name string) string {
+	if a.toplevel == "" {
+		return ""
+	}
+	return filepath.Join(a.toplevel, ".mkit", name)
+}
+
+// userFile is <user dir>/<name>, or "" when there is no user directory.
 func userFile(a orphanAnchors, name string) string {
 	if a.userDir == "" {
 		return ""
@@ -78,7 +108,7 @@ func userFile(a orphanAnchors, name string) string {
 // carries the `rm` the user runs, and nothing is removed here. Warn, never
 // Fail — a leftover breaks nothing, it only takes space and misleads a reader.
 func (r *Report) orphans(repo *gitrepo.Repo) {
-	a := orphanAnchors{userDir: scratch.UserDir()}
+	a := orphanAnchors{userDir: userdir.Dir()}
 	if repo != nil {
 		a.toplevel = repo.Toplevel
 		a.commonDir, _ = repo.CommonDir()
@@ -104,9 +134,18 @@ func (r *Report) orphans(repo *gitrepo.Repo) {
 				Detail: p + " — " + o.why + "; it is reached through a symlink, so no rm is offered: check where it points first"})
 			continue
 		}
+		remedy := "rm -r " + shellQuote(p)
+		if o.remedy != nil {
+			remedy = o.remedy(p)
+		}
 		r.add(Check{Group: leftoverGroup, Name: o.name, Status: Warn,
-			Detail: p + " — " + o.why,
-			Remedy: "rm -r " + shellQuote(p)})
+			Detail: p + " — " + o.why, Remedy: remedy})
+	}
+	if r.oldRunDirs(a) {
+		found++
+	}
+	if r.oldIgnorePair(a) {
+		found++
 	}
 	if found == 0 {
 		r.add(Check{Group: leftoverGroup, Name: "old-version leftovers", Status: OK,
@@ -160,4 +199,98 @@ func shellQuote(s string) string {
 		out += string(c)
 	}
 	return out + "'"
+}
+
+// runDirName is the exact shape of a run directory an older `mkit facts` or
+// `mkit scratch open` created: `<skill>-<UTC second>-<MkdirTemp suffix>`. Matched
+// by shape rather than by a list of skills because any slug was accepted, and
+// still never a bare pattern: nothing else names itself like this.
+var runDirName = regexp.MustCompile(`^[A-Za-z0-9_-]+-[0-9]{8}T[0-9]{6}Z-[A-Za-z0-9]+$`)
+
+// oldRunDirs reports every run directory left under `<toplevel>/.mkit/`, in one
+// finding: there can be dozens, and they share one cause and one remedy.
+func (r *Report) oldRunDirs(a orphanAnchors) bool {
+	if a.toplevel == "" {
+		return false
+	}
+	dir := filepath.Join(a.toplevel, ".mkit")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	var paths []string
+	for _, e := range entries {
+		// Directories only — Lstat semantics, so a symlink is never followed.
+		if e.IsDir() && runDirName.MatchString(e.Name()) {
+			paths = append(paths, filepath.Join(dir, e.Name()))
+		}
+	}
+	if len(paths) == 0 {
+		return false
+	}
+	sort.Strings(paths)
+	detail := strings.Join(paths, ", ") +
+		" — per-run files live in a temp dir now; nothing reads these"
+	if leavesAnchor(paths[0], a) {
+		r.add(Check{Group: leftoverGroup, Name: "old run directories", Status: Warn,
+			Detail: detail + "; they are reached through a symlink, so no rm is offered: check where it points first"})
+		return true
+	}
+	quoted := make([]string, len(paths))
+	for i, p := range paths {
+		quoted[i] = shellQuote(p)
+	}
+	r.add(Check{Group: leftoverGroup, Name: "old run directories", Status: Warn,
+		Detail: detail, Remedy: "rm -r " + strings.Join(quoted, " ")})
+	return true
+}
+
+// mkitExcludeLines are the lines an older mkit appended to the common dir's
+// `info/exclude`: the ignore pair, the legacy directory-only rule it replaced,
+// and the two comment lines it wrote above the pair. Exact lines only — a
+// user's own rule that happens to mention `.mkit` is theirs.
+var mkitExcludeLines = []string{
+	"# mkit scratch root (run directories + gate.jsonl). Added by mkit.",
+	"# config.toml is repo config and stays committable — the pair is the rule.",
+	".mkit/",
+	".mkit/*",
+	"!.mkit/config.toml",
+}
+
+// oldIgnorePair reports the ignore rules mkit wrote into `info/exclude`. The
+// remedy is an edit, not an rm: the file is git's and holds the user's rules too.
+func (r *Report) oldIgnorePair(a orphanAnchors) bool {
+	if a.commonDir == "" {
+		return false
+	}
+	path := filepath.Join(a.commonDir, "info", "exclude")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	present := map[string]bool{}
+	for _, l := range strings.Split(string(b), "\n") {
+		present[strings.TrimRight(l, " \t\r")] = true
+	}
+	var rules, lines []string
+	for _, l := range mkitExcludeLines {
+		if !present[l] {
+			continue
+		}
+		lines = append(lines, "`"+l+"`")
+		if !strings.HasPrefix(l, "#") {
+			rules = append(rules, l)
+		}
+	}
+	// The comments alone are not a rule; a file holding only them ignores nothing.
+	if len(rules) == 0 {
+		return false
+	}
+	r.add(Check{Group: leftoverGroup, Name: "old ignore pair", Status: Warn,
+		Detail: path + " still holds mkit's " + strings.Join(rules, " + ") +
+			" — nothing writes into the work tree any more, but the rule still hides any `.mkit/` leftovers"+
+			" (deleted first, they show as untracked: `git add -A` would commit them)",
+		Remedy: "remove the `.mkit/` leftovers first, then delete these lines from " + shellQuote(path) + ": " +
+			strings.Join(lines, ", ")})
+	return true
 }

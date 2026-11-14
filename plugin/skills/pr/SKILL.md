@@ -8,173 +8,69 @@ model: sonnet
 
 # Create a Pull Request (commit → push → PR → reviewers)
 
-Part of the **mkit** bundle. The review path: commit, push, open the PR, request reviewers. For a local merge
-with no review use `finish`.
+The review path. Goal: a PR from a feature branch (never the base), all intended work committed and pushed,
+the gate passed, a title and description saying **what** and **why**, reviewers requested where expected, no
+AI attribution anywhere. A local merge without review is `finish`.
 
-References: `../_shared/references/conventional-commits.md`, `../_shared/references/quality-gate.md`,
-`../_shared/references/worktree.md`, `../_shared/references/git-safety.md`,
-`../_shared/references/branching.md`, `../_shared/references/remote.md`,
-`../_shared/references/output-discipline.md`,
-`../_shared/references/agent-delegation.md`, `../_shared/references/workflow-contract.md`,
-`../_shared/references/stacked-prs.md` (only for a stacked PR).
-
-## Goal
-
-A PR that is easy to review and safe to merge:
-
-- from a feature/bugfix branch, never the base
-- all intended work committed and pushed
-- pre-flight checks pass before the PR is created
-- title and description say **what** changed and **why**
-- reviewers requested when the repo/team expects them
-- no Claude/AI co-authorship attribution anywhere
-
-## Confirm if missing
-
-- **Base branch** — default `main`; ask if unclear. If it is another unmerged feature branch (this
-  branch is a layer on top of it), this is a **stacked PR** — see "Stacked PRs" below.
-- **Draft?** — draft if the work isn't ready for review.
-- **Area prefix** — scoped to one package → prefix the title `[area]` (`[api]`, `[ui]`).
-- **Reviewers** — step 6: pinned in the repo config, from `CODEOWNERS`, or ask.
-- **Remote** — only when step 0 says `remote_choice=ask` (several remotes, none pinned): ask which one,
-  default `remote=`, then offer to pin it. `../_shared/references/remote.md` has the whole rule.
+Confirm if unclear: **base** (default `main`; another open feature branch → stacked, see the end), **draft**
+(work not ready for review), an **`[area]` title prefix** when scoped to one package.
 
 ## Workflow
 
-**Step 0 — one message, two read-only calls.** Once the base is settled, the first opens the run directory
-and returns every read-only fact this skill needs (`../_shared/references/output-discipline.md`); the second,
-below, asks who reviews. The same outputs serve step 2's pre-flight, step 4's context and the final report,
-and none change when step 3 pushes:
+**0. One read-only call**, once the base is settled. The path is relative to this skill's directory: resolve
+it and run it absolute. A key or exit not named here: `../_shared/references/output-discipline.md`.
 
 ```bash
-mkit facts pr --base <base> --gh
+bash ../_shared/scripts/facts.sh pr --run --base <base> --gh
 ```
 
-`mkit facts` **is** this skill's dependency check. If it fails with `command not found` **or**
-`unknown command "facts"` — absent and too old are the same answer here — **stop** and say:
-
-> This skill runs on the `mkit` binary. Install it with `brew install masterik/tap/mkit` (or upgrade
-> with `brew upgrade mkit`), then run it again.
-
-Presence only, no declared minimum on either side — a subcommand that does not exist *is* the too-old
-signal.
-
-Then read what ran on this branch before, and what each step concluded — never a stop:
-`../_shared/references/workflow-contract.md`, "Reading it".
-
-```bash
-mkit worklog show --json --limit 20
-```
-
-Step 5 drafts the "why" from those gists where they exist, rather than re-deriving intent from the commit
-subjects alone.
-
-That covers the branch, the status, `commits:` for `<base>..HEAD`, the stat, `codeowners=` for step 6, and
-`pr=` — whether this branch already has one, which is the check that otherwise gets skipped — and the
-remote: `remote=`, `remote_source=`, `remote_repo=`, `remotes=`, `remote_choice=`. On `remote_choice=ask`, ask and then
-re-run this `mkit facts` call with `--no-run --remote <answer>` added, as `remote.md` says — `pr=` and
-`default_branch=` above describe the fallback remote until you do. Keep the `run=`
-literal; this file writes it as `<run-dir>`. There is no `$RUN_DIR` (a shell variable does not survive to the
-next Bash call), and re-running `mkit facts` opens a second directory instead of returning the first.
-
-Then who this repo says reviews it — one more read-only call, cheap enough to send in the same
-message as the one above:
-
-```bash
-mkit repo profile --json
-```
-
-`reviewers`, tagged `pinned` or `discovered`, is step 6's first answer:
-
-- **`pinned`** — the repo's own default reviewers, for exactly the repo that has no `CODEOWNERS`. Use them
-  as given; **do not read `CODEOWNERS` to cross-check them**, and do not re-derive.
-- **`discovered`** — this is `CODEOWNERS` flattened to its owner tokens, with the patterns dropped. That is
-  a worse answer than step 6's own read, which matches owners against *the changed paths*, so take it as
-  confirmation there is a file and do step 6 normally.
-
-**Silence, with one exception.** A failed call, or `unavailable` with nothing but "no CODEOWNERS file and
-nothing pinned" behind it, changes nothing: step 6 runs as it always has and **this skill never mentions
-the binary**. The exception is a **pin that went nowhere** — a non-empty `config_problems`, or an
-`unavailable` whose `cause` names `.mkit/config.toml`. A misspelled `[review]` table is how a pinned
-reviewer list silently becomes no reviewer list, so report that one line verbatim and then fall back.
-Mind which field carries it: the sentence is `detail` on a `config_problems` entry and `cause` on the value itself — there is no `detail` on a value, and an agent that looks for one reports nothing.
+Keep `run_dir=` as `<run-dir>` (no shell variable survives; re-running `--run` opens a second directory),
+`toplevel=` as `<toplevel>`, and `command -v git` as `<git>` for calls whose output you parse
+(`../_shared/references/git-safety.md`). It returns the branch, status, `commits:` and `base_stat` for
+`<base>..HEAD`, `codeowners=`, `pr=` and the remote. **Remote:** with `remote_choice=no` and no
+`docs/agents/remote.md`, use `remote=`; otherwise follow `../_shared/references/remote.md` (re-run without
+`--run`, with `--remote <name>` from that file, or from asking — only on `remote_choice=ask`).
 
 ### 1. Commit remaining work
 
-Dirty tree → run `commit` (logical commits, Conventional Commit messages) so nothing intended is left behind.
-Same inside a worktree — just confirm `git branch --show-current` is the feature branch.
+Dirty tree → do `commit`'s work inline (`../commit/SKILL.md`) so nothing intended is left behind.
 
-### 2. Pre-flight checks
+### 2. Pre-flight
 
-1. **Not on the base branch.** `branch=` equal to `default_branch=` (or `main`/`master`): stop and warn. PRs
-   come from feature/bugfix branches (`../_shared/references/branching.md`).
-2. **Commits exist ahead of base** — `commits_ahead_of_base=0` means nothing to PR. Step 0's count
-   predates step 1, so re-count after committing (`git rev-list --count <base>..HEAD`) before you
-   trust a zero: a branch whose work was all uncommitted reads 0 in the step 0 snapshot.
-3. **Existing PR** — `pr=` is a URL only when one exists. Otherwise it is a sentinel naming why
-   there is none: `none` (no PR yet — the case that justifies creating one), `gh-missing`,
-   `gh-unauthenticated`, `no-remote`. Test for a URL, not for non-emptiness — every
-   sentinel is a non-empty string, so a "non-empty" reading always fires and shows `none` as if it
-   were a PR. Only `none` means proceed; the rest are blocked states to surface, not to push past.
-4. **Full quality gate** (`../_shared/references/quality-gate.md`), in order, stopping at the first failure:
+1. **Not on the base.** `branch=` equal to `default_branch=` (or `main`/`master`) → stop: PRs come from a
+   feature branch.
+2. **Commits ahead of base.** If step 1 committed, re-count (`git rev-list --count <base>..HEAD`) — step 0's
+   `commits_ahead_of_base` predates it. Zero → nothing to PR; stop.
+3. **Existing PR.** `pr=` is a URL only when one exists: show it and stop. `none` → proceed. `gh-missing`,
+   `gh-unauthenticated`, `no-remote`, `gh-error` are blocked states: surface them (with the `notes:` entry). Test for a URL, not non-emptiness.
+4. **Full quality gate** — `../_shared/references/quality-gate.md`: find the commands, run each to a log in
+   `<run-dir>`, stop at the first failure, one line per step. A failure is the user's call: fix, or proceed
+   as a draft. Skip only under its one reuse rule, and say so.
 
-   ```bash
-   mkit gate detect
-   mkit gate run <run-dir> --chain 'lint=<cmd>' 'test=<cmd>' 'build=<cmd>'
-   ```
-
-   One line per passing step; on failure the step, the exit code, the grepped failures and the tail — never
-   the log. The user may proceed anyway for a draft. Delegate the diagnosis only when that verdict is not
-   enough ("when a step fails") — choosing between fixing and opening a draft needs a cause, not a transcript.
-
-   Each step's `cache=` (from `mkit gate detect`'s `full:` block) may be consumed **per step**, and
-   **only when it is `fresh`**: a draft PR is the recoverable case and CI runs remotely anyway. Every
-   other class means run the step — `failed` says the tree was red on this exact content, which is a
-   thing to report before starting, not a result to reuse. Each step served from the ledger is
-   `cached (Nm ago)` on its own line — never a pass. Never cache a whole chain in one go.
-
-### 3. Push the branch
+### 3. Push
 
 ```bash
-git push -u <remote> <feature-branch>   # -u on first push; plain git push afterward
+git push -u <remote> <feature-branch>
 ```
 
-`<remote>` is step 0's `remote=` — or the user's answer when `remote_choice=ask` — never a hardcoded
-`origin` (`../_shared/references/remote.md`).
+`<remote>` is the settled `remote=`, never a hardcoded `origin`. `-u` on first push. Diverged → stop and
+surface it; never force-push.
 
-Pushing from a worktree works normally. Never force-push unless asked. If the remote rejects because the
-branch diverged, stop and surface it.
+### 4. Context
 
-### 4. Gather context for the PR
+**Nothing to run**: `commits:` and `base_stat` came from step 0 (re-read the log only if step 1 committed).
+**Commit messages are the source** for title and description. Never load the branch diff here.
 
-**Nothing to run here** — `commits:` and `base_stat` came back from step 0, and pushing changed neither.
-Re-running them spends a turn to reprint context.
+### 5. Draft title + description
 
-**Commit messages are the primary source for the title and description**; the diff is a fallback for the one
-thing they do not explain. **Do not load the branch diff into this session** — on a real branch it is tens of
-thousands of tokens for a dozen lines of prose, and even on the smallest change it is ~100× the log it would
-supplement (`../_shared/references/output-discipline.md`).
+**Small branch** (~≤5 files or ~≤100 changed lines) → draft inline from the log and stat. Otherwise a
+subagent, spawned **in the same message as step 6's lookup**: its brief carries base and branch, the
+`"<git>" -C "<toplevel>" log --oneline <base>..HEAD` output, the stat, the format below and its budget. It
+reads `git diff <base> -- . ":(exclude)*.lock" ":(exclude)*.snap"` itself and **returns at most 25 lines**:
+title, description, anything the commits did not explain. This session owns the final wording.
 
-### 5. Draft title + description — in a subagent
-
-Hand drafting to a subagent that reads what it needs and returns only the draft. Spawn it **in the same
-message as step 6's reviewer lookup** — both read-only and independent.
-
-Its brief carries: base and branch names, the `"$git_bin" -C "$toplevel" log --oneline <base>..HEAD`
-output, the `--stat`, the format spec below, and its return budget. It runs the full diff itself
-(`git diff <base> -- . ':(exclude)*.lock' ':(exclude)*.snap'`) and **returns at most 25 lines**: title,
-description, and any note about what it could not explain from the commits. No diff, no file contents, no
-narration.
-
-**Draft inline instead on a small branch** — ~≤5 files or ~≤100 changed lines, where log plus `--stat` tell
-the whole story and the round trip costs more than it saves.
-
-Then review the draft here and fix any drift from the format: **this session owns the wording**, since it is
-what step 7 shows the user and step 8 puts on the PR.
-
-**Title**: imperative, verb-first (`Add`, `Fix`, `Update`, `Remove`, `Refactor`), ~≤70 chars, optional
-`[area]` prefix. Derive from the highest-impact commit. Not a commit-format string (`feat(web): …` is a commit
-subject, not a PR title).
+**Title**: imperative, verb-first, ~≤70 chars, optional `[area]` prefix, from the highest-impact commit. Not
+a commit subject (`feat(web): …`).
 
 **Description**:
 
@@ -192,90 +88,61 @@ subject, not a PR title).
 Closes #<issue> (if applicable)
 ```
 
-Honest and brief. **Never** include co-authorship lines or any mention of AI/Claude assistance.
+Honest and brief. Never co-authorship lines or any mention of AI assistance.
 
-### 6. Determine reviewers
+### 6. Reviewers
 
-Runs alongside step 5 — spawn both in one message, or do it inline when the lookup is a `CODEOWNERS` read and
-nothing more. Figure out who, without hardcoding handles:
+Never hardcode handles. In order:
 
-0. **`reviewers` tagged `pinned`** in step 0's profile — the repo already answered this. Use that list and
-   **skip 1 entirely**; it is the answer the key exists for, and re-deriving it would be asking a question
-   that has been settled in a committed file. Say it is pinned in the preview and the report (rule 3).
-1. `CODEOWNERS` — step 0 reported `codeowners=<path>` or `none`; owners of the changed paths are the natural
-   reviewers.
-2. Repo/team conventions the user or docs mention; a configured default reviewer/team (`gh repo view` — with `<remote_repo>` unless `remote_repo=none`; org
-   settings).
+0. **`docs/agents/merge.md` names reviewers** → exactly those; skip `CODEOWNERS` (no cross-check). One that
+   names none, or none usable → say so in one line and go on.
+1. `CODEOWNERS` (`codeowners=`): owners of the changed paths.
+2. Repo/team conventions in docs or from the user; a configured default
+   (`gh repo view <remote_repo>`, the repo argument only when `remote_repo=` is not `none`).
 3. Reviewers the user named.
-4. None determinable and the change clearly needs review → ask (offer to skip for a draft).
+4. None determinable and the change needs review → ask (offer to skip for a draft).
 
-### 7. Preview before creating
+### 7. Preview
 
-Show the full PR and confirm (unless the user already said "just create it"):
+Show and confirm (unless the user said "just create it"):
 
 ```
 Title:     <title>
 Base:      <base> ← <feature-branch>
-Remote:    <remote> (<pinned in .mkit/config.toml | origin | chosen by you | fallback>)  [only with several remotes]
+Remote:    <remote> (<from docs/agents/remote.md | origin | chosen by you | fallback>)  [several remotes only]
 Draft:     <yes/no>
-Reviewers: <handles or "none"> (<pinned in .mkit/config.toml | from CODEOWNERS | repo/org default |
-           named by you | asked>)
+Reviewers: <handles or "none"> (<from docs/agents/merge.md | from CODEOWNERS | repo default | named by you | asked>)
 
 <description>
 ```
 
-The parenthesis is rule 3 in its shortest form: where the handles came from, so a wrong list is fixed in
-the right place. Drop it only where there are no reviewers at all.
+### 8. Create
 
-### 8. Create the PR
-
-Body to a temp file, to avoid shell-escaping issues (session scratch dir if available):
+Write the body to `<run-dir>/pr-body.md`, then one command:
 
 ```bash
-gh pr create \
-  --title "<title>" \
-  --body-file <path/to/pr-body.md> \
-  --base <base> \
-  [--draft] \
-  [--reviewer <handle> --reviewer <handle>]
+gh pr create --repo <remote_repo> --head <feature-branch> --base <base> --title "<title>" --body-file "<run-dir>/pr-body.md" [--draft] [--reviewer <handle>]...
 ```
 
-Name the repo: `--repo <remote_repo> --head <feature-branch>` whenever `remote_repo=` is not `none` —
-without it `gh` can pick another repo than the one just pushed to, without refusing
-(`../_shared/references/remote.md`, "Using it"). The same goes for `gh repo view` in step 6 (a repo argument only when `remote_repo=` is not `none`).
-
-Then remove the temp file.
-
-### 9. Post-creation
-
-- Add reviewers/labels afterwards if not set at creation:
-  `gh pr edit <url> --add-reviewer <handle> --add-label <label>`.
-- Mention CI will run automatically if applicable.
+Drop `--repo`/`--head` only when `remote_repo=none`. Reviewers or labels not set at creation:
+`gh pr edit <url> --add-reviewer <handle> --add-label <label>`.
 
 ## Stacked PRs
 
-GitHub-native stacks (`../_shared/references/stacked-prs.md`). Applies only when the base is another open
-feature branch, or the base PR's `.stack` is non-null (`stacked-prs.md`, "Detect").
-Otherwise skip this section; never ask about stacks on an ordinary PR.
+Only when the base is another open feature branch or the base PR is stacked
+(`../_shared/references/stacked-prs.md`, "Detect"); never ask about stacks otherwise.
 
-- **Step 2** — the gate and pre-flight are unchanged; run them on this layer only.
-- **Step 3** — the base branch must already be pushed (GitHub rejects a PR against a missing base). Never
-  force-push a lower layer to "fix" the stack.
-- **Step 7** — add a `Stack:` line to the preview: position, size, and the PR below
-  (`#<n> of <size>, on top of #<below>`). Say that merging this PR later also merges everything below it.
-- **Step 8** — needs the `gh stack` extension (`gh extension list`); absent → stop with its install line
-  (`../_shared/references/stacked-prs.md`). Open this PR with `gh pr create --base <lower-branch>` as
-  usual, then `gh stack link` (or `gh stack submit` when the stack is tracked locally) to put it in the
-  stack. Same-repo only. A failed link leaves a plain PR on a non-default base: say so — it reviews fine,
-  it just will not merge as a unit.
-- **Report** — name the stack number and position; the commit list is still `<base>..HEAD` of this layer.
-  Merge is `finish` (`gh stack merge`, not `gh pr merge`).
+- Gate and pre-flight run on this layer only. The base branch must already be pushed; never force-push a
+  lower layer.
+- Preview adds `Stack: #<n> of <size>, on top of #<below>`, and says merging it later merges everything below.
+- Create needs `gh stack` (absent → stop with its install line): `gh pr create --base <lower-branch>`, then
+  `gh stack link` (or `gh stack submit`). A failed link leaves a plain PR on a non-default base: say so.
+- Report the stack number and position. Merging is `finish`.
 
 ## Final report (always)
 
-Close with a full report, even if step 1 made no new commits. Open with a one-line bold verdict
-(`**Verdict:** PR opened, ready for review, 2 reviewers requested.`), then the block below; form per
-`../_shared/references/summary-format.md`:
+Bold verdict (`**Verdict:** PR opened, ready for review, 2 reviewers requested.`), form per
+`../_shared/references/summary-format.md`, then:
 
 ```
 PR:        <url>
@@ -289,45 +156,12 @@ Title: <title>
 
 Commits (<base>..HEAD):
 <short-sha>  <subject>
-<short-sha>  <subject>
 ...
 ```
 
-The commit list is step 0's `commits:` block — already in context, and cheap precisely because the diff never
-was. Never just "N commits pushed." Prune with `mkit scratch prune` on the way out.
+Never just "N commits pushed". End with what the user still has to do, or "nothing needed from you": a remote
+chosen but not recorded (a `docs/agents/remote.md` would settle it), CI running, a reviewer not determined, a
+gate skipped under the reuse rule, a `docs/agents/*.md` that did not say what it seemed to mean.
 
-After the block, say what the reader still has to do or decide, or "nothing needed from you": a remote chosen
-but not pinned (`mkit init --force --remote <name>`, for the user to run and commit — never run mid-run),
-CI still running, a reviewer that could not be determined, a check served from the ledger as `cached`, a pin that went
-nowhere. Never leave those implied by the block's fields alone.
-
-Then record the run:
-
-```bash
-mkit worklog append --step pr --gist '<one line: what this run concluded>' \
-  [--artifact '<pr-url>'] [--assume '<what this run derived rather than found>']...
-```
-
-After the report is produced, and it never changes the report: a failed append is one line of note, not a
-failed run. **A run that opened no PR still records** — a branch that already had one, or a run that
-stopped at the pre-flight — with the reason as the gist and no `--artifact`. One record per finished step;
-a completed no-op is a fact, and is not what an absent record says.
-
-## Common failure scenarios
-
-| Situation                           | What to do                                                        |
-| ----------------------------------- | ----------------------------------------------------------------- |
-| No commits ahead of base            | Stop — nothing to PR. Check the user is on the right branch.      |
-| Branch not pushed / push rejected   | Push with `-u`; if diverged, surface it — do not force-push.      |
-| `remote=none`                       | Stop — nothing to push to; say to add a remote.                   |
-| Several remotes, none pinned        | Ask which (`remote_choice=ask`), offer `mkit init --force --remote`. |
-| PR already exists for this branch   | step 0's `pr=` holds a URL — show it (`none`/`gh-missing` are not). |
-| Lint/test/build fails               | Report which step; user decides fix vs proceed-as-draft.          |
-| On the base branch                  | Stop — tell the user to create a feature branch first.            |
-| No reviewers determinable           | Ask, or skip for a draft.                                         |
-| Config problem in the profile       | Report its `detail` verbatim, then fall back to `CODEOWNERS`.      |
-
-## Git safety
-
-Follow `../_shared/references/git-safety.md`: never push to the base branch directly, never force-push without
-an explicit request, never skip hooks unless asked, never add AI attribution to the PR.
+Follow `../_shared/references/git-safety.md`: never push to the base, never force-push unasked, never skip
+hooks, never add AI attribution.

@@ -9,401 +9,111 @@ model: sonnet
 
 # Finish a feature (merge + cleanup)
 
-Part of the **mkit** bundle. The "wrap this branch up" path: commit, integrate into the base branch, tear down
-the branch/worktree. If an open PR already exists for this branch, merge *that* — on GitHub, respecting
-whatever checks/reviews it requires — rather than merging locally and leaving the PR stranded. With no PR, it
-merges locally, no remote round trip. Either way this skill never *opens* a PR for review — that's `pr`.
-
-References, read the ones a step calls for: `../_shared/references/worktree.md`,
-`../_shared/references/quality-gate.md`, `../_shared/references/conventional-commits.md`,
-`../_shared/references/git-safety.md`, `../_shared/references/branching.md`,
-`../_shared/references/remote.md`,
-`../_shared/references/output-discipline.md`, `../_shared/references/workflow-contract.md`,
-`../_shared/references/stacked-prs.md` (only when the PR is part of a stack).
-
-## When NOT to use this
-
-- Work needs review → `pr`.
-- You only want to commit → `commit`.
-- Base branch is protected, or the team merges only via PR → `pr`.
+Commit, integrate into the base, tear down the branch and worktree. An open PR for this branch is merged *on
+GitHub*, respecting its checks and reviews; with none, the merge is local. This skill never *opens* a PR —
+work that needs review, a protected base, or a PR-only team → `pr`.
 
 ## Preconditions
 
-**One call**, which also opens this run's directory (`../_shared/references/output-discipline.md`):
+**One call**, which also opens the run directory. The path is relative to this skill's directory: resolve it
+and run it absolute. A key or exit not named here: `../_shared/references/output-discipline.md`.
 
 ```bash
-mkit facts finish --base <base> --gh
+bash ../_shared/scripts/facts.sh finish --run --base <base> --gh
 ```
 
-`mkit facts` **is** this skill's dependency check. If it fails with `command not found` **or**
-`unknown command "facts"` — absent and too old are the same answer here — **stop** and say:
+Keep `run_dir=` as `<run-dir>` (no shell variable survives; re-running `--run` opens a second directory),
+`toplevel=` as `<toplevel>`, and `command -v git` as `<git>` for calls whose output you parse
+(`../_shared/references/git-safety.md`). Then check:
 
-> This skill runs on the `mkit` binary. Install it with `brew install masterik/tap/mkit` (or upgrade
-> with `brew upgrade mkit`), then run it again.
+1. **Branch** — `branch=` is a feature branch, not `default_branch=`; on the base, stop: nothing to finish.
+2. **Base** — the branch this one was cut from, usually `default_branch=`; ask if ambiguous.
+3. **Remote** — with `remote_choice=no` and no `docs/agents/remote.md`, use `remote=`; otherwise follow
+   `../_shared/references/remote.md` **before routing** (`pr=` was computed for the fallback remote).
+4. **Route** — `pr=<url>` with `pr_state=OPEN` and `pr_draft=false` → the **PR path**. `gh-error` → stop,
+   relay its `notes:` entry: an open PR may be hidden. Anything else → the **local path**:
+   `none`/`gh-missing`/`gh-unauthenticated`/`no-remote`; a draft (unless the user asks to
+   `gh pr ready <url>` first); `MERGED` (usually just needs cleanup — say so) or `CLOSED` (check with the user
+   before merging anything — they may have changed their mind).
 
-Presence only, no declared minimum on either side — a subcommand that does not exist *is* the too-old
-signal.
-
-Then read what ran on this branch before, and what each step concluded — never a stop:
-`../_shared/references/workflow-contract.md`, "Reading it".
-
-```bash
-mkit worklog show --json --limit 20
-```
-
-A `review` record whose `fingerprint` matches the tree in front of you says a review already ran over this
-exact content — worth naming in the deliverable. **Read its `assumptions` before believing it**: a review
-that applied fixes records a fingerprint the reviewers never saw and says so there. It does not gate the
-merge, and it never substitutes for the quality gate, which has its own ledger.
-
-Keep the `run=` literal; this file writes it as `<run-dir>`. There is no `$RUN_DIR` — a shell variable does
-not survive to the next Bash call — and re-running `mkit facts` opens a second directory instead of returning
-the first. Check four things in what it printed:
-
-1. **Current branch** — `branch=` must be a feature/bugfix branch, not `default_branch=`. On `main`/`master`:
-   stop, nothing to finish.
-2. **Base branch** — the branch this feature was cut from, usually `default_branch=`. Ask if ambiguous;
-   `../_shared/references/branching.md` covers detecting a repo's own model. Pass it as `--base` so
-   `commits:`, `base_stat` and `ff_from_base` come back with everything else.
-3. **Cleanup path** — `cleanup_path=` is `exit-worktree` (the harness's own worktree) · `wt` (linked,
-   worktrunk present) · `git-worktree` (linked, no worktrunk) · `none` (primary checkout). It decides step 4.
-   Read `../_shared/references/worktree.md` there, not now.
-4. **Existing PR** — first the remote: on `remote_choice=ask` (several remotes, none pinned) ask which and re-run
-   this `mkit facts` with `--no-run --remote <answer>` added, **before routing** — `pr=` was computed for the
-   fallback remote (`../_shared/references/remote.md`). Then `pr=` is a URL only when one exists, alongside `pr_state=OPEN|CLOSED|MERGED` and
-   `pr_draft=true|false`. Sentinels (`none`, `gh-missing`, `gh-unauthenticated`, `no-remote`)
-   mean there is nothing to merge remotely — take the **local merge path**. `pr_state=OPEN` (and not
-   draft) redirects step 4 to the **PR merge path** instead: this branch is merged on GitHub, not with a
-   local `git merge`. Treat `CLOSED`/`MERGED` like no PR for routing purposes, but mention it — a merged
-   PR with the branch still around usually just needs cleanup; a closed one may mean the user changed
-   their mind, worth a check before merging anything. `pr_draft=true` also routes to the local path unless
-   the user asks to mark it ready first (`gh pr ready <url>`) — GitHub refuses to merge a draft.
-   **Stacked?** On the PR path, check whether the PR is part of a GitHub stack
-   (`../_shared/references/stacked-prs.md`, "Detect"). Optional: a failed or empty probe means not stacked.
-   A stacked PR changes step 4's merge call (**`gh stack merge`, never `gh pr merge`**) and what step 3
-   must say: every unmerged PR below this one merges with it.
+A `review` this session ran over the content being merged is worth naming in the report — only for what it
+read, not fixes applied after. It never gates the merge and never replaces the gate.
 
 ## Workflow
 
 ### 1. Commit remaining work
 
-Dirty tree → run `commit` first (stage intentionally, logical commits, Conventional Commit messages). The
-tree must be clean before merging. **Never merge with uncommitted changes.**
+Dirty tree → do `commit`'s work inline (`../commit/SKILL.md`). **Never merge with uncommitted changes.**
 
-### 2. Verify before merging
+### 2. Gate
 
-Run the **full quality gate** (`../_shared/references/quality-gate.md`): lint → test → build or the repo's
-equivalent, stop on first failure. A local merge skips review, so this gate is the only safety net. Report any
-failure; do not merge past it without an explicit user OK.
+The **full quality gate** (`../_shared/references/quality-gate.md`): find the commands, run each to a log in
+`<run-dir>`, stop at the first failure, one line per step. A local merge skips review, so this is the only
+safety net: do not merge past a failure without the user's explicit OK. Skip only under its one reuse rule,
+and say so — never `gate=ok` for a gate that did not run.
 
-```bash
-mkit gate detect
-mkit gate run <run-dir> --chain 'lint=<cmd>' 'test=<cmd>' 'build=<cmd>'
-```
+### 3. How this repo merges
 
-One line per passing step; on failure the step, the exit code, the grepped failures and the tail
-(`../_shared/references/output-discipline.md`). A failing suite is thousands of lines, none of which change
-the decision ("fix it or get an explicit OK").
+Read `docs/agents/merge.md` if it exists (`../_shared/references/repo-settings.md`):
 
-`mkit gate detect` also reports what the gate ledger already proved — each step's `cache=` in the
-`full:` block. **This is the strictest consumer in the bundle**, because a local merge skips review and this gate
-is the only safety net: consume a step only on an exact command match, a matching fingerprint and an age
-inside the bound — per step, never a whole chain at once — and print `cached (Nm ago, exit=0)` on that
-step's own line, with the verdict naming how many were cached. `gate=ok` for a step that did not run is not
-an acceptable report here. `failed` means the tree was red on this exact content: say so before starting,
-then run the step anyway — the environment may have moved since.
+- **Names a style** (`merge`, `squash`, `rebase`) → the **repo's style**, used without asking; name where it
+  came from.
+- **No file, or silent on style** → the **default style**, `merge`. It is not a repo statement: it gives way
+  without comment where the remote refuses it and never overrides the user's worktrunk config. Never mention
+  the missing file.
+- **A style `finish` doesn't know** (`squish`) → say so in one line, then behave as with no file.
 
-Delegate the diagnosis only when that verdict is not enough (`../_shared/references/quality-gate.md`, "when a
-step fails") and give the user what it returns — what failed, probable cause, whether the change caused it,
-suggested fix. The log stays on disk.
+### 4. Plan and go-ahead
 
-### 3. Show the plan and confirm
-
-Before merging or deleting anything, print a one-screen summary and get a go-ahead (unless the user already
-said "finish and clean up" or gave standing authorization). Collect the go-ahead through `AskUserQuestion`
-where the host has it — two options, **merge and clean up** (recommended) and **stop here** — with the
-numbered-list fallback in `../_shared/references/summary-format.md`. Step 0's `commits:` block predates step 1, so if
-step 1 committed, re-read the log (`"$git_bin" -C "$toplevel" log --oneline <base>..HEAD` — pinned, per
-`../_shared/references/git-safety.md`) first — approving a plan that omits the
-commits the merge actually carries is worse than asking twice.
-
-**Local path:**
+PR path: first run `pr-merge.md` items 1–2 (push, pick the method) — [pr-merge.md](pr-merge.md). Then, unless
+the user already said "finish and clean up" or gave standing authorization, show one screen and get a
+go-ahead through `AskUserQuestion` — **merge and clean up** (recommended) / **stop here** — numbered-list
+fallback per `../_shared/references/summary-format.md`. If step 1 committed, re-read the log first
+(`"<git>" -C "<toplevel>" log --oneline <base>..HEAD`).
 
 ```
-Finish feature:  <feature-branch>
-Merge into:       <base-branch>
+Finish feature:   <feature-branch>
+Merge:            into <base> locally | via GitHub PR <url> (<method>, <from docs/agents/merge.md|default|asked>)
 Worktree:         <cleanup_path> @ <toplevel>
-Commits to merge: <the commits: block, re-read if step 1 committed>
-After merge:      delete branch <feature-branch> + remove worktree (if any)
+Commits to merge: <the commits: block>
+After merge:      delete branch <feature-branch> [local + remote] + remove worktree (if any)[; switch to <base> and pull]
 ```
 
-**PR path** — step 4's opening profile call and its first two items (push, then pick the merge method) run
-*before* this: fill this block in with the method just picked, get the go-ahead, and only then continue with
-the rest of step 4:
+A stacked PR adds a `Stack:` line naming every unmerged PR below that merges with it (`pr-merge.md`).
 
-```
-Finish feature:  <feature-branch>
-Merge via:        GitHub PR <pr-url> (<squash|merge|rebase>, <pinned|discovered|asked>)
-Base:             <base-branch>
-Worktree:         <cleanup_path> @ <toplevel>
-Commits to merge: <the commits: block, re-read if step 1 committed>
-After merge:      delete branch <feature-branch> (local + remote) + remove worktree (if any);
-                   switch to <base-branch> and pull
-```
+### 5. Merge back + clean up
 
-**Stacked PR** — add one line, and list the PRs, because the go-ahead covers all of them:
+- **PR path** → [pr-merge.md](pr-merge.md), items 3–5.
+- **Local path** → `../_shared/references/worktree.md`, by `cleanup_path`: update the base, merge in the
+  style from step 3 (the `wt merge` flag mapping is there), remove the worktree, delete the branch.
 
-```
-Stack:            #<n> of <size> — also merges (atomically) the <k> unmerged PRs below: #<a>, #<b>
-                   PRs above stay open; GitHub rebases and retargets them
-```
+### 6. Verify the cleanup
 
-### 4. Merge back + clean up
+When step 5 removed a worktree, `<toplevel>` — and possibly the shell's cwd — no longer exists. Resolve
+`<surviving-root>` once (`primary=`), `cd "<surviving-root>"`, and point every check at it (`-C
+"<surviving-root>"`). With `linked=no`, `<toplevel>` still stands.
 
-**Both paths start here: ask the repo how it merges.** One call, and it is **optional enrichment,
-never a prerequisite** — it answers the question this step used to ask on every run, and when it does not
-answer, this step behaves exactly as it did before the call existed:
+- `git -C "<surviving-root>" worktree list` — the feature worktree is gone.
+- `git -C "<surviving-root>" branch` — the feature branch is gone (PR path: `git ls-remote --heads <remote>
+  <feature-branch>` is empty too).
+- `git branch --show-current` and `pwd` — on the base, in the surviving checkout.
+- `"<git>" -C "<surviving-root>" log --oneline -5` — the base holds the feature commits (or the PR's merge
+  commit).
 
-```bash
-mkit repo profile --json
-```
+## Report
 
-`merge_style` is `{"value": "merge|squash|rebase", "source": "pinned|discovered|unavailable"}`.
-Take the value on **`pinned`** (a human wrote it in `.mkit/config.toml`) or **`discovered`** (read from this
-repo's own git config) and stop asking. On `unavailable` — or if the command fails at all, which an older
-binary that knows `facts` but not `repo` will do — there is **no style**: fall through to asking, exactly as
-below. Unlike `mkit facts`, this call never stops the run and is never mentioned when it has nothing to say.
-It is one fewer question, not a dependency.
+Bold verdict (`**Verdict:** merged into main, branch and worktree removed.` — or where and why it stopped);
+form per `../_shared/references/summary-format.md`.
 
-**Silence, with one exception — a pin that went nowhere.** A non-empty `config_problems`, or an
-`unavailable` whose `cause` names `.mkit/config.toml`, is not "no answer": it is this repo pinning a merge
-style mkit could not honour — a misspelled `style`, or a `[merge]` table that never arrived. Report that
-sentence in one line, verbatim, then ask as usual. Mind which field carries it: the sentence is `detail` on
-a `config_problems` entry and `cause` on `merge_style` itself — there is no `detail` on a value, and an agent
-that looks for one reports nothing. Falling silently back to the question is the failure
-shape that validation exists to kill: the config looks applied, and the only symptom is the question the
-pin was supposed to have answered. An `unavailable` carrying nothing but "not discoverable" stays silent.
-
-**A binary whose `repo profile` predates config validation emits neither signal** — there is no
-`config_problems` key, and `merge_style` never carries a `cause` naming the config file. Nothing special is
-needed for that: both conditions are simply false, this paragraph does not fire, and the skill behaves as it
-does with no profile at all. That is the same silence the rule above describes, not a degradation to
-announce — and it is why the two conditions are written as things to look for rather than fields to expect.
-
-**PR path** (`pr=<url>`, `pr_state=OPEN`, not draft) — merge on GitHub, then sync locally:
-
-1. **Push anything step 1 committed.** `gh pr merge` merges what's on GitHub, not local state:
-   Push explicitly, after step 1: `git push -u <remote> <feature-branch>` when `pushed=no`, else
-   `git push <remote> <feature-branch>` (a no-op when up to date). Not a bare `git push`: `pushed=yes` only proves
-   *some* upstream exists, possibly on another remote, and `ahead=` predates step 1's commits.
-   `<remote>` is `remote=` — never a hardcoded `origin` — as settled in step 0.
-2. **Pick the merge method.** `gh repo view [<remote_repo>] --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed`
-   tells you what the remote will accept; `merge_style` above tells you what this repo wants.
-   `merge`→`--merge`/`mergeCommitAllowed`, `squash`→`--squash`/`squashMergeAllowed`,
-   `rebase`→`--rebase`/`rebaseMergeAllowed`. In order:
-
-   - **Exactly one method allowed** → use it, whatever `merge_style` says. GitHub decides what it will
-     accept; a pin cannot widen that. If the pin named a different one, say so in one line.
-   - **A style, and the remote allows it** → use it and **do not ask**. Name where it came from — "squash,
-     pinned in `.mkit/config.toml`" or "squash, discovered from this repo's git config" — so a wrong pin is
-     visible the first time it is used rather than on the merge it produced.
-   - **A style the remote does not allow** → **report it, never substitute.** Say which value was pinned,
-     what the remote actually allows, and let the user pick; do not quietly fall back to squash. A pinned
-     value cheap to verify gets verified, and the point of verifying is to surface the mismatch, not to
-     paper over it. A pin that is wrong for the repo is worth one interruption; a silent substitution on
-     every run for the rest of the repo's life is not.
-   - **No style** (`unavailable`, or no profile at all) and more than one method allowed → ask, default
-     suggestion squash, as before.
-
-   Never pass `--admin` (bypasses branch protection / required reviews) unless the user explicitly asks
-   for it.
-
-   **Stop here and show step 3's PR-path confirmation block, filled in with the method just picked. Get
-   the go-ahead before continuing** — nothing below this point runs without it.
-3. **Merge.** **Stacked PR → `gh stack merge <pr-number> --yes --<method>` instead of `gh pr merge`**
-   (`../_shared/references/stacked-prs.md`, "Merge"). It needs the `gh stack` extension: absent → stop
-   with the install line from that file, nothing merged. **Signed commits first:** GitHub's rebase of the
-   layers above is unsigned, so if the base branch requires signed commits, stop before merging and
-   report that the stack needs a local `gh stack rebase` + `gh stack push` (stacked-prs.md, "Why the
-   normal merge path breaks"). Success continues to item 4; a refusal or `enqueued` stops here (report it
-   verbatim; no local-merge fallback; nothing deleted). The server does not delete branches, so item 5
-   removes remote and local by hand — **for every PR the merge carried** (the lower layers' head
-   branches too, listed in step 3's `Stack:` line), each only after its own `state=MERGED` check
-   (`git push <remote> --delete <branch>`). Auto-merge is unsupported for stacks — never offer it.
-
-   Not stacked:
-   ```bash
-   gh pr merge <pr-url> --squash --delete-branch   # or --merge / --rebase, whichever the previous item picked
-   ```
-   `--delete-branch` deletes the **local branch too, not just remote** — and if the feature branch is
-   checked out right here with nothing else pinning it, `gh` switches this checkout to `<base>` itself
-   first. Item 5 below checks before deleting for exactly this reason. If `gh pr merge` refuses (failing
-   checks, missing required review, merge conflict), report exactly what it said — do not fall back to a
-   local merge to route around a block GitHub is enforcing on purpose.
-4. **Sync the local base.** If `<base>` is already checked out elsewhere (primary worktree, from a linked
-   one), work from `primary=` instead — same rule as the local path's worktree.md note:
-   ```bash
-   git switch <base>
-   git pull --ff-only <remote> <base>   # explicit: a bare `git pull` follows the base's own upstream, possibly another remote
-   ```
-5. **Confirm the merge actually landed, then remove the local vestiges.** `gh pr merge` returning success
-   does not always mean *merged*: on a branch that requires a merge queue it means "enqueued" (or
-   "auto-merge enabled" if required checks hadn't passed yet), and the real merge can still fail later — a
-   check regresses, a conflict, a dequeue. Force-deleting the only copy of this branch on that signal alone
-   risks losing the work. Confirm first:
-   ```bash
-   gh pr view <pr-url> --json state,mergeStateStatus
-   ```
-   Proceed only on `state=MERGED`. Anything else (still `OPEN`, queued or auto-merge-enabled) — stop, tell
-   the user the PR hasn't actually merged yet, and leave the branch/worktree in place; re-run this item once
-   it lands.
-
-   Once confirmed, remove by `cleanup_path`. Every branch below uses a *forced* delete: a squash or rebase
-   merge produces a commit GitHub knows is merged but whose hash your local branch never reaches, so the
-   ordinary ancestry check (`-d`, `wt remove`'s own test) reads a genuinely merged branch as unmerged —
-   `state=MERGED`, just confirmed, is the "clear, stated reason" `../_shared/references/git-safety.md`
-   requires for that. And because item 3's `--delete-branch` may already have deleted the local branch
-   (whenever it wasn't pinned by another worktree), check before you delete — "already gone" means item 3
-   did this already, not a failure:
-   - `wt`: `wt remove <feature-branch>` if it's still there; add `-D` if it reports the branch unmerged.
-   - `exit-worktree`: hand back via the **ExitWorktree** tool (`action: "remove"`, `discard_changes: true`
-     — a squash/rebase merge leaves the worktree's commits unreachable from the branch it was cut from, and
-     the tool refuses removal without it). Never `git worktree remove` the harness's own worktree from
-     inside it.
-   - `git-worktree`: `git worktree remove <toplevel>` then, if `git branch --list <feature-branch>` still
-     shows it, `git branch -D <feature-branch>`, then `git worktree prune`.
-   - `none`: if `git branch --list <feature-branch>` still shows it, `git branch -D <feature-branch>`,
-     then retire the worklog per **Retiring the worklog** below.
-
-   **Stacked: sync what is left.** The PRs above this one were rebased and retargeted on GitHub; the
-   local branches for them are behind. If a local stack is tracked, ask before running `gh stack sync` (it force-pushes the rebased branches), then run it (from the surviving root, after the cleanup above); otherwise tell the user
-   those branches need a fetch and rebase. Leave them and their worktrees in place — they are not this
-   run's to remove. Name them in the deliverable under "left behind".
-
-**Local path** (no open PR) — by `cleanup_path`
-
-**`wt`** — delegate; it squash-rebases, fast-forwards the base and removes the worktree in one step, firing
-the user's hooks:
-
-```bash
-wt merge <base>        # add -y only if non-interactive completion is authorized
-```
-
-`wt merge` removes the worktree by default and deletes the branch as part of the flow.
-
-**A `merge_style` from the profile goes on this command line.** worktrunk carries the user's own
-squash/rebase config, and a repo-wide pin outranks a personal default — but `wt merge`'s flags only turn
-defaults *off*, so one direction cannot be forced and is reported instead of fought.
-`../_shared/references/worktree.md`, "A pinned merge style vs. worktrunk's own config", has the mapping
-(`squash` → no flag · `rebase` → `--no-squash` · `merge` → `--no-squash --no-ff`) and the reasoning. No
-style → plain `wt merge <base>`, worktrunk's config unchallenged, as today. Use `--no-remove` only to
-override the user's config on request.
-
-**`exit-worktree`** — merge into the base, then hand back via the **ExitWorktree** tool
-(`action: "remove"`). Never `git worktree remove` the harness's own worktree from inside it. If the base
-cannot be fast-forwarded (`ff_from_base=no`, or it is checked out in the primary worktree), merge from
-`primary=` per `../_shared/references/worktree.md`.
-
-**`git-worktree`**:
-
-```bash
-git -C <primary> merge --ff-only <feature-branch>   # or a real merge if ff isn't possible
-git worktree remove <toplevel>
-git branch -d <feature-branch>
-git worktree prune
-```
-
-**`none` (single checkout)**:
-
-```bash
-git switch <base>
-git merge --no-ff <feature-branch>      # or --ff-only for linear history, if it fast-forwards
-git branch -d <feature-branch>
-```
-
-Update the base against the remote first (`git fetch <remote>` / `git pull --ff-only <remote> <base>`) when one exists, so you
-merge onto current base.
-
-On the three plain-git paths a `merge_style` decides the shape of that merge, with none of worktrunk's
-config to contend with: `merge` → `git merge --no-ff` · `rebase` → rebase the feature branch onto `<base>`
-first, then fast-forward · `squash` → `git merge --squash` followed by one commit. No style → the command
-as written above. Say which one you used, the same as on the other paths.
-
-#### Retiring the worklog
-
-**Both paths, and only where `cleanup_path=none`.** The worklog lives in the work tree, so every other
-cleanup path carries it off with the worktree it removes. `none` removes no worktree, so the log outlives
-the branch it is keyed on — and a branch name is reusable, which hands a later `review` on a recreated
-`feat/x` the *old* `feat/x`'s gists, a goal for work that no longer exists. Ask the binary for the path
-rather than deriving the filename, which carries a digest:
-
-```bash
-p=$(mkit worklog show --branch <feature-branch> --path) && rm -f "$p"
-```
-
-Best effort, like every other `mkit worklog` call here: a path it cannot produce is one line of note. And skip
-the append on this path — the record would go straight into the file being retired.
-
-### 5. Verify the cleanup
-
-**`$toplevel` is stale here whenever step 4 removed a worktree — and so may the shell's cwd be**, if it was
-inside that worktree when `git worktree remove` ran. `$toplevel` is the root `mkit facts` resolved at step
-1 — the *feature* worktree on any linked path — and that directory no longer exists, so a call pinned to it,
-or one run from a cwd still inside it, fails instead of verifying anything. Resolve `<surviving-root>` once
-(`primary=` from `mkit facts`, or re-resolve the root) and put every command below against it — `cd
-"<surviving-root>"` first, since `pwd` and `git branch --show-current` have no `-C` equivalent, and pass
-`-C "<surviving-root>"` explicitly to the rest, including the pinned log check. On `linked=no` there was
-nothing to remove and `$toplevel`/the cwd are still correct.
-
-- `git -C "<surviving-root>" worktree list` — the feature worktree is gone (if there was one).
-- `git -C "<surviving-root>" branch` — the feature branch is gone (and, PR path, `git ls-remote --heads
-  <remote> <feature-branch>` is empty).
-- after `cd "<surviving-root>"`: `git branch --show-current` / `pwd` — you are on the base branch (or back
-  in the primary checkout).
-- `"$git_bin" -C "<surviving-root>" log --oneline -5` — the base contains the feature commits (PR path: the
-  squash/merge/rebase commit `gh pr merge` produced).
-
-## Deliverable
-
-Prune with `mkit scratch prune` on the way out, folded into step 5's
-verification call. Open with a one-line bold verdict (`**Verdict:** merged into main, branch and worktree
-removed.` — or where and why it stopped short); form per `../_shared/references/summary-format.md`.
-
-- Which path ran — local merge, or GitHub PR merge (name the PR URL and method used), and **where the
-  method came from**: pinned, discovered, or asked. Plus, only when there was something to say: a pinned
-  style the remote refused, a pinned style mkit could not honour at all (`config_problems`, or an
-  `unavailable` whose `cause` names the config file), or a `wt merge` whose output shows the user's
-  worktrunk config overrode the pin. Silence when the profile simply had no answer — that is not a
-  degradation.
-- Stacked PR: which PRs merged together (all of them, by number), the `gh stack merge` outcome, and the
-  PRs still open above.
-- The gate verdict, naming any step served from the ledger as `cached` and how old that proof was.
-- What merged into what, the resulting base HEAD, and that branch + worktree were removed.
-- Anything left in place on purpose (unmerged commits, dirty tree, a delete the user declined) — say so
-  explicitly, each with its path or name and why, or "nothing left behind" so the absence is not ambiguous.
-- What is needed from the user, as the last line: how to continue where the run stopped short, or
-  "nothing needed from you" when it completed.
-
-Then record the run — from wherever this session ends up, and **only if that is still a work tree with
-this branch's log in it**. `finish` is the one step that usually destroys its own log: the worklog lives in
-the worktree it removes, and the branch it is keyed on is deleted a moment later. So the append is worth
-doing where the run stopped short — a declined merge, a failed gate, a PR not ready — and worth skipping
-where the cleanup actually ran. Skipping it is not a degradation to report:
-
-```bash
-mkit worklog append --step finish --gist '<one line: what this run concluded>' \
-  [--artifact '<merge-sha>'] [--assume '<what this run derived rather than found>']...
-```
-
-`--artifact` only where a merge happened; a run that stopped short has no sha to name, and the gist is
-where the reason goes.
-
-After the report is produced, and it never changes the report: a failed append is one line of note, not a
-failed run. A run that merged nothing still records where the log survives — the reason is exactly what the
-next `finish` wants to know.
-
-## Git safety
+- The path that ran — local, or the PR (URL, method) — and **where the method came from**: `merge.md`, the
+  default, or asked. Only when there is something to say: a file style the remote refused, a style `finish`
+  doesn't know, a `wt merge` whose output shows the user's config overrode the file.
+- Stacked: every PR merged together, the `gh stack merge` outcome, the PRs still open above.
+- The gate verdict, or that it was skipped under the reuse rule and at which commit it passed.
+- What merged into what, the resulting base HEAD, branch and worktree removed.
+- Anything left in place on purpose — each with name or path and why — or "nothing left behind".
+- Last line: what the user needs to do, or "nothing needed from you".
 
 Follow `../_shared/references/git-safety.md`: never delete an unmerged branch or force-remove a dirty worktree
-without an explicit request, never push to or force-update the base, confirm branch/tree state before each
+without an explicit request, never push to or force-update the base, confirm branch and tree state before each
 irreversible step.

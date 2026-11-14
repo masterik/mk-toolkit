@@ -10,17 +10,22 @@
 // cannot report on itself. Both were the hook's job and both are accepted losses
 // (docs/backlog.md, "Accepted gaps").
 //
-// Every degradation sentence has exactly one producer. Until M5 the shell was it
-// and this fetched from `lib/common.sh`; since the payload's last script went,
-// the producer is the Go package that owns the surface — `scratch` for the
-// user-scoped directory and for an unignored scratch root, `repoconfig` for a
-// shadowed config.
+// Every degradation sentence has one producer in the binary: the Go package that
+// owns the surface — `userdir` for the user-scoped directory, `pluginroot` for a
+// missing payload. Doctor relays, never re-words. The plugin cannot call the
+// binary (ADR 0006), so its `facts.sh` prints the user-dir sentence itself; a test
+// in `userdir` holds that copy to `userdir.Remedy()` word for word.
+//
+// The binary is optional (ADR 0006): the skills run without it, so nothing here
+// is a precondition for them. Doctor checks what they compose (git, gh, bash,
+// optional tools), the plugin's state, and what older releases left behind.
 //
 // Layering: returns data, never prints, never assumes a terminal.
 package doctor
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -30,8 +35,7 @@ import (
 	"github.com/masterik/mk-toolkit/internal/buildinfo"
 	"github.com/masterik/mk-toolkit/internal/core/gitrepo"
 	"github.com/masterik/mk-toolkit/internal/core/pluginroot"
-	"github.com/masterik/mk-toolkit/internal/core/repoconfig"
-	"github.com/masterik/mk-toolkit/internal/core/scratch"
+	"github.com/masterik/mk-toolkit/internal/core/userdir"
 )
 
 // Status is a check's verdict.
@@ -115,7 +119,7 @@ func Run(opts Options) *Report {
 			Detail: "not inside a git repository — the repo checks were skipped"})
 	}
 	r.orphans(opts.Repo)
-	r.writableSet(toplevel)
+	r.writableSet()
 	r.allowlist(toplevel)
 	return r
 }
@@ -149,7 +153,7 @@ func (r *Report) payload(root *pluginroot.Root, err error, toplevel string) {
 	if v := root.Version(); v != "" && v != buildinfo.Version && buildinfo.Version != "dev" {
 		r.add(Check{Group: "install", Name: "plugin payload", Status: Warn,
 			Detail: detail + "; binary is " + buildinfo.Version +
-				" — the two ship over separate channels and drift is expected, not broken",
+				" — the binary is optional and ships over its own channel, so drift is expected, not broken",
 			Remedy: "update whichever is behind: `brew upgrade mkit` for the binary, " +
 				"`/plugin marketplace update masterik` for the payload"})
 	} else {
@@ -212,7 +216,7 @@ type tool struct {
 // binary has no half-capable mode, so today a missing tool surfaces only here.
 var tools = []tool{
 	{"git", "prerequisites", Fail, "every skill", ""},
-	{"bash", "prerequisites", Fail, "mkit gate run", ""},
+	{"bash", "prerequisites", Fail, "the plugin's facts.sh/branch-status.sh and the gate commands", ""},
 	{"gh", "prerequisites", Warn, "pr, finish, and cleanup's PR column", "brew install gh, then `gh auth login`"},
 	{"rg", "optional", Warn, "faster searching; grep -E is used otherwise", "brew install ripgrep"},
 	{"wt", "optional", Warn, "worktrunk-managed worktree teardown in finish/cleanup", "brew install worktrunk"},
@@ -224,6 +228,10 @@ func (r *Report) prerequisites() {
 	for _, t := range tools {
 		path, err := exec.LookPath(t.name)
 		if err == nil {
+			if t.name == "bash" {
+				r.add(bashCheck(path))
+				continue
+			}
 			r.add(Check{Group: t.group, Name: t.name, Status: OK, Detail: path})
 			continue
 		}
@@ -231,6 +239,25 @@ func (r *Report) prerequisites() {
 			Detail: "not on PATH — needed for " + t.what, Remedy: t.remedy})
 	}
 	r.ghStack()
+}
+
+// bashCheck names the version: the plugin's scripts are written for bash 3.2
+// (macOS /bin/bash) and up, so anything older fails them.
+func bashCheck(path string) Check {
+	out, err := exec.Command(path, "-c", `printf '%s' "$BASH_VERSION"`).Output()
+	v := strings.TrimSpace(string(out))
+	if err != nil || v == "" {
+		return Check{Group: "prerequisites", Name: "bash", Status: Unknown,
+			Detail: path + " — could not read its version"}
+	}
+	var major, minor int
+	_, _ = fmt.Sscanf(v, "%d.%d", &major, &minor)
+	if major < 3 || major == 3 && minor < 2 {
+		return Check{Group: "prerequisites", Name: "bash", Status: Fail,
+			Detail: "bash " + v + " at " + path + " — the plugin's scripts need 3.2 or later",
+			Remedy: "brew install bash"}
+	}
+	return Check{Group: "prerequisites", Name: "bash", Status: OK, Detail: "bash " + v + " at " + path}
 }
 
 // hasExtension reports whether `gh extension list` output names repo exactly —
@@ -267,20 +294,20 @@ func (r *Report) ghStack() {
 // whose rows rename themselves by branch cannot be diffed or matched against.
 const userDirCheck = "user state dir"
 
-// userDir reports both halves from `internal/core/scratch`: the probe (net-zero
+// userDir reports both halves from `internal/core/userdir`: the probe (net-zero
 // by construction) and the sentence (which must name creating the directory *and*
 // granting it). One producer for each — until M5 both were fetched from the
 // payload's lib/common.sh, and re-wording the sentence is how the original
 // one-grant mistake survived three files.
 func (r *Report) userDir() {
-	dir := scratch.UserDir()
+	dir := userdir.Dir()
 	if dir == "" {
 		r.add(Check{Group: "sandbox", Name: userDirCheck, Status: Warn,
 			Detail: "no user-scoped directory: $HOME is unset and MKIT_HOME is not set",
-			Remedy: scratch.UserDirRemedy()})
+			Remedy: userdir.Remedy()})
 		return
 	}
-	if scratch.UserDirWritable() {
+	if userdir.Writable() {
 		r.add(Check{Group: "sandbox", Name: userDirCheck, Status: OK, Detail: dir + " is writable"})
 		return
 	}
@@ -290,144 +317,33 @@ func (r *Report) userDir() {
 	// would fail.
 	r.add(Check{Group: "sandbox", Name: userDirCheck, Status: Warn,
 		Detail: dir + " is not writable; the sandbox-audit ledger cannot be kept, and a later user-scoped write would fail",
-		Remedy: scratch.UserDirRemedy()})
+		Remedy: userdir.Remedy()})
 }
 
+// repo names the work tree the leftover checks look in. Repo settings are prose
+// under docs/agents/ now (ADR 0006), read by the skills; nothing here checks
+// them, and an old `.mkit/config.toml` is a leftover (orphans.go).
 func (r *Report) repo(repo *gitrepo.Repo) {
 	r.add(Check{Group: "repo", Name: "work tree", Status: OK, Detail: repo.Toplevel})
-
-	// The remedy names this file rather than a fixed `.git/info/exclude`: under a
-	// linked worktree the exclude lives in the main checkout.
-	common, _ := repo.CommonDir()
-
-	// scratch.Ignored, not a single check-ignore: it probes the ledger *and* a
-	// run directory, because an unrelated `*.jsonl` rule hides the first while
-	// leaving the second untracked. facts reads the same producer.
-	if scratch.Ignored(repo) {
-		r.add(Check{Group: "repo", Name: "scratch ignored", Status: OK,
-			Detail: ".mkit/ scratch is excluded"})
-	} else {
-		r.add(Check{Group: "repo", Name: "scratch ignored", Status: Fail,
-			Detail: ".mkit/ is not ignored here — `git worktree remove` will refuse, " +
-				"`git add -A` would commit run artefacts, and the gate fingerprint " +
-				"sees a directory that changes while the gate runs",
-			Remedy: scratch.IgnoredRemedy(common)})
-	}
-
-	st := repoconfig.Stat(repo)
-	switch st.State {
-	case repoconfig.StateTracked:
-		r.add(Check{Group: "repo", Name: "config", Status: OK,
-			Detail: st.Path + " (tracked — a fresh clone inherits it)"})
-	case repoconfig.StateUntracked:
-		r.add(Check{Group: "repo", Name: "config", Status: Warn,
-			Detail: st.Path + " exists but is not committed, so no colleague inherits it",
-			Remedy: "git add .mkit/config.toml && git commit"})
-	case repoconfig.StateShadowed:
-		r.add(Check{Group: "repo", Name: "config", Status: Fail,
-			Detail: st.Path + " is ignored here, so `mkit init` would write a file that " +
-				"never reaches a fresh clone — the one property it exists for",
-			Remedy: repoconfig.ShadowedRemedy(st)})
-	default:
-		// Absent is a normal state, not a finding: config is an input, never a
-		// permission (ADR 0001 decision 3). Reported so the path is visible.
-		r.add(Check{Group: "repo", Name: "config", Status: OK,
-			Detail: "none — every command runs without one; `mkit init` writes " + st.Path})
-	}
-
-	r.configValues(repo)
 }
 
-// configValues reports what the config file says that mkit could not honour: a
-// key it does not know, an enumerated value outside its set, a document that will
-// not parse, a version from the future.
-//
-// Warn, never Fail, and the exit status stays 0: config is an input, never a
-// permission (ADR 0001 decision 3) — nothing here stops a command, it only means
-// a pin the reader believed in never took effect. The sentences come from
-// `repoconfig`, which is their one producer; `mkit repo profile` prints the same
-// words from the same place.
-func (r *Report) configValues(repo *gitrepo.Repo) {
-	cfg, present, err := repoconfig.Load(repo.Toplevel)
-	if err != nil {
-		// A file that is there and cannot be read is exactly what a human-run
-		// report exists to name. Staying silent here left `doctor` reporting
-		// nothing at all about the one config state a user cannot see for
-		// themselves from the file's contents.
-		pb := repoconfig.UnreadableProblem(repoconfig.Path(repo.Toplevel), err)
-		r.add(Check{Group: "repo", Name: "config values", Status: Warn,
-			Detail: pb.Detail, Remedy: configRemedy(pb)})
-		return
-	}
-	if !present {
-		return
-	}
-	if len(cfg.Problems) == 0 {
-		r.add(Check{Group: "repo", Name: "config values", Status: OK,
-			Detail: "every key and value in " + repoconfig.Path(repo.Toplevel) + " is understood"})
-		return
-	}
-	for _, pb := range cfg.Problems {
-		r.add(Check{Group: "repo", Name: "config values", Status: Warn,
-			Detail: pb.Detail, Remedy: configRemedy(pb)})
-	}
-}
-
-// configRemedy names an edit that works. A newer-version file gets none on
-// purpose: there is nothing to fix in it — upgrading is the reader's move, not an
-// edit to a colleague's committed file — so it says so rather than offering one.
-func configRemedy(pb repoconfig.Problem) string {
-	switch pb.Kind {
-	case repoconfig.ProblemUnknownKey:
-		return "remove or correct `" + pb.Key + "` in " + pb.Path
-	case repoconfig.ProblemInvalidValue:
-		// Not every invalid value has an enumeration behind it: `commit.subject_max`
-		// is a number with a rule, and rendering its allowed set produces "to one
-		// of , or remove it" — a remedy naming no value, which is the one thing a
-		// degradation sentence may not be.
-		if allowed := repoconfig.Allowed(pb.Key); len(allowed) > 0 {
-			return "set `" + pb.Key + "` in " + pb.Path + " to one of " +
-				strings.Join(allowed, ", ") + ", or remove it"
-		}
-		if rule := repoconfig.Rule(pb.Key); rule != "" {
-			return "set `" + pb.Key + "` in " + pb.Path + " to " + rule + ", or remove it"
-		}
-		return "correct `" + pb.Key + "` in " + pb.Path + ", or remove it"
-	case repoconfig.ProblemUnreadable:
-		return "make " + pb.Path + " readable, or delete it — discovery answers " +
-			"everything it pinned"
-	case repoconfig.ProblemUnparsable:
-		return "fix the TOML syntax in " + pb.Path + ", or delete the file — " +
-			"discovery answers everything it pinned"
-	default:
-		return ""
-	}
-}
-
-// writableSet reports the three locations the project declares, by writing to
-// them. Probed rather than inferred: the sandbox leaves the mode bits saying yes
-// while denying the write, so `[ -w ]` and os.Stat both lie here.
-func (r *Report) writableSet(toplevel string) {
+// writableSet reports the one write location the skills use, by writing to it.
+// Probed rather than inferred: the sandbox leaves the mode bits saying yes while
+// denying the write, so `[ -w ]` and os.Stat both lie here. `<toplevel>/.mkit`
+// is no longer one (#50): per-run files live under $TMPDIR.
+func (r *Report) writableSet() {
 	tmp := os.Getenv("TMPDIR")
 	if tmp == "" {
 		tmp = os.TempDir()
 	}
-	r.probe("$TMPDIR", tmp, "anything that dies with the command",
+	r.probe("$TMPDIR", tmp, "per-run files, which die with the session",
 		"nothing to grant — a denied $TMPDIR means the sandbox is configured unusually")
-
-	if toplevel != "" {
-		r.probe("<toplevel>/.mkit", filepath.Join(toplevel, ".mkit"),
-			"run directories and the gate ledger",
-			"nothing to grant — the working directory is writable by default; "+
-				"a refusal here usually means the session is isolated in another worktree")
-	}
 }
 
 func (r *Report) probe(label, dir, what, cannotFix string) {
 	// doctor reports and fixes nothing, and that includes leaving the filesystem
-	// as it found it: on a fresh clone `<toplevel>/.mkit` does not exist yet, and
-	// a probe that creates it has made the repo dirty to answer a question about
-	// it. Only directories this call created are removed, and only if still empty
+	// as it found it: a probe that creates the directory it asks about has
+	// changed the answer to report it. Only directories this call created are removed, and only if still empty
 	// — never one that was already there, and never one another process has since
 	// written into.
 	created := createdDirs(dir)

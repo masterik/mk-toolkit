@@ -1,6 +1,9 @@
 # ADR 0003 — Two distribution channels: Homebrew ships the binary, GitHub ships the plugin
 
 **Status:** accepted · **Date:** 2026-09-09 ·
+**Amended by** [ADR 0006](0006-standalone-skills-optional-binary.md) (2026-11-13): the plugin is no
+longer Markdown only. It carries exactly two scripts, `_shared/scripts/facts.sh` and
+`branch-status.sh`, and nothing else that runs. The binary is optional.
 **Supersedes** the "Homebrew ships binary *and* plugin payload" decision in
 [`backlog.md`](../backlog.md) and the same claim in `concept.md`, `README.md` and `AGENTS.md`.
 **Withdraws** M3.

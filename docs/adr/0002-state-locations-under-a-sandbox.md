@@ -1,6 +1,8 @@
 # ADR 0002 — Where mkit's state lives, under a sandbox
 
-**Status:** accepted · **Date:** 2026-09-09 ·
+**Status:** superseded by [ADR 0006](0006-standalone-skills-optional-binary.md) (2026-11-13): no
+`.mkit/`, no repo-scoped state; per-run files live in a temp dir `facts.sh --run` creates. ·
+**Date:** 2026-09-09 ·
 **Supersedes:** the state-location table in [ADR 0001](0001-per-repo-config-and-init.md) (its
 "Context" table and decision 5's premise). ADR 0001's other four decisions stand unchanged.
 **Partly superseded by** [ADR 0003](0003-two-distribution-channels.md): the "M3 is unblocked"

@@ -3,25 +3,36 @@
 Stage 2 of finding triage in `review`: judge the reconciled findings against the code. Reconciling
 happened before you (`triage-reconcile.md`), fixing happens after (`fix-checks.md`) — you do neither.
 
-You are given a `verify-<group>.jsonl` file of findings. Open each one's file at the line named, read enough
-around it to judge, and return exactly **one** verdict per finding — as a line of JSON in
-`<run-dir>/verdicts-<group>.jsonl`, `{"id":"f03","verdict":"…","reason":"one clause"}`, plus any field a
-`refined` verdict corrects:
+You are given a `verify-<batch>.md` file: the findings for one or a few files, each with its id
+(`F3`), location, every source's wording, and the reviewers that raised it. Open each one's file at the
+line named, read enough around it to judge, and give exactly **one** verdict per finding — a line in
+`<run-dir>/verdicts-<batch>.md`, `F3 → confirmed — one clause of reasoning`, plus any field a `refined`
+verdict corrects:
 
 | verdict | means |
 | --- | --- |
 | **confirmed** | real as described |
-| **refined** | real, but description, location, severity or confidence is wrong — return corrected values; omitted fields keep their original |
+| **refined** | real, but description, location, severity or confidence is wrong — give corrected values; omitted fields keep their original |
 | **rejected** | not real: the code already handles it, the reviewer misread it, or the claimed trigger cannot occur |
 | **immaterial** | accurate, and still not worth acting on |
 | **pre_existing** | real, but in code the change did not touch |
+| **duplicate of `F<n>`** | only for a finding marked `possible duplicate of F<n>`: the same defect as `F<n>` — it folds into `F<n>`, which gets its own verdict |
+
+A merged finding carries several sources' wording for one location. Judge the problem they describe.
+If the wordings turn out to name two different problems, split it: one verdict each, as `F3a` and
+`F3b`, with a clause saying which wording is which. The split ids replace `F3`, which gets no verdict of its
+own.
+
+A finding marked `possible duplicate of F<n>` sits in your batch with `F<n>` (same file). Collapse it
+with `duplicate of F<n>` only when both name the same defect; two defects at nearby lines each get their
+own verdict.
 
 Rules that make the pass worth running:
 
 - **Judge the finding, not the reviewer.** Confidence is not evidence; hedging is not grounds for rejection.
   Where the code contradicts the finding, say so and reject.
 - **Do not hunt for new problems.** Verification is not a second review.
-- **You are given only your own group's findings** — seeing the whole set anchors you. Do not go looking for
+- **You are given only your own batch's findings** — seeing the whole set anchors you. Do not go looking for
   the rest.
 - Missing or wrong location: find what it points at and **refine** with the real location, or reject when the
   code supports none.

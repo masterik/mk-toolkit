@@ -1,0 +1,112 @@
+---
+title: "Other agents — Codex and Copilot support for mkit's skills"
+date_created: 2026-11-13
+last_updated: 2026-11-13
+description: >
+  Whether OpenAI Codex and GitHub Copilot can run mkit's SKILL.md skills, and which of the
+  capabilities the skills lean on (discovery, frontmatter, bundled scripts, plugins, subagents,
+  structured questions, arguments, worktrees, sandbox, Windows) each agent has: yes, no or
+  workaround, with sources. Research for epic #59 (#54).
+---
+
+# Other agents — Codex and Copilot
+
+**Status:** findings, primary sources checked 2026-11-13 (#59 grilling session). Closes #54. The
+decisions they fed are in [Implications](#implications). **UNVERIFIED** = not confirmed by a
+source; re-check before relying on it.
+
+**Question.** Porting the skills assumes Codex and GitHub Copilot read SKILL.md-format skills and
+offer what the skills use in Claude Code. Is that true, per agent?
+
+**Scope.** Codex = CLI, IDE extension and app (one skill/sandbox model). Copilot = CLI, VS Code
+(JetBrains where noted) and the coding agent; columns split where they differ.
+
+**Legend.** **yes** = native · **no** = absent · **workaround** = absent, but the skill can get
+the same result another way (named).
+
+## Summary
+
+| Capability | Codex | Copilot CLI | Copilot VS Code | Copilot coding agent |
+|---|---|---|---|---|
+| Reads SKILL.md | yes | yes | yes | yes |
+| Reads `.claude/skills` | **no** | yes | yes | yes |
+| Reads `.agents/skills` | yes | yes | yes | yes |
+| Bundled scripts | yes | yes | yes | yes |
+| Env var for the skill's directory | **no** → relative paths | **no** → relative paths | **no** → relative paths | **no** → relative paths |
+| Plugin + marketplace | yes | yes | — | — |
+| Subagents | yes, parallel | yes, parallel (`/fleet`) | yes, parallelism undocumented | UNVERIFIED |
+| Structured question | workaround (Plan mode only) | yes (`ask_user`) | yes (`#vscode/askQuestions`) | **no** (none documented) |
+| `$ARGUMENTS` | **no** → free text | **no** → free text | **no** → free text | **no** → free text |
+| Worktree/session (`ExitWorktree`) | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED |
+| Sandbox lets `git commit` | **no** without approval (`.git` read-only) | yes (opt-in sandbox, `.git` r/w) | UNVERIFIED | UNVERIFIED |
+| Sandbox lets `gh` (network) | **no** without approval (network off) | yes (network on) | UNVERIFIED | UNVERIFIED |
+| Windows shell | PowerShell | PowerShell or WSL | PowerShell or WSL | PowerShell or WSL |
+
+"—" = not researched for that surface.
+
+## Codex (CLI, IDE, app)
+
+- **SKILL.md: yes.** Frontmatter honoured: `name`, `description`. Discovery: `.agents/skills`
+  from cwd up to the repo root, and `~/.agents/skills`. **`.claude/skills` is not read.**
+  [build skills](https://learn.chatgpt.com/docs/build-skills)
+- **Bundled scripts: yes**, through paths relative to SKILL.md's directory. **No skill-body env
+  var**: `${CLAUDE_PLUGIN_ROOT}` is expanded only in hooks and MCP config. Workaround: relative
+  paths. Source: Codex source, `codex-rs/ext/skills/src/catalog_prompt.rs`.
+- **Plugins: yes.** Manifest `.codex-plugin/plugin.json`; marketplace at
+  `.agents/plugins/marketplace.json`. The `codex plugin marketplace add` syntax is **UNVERIFIED**.
+  [build plugins](https://developers.openai.com/codex/plugins/build)
+- **Subagents: yes**, parallel, on by default; spawned when a skill asks for them in prose (no
+  structured briefing API). Custom agents are TOML files in `.codex/agents/` and inherit the
+  parent's sandbox. [subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents.md)
+- **Structured questions: workaround.** Only in Plan mode (`request_user_input`); the default-mode
+  feature flag is off and under development. Elsewhere: ask in plain text and parse the reply.
+- **`$ARGUMENTS`: no.** Arguments arrive as free text in the prompt; the skill reads them from
+  there.
+- **Worktree/session features: UNVERIFIED** — not covered by the research.
+- **Sandbox:** `workspace-write` allows cwd and temp dirs. **Network is off** by default (`gh`
+  needs approval) and **`.git` is read-only** (`git commit` needs approval).
+  [approvals and security](https://learn.chatgpt.com/docs/agent-approvals-security)
+- **Windows:** runs natively in **PowerShell**; Git Bash isn't mentioned.
+
+## Copilot (CLI, VS Code, coding agent)
+
+- **SKILL.md: yes** in the CLI, the coding agent, VS Code and JetBrains. Discovery, project:
+  `.github/skills`, `.claude/skills`, `.agents/skills`; user: `~/.copilot/skills`,
+  `~/.agents/skills`. [about agent skills](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills)
+- **Frontmatter:** the CLI honours `name`, `description`, `license`, `allowed-tools`. VS Code adds
+  `argument-hint`, `user-invocable`, `disable-model-invocation`, `context: fork`.
+- **Bundled scripts: yes**, relative to the skill's directory. Plugin hooks get
+  `PLUGIN_ROOT`/`CLAUDE_PLUGIN_ROOT`; **skill bodies get nothing documented**. Workaround: relative
+  paths.
+- **Plugins: yes.** `plugin.json` plus `marketplace.json`, installed with
+  `copilot plugin marketplace add`.
+  [about CLI plugins](https://docs.github.com/en/copilot/concepts/agents/copilot-cli/about-cli-plugins)
+- **Subagents:** CLI **yes** — the `task` tool, and `/fleet` for parallel. VS Code **yes** —
+  `runSubagent`/`task`; parallelism undocumented. Coding agent **UNVERIFIED**.
+- **Structured questions:** CLI **yes** (`ask_user`); VS Code **yes** (`#vscode/askQuestions`);
+  coding agent **no** (none documented) — it runs unattended, so a skill must default instead of
+  asking.
+- **`$ARGUMENTS`: no.** Free text, as in Codex.
+- **Worktree/session features: UNVERIFIED** — not covered by the research.
+- **Sandbox:** the CLI sandbox is **opt-in**, with `.git` read/write and outbound network on. VS
+  Code and coding-agent sandboxes: UNVERIFIED.
+- **Windows:** PowerShell (or WSL); Git Bash isn't mentioned.
+
+## Implications
+
+Already decided in #59:
+
+- **Script paths relative to SKILL.md** (#52) — neither agent gives a skill body its directory.
+- **One plugin tree, a manifest per agent** (#56) — Codex wants `.codex-plugin/plugin.json`,
+  Copilot and Claude Code their own.
+- **Dedupe in prose** (#51).
+- **Skills call `bash <script>` on Windows** (#58) — both agents default to PowerShell.
+
+Follows from the table, for whoever ports a skill:
+
+- `.agents/skills` is the one project path both agents read; `.claude/skills` misses Codex.
+- Under Codex's default sandbox, `commit`, `pr` and `finish` hit an approval on every `git commit`
+  and `gh` call; that is the agent's gate, not a failure to report.
+- A skill that asks a structured question needs a plain-text fallback in Codex default mode; on the
+  Copilot coding agent, which runs unattended, it takes the default instead.
+- A skill that takes arguments reads them from the free-text request, never `$ARGUMENTS`.

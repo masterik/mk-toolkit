@@ -3,13 +3,13 @@
 A **personal toolkit for agentic coding**: the skills and tools I use daily with Claude Code.
 Opinionated, built for one setup (Claude Code, macOS, git + GitHub), shared as-is.
 
-- **Claude Code plugin**: Markdown skills that take work from edits to committed, reviewed and merged.
-- **`mkit` Go binary**: the mechanical layer under the skills, plus housekeeping for the agent's
-  environment.
+- **The plugin** (the product): Markdown skills that take work from edits to committed, reviewed and
+  merged, plus two small bash scripts they share. Needs nothing but `git`, `bash` and (for PRs) `gh`.
+- **The `mkit` binary** (optional): macOS + Claude Code power tools: a prerequisite report, a
+  sandbox audit and storage cleanup. No skill needs it but `sandbox-audit`.
 
-Skills orchestrate `git`, `gh`, [Worktrunk](https://worktrunk.dev) (`wt`), CodeRabbit and Codex
-rather than reimplementing them. Judgement lives in Markdown. Anything that must run identically
-every time lives in the binary. Background: [concept](docs/concept.md).
+Skills orchestrate `git`, `gh`, CodeRabbit, Codex and, if installed, [Worktrunk](https://worktrunk.dev)
+(`wt`) rather than reimplementing them. Judgement lives in Markdown. Background: [concept](docs/concept.md).
 
 ## Skills
 
@@ -20,7 +20,8 @@ every time lives in the binary. Background: [concept](docs/concept.md).
 | `pr` | Commit, push, open a GitHub PR, request reviewers. |
 | `finish` | Commit, merge into base (the open PR, or locally), delete the branch and worktree. |
 | `cleanup` | Delete branches and worktrees that are provably merged; ask about the rest. |
-| `sandbox-audit` | Turn sandbox blocks and permission denials into a proposed settings diff. Report-only. |
+| `setup` | Optional, once per repo: record non-default settings as prose in `docs/agents/`; converts an old `.mkit/config.toml`. Run as `/mkit:setup`. |
+| `sandbox-audit` | Turn sandbox blocks and permission denials into a proposed settings diff. Report-only. Needs the binary. |
 | `explain` | Re-explain the last answer or one session item in plain English (`simpler`, `eli5`, `deeper`). |
 | `recap` | Branch status in plain English: done, changed, left, and waiting on you. |
 
@@ -34,39 +35,37 @@ or call a skill directly as `/mkit:<skill>`, for example `/mkit:review quick`. A
 edit → /mkit:commit → /mkit:review → /mkit:pr   (or /mkit:finish to merge locally)
 ```
 
-Skills discover gate commands, commit scopes, reviewers, merge style and the push remote from the repo. `mkit init`
-can pin them in a committed `.mkit/config.toml`, but that is optional. mkit's scratch state lives in
-`.mkit/` and is git-ignored; `.mkit/config.toml` is committed.
-
-## The binary
-
-```
-mkit facts <skill>       all starting facts a skill needs, in one call
-mkit gate detect | run   find and run the repo's checks; record what passed
-mkit findings …          reconcile and group a multi-reviewer review
-mkit branch status       classify every local branch and worktree
-mkit worklog show        what each step concluded on this branch
-mkit repo profile        discovered vs pinned config (mkit init pins it)
-mkit doctor              prerequisites, sandbox writability, plugin state
-mkit audit sandbox       sandbox and permission-gate events across sessions
-mkit cache prune         prune stale Claude Code / Codex storage
-```
-
-Every command takes `--json`. On a terminal, some show a TUI.
+Skills discover gate commands, commit scopes, reviewers and the push remote from the repo (git history,
+`CODEOWNERS`, task runners, manifests); merge style defaults to a merge commit. To change a default,
+`/mkit:setup` writes short prose files in `docs/agents/` (`commit.md`, `review.md`, `merge.md`, `remote.md`,
+`gate.md`, `cleanup.md`); write or edit them by hand just as well. Each is optional. Skills keep per-run files in a temp dir; only `setup` writes into your work tree, and only `docs/agents/`.
 
 ## Install
-
-```bash
-brew install masterik/tap/mkit
-```
 
 ```
 /plugin marketplace add masterik/mk-toolkit
 /plugin install mkit@masterik
 ```
 
-You need both, because every skill except `explain` calls the binary. Then run `mkit doctor`. For
-optional tools, sandbox setup and a permission allowlist, see [Prerequisites](docs/prerequisites.md).
+That is all the skills need. For optional tools, sandbox setup and a permission allowlist, see
+[Prerequisites](docs/prerequisites.md).
+
+## The binary (optional)
+
+macOS only, for Claude Code users:
+
+```bash
+brew install masterik/tap/mkit
+```
+
+```
+mkit doctor              prerequisites, plugin state, sandbox grants, leftovers from old releases
+mkit audit sandbox       sandbox and permission-gate events across sessions (sandbox-audit runs it)
+mkit cache prune         prune stale Claude Code / Codex storage
+```
+
+Every command takes `--json`. On a terminal, the reports are styled and `cache prune --apply` shows a
+tick-list. Plugin and binary are released together under one version tag.
 
 ## Docs
 

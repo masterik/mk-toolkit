@@ -9,12 +9,11 @@ import (
 	"golang.org/x/term"
 )
 
-// Help groups: what a command is about, not who calls it — most are used by
-// both a person and a skill. Presentation only; no command moves.
+// Help groups: what a command is about. Presentation only; no command moves.
+// The binary is optional macOS + Claude Code power tools (ADR 0006): no skill
+// but sandbox-audit calls it.
 const (
 	groupSetup   = "setup"
-	groupState   = "state"
-	groupReview  = "review"
 	groupCleanup = "cleanup"
 )
 
@@ -28,8 +27,8 @@ type Options struct {
 	// Pretty is styled, human-facing output: stdout is a terminal, and neither
 	// --json nor --no-tui asked for the machine forms. Distinct from Interactive,
 	// which is a TUI that reads keys — a report is pretty without prompting. A
-	// pipe is never Pretty, which is what keeps the `key=value` text the skills
-	// parse byte-for-byte unchanged.
+	// pipe is never Pretty, which is what keeps the plain text `sandbox-audit`
+	// parses byte-for-byte unchanged.
 	Pretty bool
 	Yes    bool
 }
@@ -46,7 +45,7 @@ func NewRoot() *cobra.Command {
 
 	root := &cobra.Command{
 		Use:           "mkit",
-		Short:         "mkit — coding-workflow toolkit",
+		Short:         "mkit — optional power tools for the mkit Claude Code plugin",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
@@ -64,8 +63,6 @@ func NewRoot() *cobra.Command {
 
 	root.AddGroup(
 		&cobra.Group{ID: groupSetup, Title: "Setup & health:"},
-		&cobra.Group{ID: groupState, Title: "Repo & branch state:"},
-		&cobra.Group{ID: groupReview, Title: "Quality gate & review:"},
 		&cobra.Group{ID: groupCleanup, Title: "Housekeeping & audit:"},
 	)
 	root.SetHelpCommandGroupID(groupSetup)
@@ -77,10 +74,8 @@ func NewRoot() *cobra.Command {
 			root.AddCommand(c)
 		}
 	}
-	add(groupSetup, newInitCmd(), newDoctorCmd(), newVersionCmd())
-	add(groupState, newFactsCmd(), newRepoCmd(), newBranchCmd(), newWorklogCmd())
-	add(groupReview, newGateCmd(), newFindingsCmd())
-	add(groupCleanup, newScratchCmd(), newCacheCmd(), newAuditCmd())
+	add(groupSetup, newDoctorCmd(), newVersionCmd())
+	add(groupCleanup, newCacheCmd(), newAuditCmd())
 
 	installPrettyHelp(root)
 
