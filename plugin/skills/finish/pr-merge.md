@@ -63,10 +63,10 @@ below this one merges with it.
    `git -C "<primary>"`: `gh pr view <n> --json state,headRefName,headRefOid` (`--repo <remote_repo>` only
    when `remote_repo=` is not `none`). Only `state=MERGED`, and only if a local `<headRefName>` is absent or
    its tip is `headRefOid` or an ancestor of it (`merge-base --is-ancestor <headRefName> <headRefOid>`):
-   `push --force-with-lease=<headRefName>:<headRefOid> <remote> --delete <headRefName>` (refused if the
-   remote moved past the merge), then `branch -D <headRefName>` if it still exists and no other worktree has
-   it checked out. A failed check or a refused push → it holds commits the merge never carried: leave both
-   refs, named under "left behind". Not merged → delete nothing of it; say so.
+   `push <remote> --delete <headRefName>` only if `ls-remote <remote> refs/heads/<headRefName>` prints
+   `headRefOid` or nothing, then `branch -D <headRefName>` if it still exists and no other worktree has
+   it checked out. A failed check (local or remote tip past `headRefOid`) → it holds commits the merge never
+   carried: leave both refs, named under "left behind". Not merged → delete nothing of it; say so.
 
    **Stacked:** the PRs above were rebased and retargeted on GitHub; their local branches are behind. With a
    local stack tracked, ask before `gh stack sync` (it force-pushes), then run it from the surviving root;
