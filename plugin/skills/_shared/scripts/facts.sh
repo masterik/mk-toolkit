@@ -82,7 +82,8 @@ toplevel="$(git rev-parse --show-toplevel 2>/dev/null)" || die 'not inside a git
 # it, the run dir would land inside the checkout.
 case "${TMPDIR:-}" in
 '' | /*) ;;
-*) TMPDIR="$(cd "$TMPDIR" 2>/dev/null && pwd)" || TMPDIR="$PWD/$TMPDIR" ;;
+*) tmp_abs="$(cd "$TMPDIR" 2>/dev/null && pwd)" || tmp_abs="$PWD/$TMPDIR"
+	TMPDIR="$tmp_abs" ;;
 esac
 cd "$toplevel" || die "cannot enter the work-tree top level: $toplevel" 1
 
@@ -379,7 +380,7 @@ if [ "$want_gh" = yes ]; then
 	if ! command -v gh >/dev/null 2>&1; then
 		printf 'pr=gh-missing\n'
 	else
-		pr='' gh_err=''
+		pr='' gh_err='' out=''
 		if [ "$detached" = no ]; then
 			if [ -n "$remote_repo" ]; then
 				set -- pr view "$branch" --repo "$remote_repo"
@@ -389,17 +390,23 @@ if [ "$want_gh" = yes ]; then
 			# stderr joins stdout so a failure can be told apart: only gh's "no pull requests
 			# found" is `none`. A success is the one three-field row.
 			if out="$(gh "$@" --json url,state,isDraft --jq '[.url, .state, (.isDraft|tostring)] | @tsv' 2>&1)"; then
-				pr="$(printf '%s\n' "$out" | awk -F'\t' 'NF == 3 { print; exit }')"
+				pr="$(printf '%s\n' "$out" | awk -F'\t' 'NF == 3 && $1 != "" { print; exit }')"
+				[ -n "$pr" ] || gh_err='no PR row in its output'
 			else
 				case "$out" in
 				*'no pull requests found'*) ;;
-				*) gh_err="$(printf '%s\n' "$out" | grep . | head -1)" ;;
+				*) gh_err="$(printf '%s\n' "$out" | grep . | head -1)"
+					[ -n "$gh_err" ] || gh_err='exit status 1, no output' ;;
 				esac
 			fi
 		fi
+		# A failed lookup is not-logged-in only on gh's own words: offline, `gh auth status`
+		# fails too, and gh-unauthenticated sends `finish` down the local path past a PR.
 		if [ -n "$pr" ]; then
 			printf '%s\n' "$pr" | awk -F'\t' '{ printf "pr=%s pr_state=%s pr_draft=%s\n", $1, $2, $3 }'
-		elif ! gh auth status >/dev/null 2>&1; then
+		elif case "$out" in *'gh auth login'* | *'HTTP 401'*) true ;; *) false ;; esac; then
+			printf 'pr=gh-unauthenticated\n'
+		elif [ -z "$gh_err" ] && ! gh auth status >/dev/null 2>&1; then
 			printf 'pr=gh-unauthenticated\n'
 		elif [ -z "$remote" ]; then
 			printf 'pr=no-remote\n'

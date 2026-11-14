@@ -131,6 +131,15 @@ teardown() { mkit_teardown_repo; }
 	! grep -n '/tmp' "$SCRIPTS/facts.sh"
 }
 
+# A relative TMPDIR naming no directory: the failed `$(cd …)` emptied TMPDIR before the
+# fallback read it, so the run dir landed in the caller's directory — inside the checkout.
+@test "a relative TMPDIR naming no directory fails, never a run dir in the work tree" {
+	before="$(git status --porcelain --ignored)"
+	run env TMPDIR="no-such-tmp" "$TEST_BASH" "$SCRIPTS/facts.sh" commit --run
+	[ "$status" -eq 1 ]
+	[ "$(git status --porcelain --ignored)" = "$before" ]
+}
+
 # Run from a subdirectory with a relative TMPDIR: resolved after the cd to the top
 # level, it put the run dir inside the checkout.
 @test "a relative TMPDIR resolves against the caller's directory, not the work tree" {
@@ -511,6 +520,27 @@ teardown() { mkit_teardown_repo; }
 	[ "$status" -eq 0 ]
 	[ "$(field pr)" = gh-error ]
 	[[ "$output" == *"notes:"*"- pr=gh-error — gh pr view failed: HTTP 502: Bad Gateway."* ]]
+}
+
+# Offline (or api.github.com blocked by the sandbox) `gh auth status` fails too, and
+# `finish` reads gh-unauthenticated as "no PR path": only gh's own words say "not logged in".
+@test "a failed PR lookup with auth status also failing is gh-error unless gh says to log in" {
+	git remote add origin https://github.com/me/fork.git
+	stub_gh
+	GH_AUTH=fail GH_ERROR='error connecting to api.github.com' run facts pr --gh
+	[ "$(field pr)" = gh-error ]
+	GH_AUTH=fail GH_ERROR='To get started with GitHub CLI, please run:  gh auth login' run facts pr --gh
+	[ "$(field pr)" = gh-unauthenticated ]
+	GH_AUTH=fail GH_ERROR='HTTP 401: Bad credentials (https://api.github.com/graphql)' run facts pr --gh
+	[ "$(field pr)" = gh-unauthenticated ]
+}
+
+@test "a PR lookup that fails with no output is gh-error, never none" {
+	git remote add origin https://github.com/me/fork.git
+	stub_gh
+	GH_FAIL_SILENT=1 run facts pr --gh
+	[ "$(field pr)" = gh-error ]
+	[[ "$output" == *"- pr=gh-error — gh pr view failed: exit status 1, no output."* ]]
 }
 
 # `gh pr view --repo` needs a branch, and a detached HEAD has none to have a PR.
