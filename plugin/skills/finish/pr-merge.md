@@ -60,11 +60,13 @@ below this one merges with it.
    - `none`: `git branch -D <feature-branch>` if it still exists.
 
    **Stacked — every PR the merge carried**, this one included, one at a time, each git call as
-   `git -C "<primary>"`: `gh pr view <n> --repo <remote_repo> --json state,headRefName,headRefOid`; only
-   `state=MERGED` → `push <remote> --delete <headRefName>`, then `branch -D <headRefName>` if it still
-   exists, no other worktree has it checked out, and its tip is `headRefOid` or an ancestor of it
-   (`merge-base --is-ancestor <headRefName> <headRefOid>`) — else it holds commits the merge never carried:
-   it stays, named under "left behind". Not merged → delete nothing of it; say so.
+   `git -C "<primary>"`: `gh pr view <n> --json state,headRefName,headRefOid` (`--repo <remote_repo>` only
+   when `remote_repo=` is not `none`). Only `state=MERGED`, and only if a local `<headRefName>` is absent or
+   its tip is `headRefOid` or an ancestor of it (`merge-base --is-ancestor <headRefName> <headRefOid>`):
+   `push --force-with-lease=<headRefName>:<headRefOid> <remote> --delete <headRefName>` (refused if the
+   remote moved past the merge), then `branch -D <headRefName>` if it still exists and no other worktree has
+   it checked out. A failed check or a refused push → it holds commits the merge never carried: leave both
+   refs, named under "left behind". Not merged → delete nothing of it; say so.
 
    **Stacked:** the PRs above were rebased and retargeted on GitHub; their local branches are behind. With a
    local stack tracked, ask before `gh stack sync` (it force-pushes), then run it from the surviving root;
