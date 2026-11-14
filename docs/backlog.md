@@ -6,8 +6,8 @@ This file holds the ordered work list and the rules every change must keep. Rati
 
 ## Decisions
 
-- **The plugin is the product; the binary is optional.** Every skill runs on the plugin alone (its
-  Markdown plus two bash 3.2 scripts). The binary is macOS + Claude Code power tools: `doctor`,
+- **The plugin is the product; the binary is optional.** Every skill but `sandbox-audit` runs on the plugin
+  alone (its Markdown plus two bash 3.2 scripts). The binary is macOS + Claude Code power tools: `doctor`,
   `audit sandbox`, `cache prune` ([ADR 0006](adr/0006-standalone-skills-optional-binary.md)).
 - **Go, one binary, subcommand tree.** It ships as a single static binary. The stdlib covers the
   workload, and Go has the Charm TUI stack and GoReleaser's Homebrew support.

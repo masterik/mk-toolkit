@@ -3,7 +3,7 @@
 ## Language
 
 **Plugin**:
-The product: the skills, their shared references and the two bundled scripts (`facts.sh`, `branch-status.sh`). Every skill runs on it alone.
+The product: the skills, their shared references and the two bundled scripts (`facts.sh`, `branch-status.sh`). Every skill but `sandbox-audit` runs on it alone.
 
 **Binary**:
 The optional `mkit` Go program: macOS + Claude Code power tools (`doctor`, `audit sandbox`, `cache prune`). Only `sandbox-audit` needs it.
