@@ -18,7 +18,7 @@ Read only the file the step needs, when it needs it. In the report, say where ea
 | --- | --- | --- | --- | --- |
 | Commit | `commit.md` | scopes · subject length | scopes discovered · ~72 chars | `commit` step 0 |
 | Review | `review.md` | default mode | `full` | `review` step 1 |
-| Merge | `merge.md` | merge style · reviewers | `merge` · `CODEOWNERS`, else ask | `finish` step 4 · `pr` step 6 |
+| Merge | `merge.md` | merge style · reviewers | `merge` · `CODEOWNERS`, else ask | `finish` step 3 · `pr` step 6 |
 | Remote | `remote.md` | the remote to push to | `origin` → lone remote → ask | `remote.md` |
 | Gate | `gate.md` | the gate commands, in order | detected | `quality-gate.md` |
 | Cleanup | `cleanup.md` | kept branches · develop branch | default + `develop`/`development`/`dev` | `cleanup` |

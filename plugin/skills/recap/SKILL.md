@@ -40,6 +40,18 @@ binary, `../_shared/references/git-safety.md`).
 `ahead=0`; with `ahead=2`, say two commits are still local. With `upstream=none`, say no upstream is set,
 so whether the branch was pushed is unknown — never "not pushed".
 
+**When `pr=` is a URL**, read the PR's own account of the work and where its review stands **first**: its
+`baseRefName` is one sign the branch is stacked, so it settles the base before the log runs:
+
+```bash
+gh pr view <pr-url> --json title,body,baseRefName,reviewDecision,latestReviews
+```
+
+Any other `pr=` value (`none`, `gh-missing`, `gh-unauthenticated`, `no-remote`, `gh-error`, or absent on a detached
+HEAD) is **one fewer input, never a stop**; a failed `gh pr view` is the same. Say in one line that the
+recap rests on the session and git alone, and name the `pr=` value only when it means the user could fix
+it (`gh-unauthenticated`).
+
 **The base this branch is measured against** is `default_branch`, unless the session, a commit message or
 the PR's base says the branch is stacked on another one. Then use that parent, because measuring from the
 default would list the parent's commits as this branch's work. Skip this step when the branch **is** the
@@ -53,18 +65,6 @@ long-lived branch can't flood the context:
 
 If that fails (a base that exists only on the remote, for instance), or the step was skipped, say in one
 line that there was no base to compare against. Then build "Done" from the PR and the session alone.
-
-**When `pr=` is a URL**, read the PR's own account of the work and where its review stands, in the same
-message as the log:
-
-```bash
-gh pr view <pr-url> --json title,body,baseRefName,reviewDecision,latestReviews
-```
-
-Any other `pr=` value (`none`, `gh-missing`, `gh-unauthenticated`, `no-remote`, `gh-error`, or absent on a detached
-HEAD) is **one fewer input, never a stop**; a failed `gh pr view` is the same. Say in one line that the
-recap rests on the session and git alone, and name the `pr=` value only when it means the user could fix
-it (`gh-unauthenticated`).
 
 ## Build the recap
 
@@ -90,8 +90,8 @@ Follow `plain-english.md` at the chosen level, in this order:
 1. **One line:** where things stand, as the very first line. No title heading above it, and one sentence,
    not a paragraph. For example: "The feature works and is committed; two review fixes are
    still uncommitted, and the PR isn't open yet."
-2. **Waiting on you:** decisions, approvals or questions the user still owes, and review comments asking
-   for changes. Put it first when it isn't empty, because it is the part that blocks. Leave the heading out
+2. **Waiting on you:** decisions, approvals or questions the user still owes, and reviews requesting
+   changes (`latestReviews`; inline comments are not fetched). Put it first when it isn't empty, because it is the part that blocks. Leave the heading out
    when nothing is waiting.
 3. **Done:** what was finished, in plain words, with the commits or PR that show it.
 4. **Changed:** committed vs uncommitted (staged, unstaged, untracked), and whether the branch is pushed.

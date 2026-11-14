@@ -50,7 +50,7 @@ Read whatever exists, from the repo root (`git rev-parse --show-toplevel`):
 - `CODEOWNERS` (`.github/`, root, `docs/`).
 - The gate as `pr`/`finish` would find it with no file (`../_shared/references/quality-gate.md`, "Find the
   gate"); any doc naming a different check command.
-- `git branch --format=%(refname:short)`: long-lived branches besides the default and feature branches
+- `git branch '--format=%(refname:short)'`: long-lived branches besides the default and feature branches
   (`staging`, `release/*`, an integration branch).
 - `docs/agents/`: which of mkit's six files exist (a re-run), and whether `issue-tracker.md` does.
 - `.mkit/config.toml`: the old config ("Migration").
@@ -75,8 +75,8 @@ Subject length: no file unless a document or commitlint names a limit.
 
 **B. Review mode.** Recommend `full` (no file); offer `quick` as a cheaper default roster.
 
-**C. Merge.** Style: recommend `merge` (no file) unless evidence says otherwise — repo-local `pull.rebase`,
-a `.config/wt.toml` `merge.*` key, or the GitHub repo allowing only one method (`gh repo view --json
+**C. Merge.** Style: recommend `merge` (no file) unless evidence says otherwise — a `.config/wt.toml`
+`merge.*` key, or the GitHub repo allowing only one method (`gh repo view --json
 mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed`, when `gh` works). Reviewers: skip when
 `CODEOWNERS` exists (recommend relying on it); otherwise ask for handles, recommend none.
 
@@ -113,15 +113,13 @@ absent, append it with only this sub-block. List only the files that exist after
 ### mkit workflow
 
 Settings for mkit's skills; a file not listed means the default, or what the skill discovers. See:
-- `docs/agents/commit.md`: <scopes, subject length>
-- `docs/agents/merge.md`: <merge style, reviewers>
-- <one line per existing file>
+- `docs/agents/<area>.md`: <what it sets, e.g. merge style, reviewers> — one line per existing file
 
 Spec store: `docs/agents/issue-tracker.md`.
 ```
 
 With no mkit file at all, the body is one line: *Defaults throughout: scopes from history, `full` review,
-`merge` style, `CODEOWNERS` reviewers, remote by `origin` → lone remote → ask, gate detected, cleanup keeps
+`merge` style, `CODEOWNERS` reviewers (else ask), remote by `origin` → lone remote → ask, gate detected, cleanup keeps
 the default and develop branches. Add a `docs/agents/<area>.md` file (or re-run `setup`) to change one.*
 Drop the spec-store line when `issue-tracker.md` is absent.
 

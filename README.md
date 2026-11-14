@@ -38,7 +38,7 @@ edit → /mkit:commit → /mkit:review → /mkit:pr   (or /mkit:finish to merge 
 Skills discover gate commands, commit scopes, reviewers and the push remote from the repo (git history,
 `CODEOWNERS`, task runners, manifests); merge style defaults to a merge commit. To change a default,
 `/mkit:setup` writes short prose files in `docs/agents/` (`commit.md`, `review.md`, `merge.md`, `remote.md`,
-`gate.md`, `cleanup.md`); write or edit them by hand just as well. Each is optional. Skills write nothing into your work tree: per-run files live in a temp dir.
+`gate.md`, `cleanup.md`); write or edit them by hand just as well. Each is optional. Skills keep per-run files in a temp dir; only `setup` writes into your work tree, and only `docs/agents/`.
 
 ## Install
 

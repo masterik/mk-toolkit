@@ -20,7 +20,8 @@ verdict corrects:
 
 A merged finding carries several sources' wording for one location. Judge the problem they describe.
 If the wordings turn out to name two different problems, split it: one verdict each, as `F3a` and
-`F3b`, with a clause saying which wording is which.
+`F3b`, with a clause saying which wording is which. The split ids replace `F3`, which gets no verdict of its
+own.
 
 A finding marked `possible duplicate of F<n>` sits in your batch with `F<n>` (same file). Collapse it
 with `duplicate of F<n>` only when both name the same defect; two defects at nearby lines each get their

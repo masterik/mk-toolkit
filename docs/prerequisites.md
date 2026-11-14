@@ -65,8 +65,8 @@ length), `review.md` (default mode), `merge.md` (merge style, reviewers), `remot
 `docs/agents/issue-tracker.md`. Nothing requires any of it
 ([ADR 0006](adr/0006-standalone-skills-optional-binary.md) decision 7).
 
-An old `.mkit/config.toml` (from `mkit init`) is read by no skill: `setup` converts it, then
-`git rm` it.
+An old `.mkit/config.toml` (from `mkit init`) is read by no skill: `setup` converts it and says to
+remove it; you (or `commit`) run `git rm`.
 
 ## Gatekeeper blocks the binary
 
