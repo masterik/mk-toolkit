@@ -22,5 +22,5 @@ mktemp "<run-dir>/patch.XXXXXX"
   re-cut from step 1.
 - **Hunks that share lines are not split.** A split needing a cut inside a hunk → commit the file whole and
   say so in the report.
-- Undo: `git apply --cached -R -- "<patch>"`; a whole file: `"<git>" -C "<toplevel>" restore --staged --
+- Undo: `"<git>" -C "<toplevel>" apply --cached -R -- "<patch>"`; a whole file: `"<git>" -C "<toplevel>" restore --staged --
   "<path>"`. Delete the patch once step 4 verified.

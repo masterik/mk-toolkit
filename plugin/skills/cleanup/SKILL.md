@@ -33,10 +33,12 @@ bash ../_shared/scripts/branch-status.sh --default <default_branch> [--develop <
 branch it keeps goes to the second call as one `--keep <name>` (names, not patterns; added to what is
 protected, never substituted), and a develop branch it names as `--develop <name>`. No file → no `--keep`.
 
+Either call fails → stop, show its stderr. `default_branch=unknown` → ask for it; pass `--default <name>`.
+
 **Remote**: `remote_choice=ask` → ask *before* the second call, re-run the first with `--remote <answer>`, and
 pass `--remote <answer>` to the second (`../_shared/references/remote.md`).
 
-From `facts.sh`: `branch=`, `clean=`, `cleanup_path=` (this session's own worktree). From
+From `facts.sh`: `branch=`, `clean=`, `default_branch=`, `cleanup_path=` (this session's own worktree). From
 `branch-status.sh`: `protected=` (for reading; the per-row `class` is exact), `develop=`, `keep=`,
 `keep_unknown=` (kept names with no local branch — normal, mention once), `remote=`, `fetch=` (`failed` →
 classify on what you have, say so), `gh=` (anything but `ok` → say so; PR-based classes rest on git alone),
@@ -102,7 +104,8 @@ stop and say so — never force.
 
 Per approved branch:
 
-1. **Worktree**, if any: `wt remove <branch>` when `wt` is available, else `git worktree remove <path>`.
+1. **Worktree**, if any: this session's own with `cleanup_path=exit-worktree` → only **ExitWorktree**
+   (`action: "remove"`, `discard_changes: true`). Any other: `wt remove <branch>` when `wt` is available, else `git worktree remove <path>`.
    `--force` only for a `clean=no` worktree the user approved removing — say plainly it discards uncommitted
    work. Never an `origin=claude-code` worktree without explicit approval knowing what it is. `wt remove`
    deletes a merged branch itself: check `git show-ref --verify --quiet refs/heads/<branch>` before 4.2.

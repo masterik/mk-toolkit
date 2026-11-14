@@ -45,8 +45,9 @@ path under `~/.claude`.
 | the user's tracked content | nowhere: no skill writes its own files into the work tree |
 
 Use `$TMPDIR`, never the literal `/tmp`, never `~/.claude/…` (protected), never a bare relative path. A
-`mktemp` always gets a template under `<run-dir>` or `$TMPDIR` — without one it ignores `$TMPDIR`. A refused
-write: say so and stop rather than falling back elsewhere.
+`mktemp` always gets a template under `<run-dir>` or `$TMPDIR` — without one it ignores `$TMPDIR`. `$TMPDIR`
+unset → the template goes under `<run-dir>` (`facts.sh --run` makes one either way); no run dir either → say
+so and stop. A refused write: say so and stop rather than falling back elsewhere.
 
 ## Diffs
 

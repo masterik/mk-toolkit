@@ -49,11 +49,13 @@ contradicts `merge.md` → report the contradiction, let the user settle it.
 **`git-worktree`, no worktrunk:**
 
 ```bash
-git -C "<primary>" merge --ff-only <feature-branch>   # a real merge if it can't fast-forward
-git worktree remove "<toplevel>"
-git branch -d <feature-branch>
-git worktree prune
+git -C "<primary>" merge --no-ff <feature-branch>   # the style's command: below
+git -C "<primary>" worktree remove "<toplevel>"
+git -C "<primary>" branch -d <feature-branch>
+git -C "<primary>" worktree prune
 ```
+
+Every call names `<primary>`: removing `<toplevel>` may delete the shell's working directory.
 
 **`none`:**
 
@@ -65,7 +67,8 @@ git branch -d <feature-branch>
 
 On the plain-git paths the style decides the merge command: `merge` → `git merge --no-ff` · `rebase` →
 rebase the feature branch onto `<base>`, then `--ff-only` · `squash` → `git merge --squash`, then one
-commit. No file → the commands as written. Say which you used.
+commit; the squash commit does not contain the branch tip, so `-d` refuses: delete with `git branch -D`, the
+squash just committed being the stated reason. No file → the commands as written. Say which you used.
 
 **Merging from inside a linked worktree.** `git switch <base>` fails there when the base is checked out in
 the primary. Merge from the primary (`git -C "<primary>" merge …`), or, when `ff_from_base=yes`, without a
