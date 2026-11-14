@@ -288,7 +288,9 @@ func (r *Report) oldIgnorePair(a orphanAnchors) bool {
 	}
 	r.add(Check{Group: leftoverGroup, Name: "old ignore pair", Status: Warn,
 		Detail: path + " still holds mkit's " + strings.Join(rules, " + ") +
-			" — nothing writes into the work tree any more, so the rule guards nothing",
-		Remedy: "delete these lines from " + shellQuote(path) + ": " + strings.Join(lines, ", ")})
+			" — nothing writes into the work tree any more, but the rule still hides any `.mkit/` leftovers"+
+			" (deleted first, they show as untracked: `git add -A` would commit them)",
+		Remedy: "remove the `.mkit/` leftovers first, then delete these lines from " + shellQuote(path) + ": " +
+			strings.Join(lines, ", ")})
 	return true
 }
