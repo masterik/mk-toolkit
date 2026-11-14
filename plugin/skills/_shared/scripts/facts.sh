@@ -78,6 +78,12 @@ note() {
 # only that subdirectory while the --shortstat beside them stayed repo-wide.
 toplevel="$(git rev-parse --show-toplevel 2>/dev/null)" || die 'not inside a git work tree' 1
 [ -n "$toplevel" ] || die 'not inside a git work tree' 1
+# A relative $TMPDIR is relative to the caller, so it is resolved before the cd: after
+# it, the run dir would land inside the checkout.
+case "${TMPDIR:-}" in
+'' | /*) ;;
+*) TMPDIR="$(cd "$TMPDIR" 2>/dev/null && pwd)" || TMPDIR="$PWD/$TMPDIR" ;;
+esac
 cd "$toplevel" || die "cannot enter the work-tree top level: $toplevel" 1
 
 if [ "$want_run" = yes ]; then
@@ -335,7 +341,8 @@ fi
 if [ -n "$base" ]; then
 	# Unresolvable used to fall through and exit 0: `finish`/`pr` could not tell it from a
 	# base with nothing on it.
-	if ! git rev-parse --verify --quiet --end-of-options "$base" >/dev/null 2>&1; then
+	# `^{commit}`: a tree or blob resolves too, and its counts read like a real base's.
+	if ! git rev-parse --verify --quiet --end-of-options "$base^{commit}" >/dev/null 2>&1; then
 		printf 'base_state=unresolvable\n'
 		die "--base does not resolve to a commit: $base" 1
 	fi

@@ -131,6 +131,26 @@ teardown() { mkit_teardown_repo; }
 	! grep -n '/tmp' "$SCRIPTS/facts.sh"
 }
 
+# Run from a subdirectory with a relative TMPDIR: resolved after the cd to the top
+# level, it put the run dir inside the checkout.
+@test "a relative TMPDIR resolves against the caller's directory, not the work tree" {
+	mkdir sub
+	before="$(git status --porcelain --ignored)"
+	rel="$(basename "$REPO")-tmp"
+	mkdir "$(dirname "$REPO")/$rel"
+	cd sub
+	run env TMPDIR="../../$rel" "$TEST_BASH" "$SCRIPTS/facts.sh" commit --run
+	cd ..
+	dir="$(field run_dir)"
+	made=no
+	[ -n "$dir" ] && [ -d "$dir" ] && made=yes
+	rm -rf -- "$(dirname "$REPO")/$rel"
+	[ "$status" -eq 0 ]
+	[ "$made" = yes ]
+	[ "$dir" = "$(dirname "$REPO")/$rel/${dir##*/}" ]
+	[ "$(git status --porcelain --ignored)" = "$before" ]
+}
+
 # --- usage -----------------------------------------------------------------------------
 
 @test "usage errors exit 2" {
@@ -171,6 +191,16 @@ teardown() { mkit_teardown_repo; }
 	[ "$status" -eq 1 ]
 	[[ "$output" == *"base_state=unresolvable"* ]]
 	[[ "$output" != *"commits_ahead_of_base="* ]]
+}
+
+# A tree or blob resolves too, and gave counts that read like a real base.
+@test "a --base that is not a commit is unresolvable" {
+	run facts finish --base 'HEAD^{tree}'
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"base_state=unresolvable"* ]]
+	run facts finish --base 'HEAD:seed.txt'
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"base_state=unresolvable"* ]]
 }
 
 @test "--base with commits ahead reports the count, the log and the diff" {
