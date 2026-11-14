@@ -215,8 +215,8 @@ apply both ways:
 - Commands and bundled scripts report and run; never stage, merge, push, edit. Parse stable output
   (`--porcelain`, `--shortstat`/`--name-only`, `--format`, `--json`); never call `rtk`. Scripts: no OS
   branching except where Git Bash forces it (#58).
-- **Write locations, by lifetime:** skills write only to `$TMPDIR` (per-run files in `<run-dir>`);
-  `~/.mkit/` holds the agent-written `sandbox-audit` ledger; `branch-status.sh` runs `git fetch --prune`.
+- **Write locations, by lifetime:** skills write only to `$TMPDIR` (per-run files in `<run-dir>`), except
+  `setup` (user-confirmed `docs/agents/*.md`) and `sandbox-audit` (its agent-written `~/.mkit/` ledger); `branch-status.sh` runs `git fetch --prune`.
   The binary's writes: `cache prune --apply` deleting stale `~/.claude`/`~/.codex` storage
   (home-guarded, own tests) and the net-zero `~/.mkit`/`$TMPDIR` probes. State never goes in the work
   tree, user files, `/tmp` or `~/.claude`.

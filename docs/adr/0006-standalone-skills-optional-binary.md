@@ -5,8 +5,8 @@
 [ADR 0002](0002-state-locations-under-a-sandbox.md) (state locations).
 **Amends** [ADR 0003](0003-two-distribution-channels.md): `plugin/` may now carry two scripts.
 **Withdraws** [ADR 0004](0004-worktree-helpers-in-the-binary.md) (proposed, never built).
-**Amends** [ADR 0005](0005-one-remote-per-repo.md): the `[remote] name` pin is gone; the resolution
-order without it stands.
+**Amends** [ADR 0005](0005-one-remote-per-repo.md): the `[remote] name` pin in `.mkit/config.toml` is
+gone (an optional `docs/agents/remote.md` takes its place); the resolution order without it stands.
 
 ## Context
 
@@ -34,8 +34,8 @@ written up as [`other-agents.md`](../ideas/other-agents.md). The portability dec
 **1. Skills stand alone.** All eight skills run without the binary. The "binary absent (or too old)
 = stop with a `brew` remedy" rule is gone.
 
-**2. The binary is optional.** A macOS + Claude Code power tool with only `doctor`, `audit sandbox`
-and `cache prune`. It still releases in lockstep with the plugin (one tag for both).
+**2. The binary is optional.** A macOS + Claude Code power tool with only `doctor`, `audit sandbox`,
+`cache prune` and `version`. It still releases in lockstep with the plugin (one tag for both).
 
 **3. Two bundled scripts.** `facts.sh` and `branch-status.sh` live in
 `plugin/skills/_shared/scripts/`, reached through paths relative to `SKILL.md`: no target agent sets a
@@ -59,7 +59,9 @@ no `info/exclude` write. Per-run files live in a temp dir that `facts.sh --run` 
 - Lazy `docs/agents/{commit,review,merge,remote,gate,cleanup}.md`, listed under a `### mkit workflow`
   sub-block of `## Agent skills` in `AGENTS.md`, written by a prompt-driven `setup` skill.
 - The spec store reuses `docs/agents/issue-tracker.md`; mattpocock's own sections are left alone.
-- Pinning is gone: a missing file means "detect or ask".
+- `.mkit/config.toml` pinning is gone. A committed `docs/agents/remote.md` is a repo setting like the
+  others, read before `origin` → lone remote → ask; a missing file means "detect or ask". An answer
+  given in a session is never persisted.
 - The remote choice is applied by the skill, which re-runs `facts.sh --remote <name>`.
 
 **8. Worktrees.** `wt` is optional; skills use `git worktree`. ADR 0004 is withdrawn.
@@ -85,7 +87,7 @@ payload.
 | [0002](0002-state-locations-under-a-sandbox.md) | superseded | `$TMPDIR` for per-run files; working remedy sentences; detect at first call |
 | [0003](0003-two-distribution-channels.md) | amended | everything but "Markdown only" |
 | [0004](0004-worktree-helpers-in-the-binary.md) | withdrawn | nothing |
-| [0005](0005-one-remote-per-repo.md) | amended | one remote for push and PRs; `origin` → lone remote → ask; answers passed, never pinned; `gh` told the repo |
+| [0005](0005-one-remote-per-repo.md) | amended | one remote for push and PRs; `origin` → lone remote → ask; session answers passed, never persisted; `gh` told the repo |
 
 ## Consequences
 
