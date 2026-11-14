@@ -28,8 +28,8 @@ Keep `run_dir=` as `<run-dir>` (no shell variable survives; re-running `--run` o
 `toplevel=` as `<toplevel>`, and `command -v git` as `<git>` for calls whose output you parse
 (`../_shared/references/git-safety.md`). It returns the branch, status, `commits:` and `base_stat` for
 `<base>..HEAD`, `codeowners=`, `pr=` and the remote. **Remote:** with `remote_choice=no` and no
-`docs/agents/remote.md`, use `remote=`; otherwise follow `../_shared/references/remote.md` (ask, then
-re-run without `--run`, with `--remote <name>`).
+`docs/agents/remote.md`, use `remote=`; otherwise follow `../_shared/references/remote.md` (re-run without
+`--run`, with `--remote <name>` from that file, or from asking — only on `remote_choice=ask`).
 
 ### 1. Commit remaining work
 

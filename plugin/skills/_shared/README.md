@@ -12,7 +12,7 @@ are `tests/*.bats` at the repo root.
 
 | file | what | read by |
 | --- | --- | --- |
-| `workflow-contract.md` | how the steps compose; the five rules; what each step owes | `review`, `recap` |
+| `workflow-contract.md` | how the steps compose; the five rules; what each step owes | `review` |
 | `git-safety.md` | the never-list, pinned `<git>`, inline shell shape, branches | every repo-scoped skill |
 | `output-discipline.md` | `facts.sh` contract, run dir, where a write lands, bounded output | every repo-scoped skill, for the `facts.sh` call |
 | `repo-settings.md` | reading a `docs/agents/<area>.md` setting; the areas and defaults | any skill reading a setting; `setup` |
@@ -26,8 +26,8 @@ are `tests/*.bats` at the repo root.
 | `triage-reconcile.md`, `triage-verify.md`, `fix-checks.md` | dedupe rule, verdicts, the three checks per fix | `review` steps 3–5 |
 | `plain-english.md` | register, levels, visuals | `explain`, `recap` |
 
-Skill-local files beside a `SKILL.md` hold a branch only that skill takes: `finish/pr-merge.md`,
-`review/reviewers.md`, `review/closing.md`, `setup/migration.md` and `setup`'s templates.
+Skill-local files beside a `SKILL.md` hold a branch only that skill takes: `commit/patch-staging.md`,
+`finish/pr-merge.md`, `review/reviewers.md`, `review/closing.md`, `setup/migration.md` and `setup`'s templates.
 
 Why the rules say what they say, and where each is enforced: `docs/skill-invariants.md` in the repo (not
 shipped).

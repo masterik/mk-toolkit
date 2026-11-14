@@ -13,13 +13,15 @@ Walk the table top to bottom; the first row that yields commands is the gate (ro
 | 2 | a task-runner `check` or `ci` target | that one command (`just check`, `make ci`, `task check`, `deno task ci`) |
 | 3 | per-step task-runner recipes | laid over row 4, step by step (below) |
 | 4 | the ecosystem default | the manifest table's commands (below) |
-| 5 | nothing | ask the user which commands to run; never invent one |
+| 5 | nothing | code to check → ask the user which commands to run, never invent one; no code (Markdown only) → say `no gate`, never `gate=ok` |
 
 Say which row it came from in the report (`gate from: just check`, `gate from: go.mod + justfile`).
 
 **Task runners**, in this order: `justfile`/`Justfile`/`.justfile`, `Makefile`/`makefile`/`GNUmakefile`,
-`Taskfile.yml`/`.yaml`, `deno.json`/`.jsonc` `tasks`. Grep the file for the names you need. A recipe counts
-only if it runs bare (no required parameter); the first runner with a recipe wins for that name.
+`Taskfile.yml`/`.yaml`, `deno.json`/`.jsonc` `tasks`. Grep the file for the names you need — except Deno's:
+parse its `tasks` object after stripping JSONC comments and trailing commas (a grep matches a commented-out
+task). A recipe counts only if it runs bare (no required parameter); the first runner with a recipe wins for
+that name.
 
 **Row 2 — read the recipe first.** A `check` whose body plainly covers less than rows 3–4 (lint only) is not
 the whole gate: fall through to rows 3–4 and say why.
@@ -43,8 +45,7 @@ the ecosystem's; a runner step no ecosystem proposes **joins** in that step orde
 justfile with `lint` and `test` → `just lint`, `go vet ./...`, `just test`, `go build ./...`.
 
 A repo doc (`CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`) naming another check command is evidence, not an
-override: run what the table gives, report the mismatch, suggest `docs/agents/gate.md`. No checks at all
-(Markdown only) → say `no gate`, never `gate=ok`.
+override: run what the table gives, report the mismatch, suggest `docs/agents/gate.md`.
 
 ## Run it
 
