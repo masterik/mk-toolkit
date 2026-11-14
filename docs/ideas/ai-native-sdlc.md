@@ -12,6 +12,8 @@ description: >
 # AI-native SDLC — how mkit could cover the whole loop
 
 **Status:** brainstorm, 2026-10-12. Not scheduled, not on [`backlog.md`](../backlog.md). Nothing built.
+M8 (`brainstorm`/`spec`/`implement`, `mkit plan`), which much of this note builds on, was dropped
+2026-11-14 ([#9](https://github.com/masterik/mk-toolkit/issues/9)): read its M8 proposals as void.
 
 **Source:** [The AI-native SDLC playbook](https://claude.com/resources/articles/the-ai-native-sdlc-playbook)
 (Anthropic, read 2026-10-12 as a summary, not verbatim). Mod mechanics are in

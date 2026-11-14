@@ -25,8 +25,7 @@ Skills orchestrate `git`, `gh`, CodeRabbit, Codex and, if installed, [Worktrunk]
 | `explain` | Re-explain the last answer or one session item in plain English (`simpler`, `eli5`, `deeper`). |
 | `recap` | Branch status in plain English: done, changed, left, and waiting on you. |
 
-Each skill runs alone, in any order. Planned: `brainstorm`, `spec`, `implement`
-([backlog](docs/backlog.md)).
+Each skill runs alone, in any order.
 
 **Usage.** Ask in plain words ("commit this", "review my changes", "open a PR", "where are we?"),
 or call a skill directly as `/mkit:<skill>`, for example `/mkit:review quick`. A typical branch:

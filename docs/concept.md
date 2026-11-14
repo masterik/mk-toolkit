@@ -64,9 +64,6 @@ many tool calls into two small, tested scripts.
 | `explain` | Re-explain the last answer or one session item in plain English. |
 | `recap` | Branch status in plain English: done, changed, left, waiting on you. |
 
-Planned, not yet built: `brainstorm`, `spec` and `implement`. Together they take an idea to a task
-graph and work through it slice by slice ([backlog](backlog.md)).
-
 All skills share one reference bundle, [`_shared/`](../plugin/skills/_shared/README.md). It covers git
 safety, Conventional Commits, gate detection, worktrees, review severity and lenses, triage, agent
 delegation, output discipline and plain-English writing.
@@ -122,14 +119,13 @@ your files or in `~/.claude`, which is sandbox-protected, so no allowlist entry 
 ## Workflow
 
 ```
-brainstorm → spec → implement → commit → review → pr ──┐
-                                                        ├─→ merged
-                                               finish ──┘
+commit → review → pr ──┐
+                        ├─→ merged
+               finish ──┘
 setup · cleanup · sandbox-audit · explain · recap   (outside the line)
 ```
 
-This is the common path, not a required one. A bug fix starts at `implement`, someone else's branch
-starts at `review`, and most changes are just `commit`. A step learns what came before from the branch's
+This is the common path, not a required one. Someone else's branch starts at `review`, and most changes are just `commit`. A step learns what came before from the branch's
 commits and its PR (subjects, bodies, review state), so the next step can reuse a goal instead of
 re-deriving it.
 
