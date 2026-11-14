@@ -127,7 +127,8 @@ reference lists.
   ignores `$TMPDIR`.
 - **Plan coverage (C5–C7).** A delegated commit plan once dropped a changed file; re-reading the diff in the
   main session paid for the delegation twice. Per-hunk assignment does not survive a 20-line budget.
-- **`pr=` sentinels (C9).** Every sentinel is non-empty; a non-empty test showed `none` as a PR.
+- **`pr=` sentinels (C9).** Every sentinel is non-empty; a non-empty test showed `none` as a PR. A failed
+  lookup is `gh-error`, never `none`: `none` is what `pr` opens a PR on, and what `finish` merges locally on.
 - **Explicit push (C22).** `pushed=yes` only proves *some* upstream, possibly on another remote.
 - **`state=MERGED` (C25).** `gh pr merge` success can mean "enqueued" or "auto-merge enabled"; deleting the
   only copy of a branch on that signal risks losing it. A squash/rebase merge leaves the local branch looking

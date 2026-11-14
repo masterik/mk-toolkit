@@ -57,6 +57,8 @@ func TestDoctorReportsEveryOldMkitLeftover(t *testing.T) {
 		`"old repo config"`, "run the `setup` skill",
 		"git rm '" + filepath.Join(repo, ".mkit", "config.toml") + "'",
 		`"old ignore pair"`, "delete these lines from '" + exclude + "'",
+		// The rule still hides the leftovers above: dropped first, `.mkit/` turns untracked.
+		"still hides", "remove the `.mkit/` leftovers first",
 		"`.mkit/*`", "`!.mkit/config.toml`",
 	} {
 		if !strings.Contains(res.stdout, want) {

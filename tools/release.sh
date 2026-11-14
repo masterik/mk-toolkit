@@ -10,12 +10,6 @@
 set -euo pipefail
 
 bump=${1:-auto}
-# Every agent's plugin manifest that exists (Claude Code's always; Codex's and Copilot's once
-# they ship, #56) — one tree, one version, bumped together.
-manifests=()
-for f in plugin/plugin.json plugin/.[!.]*/plugin.json plugin/.[!.]*/*/plugin.json; do
-  if [[ -f $f ]]; then manifests+=("$f"); fi
-done
 
 die() { echo "release: $*" >&2; exit 1; }
 semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
@@ -29,6 +23,13 @@ below() {
 
 cd "$(git rev-parse --show-toplevel)"
 [[ -f plugin/.claude-plugin/plugin.json ]] || die "plugin/.claude-plugin/plugin.json is missing"
+# Every agent's plugin manifest that exists (Claude Code's always; Codex's and Copilot's once
+# they ship, #56) — one tree, one version, bumped together. Globbed after the cd: run from
+# tools/, the paths matched nothing.
+manifests=()
+for f in plugin/plugin.json plugin/.[!.]*/plugin.json plugin/.[!.]*/*/plugin.json; do
+  if [[ -f $f ]]; then manifests+=("$f"); fi
+done
 [[ -t 0 ]] || die "needs a terminal to confirm on"
 [[ $(git branch --show-current) == main ]] || die "release from main only"
 dirty=$(git status --porcelain --untracked-files=no)

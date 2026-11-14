@@ -98,12 +98,41 @@ func TestOldConfigIsOnlyALeftover(t *testing.T) {
 // just a path.
 func TestBashReportsItsVersion(t *testing.T) {
 	isolate(t)
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash not on PATH here")
+	}
 	c := find(t, Run(Options{}), "bash")
 	if c.Status != OK {
-		t.Skipf("bash not on PATH here: %s", c.Detail)
+		t.Fatalf("bash on PATH but not OK: %+v", c)
 	}
 	if !strings.Contains(c.Detail, "bash ") || !strings.ContainsAny(c.Detail, "0123456789") {
 		t.Errorf("bash detail must name the version: %q", c.Detail)
+	}
+}
+
+// Below 3.2 is a Fail, and a bash whose version cannot be read is never OK.
+func TestBashCheckJudgesTheVersion(t *testing.T) {
+	dir := t.TempDir()
+	fake := func(name, body string) string {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	for _, tc := range []struct {
+		name, body string
+		want       Status
+	}{
+		{"old", "printf 3.1.17", Fail},
+		{"min", "printf 3.2.57", OK},
+		{"new", "printf 5.2.37", OK},
+		{"mute", "exit 0", Unknown},
+		{"broken", "exit 1", Unknown},
+	} {
+		if c := bashCheck(fake(tc.name, tc.body)); c.Status != tc.want {
+			t.Errorf("%s: status = %v, want %v (%+v)", tc.name, c.Status, tc.want, c)
+		}
 	}
 }
 

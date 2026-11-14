@@ -47,7 +47,7 @@ so whether the branch was pushed is unknown — never "not pushed".
 gh pr view <pr-url> --json title,body,baseRefName,reviewDecision,latestReviews
 ```
 
-Any other `pr=` value (`none`, `gh-missing`, `gh-unauthenticated`, `no-remote`, or absent on a detached
+Any other `pr=` value (`none`, `gh-missing`, `gh-unauthenticated`, `no-remote`, `gh-error`, or absent on a detached
 HEAD) is **one fewer input, never a stop**; a failed `gh pr view` is the same. Say in one line that the
 recap rests on the session and git alone, and name the `pr=` value only when it means the user could fix
 it (`gh-unauthenticated`).

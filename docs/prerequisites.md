@@ -148,7 +148,8 @@ export GOCACHE="$TMPDIR/go-build" GOMODCACHE="$TMPDIR/go-mod" GOLANGCI_LINT_CACH
 | `review`'s external reviewers | whatever `codex` and `coderabbit` call |
 
 If GitHub is unreachable, `cleanup` still classifies from git. It reports `fetch=failed` plus
-`gh=gh-unauthenticated` or `gh=gh-error`. `pr` can't open a PR without `api.github.com`.
+`gh=gh-unauthenticated` or `gh=gh-error`. `pr` can't open a PR without `api.github.com`: `facts.sh --gh`
+reports `pr=gh-error`, and `pr`/`finish` stop on it.
 
 ### Gotchas
 

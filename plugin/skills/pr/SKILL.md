@@ -42,7 +42,7 @@ Dirty tree → do `commit`'s work inline (`../commit/SKILL.md`) so nothing inten
 2. **Commits ahead of base.** If step 1 committed, re-count (`git rev-list --count <base>..HEAD`) — step 0's
    `commits_ahead_of_base` predates it. Zero → nothing to PR; stop.
 3. **Existing PR.** `pr=` is a URL only when one exists: show it and stop. `none` → proceed. `gh-missing`,
-   `gh-unauthenticated`, `no-remote` are blocked states: surface them. Test for a URL, not non-emptiness.
+   `gh-unauthenticated`, `no-remote`, `gh-error` are blocked states: surface them (with the `notes:` entry). Test for a URL, not non-emptiness.
 4. **Full quality gate** — `../_shared/references/quality-gate.md`: find the commands, run each to a log in
    `<run-dir>`, stop at the first failure, one line per step. A failure is the user's call: fix, or proceed
    as a draft. Skip only under its one reuse rule, and say so.

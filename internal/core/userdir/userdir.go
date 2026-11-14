@@ -58,9 +58,9 @@ func Dir() string {
 //
 // Net-zero by construction: the probe file always goes, and every directory this
 // had to create is removed again (the plugin's `facts.sh` probes the same way).
-// `mkit doctor` reports and writes nothing — creating user-scoped state as a
-// side effect of reporting on it would make the report the thing that changed the
-// answer.
+// `mkit doctor` reports and leaves nothing behind — creating user-scoped state as
+// a side effect of reporting on it would make the report the thing that changed
+// the answer.
 //
 // "Every" is load-bearing, and is why this counts absent ancestors rather than
 // setting a flag: MKIT_HOME need not have an existing parent, MkdirAll creates
