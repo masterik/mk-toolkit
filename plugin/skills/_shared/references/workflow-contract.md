@@ -3,9 +3,9 @@
 How mkit's steps compose. Every skill in the bundle is held to it.
 
 ```
-brainstorm → spec → implement → commit → review → pr ──┐
-                                                        ├─→ (merged)
-                                              finish ──┘
+commit → review → pr ──┐
+                        ├─→ (merged)
+              finish ──┘
 
 setup           optional, once per repo: settings as prose in docs/agents/ (repo-settings.md)
 cleanup         repo-wide gardening, not a step in the line
@@ -41,9 +41,6 @@ No skill needs the `mkit` binary but `sandbox-audit`.
 
 | step | needs | derives when absent | leaves behind |
 | --- | --- | --- | --- |
-| `brainstorm` | a question | — | the decisions reached, and the ones deferred |
-| `spec` | decisions | reads the conversation and the repo; no re-interview | the spec artifact + task graph |
-| `implement` | a task graph | one slice covering the ask | which slices landed, gate results |
 | `commit` | a dirty tree | — | the commits, messages saying why |
 | `review` | a diff + a goal | goal from the user or a spec in the session, then branch, commits, ticket | findings, verdicts, fixes applied |
 | `pr` | commits + a branch | commits first, inline | the PR: its body, gate verdict |
@@ -52,8 +49,7 @@ No skill needs the `mkit` binary but `sandbox-audit`.
 A step with nothing to do says so and stops (`commit` on a clean tree): a completed run with an empty result,
 not a failure.
 
-## Where the artifacts live
+## Where specs live
 
-The spec and task-graph store is **read, never assumed**: `docs/agents/issue-tracker.md` names it
-(`repo-settings.md`). A step whose artifact store is denied by a sandbox says which path was denied and falls
-back to the run directory.
+Where issues and specs live is **read, never assumed**: `docs/agents/issue-tracker.md` names it
+(`repo-settings.md`).

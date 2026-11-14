@@ -12,7 +12,7 @@ tools — no new git logic; `wt` optional. Targets Claude Code, Codex, Copilot; 
 epic #59): **no skill needs `mkit` but `sandbox-audit`** (it stops with a `brew` remedy; absent ≡ too
 old). No `.mkit/`, no gate ledger/worklog/findings pipeline, no `mkit init` or pinning; config is prose
 in lazy `docs/agents/*.md`, written by `setup`. Still open in #59: Codex/Copilot
-ports (#54–#57), Windows (#58). **Next: M8** (`spec`/`implement` skills). Milestones:
+ports (#54–#57), Windows (#58). **Next:** the ports. Milestones:
 [`backlog.md`](docs/backlog.md); the *why*: [`concept.md`](docs/concept.md).
 
 ## Rules
@@ -134,16 +134,14 @@ apply both ways:
 - **No hooks**, no `hooks` key (removed 0.15.0). **No `Stop`/`SubagentStop` hook** — its
   `additionalContext` renders in the transcript every turn (`concept.md`). If ever reintroduced:
   plugin-root `hooks/hooks.json`, **no `matcher`** (mistyped = silently never runs).
-- `plugin/skills/<name>/SKILL.md` — **seven-step** workflow (`brainstorm` → `spec` → `implement` →
-  `commit` → `review` → `pr`/`finish`) plus `cleanup` (branches/worktrees), `sandbox-audit` (user-wide
-  → proposed settings diff, never edits; **the one skill that needs the binary**: `mkit audit sandbox`
+- `plugin/skills/<name>/SKILL.md` — workflow (`commit` → `review` → `pr`/`finish`) plus `cleanup`
+  (branches/worktrees), `sandbox-audit` (user-wide → proposed settings diff, never edits; **the one skill that needs the binary**: `mkit audit sandbox`
   is its first call and dependency check), `explain` and `recap` (plain English, share
   `_shared/references/plain-english.md`; `explain` runs nothing; `recap` read-only,
   `facts.sh recap --gh` + `git log <base>..HEAD` bodies + the PR, records nothing), `setup` (user-only;
   writes the repo-settings files below). **Nine exist**: `commit`, `review`, `pr`, `finish`,
-  `cleanup`, `sandbox-audit`, `explain`, `recap`, `setup`; `brainstorm`/`spec`/`implement` unbuilt (M8) — never
-  describe as shipping. Steps **composable, not sequential**: entry-capable, any order/subset, derive
-  a thin version of what's missing, name assumptions. Never tell the user to run another skill first
+  `cleanup`, `sandbox-audit`, `explain`, `recap`, `setup`. Steps **composable, not sequential**:
+  entry-capable, any order/subset, derive a thin version of what's missing, name assumptions. Never tell the user to run another skill first
   or run a downstream step. Contract: `_shared/references/workflow-contract.md`.
 - **Repo settings** (ADR 0006 decision 7) — lazy prose `docs/agents/{commit,review,merge,remote,gate,cleanup}.md`
   in the *target* repo, one per non-default choice, listed under `### mkit workflow` in `## Agent skills`.

@@ -55,26 +55,6 @@ Breaking one is a design error, not a trade-off.
 
 ## Next
 
-### M8: the `spec` and `implement` skills ([#9](https://github.com/masterik/mk-toolkit/issues/9))
-
-This is the workflow's front half. `brainstorm` can land at any time. Like every skill, none of the
-three may need the binary (invariant 11), so the planned `mkit plan` verb is out.
-
-- **Frontier arithmetic** (unblocked slices, blockers, cycles, dangling edges): prose in a shared
-  reference, or a third bundled script if it replaces many calls (that needs its own ADR,
-  [ADR 0006](adr/0006-standalone-skills-optional-binary.md)). It never picks or sizes a slice.
-- **`spec`**: turns the discussion so far into a spec plus a task graph, without re-interviewing the
-  user. It publishes to the store `docs/agents/issue-tracker.md` names, falling back to the run dir.
-- **`implement`**: works the frontier one slice at a time, running the gate between slices. It runs
-  sequentially in place by default, for two reasons: `wt` is fragile under the sandbox (it was seen
-  failing to `mktemp`), and two editors in one tree collide. Parallel worktrees would be a
-  `docs/agents/` setting.
-
-**Done when** `implement`, in a fresh session, can work a spec from `spec` using only the artifact and
-the branch's commits.
-
-### Also open
-
 - **Rest of epic [#59](https://github.com/masterik/mk-toolkit/issues/59)**:
   Codex and Copilot ports (#54–#57), Windows via Git Bash (#58).
 - **Signing and notarization**: [#28](https://github.com/masterik/mk-toolkit/issues/28). Until then,
@@ -83,15 +63,8 @@ the branch's commits.
 
 ## Later
 
-- **Hunk staging helper**: replaces `commit`'s Markdown patch-staging recipe
-  ([#11](https://github.com/masterik/mk-toolkit/issues/11)). Not a binary verb: `commit` must not need
-  the binary.
 - **`mkit session show`**: reads earlier Claude Code transcript turns back, so `explain` can cover
   compacted context when the binary is present, never requiring it.
-- **TUIs for `cleanup` and `review`**: [#12](https://github.com/masterik/mk-toolkit/issues/12),
-  [#13](https://github.com/masterik/mk-toolkit/issues/13).
-- **`install` / `uninstall`**: only if a job appears that manual steps can't do
-  ([#10](https://github.com/masterik/mk-toolkit/issues/10)).
 
 ## Done
 
