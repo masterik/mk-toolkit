@@ -241,7 +241,7 @@ Single-context: `CONTEXT.md` and `docs/adr/` at the repo root, created lazily. S
 ### mkit workflow
 
 Settings for mkit's skills; a file not listed means the default, or what the skill discovers. Defaults
-throughout: scopes from history, `full` review, `merge` style, `CODEOWNERS` reviewers, remote by `origin` →
+throughout: scopes from history, `full` review, `merge` style, `CODEOWNERS` reviewers (else ask), remote by `origin` →
 lone remote → ask, gate detected (`just ci`), cleanup keeps the default and develop branches. Add a
 `docs/agents/<area>.md` file (or re-run `setup`) to change one.
 
