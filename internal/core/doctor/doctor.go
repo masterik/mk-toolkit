@@ -10,9 +10,11 @@
 // cannot report on itself. Both were the hook's job and both are accepted losses
 // (docs/backlog.md, "Accepted gaps").
 //
-// Every degradation sentence has exactly one producer: the Go package that owns
-// the surface — `userdir` for the user-scoped directory, `pluginroot` for a
-// missing payload.
+// Every degradation sentence has one producer in the binary: the Go package that
+// owns the surface — `userdir` for the user-scoped directory, `pluginroot` for a
+// missing payload. Doctor relays, never re-words. The plugin cannot call the
+// binary (ADR 0006), so its `facts.sh` prints the user-dir sentence itself; a test
+// in `userdir` holds that copy to `userdir.Remedy()` word for word.
 //
 // The binary is optional (ADR 0006): the skills run without it, so nothing here
 // is a precondition for them. Doctor checks what they compose (git, gh, bash,

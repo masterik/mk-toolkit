@@ -13,7 +13,8 @@
 # `--keep` names what the repo's cleanup config keeps.
 #
 # Output: `key=value` lines, then the `branches:` and `worktrees:` tables (tab-separated),
-# then `notes:` when there is something to say.
+# then `notes:` when there is something to say, in facts.sh's entry format; a cause
+# facts.sh found (an unknown --remote) is relayed as facts.sh worded it.
 #
 #   branches:  name  class  upstream  merged_into  pr
 #     class    protected | current | merged | merged-pr | open-pr | closed-pr | gone |
@@ -22,13 +23,13 @@
 #     merged_into  default/develop it is an ancestor of, comma-joined, or `-`
 #     pr       open#12 | merged#12 | closed#12 (the newest PR for that head), or `-`
 #   worktrees: branch (HEAD when detached)  path  origin  clean
-#     origin   primary | claude-code | linked
+#     origin   primary | claude-code | linked (facts.sh --worktrees classifies)
 #     clean    yes | no | missing (path gone) | error (status failed; never collapsed into yes)
 #
 # `protected=`, `keep=`, `keep_unknown=` are comma-joined for reading; a branch name may
 # contain a comma, so the `class` column is the exact answer per branch.
 #
-# Exit: 0 ok; 1 not a git repo or facts.sh failed; 2 bad usage or a --default with no
+# Exit: 0 ok; 1 not a git repo, facts.sh failed, or a git query failed; 2 bad usage or a --default with no
 # local branch. bash 3.2 compatible.
 
 set -u
@@ -72,13 +73,20 @@ toplevel="$(git rev-parse --show-toplevel 2>/dev/null)" || die 'not inside a git
 [ -n "$toplevel" ] || die 'not inside a git work tree' 1
 cd "$toplevel" || die "cannot enter $toplevel" 1
 
-# The remote and the default branch, resolved once, by facts.sh.
-if [ -n "$chosen" ]; then
-	facts="$(bash "$here/facts.sh" cleanup --remote "$chosen")" || die 'facts.sh failed' 1
-else
-	facts="$(bash "$here/facts.sh" cleanup)" || die 'facts.sh failed' 1
-fi
+# The remote, the default branch and every worktree's origin, resolved once, by facts.sh.
+set -- cleanup --worktrees
+[ -n "$chosen" ] && set -- "$@" --remote "$chosen"
+facts="$(bash "$here/facts.sh" "$@")" || die 'facts.sh failed' 1
 fact() { printf '%s\n' "$facts" | sed -n "s/^$1=//p" | head -1; }
+# The lines of facts.sh's `<name>:` block (it ends at the next unindented `word:`/`word=`).
+fact_block() {
+	printf '%s\n' "$facts" | awk -v h="$1:" '
+		$0 == h { inblock = 1; next }
+		inblock && /^[a-z_]+[:=]/ { exit }
+		inblock { print }'
+}
+# facts.sh's `notes:` entry for <key>, word for word: one wording per cause.
+fact_note() { fact_block notes | grep -- "^- $1=" || true; }
 remote="$(fact remote)"
 [ "$remote" = none ] && remote=''
 remote_repo="$(fact remote_repo)"
@@ -99,7 +107,7 @@ notes=''
 # this repo's branches to keep.
 if [ -n "$develop" ]; then
 	if ! has_local "$develop"; then
-		notes="$notes- develop: --develop '$develop' is not a local branch here; nothing extra is protected$nl"
+		notes="$notes- develop=none — --develop '$develop' is not a local branch here; nothing extra is protected$nl"
 		develop=none
 	fi
 else
@@ -133,9 +141,8 @@ EOF
 printf 'default=%s\ndevelop=%s\n' "$def" "$develop"
 printf 'protected=%s\nkeep=%s\nkeep_unknown=%s\n' "$(join "$protected")" "$(join "$keep")" "$(join "$keep_unknown")"
 printf 'remote=%s\n' "${remote:-none}"
-if [ -n "$chosen" ] && [ "$chosen" != "$remote" ]; then
-	notes="$notes- remote: --remote '$chosen' is not a remote of this checkout; ${remote:-no remote} is used instead$nl"
-fi
+remote_note="$(fact_note remote_source)"
+[ -n "$remote_note" ] && notes="$notes$remote_note$nl"
 
 if [ "$no_fetch" = yes ]; then
 	fetch=skipped
@@ -193,9 +200,13 @@ oid_is_local() { # <branch> <oid>
 	git merge-base --is-ancestor "refs/heads/$1" "$2"
 }
 
-current="$(git branch --show-current 2>/dev/null)" || current=''
+# Both read before the table starts: a failure is an error, never an empty `branches:`
+# (which reads as "nothing to clean up") or a current branch nobody is on.
+current="$(git branch --show-current)" || die 'git branch --show-current failed' 1
+refs="$(git for-each-ref refs/heads --format='%(refname:lstrip=2)%09%(upstream)%09%(upstream:track)')" ||
+	die 'git for-each-ref refs/heads failed, so there is no branch list' 1
 printf 'branches:\n'
-git for-each-ref refs/heads --format='%(refname:lstrip=2)%09%(upstream)%09%(upstream:track)' |
+printf '%s\n' "$refs" |
 	while IFS='	' read -r name up track; do
 		[ -n "$name" ] || continue
 		if [ -z "$up" ]; then
@@ -249,24 +260,21 @@ git for-each-ref refs/heads --format='%(refname:lstrip=2)%09%(upstream)%09%(upst
 
 printf 'worktrees:\n'
 if [ "$worktrees_state" = ok ]; then
-	primary=''
+	origins="$(fact_block worktree_origins)"
 	printf '%s\n' "$wt_raw" | while IFS= read -r line; do
 		case "$line" in
 		'worktree '*)
 			path="${line#worktree }"
-			[ -n "$primary" ] || primary="$path"
 			continue
 			;;
 		'branch '*) wbranch="${line#branch refs/heads/}" ;;
 		detached) wbranch=HEAD ;;
 		*) continue ;;
 		esac
-		origin=linked
-		if [ "$path" = "$primary" ]; then
-			origin=primary
-		else
-			case "$path" in */.claude/worktrees/*) origin=claude-code ;; esac
-		fi
+		# facts.sh's classifier; a worktree added since it ran is `linked`.
+		origin="$(printf '%s\n' "$origins" | WT_PATH="$path" awk -F'\t' '
+			{ o = $1; sub(/^[^\t]*\t/, "") } $0 == ENVIRON["WT_PATH"] { print o; exit }')"
+		[ -n "$origin" ] || origin=linked
 		# A failed status and an empty one never collapse into the same answer.
 		if [ ! -d "$path" ]; then
 			clean=missing
@@ -280,6 +288,7 @@ if [ "$worktrees_state" = ok ]; then
 fi
 
 if [ -n "$notes" ]; then
+	# facts.sh's format: `- <key>=<value> — <cause>`, one entry per line.
 	printf 'notes:\n%s' "$notes"
 fi
 exit 0

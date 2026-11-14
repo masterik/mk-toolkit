@@ -159,17 +159,21 @@ apply both ways:
 - `plugin/skills/_shared/` — references and `scripts/`, no `SKILL.md`; **keep `../_shared/…` paths
   relative**. Skills run `bash ../_shared/scripts/<name>.sh`, resolved against their own `SKILL.md`
   directory (no agent sets a skill-root env var in a skill body).
-- `facts.sh <skill> [--run] [--gh] [--base] [--range] [--remote]` — every starting fact, one call;
+- `facts.sh <skill> [--run] [--gh] [--base] [--range] [--remote] [--worktrees]` — every starting fact, one call;
   **never reads config**. `--run` → `run_dir=` under `$TMPDIR`. `cd` toplevel first (pathspec lists and
   `--shortstat` agree). **Both** `unstaged_stat` and `staged_stat` (fully-staged looks clean otherwise);
   separate `untracked_file_list`. Unresolvable `--base`/`--range` →
   `*_state=unresolvable` **+ exit 1**. Failed git query = error, never empty (`git status` failing ≠
-  `clean=yes`). Remote: `--remote` → `origin` → lone → first; `remote_choice=ask` → the skill asks, re-runs
+  `clean=yes`; a failed ahead/behind count ≠ `0 0`; a failed `remote get-url` ≠ no GitHub repo).
+  Remote: `--remote` → `origin` → lone → first; `remote_choice=ask` → the skill asks, re-runs
   with `--remote` (`_shared/references/remote.md`); a `--remote` naming nothing falls back + `notes:`.
-  `user_dir_writable=` is a net-zero write probe. Causes go in trailing `notes:`, never on a `key=value`
-  line (some pack two pairs).
+  `user_dir_writable=` is a net-zero write probe; its `notes:` remedy is `userdir.Remedy()` verbatim
+  (`userdir_test.go` compares). Causes go in trailing `notes:`, never on a `key=value` line (some pack
+  two pairs): one `- <key>=<value> — …` entry per line, the format both scripts share.
 - `branch-status.sh [--default] [--develop] [--keep]… [--remote] [--no-fetch] [--no-gh]` — `cleanup`'s
-  classifier. Default/remote come from `facts.sh` (one resolver); `--keep` is what
+  classifier. Default, remote and each worktree's origin (`--worktrees`) come from `facts.sh` (one
+  resolver), and its `--remote` note is relayed, not re-worded; a failed branch listing is exit 1, never
+  an empty `branches:`; `--keep` is what
   `docs/agents/cleanup.md` keeps. **One batched `gh` call** (`--jq`, no `jq`). Default/develop tested by
   name (may contain commas); a kept branch is never a merge target. `merged` PR refused unless the branch
   tip is its `headRefOid` or an ancestor of it. Failed worktree `git status` → `clean=error`.
@@ -182,8 +186,8 @@ apply both ways:
   `info/exclude` write; `git add -A` and `git worktree remove` never meet a run artefact (`setup`'s
   `docs/agents/*.md` are user-confirmed docs, not state). An old `.mkit/` (incl. `config.toml`) shows as
   untracked; `doctor` names the remedy.
-- `<run-dir>` — `facts.sh --run` → `mktemp -d "$TMPDIR/mkit-<skill>-XXXXXX"`; dies with the session,
-  nothing to prune.
+- `<run-dir>` — `facts.sh --run` → `mktemp -d "$TMPDIR/mkit-<skill>-XXXXXX"` (`$TMPDIR` unset: bare
+  `mktemp -d`, the system's choice; the script never names `/tmp`); dies with the session, nothing to prune.
 - `~/.mkit/` (`MKIT_HOME`) — user-scoped state; the binary writes nothing there but its probe. Holds
   `sandbox-audit.md` (agent-written ledger). `facts.sh` probes it. **Not `~/.claude/mkit/`**: protected
   region, allowlists inert; here one `permissions.additionalDirectories` entry works.

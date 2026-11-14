@@ -22,7 +22,8 @@ It prints `key=value` lines, then `<name>:` blocks, then a trailing `notes:` blo
 - `codeowners=` (a path or `none`). `--base <b>` adds `commits:` (`<b>..HEAD`), `base_stat`,
   `commits_ahead_of_base`, `ff_from_base`; `--range <r>` adds `range_stat` and its file list; `--gh` adds
   `pr=` `pr_state=` `pr_draft=`; `--remote <name>` picks the remote.
-- **`notes:`** — a cause and its remedy, when something needs a sentence. Report it as given.
+- **`notes:`** — a cause and its remedy, when something needs a sentence: one `- <key>=<value> — …` entry
+  per line, naming the fact it explains. Report it as given.
 - Exit 1: not a work tree, a failed git query, or an unresolvable `--base`/`--range`
   (`*_state=unresolvable`). Exit 2: bad usage. Never `mkdir` a substitute run directory.
 

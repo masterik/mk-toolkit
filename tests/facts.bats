@@ -121,6 +121,16 @@ teardown() { mkit_teardown_repo; }
 	[ ! -e .mkit ]
 }
 
+# With TMPDIR unset the run dir is mktemp's own default, never a /tmp this script names.
+@test "--run without TMPDIR still creates a run dir" {
+	run env -u TMPDIR "$TEST_BASH" "$SCRIPTS/facts.sh" commit --run
+	[ "$status" -eq 0 ]
+	dir="$(field run_dir)"
+	[ -d "$dir" ]
+	rmdir "$dir"
+	! grep -n '/tmp' "$SCRIPTS/facts.sh"
+}
+
 # --- usage -----------------------------------------------------------------------------
 
 @test "usage errors exit 2" {
@@ -248,6 +258,21 @@ teardown() { mkit_teardown_repo; }
 	[ "$(field cleanup_path)" = exit-worktree ]
 }
 
+# branch-status.sh reads every worktree's origin from here: one classifier.
+@test "--worktrees lists every worktree's origin" {
+	mkdir -p "$TEST_TMP/.claude/worktrees"
+	git worktree add -q -b a "$TEST_TMP/.claude/worktrees/a" main
+	git worktree add -q -b b "$TEST_TMP/wt b" main
+	run facts cleanup
+	[[ "$output" != *"worktree_origins:"* ]]
+	run facts cleanup --worktrees
+	[ "$status" -eq 0 ]
+	block="$(printf '%s\n' "$output" | sed -n '/^worktree_origins:$/,/^[a-z_]*[:=]/p')"
+	[[ "$block" == *"primary	$REPO"* ]]
+	[[ "$block" == *"claude-code	$TEST_TMP/.claude/worktrees/a"* ]]
+	[[ "$block" == *"linked	$TEST_TMP/wt b"* ]]
+}
+
 @test "upstream, ahead and behind" {
 	run facts pr
 	[ "$(field upstream)" = none ]
@@ -263,6 +288,27 @@ teardown() { mkit_teardown_repo; }
 	[ "$(field pushed)" = yes ]
 	[ "$(field ahead)" = 1 ]
 	[ "$(field behind)" = 0 ]
+}
+
+# `ahead=0 behind=0` is what `finish` reads as "nothing to push": a failed count must
+# never print it.
+@test "a failing ahead/behind count is an error, never 0/0" {
+	git init -q --bare "$TEST_TMP/remote.git"
+	git remote add origin "$TEST_TMP/remote.git"
+	git push -q -u origin main 2>/dev/null
+	stub_git_fail 'rev-list --left-right'
+	run facts pr
+	[ "$status" -eq 1 ]
+	[[ "$output" != *"ahead="* ]]
+}
+
+# An empty URL reads as "not a GitHub remote", and `gh` then guesses the repo.
+@test "a failing remote URL lookup is an error, never remote_repo=none" {
+	git remote add origin https://github.com/me/repo.git
+	stub_git_fail 'remote get-url'
+	run facts pr
+	[ "$status" -eq 1 ]
+	[[ "$output" != *"remote_repo="* ]]
 }
 
 # --- remote resolution (ADR 0005, amended by ADR 0006) ---------------------------------
@@ -321,7 +367,8 @@ teardown() { mkit_teardown_repo; }
 	[ "$(field remote)" = origin ]
 	[ "$(field remote_source)" = origin ]
 	[ "$(field remote_choice)" = ask ]
-	[[ "$output" == *"notes:"*"--remote 'gone' is not a remote of this checkout"* ]]
+	[[ "$output" == *"notes:
+- remote_source=origin — --remote 'gone' is not a remote of this checkout"* ]]
 }
 
 @test "remote_repo is owner/repo for GitHub remotes only" {
@@ -454,7 +501,16 @@ teardown() { mkit_teardown_repo; }
 	chmod 700 "$MKIT_HOME"
 	[ "$status" -eq 0 ]
 	[ "$(field user_dir_writable)" = no ]
-	[[ "$output" == *"notes:"*"user_dir_writable=no"*"permissions.additionalDirectories"* ]]
+	[[ "$output" == *"notes:"*"- user_dir_writable=no — run \`! mkdir -p $MKIT_HOME\`"*"permissions.additionalDirectories"* ]]
 	[[ "$output" != *".claude/mkit"* ]]
 	[ -z "$(ls -A "$MKIT_HOME")" ]
+}
+
+# The remedy is userdir.Remedy()'s sentence (a Go test compares them); a path a shell
+# would split is quoted the same way.
+@test "the user-dir remedy quotes a path the shell would split" {
+	export MKIT_HOME="$REPO/seed.txt/my state"
+	run facts commit
+	[ "$(field user_dir_writable)" = no ]
+	[[ "$output" == *"run \`! mkdir -p '$MKIT_HOME'\`"* ]]
 }
