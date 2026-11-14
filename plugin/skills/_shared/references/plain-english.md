@@ -25,7 +25,7 @@ subject.
 - **Common words over precise ones** when the meaning survives: "use" over "leverage", "check" over
   "validate", "stops" over "terminates". Keep a precise word when the meaning would change without it.
 - **Define a term once, where it first appears,** in plain words and in passing: "the quality gate (the
-  checks — lint, tests, build — that must pass before a merge)". Don't define it again later in the same answer.
+  repo's checks, such as lint, tests and build, that must pass before a PR or a merge)". Don't define it again later in the same answer.
 - **Concrete before abstract.** Give the example first, then the rule it shows.
 - **Active voice, named actors.** "`finish` deletes the branch", not "the branch is deleted".
 - **No copying.** Never reuse the original answer's sentences. If the reader could have understood those
