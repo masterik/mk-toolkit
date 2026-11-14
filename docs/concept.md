@@ -27,8 +27,9 @@ many tool calls into two small, tested scripts.
   split is unclear, a script reports candidates and the skill picks.
 - **Compose, don't replace.** Orchestrate `git`, `gh`, CodeRabbit, Codex and (optionally) `wt`. The
   scripts and the binary never stage, merge, push or edit your files. Their writes are limited to
-  remote-tracking refs (`branch-status.sh`'s `git fetch --prune`) and `mkit cache prune --apply`,
-  which deletes stale Claude Code and Codex storage when you ask it to.
+  remote-tracking refs (`branch-status.sh`'s `git fetch --prune`), `facts.sh --run`'s run dir under
+  `$TMPDIR`, the binary's net-zero write probes, and `mkit cache prune --apply`, which deletes stale
+  Claude Code and Codex storage when you ask it to.
 - **A recorded fact is an input, never a permission.** A skill may skip work because the commit
   history, the PR, or (for the gate) a pass earlier in the same session shows it was already done, and it says so. A missing record is never a reason to
   stop.
@@ -98,6 +99,7 @@ Each repo-scoped skill starts with the bundled `facts.sh <skill>`. The exception
 
 - `sandbox-audit` starts with `mkit audit sandbox`.
 - `explain` runs nothing.
+- `setup` explores with plain `git` calls and the repo's files.
 
 No skill checks for the binary but `sandbox-audit`, which stops with a `brew` remedy when
 `mkit audit sandbox` is missing or too old.
@@ -108,7 +110,8 @@ Two write locations, chosen by lifetime:
 
 | Where | What | Lifetime |
 | --- | --- | --- |
-| `$TMPDIR` | per-run files (`facts.sh --run`'s run dir) and anything that dies with the command | one session |
+| `$TMPDIR` | per-run files (`facts.sh --run`'s run dir) | one session |
+| `$TMPDIR` | anything that dies with the command | one call |
 | `~/.mkit/` (`MKIT_HOME`) | user-scoped state; today only the `sandbox-audit` ledger | across repos |
 
 Nothing goes in the work tree, so there is no ignore rule to write and nothing to prune

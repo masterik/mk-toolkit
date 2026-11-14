@@ -63,7 +63,8 @@ These are the ones changes break most often. The full list is the
 - **Commands report and run.** They never stage, merge, push, or edit your files.
 - **Nothing writes into the work tree.** Skills keep per-run files in `$TMPDIR` (`facts.sh --run`);
   `~/.mkit/` holds the `sandbox-audit` ledger; `branch-status.sh` runs `git fetch --prune`. The
-  binary's only write is `cache prune --apply` deleting stale Claude Code / Codex storage.
+  binary's only persistent write is `cache prune --apply` deleting stale Claude Code / Codex storage;
+  its write probes (`~/.mkit`, `$TMPDIR`) are net-zero.
 - **Skills are composable.** Each runs alone, in any order, and never sends the user to another
   skill first ([workflow contract](plugin/skills/_shared/references/workflow-contract.md)).
 - **Nothing project-specific is hardcoded.** Gate commands, commit scopes and reviewers are discovered

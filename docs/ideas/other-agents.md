@@ -107,6 +107,6 @@ Follows from the table, for whoever ports a skill:
 - `.agents/skills` is the one project path both agents read; `.claude/skills` misses Codex.
 - Under Codex's default sandbox, `commit`, `pr` and `finish` hit an approval on every `git commit`
   and `gh` call; that is the agent's gate, not a failure to report.
-- A skill that asks a structured question needs a plain-text fallback (Codex default mode, Copilot
-  coding agent).
+- A skill that asks a structured question needs a plain-text fallback in Codex default mode; on the
+  Copilot coding agent, which runs unattended, it takes the default instead.
 - A skill that takes arguments reads them from the free-text request, never `$ARGUMENTS`.
