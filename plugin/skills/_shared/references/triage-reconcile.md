@@ -30,8 +30,9 @@ something looser — free prose, a different layout — is read for the same fie
    - **lists the reviewers** that raised it — agreement between independent reviewers is signal, and
      the report says so. One reviewer raising it under two lenses is still one source.
    - spans the union of the line ranges.
-3. **Flag, don't merge, a near-duplicate**: same file, ranges not overlapping but within about **5
-   lines** of each other (any surface). Keep both, and mark the later one `possible duplicate of F<n>`.
+3. **Flag, don't merge, a near-duplicate**: same file, and either overlapping ranges with a different
+   surface, or ranges not overlapping but within about **5 lines** of each other (any surface). Keep both,
+   and mark the later one `possible duplicate of F<n>`.
    The verifier settles it with the code in front of it.
 4. **Number the survivors** `F1`, `F2`, … ordered by severity (critical → major → minor), then file,
    then line. The ids are what verdicts, fixes and the report refer to from here on.
