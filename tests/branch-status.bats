@@ -251,10 +251,13 @@ $facts_note"* ]]
 	[[ "$output" != *"branches:"* ]]
 }
 
+# facts.sh asks first; failing that call would stop the run before branch-status.sh's own
+# lookup, and the test would pass with that lookup unguarded.
 @test "a failing current-branch lookup is an error" {
-	stub_git_fail 'branch --show-current'
+	stub_git_fail 'branch --show-current' 1
 	run branch_status --default main --no-fetch --no-gh
 	[ "$status" -eq 1 ]
+	[[ "$output" == *"branch-status.sh: git branch --show-current failed"* ]]
 	[[ "$output" != *"branches:"* ]]
 }
 

@@ -100,7 +100,8 @@ EOS
 
 # A `git` first on PATH that fails — exit 128, like git's own fatal — for any call
 # whose argument list contains the words in $GIT_FAIL, and runs the real git for
-# every other call.
+# every other call. With a second argument N, the first N matching calls run the real
+# git and only later ones fail (branch-status.sh repeats a query facts.sh made first).
 stub_git_fail() {
 	local dir="$BATS_TEST_TMPDIR/stubgit" real
 	real="$(command -v git)" || return 1
@@ -108,11 +109,16 @@ stub_git_fail() {
 	cat >"$dir/git" <<EOS
 #!/usr/bin/env bash
 case " \$* " in
-*" \$GIT_FAIL "*) echo "fatal: stubbed failure: \$*" >&2; exit 128 ;;
+*" \$GIT_FAIL "*)
+	n=\$(cat "\$GIT_FAIL_COUNT" 2>/dev/null || echo 0)
+	echo \$((n + 1)) >"\$GIT_FAIL_COUNT"
+	[ "\$n" -lt "\$GIT_FAIL_SKIP" ] || { echo "fatal: stubbed failure: \$*" >&2; exit 128; }
+	;;
 esac
 exec '$real' "\$@"
 EOS
 	chmod +x "$dir/git"
-	export GIT_FAIL="$1"
+	export GIT_FAIL="$1" GIT_FAIL_SKIP="${2:-0}" GIT_FAIL_COUNT="$dir/count"
+	rm -f -- "$GIT_FAIL_COUNT"
 	PATH="$dir:$PATH"
 }
