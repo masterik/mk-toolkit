@@ -1,8 +1,10 @@
 // Package gitrepo answers the two questions about the surrounding git
 // repository the binary still asks: where the work tree is, and where its
 // common dir is. `doctor` reads both for the leftovers older releases wrote;
-// `claudecfg` uses Open to find a work tree's settings. Every other repo
-// question moved into the plugin's scripts (ADR 0006).
+// `claudecfg` uses Open to find a work tree's settings. Of the other repo
+// questions, remote and branch facts moved into the plugin's scripts; the
+// ignore-rule, tracked-file and local-config ones went with `.mkit/` and the
+// config file (ADR 0006).
 //
 // It shells out to git rather than linking a git library, with stable machine
 // output only.
