@@ -70,7 +70,7 @@ fake_path() {
 # A stub `gh` first on PATH. It logs every call to $GH_LOG, fails `auth status` when
 # GH_AUTH=fail, and answers `pr view`/`pr list` from the JSON in $GH_VIEW/$GH_LIST
 # (absent = gh's "no pull requests found", exit 1), applying `--jq` with the real jq
-# so the scripts' filters are exercised.
+# so the scripts' filters are exercised. GH_ERROR set: `pr view`/`pr list` fail with it.
 stub_gh() {
 	local dir="$BATS_TEST_TMPDIR/stubgh"
 	mkdir -p "$dir"
@@ -81,6 +81,7 @@ printf '%s\n' "$*" >>"$GH_LOG"
 case "$1 $2" in
 "auth status") [ "${GH_AUTH:-ok}" = ok ] ;;
 "pr view" | "pr list")
+	[ -z "${GH_ERROR:-}" ] || { printf '%s\n' "$GH_ERROR" >&2; exit 1; }
 	if [ "$2" = view ]; then json="${GH_VIEW:-}"; else json="${GH_LIST:-}"; fi
 	[ -n "$json" ] || { echo 'no pull requests found' >&2; exit 1; }
 	jq_expr=''

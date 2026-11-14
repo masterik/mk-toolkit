@@ -502,6 +502,17 @@ teardown() { mkit_teardown_repo; }
 	[ "$(field pr)" = gh-unauthenticated ]
 }
 
+# `none` is what `pr` opens a PR on: a lookup that failed for another reason (network,
+# rate limit, a repo gh cannot see) may hide an open PR, so it is never `none`.
+@test "a failed PR lookup is pr=gh-error with gh's message, never none" {
+	git remote add origin https://github.com/me/fork.git
+	stub_gh
+	GH_ERROR='HTTP 502: Bad Gateway' run facts pr --gh
+	[ "$status" -eq 0 ]
+	[ "$(field pr)" = gh-error ]
+	[[ "$output" == *"notes:"*"- pr=gh-error — gh pr view failed: HTTP 502: Bad Gateway."* ]]
+}
+
 # `gh pr view --repo` needs a branch, and a detached HEAD has none to have a PR.
 @test "a detached HEAD skips the PR lookup" {
 	git remote add origin https://github.com/me/fork.git

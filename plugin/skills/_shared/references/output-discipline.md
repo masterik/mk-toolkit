@@ -21,7 +21,7 @@ It prints `key=value` lines, then `<name>:` blocks, then a trailing `notes:` blo
   `user_dir_writable=`.
 - `codeowners=` (a path or `none`). `--base <b>` adds `commits:` (`<b>..HEAD`), `base_stat`,
   `commits_ahead_of_base`, `ff_from_base`; `--range <r>` adds `range_stat` and its file list; `--gh` adds
-  `pr=` `pr_state=` `pr_draft=`; `--remote <name>` picks the remote.
+  `pr=` (a URL, or `none`/`gh-missing`/`gh-unauthenticated`/`no-remote`/`gh-error`) `pr_state=` `pr_draft=`; `--remote <name>` picks the remote.
 - **`notes:`** — a cause and its remedy, when something needs a sentence: one `- <key>=<value> — …` entry
   per line, naming the fact it explains. Report it as given.
 - Exit 1: not a work tree, a failed git query, or an unresolvable `--base`/`--range`

@@ -379,21 +379,33 @@ if [ "$want_gh" = yes ]; then
 	if ! command -v gh >/dev/null 2>&1; then
 		printf 'pr=gh-missing\n'
 	else
-		pr=''
+		pr='' gh_err=''
 		if [ "$detached" = no ]; then
 			if [ -n "$remote_repo" ]; then
 				set -- pr view "$branch" --repo "$remote_repo"
 			else
 				set -- pr view
 			fi
-			pr="$(gh "$@" --json url,state,isDraft --jq '[.url, .state, (.isDraft|tostring)] | @tsv' 2>/dev/null)" || pr=''
+			# stderr joins stdout so a failure can be told apart: only gh's "no pull requests
+			# found" is `none`. A success is the one three-field row.
+			if out="$(gh "$@" --json url,state,isDraft --jq '[.url, .state, (.isDraft|tostring)] | @tsv' 2>&1)"; then
+				pr="$(printf '%s\n' "$out" | awk -F'\t' 'NF == 3 { print; exit }')"
+			else
+				case "$out" in
+				*'no pull requests found'*) ;;
+				*) gh_err="$(printf '%s\n' "$out" | grep . | head -1)" ;;
+				esac
+			fi
 		fi
 		if [ -n "$pr" ]; then
-			printf '%s\n' "$pr" | head -1 | awk -F'\t' '{ printf "pr=%s pr_state=%s pr_draft=%s\n", $1, $2, $3 }'
+			printf '%s\n' "$pr" | awk -F'\t' '{ printf "pr=%s pr_state=%s pr_draft=%s\n", $1, $2, $3 }'
 		elif ! gh auth status >/dev/null 2>&1; then
 			printf 'pr=gh-unauthenticated\n'
 		elif [ -z "$remote" ]; then
 			printf 'pr=no-remote\n'
+		elif [ -n "$gh_err" ]; then
+			printf 'pr=gh-error\n'
+			note "pr=gh-error — gh pr view failed: $gh_err. Whether a PR exists is unknown, so do not open one or merge locally on this answer."
 		else
 			printf 'pr=none\n'
 		fi

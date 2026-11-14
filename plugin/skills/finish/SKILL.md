@@ -30,8 +30,9 @@ Keep `run_dir=` as `<run-dir>` (no shell variable survives; re-running `--run` o
 2. **Base** — the branch this one was cut from, usually `default_branch=`; ask if ambiguous.
 3. **Remote** — with `remote_choice=no` and no `docs/agents/remote.md`, use `remote=`; otherwise follow
    `../_shared/references/remote.md` **before routing** (`pr=` was computed for the fallback remote).
-4. **Route** — `pr=<url>` with `pr_state=OPEN` and `pr_draft=false` → the **PR path**. Anything else → the
-   **local path**: `none`/`gh-missing`/`gh-unauthenticated`/`no-remote`; a draft (unless the user asks to
+4. **Route** — `pr=<url>` with `pr_state=OPEN` and `pr_draft=false` → the **PR path**. `gh-error` → stop,
+   relay its `notes:` entry: an open PR may be hidden. Anything else → the **local path**:
+   `none`/`gh-missing`/`gh-unauthenticated`/`no-remote`; a draft (unless the user asks to
    `gh pr ready <url>` first); `MERGED` (usually just needs cleanup — say so) or `CLOSED` (check with the user
    before merging anything — they may have changed their mind).
 
