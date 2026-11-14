@@ -188,9 +188,9 @@ printf 'gh=%s\n' "$gh_state"
 wt_raw="$(git worktree list --porcelain 2>/dev/null)" && worktrees_state=ok || worktrees_state=unreadable
 printf 'worktrees_state=%s\n' "$worktrees_state"
 
-# A `merged` PR is trusted only when its head commit is this branch's tip or an ancestor
-# of it: a reused branch name must never delete new work. A missing oid falls back to the
-# name match.
+# A `merged` PR is trusted only when this branch's tip is the PR's head commit or an
+# ancestor of it: a tip past the PR head is new work on a reused branch name, never
+# deleted. A missing oid falls back to the name match.
 oid_is_local() { # <branch> <oid>
 	local tip
 	[ -n "$2" ] || return 0
