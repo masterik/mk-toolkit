@@ -123,7 +123,9 @@ func Writable() bool {
 }
 
 // Remedy is the one sentence for an unwritable user-scoped directory. One
-// producer in the binary; the plugin's `facts.sh` carries the same wording.
+// producer in the binary; the plugin's `facts.sh`, which cannot call the binary,
+// prints the same words, and TestFactsShNotesCarryRemedyVerbatim fails when the
+// two drift. Change both in one commit.
 //
 // `permissions.additionalDirectories` rather than `sandbox.filesystem.allowWrite`:
 // the former grants the sandbox write *and* makes the path a working directory,

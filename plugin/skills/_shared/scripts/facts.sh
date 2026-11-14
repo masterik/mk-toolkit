@@ -3,6 +3,7 @@
 # Every read-only fact a skill needs to start, in one call.
 #
 #   usage: facts.sh <skill> [--run] [--gh] [--base <ref>] [--range <a..b>] [--remote <name>]
+#                   [--worktrees]
 #
 #   facts.sh commit --run
 #   facts.sh finish --base main --gh
@@ -13,8 +14,9 @@
 # docs/agents/remote.md is applied by the skill re-running with `--remote <name>`.
 #
 # Output: `key=value` lines, some packing several pairs, then `<name>:` blocks, then a
-# trailing `notes:` block. A cause that needs a sentence goes in `notes:`, never on a
-# `key=value` line. The contract is internal: change it here and in every skill that
+# trailing `notes:` block of `- <key>=<value> — <cause and remedy>` entries, one line
+# each. A cause that needs a sentence goes in `notes:`, never on a `key=value` line.
+# `--worktrees` adds `worktree_origins:` (`<origin>\t<path>` per worktree). The contract is internal: change it here and in every skill that
 # parses it, in the same commit (ADR 0006 decision 4).
 #
 # Exit: 0 ok; 1 not a git repo, git failed, or --base/--range does not resolve
@@ -29,7 +31,7 @@ die() {
 	exit "${2:-1}"
 }
 
-usage='usage: facts.sh <skill> [--run] [--gh] [--base <ref>] [--range <a..b>] [--remote <name>]'
+usage='usage: facts.sh <skill> [--run] [--gh] [--base <ref>] [--range <a..b>] [--remote <name>] [--worktrees]'
 
 [ $# -gt 0 ] || die "$usage" 2
 skill="$1"
@@ -39,11 +41,12 @@ case "$skill" in
 *[!a-zA-Z0-9_-]*) die "skill name may only contain [a-zA-Z0-9_-], got: $skill" 2 ;;
 esac
 
-want_run=no want_gh=no base='' range='' chosen=''
+want_run=no want_gh=no want_worktrees=no base='' range='' chosen=''
 while [ $# -gt 0 ]; do
 	case "$1" in
 	--run) want_run=yes; shift ;;
 	--gh) want_gh=yes; shift ;;
+	--worktrees) want_worktrees=yes; shift ;;
 	--base | --range | --remote)
 		[ $# -ge 2 ] && [ -n "$2" ] || die "$1 needs a value" 2
 		# A value git would read as an option is refused before any git call sees it:
@@ -63,10 +66,12 @@ done
 
 status_max=60
 files_max=200
+# One entry per cause: `- <key>=<value> — <cause and remedy>`, on one line, so a caller
+# (branch-status.sh) can relay an entry by its key instead of re-wording it.
 notes=''
 note() {
 	notes="$notes
-  $1"
+- $1"
 }
 
 # Repo-wide from here on: called from a subdirectory, pathspec'd file lists covered
@@ -76,9 +81,13 @@ toplevel="$(git rev-parse --show-toplevel 2>/dev/null)" || die 'not inside a git
 cd "$toplevel" || die "cannot enter the work-tree top level: $toplevel" 1
 
 if [ "$want_run" = yes ]; then
-	tmp="${TMPDIR:-/tmp}"
-	tmp="${tmp%/}"
-	run_dir="$(mktemp -d "$tmp/mkit-$skill-XXXXXX")" || die "cannot create a run dir under $tmp" 1
+	# An explicit template under $TMPDIR: without one, macOS mktemp may ignore $TMPDIR. With
+	# $TMPDIR unset, mktemp's own default — this script never names a temp dir itself.
+	if [ -n "${TMPDIR:-}" ]; then
+		run_dir="$(mktemp -d "${TMPDIR%/}/mkit-$skill-XXXXXX")" || die "cannot create a run dir under $TMPDIR" 1
+	else
+		run_dir="$(mktemp -d)" || die 'cannot create a run dir: TMPDIR is unset and mktemp -d failed' 1
+	fi
 	printf 'run_dir=%s\n' "$run_dir"
 fi
 
@@ -120,29 +129,42 @@ if [ -n "$user_dir" ]; then
 	done
 fi
 printf 'user_dir=%s\nuser_dir_writable=%s\n' "${user_dir:-none}" "$user_dir_writable"
+# The remedy is word for word the binary's `userdir.Remedy()` (doctor), quoting included;
+# a Go test in internal/core/userdir runs this script and compares the two.
 if [ "$user_dir_writable" = no ]; then
 	if [ -z "$user_dir" ]; then
-		note "user_dir_writable=no — \$HOME is unset, so there is no user-scoped directory. Remedy:
-  set MKIT_HOME to an absolute path, or run with HOME set. Tell the user; do not retry the write."
+		remedy='$HOME is unset, so there is no user-scoped directory to grant — set MKIT_HOME to an absolute path, or run with HOME set'
 	else
-		note "user_dir_writable=no — nothing needs that directory today, so nothing is failing
-  yet; a later user-scoped write would. Remedy: run \`! mkdir -p '$user_dir'\` (a sandboxed
-  session cannot create it), then add $user_dir to permissions.additionalDirectories
-  (sandbox.filesystem.allowWrite grants the sandbox only). Tell the user; do not retry the write."
+		case "$user_dir" in
+		*[!A-Za-z0-9/._-]*) q="'$(printf '%s' "$user_dir" | sed "s/'/'\\\\''/g")'" ;;
+		*) q="$user_dir" ;;
+		esac
+		remedy="run \`! mkdir -p $q\` (a sandboxed session cannot create it), then add $user_dir to permissions.additionalDirectories (sandbox.filesystem.allowWrite grants the sandbox only)"
 	fi
+	note "user_dir_writable=no — $remedy. Tell the user; do not retry the write."
 fi
 
 # --- worktree origin: the lookup table in worktree.md ----------------------------------
 #   primary checkout          -> nothing to tear down
 #   the harness's worktree    -> hand back with ExitWorktree, never rm it
 #   any other linked worktree -> git worktree remove (or `wt`, when the skill has it)
-origin=primary cleanup=none
-if [ "$linked" = yes ]; then
-	case "$toplevel" in
-	*/.claude/worktrees/*) origin=claude-code cleanup=exit-worktree ;;
-	*) origin=linked cleanup=git-worktree ;;
-	esac
-fi
+# The one classifier: `--worktrees` applies it to every worktree for branch-status.sh.
+origin_of() { # <path> <is-linked: yes|no>
+	if [ "$2" = no ]; then
+		printf 'primary'
+	else
+		case "$1" in
+		*/.claude/worktrees/*) printf 'claude-code' ;;
+		*) printf 'linked' ;;
+		esac
+	fi
+}
+origin="$(origin_of "$toplevel" "$linked")"
+case "$origin" in
+primary) cleanup=none ;;
+claude-code) cleanup=exit-worktree ;;
+*) cleanup=git-worktree ;;
+esac
 printf 'worktree_origin=%s\ncleanup_path=%s\n' "$origin" "$cleanup"
 
 # --- branch, upstream ------------------------------------------------------------------
@@ -196,7 +218,9 @@ choice=no
 # precede it in a URL, so `evilgithub.com` and `github.com.evil.example` are not GitHub.
 remote_repo=''
 if [ -n "$remote" ]; then
-	url="$(git remote get-url "$remote" 2>/dev/null)" || url=''
+	# `remote` came from `git remote`, so a failure is git's, never "no URL" (a remote
+	# with no url prints its own name): an empty answer would hand `gh` its own guess.
+	url="$(git remote get-url "$remote")" || die "git remote get-url $remote failed" 1
 	url="${url%/}"
 	url="${url%.git}"
 	gh_re='(^|[/@])github\.com[:/]+([^/]+/[^/]+)$'
@@ -228,9 +252,12 @@ fi
 printf 'default_branch=%s\n' "${default_branch:-unknown}"
 [ -n "$base" ] && printf 'base=%s\n' "$base"
 if [ -n "$upstream" ]; then
-	counts="$(git rev-list --left-right --count "HEAD...$upstream" 2>/dev/null)" || counts='0	0'
+	# A failure is not `0 0`: that reads as "nothing to push".
+	counts="$(git rev-list --left-right --count "HEAD...$upstream")" ||
+		die "git rev-list HEAD...$upstream failed, so ahead/behind are unknown" 1
 	set -- $counts
-	printf 'ahead=%s behind=%s\n' "${1:-0}" "${2:-0}"
+	[ $# -eq 2 ] || die "git rev-list --left-right --count gave no two counts: $counts" 1
+	printf 'ahead=%s behind=%s\n' "$1" "$2"
 fi
 
 # --- working tree ------------------------------------------------------------------------
@@ -364,6 +391,17 @@ if [ "$want_gh" = yes ]; then
 			printf 'pr=none\n'
 		fi
 	fi
+fi
+
+# --- every worktree's origin (--worktrees) ---------------------------------------------------
+# `<origin>\t<path>`, primary first: what branch-status.sh classifies worktrees by.
+if [ "$want_worktrees" = yes ]; then
+	printf 'worktree_origins:\n'
+	printf '%s\n' "$wt_list" | sed -n 's/^worktree //p' | while IFS= read -r p; do
+		l=yes
+		[ "$p" = "$primary" ] && l=no
+		printf '%s\t%s\n' "$(origin_of "$p" "$l")" "$p"
+	done
 fi
 
 if [ -n "$notes" ]; then

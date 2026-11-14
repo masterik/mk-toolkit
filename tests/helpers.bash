@@ -96,3 +96,22 @@ EOS
 	chmod +x "$dir/gh"
 	PATH="$dir:$PATH"
 }
+
+# A `git` first on PATH that fails — exit 128, like git's own fatal — for any call
+# whose argument list contains the words in $GIT_FAIL, and runs the real git for
+# every other call.
+stub_git_fail() {
+	local dir="$BATS_TEST_TMPDIR/stubgit" real
+	real="$(command -v git)" || return 1
+	mkdir -p "$dir"
+	cat >"$dir/git" <<EOS
+#!/usr/bin/env bash
+case " \$* " in
+*" \$GIT_FAIL "*) echo "fatal: stubbed failure: \$*" >&2; exit 128 ;;
+esac
+exec '$real' "\$@"
+EOS
+	chmod +x "$dir/git"
+	export GIT_FAIL="$1"
+	PATH="$dir:$PATH"
+}

@@ -233,7 +233,29 @@ gone_upstream() {
 	run branch_status --default main --remote nope --no-fetch --no-gh
 	[ "$status" -eq 0 ]
 	[ "$(kv remote)" = origin ]
-	[[ "$output" == *"notes:"*"- remote: --remote 'nope'"* ]]
+	# facts.sh's sentence, relayed: one wording per degradation.
+	run facts cleanup --remote nope
+	facts_note="$(printf '%s\n' "$output" | grep -- "^- remote_source=")"
+	run branch_status --default main --remote nope --no-fetch --no-gh
+	[ -n "$facts_note" ]
+	[[ "$output" == *"notes:
+$facts_note"* ]]
+	[ "$(printf '%s\n' "$output" | grep -c -- "--remote 'nope'")" = 1 ]
+}
+
+# An empty `branches:` table reads as "nothing to clean up".
+@test "a failing branch listing is an error, never an empty table" {
+	stub_git_fail 'for-each-ref refs/heads'
+	run branch_status --default main --no-fetch --no-gh
+	[ "$status" -eq 1 ]
+	[[ "$output" != *"branches:"* ]]
+}
+
+@test "a failing current-branch lookup is an error" {
+	stub_git_fail 'branch --show-current'
+	run branch_status --default main --no-fetch --no-gh
+	[ "$status" -eq 1 ]
+	[[ "$output" != *"branches:"* ]]
 }
 
 # --- gh --------------------------------------------------------------------------------
