@@ -24,7 +24,7 @@ Skills orchestrate `git`, `gh`, CodeRabbit, Codex and, if installed, [Worktrunk]
 | `sandbox-audit` | Turn sandbox blocks and permission denials into a proposed settings diff. Report-only. Needs the binary. |
 | `explain` | Re-explain the last answer or one session item in plain English (`simpler`, `eli5`, `deeper`). |
 | `recap` | Branch status in plain English: done, changed, left, and waiting on you. |
-| `shorten` | Rewrite text shorter under report/doc/plan concision rules; returns only the revised text. |
+| `shorten` | Rewrite text shorter (returns it) or a doc file (edits it in place); input always named. |
 
 Each skill runs alone, in any order.
 
@@ -38,7 +38,7 @@ edit → /mkit:commit → /mkit:review → /mkit:pr   (or /mkit:finish to merge 
 Skills discover gate commands, commit scopes, reviewers and the push remote from the repo (git history,
 `CODEOWNERS`, task runners, manifests); merge style defaults to a merge commit. To change a default,
 `/mkit:setup` writes short prose files in `docs/agents/` (`commit.md`, `review.md`, `merge.md`, `remote.md`,
-`gate.md`, `cleanup.md`); write or edit them by hand just as well. Each is optional. Skills keep per-run files in a temp dir; only `setup` writes into your work tree, and only `docs/agents/`.
+`gate.md`, `cleanup.md`); write or edit them by hand just as well. Each is optional. Skills keep per-run files in a temp dir; only `setup` (into `docs/agents/`) and `shorten` (the file you name) write into your work tree.
 
 ## Install
 

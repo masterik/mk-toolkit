@@ -17,10 +17,10 @@ ports (#54–#57), Windows (#58). **Next:** the ports. Milestones:
 
 ## Rules
 
-- When reporting information, be _extremely concise_ — prioritize brevity over grammar or style.
-- When writing documentation, be _clear and complete_, but prioritize concision over polished grammar.
-- When creating plans, be thorough and actionable; describe *what* to do, not *how*, and omit code
-  unless essential for clarity.
+- Be clear and complete.
+- Be concise: cut words, never facts.
+- Brevity beats grammar and style.
+- When creating plans, be thorough and actionable. Include all necessary requirements and specifications, and break the work into clear, ordered steps. Describe what to do, not how to do it — omit code unless essential for clarity.
 - **Never run a destructive operation (create, edit, write, delete) against the real user (home)
   folder** while testing or implementing. If a test or implementation needs to simulate or mock
   the home folder, do it inside the project (e.g. a throwaway dir under this repo or `$TMPDIR`),
@@ -139,8 +139,8 @@ apply both ways:
   is its first call and dependency check), `explain` and `recap` (plain English, share
   `_shared/references/plain-english.md`; `explain` runs nothing; `recap` read-only,
   `facts.sh recap --gh` + `git log <base>..HEAD` bodies + the PR, records nothing), `setup` (user-only;
-  writes the repo-settings files below), `shorten` (rewrites pasted text per the user's report/doc/plan
-  concision rules; runs nothing). **Ten exist**: `commit`, `review`, `pr`, `finish`,
+  writes the repo-settings files below), `shorten` (rewrites given text, returned, or a given doc file, edited
+  in place, per the user's concision rules; runs no commands). **Ten exist**: `commit`, `review`, `pr`, `finish`,
   `cleanup`, `sandbox-audit`, `explain`, `recap`, `shorten`, `setup`. Steps **composable, not sequential**:
   entry-capable, any order/subset, derive a thin version of what's missing, name assumptions. Never tell the user to run another skill first
   or run a downstream step. Contract: `_shared/references/workflow-contract.md`.
@@ -183,7 +183,7 @@ apply both ways:
   reporter: no session-start run. Skills read `facts.sh`, not `doctor`.
 - **Nothing writes into the work tree** (ADR 0006 decision 5): no `.mkit/`, no ignore pair, no
   `info/exclude` write; `git add -A` and `git worktree remove` never meet a run artefact (`setup`'s
-  `docs/agents/*.md` are user-confirmed docs, not state). An old `.mkit/` (incl. `config.toml`) shows as
+  `docs/agents/*.md` are user-confirmed docs, not state; `shorten` edits only the file the user names). An old `.mkit/` (incl. `config.toml`) shows as
   untracked; `doctor` names the remedy.
 - `<run-dir>` — `facts.sh --run` → `mktemp -d "$TMPDIR/mkit-<skill>-XXXXXX"` (`$TMPDIR` unset: bare
   `mktemp -d`, the system's choice; the script never names `/tmp`); dies with the session, nothing to prune.
@@ -215,7 +215,7 @@ apply both ways:
   (`--porcelain`, `--shortstat`/`--name-only`, `--format`, `--json`); never call `rtk`. Scripts: no OS
   branching except where Git Bash forces it (#58).
 - **Write locations, by lifetime:** skills write only to `$TMPDIR` (per-run files in `<run-dir>`), except
-  `setup` (user-confirmed `docs/agents/*.md`) and `sandbox-audit` (its agent-written `~/.mkit/` ledger); `branch-status.sh` runs `git fetch --prune`.
+  `setup` (user-confirmed `docs/agents/*.md`), `shorten` (the one file the user names) and `sandbox-audit` (its agent-written `~/.mkit/` ledger); `branch-status.sh` runs `git fetch --prune`.
   The binary's writes: `cache prune --apply` deleting stale `~/.claude`/`~/.codex` storage
   (home-guarded, own tests) and the net-zero `~/.mkit`/`$TMPDIR` probes. State never goes in the work
   tree, user files, `/tmp` or `~/.claude`.
