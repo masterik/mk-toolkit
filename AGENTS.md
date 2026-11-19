@@ -139,9 +139,9 @@ apply both ways:
   is its first call and dependency check), `explain` and `recap` (plain English, share
   `_shared/references/plain-english.md`; `explain` runs nothing; `recap` read-only,
   `facts.sh recap --gh` + `git log <base>..HEAD` bodies + the PR, records nothing), `setup` (user-only;
-  writes the repo-settings files below), `concise` (rewrites pasted text per the user's report/doc/plan
+  writes the repo-settings files below), `shorten` (rewrites pasted text per the user's report/doc/plan
   concision rules; runs nothing). **Ten exist**: `commit`, `review`, `pr`, `finish`,
-  `cleanup`, `sandbox-audit`, `explain`, `recap`, `concise`, `setup`. Steps **composable, not sequential**:
+  `cleanup`, `sandbox-audit`, `explain`, `recap`, `shorten`, `setup`. Steps **composable, not sequential**:
   entry-capable, any order/subset, derive a thin version of what's missing, name assumptions. Never tell the user to run another skill first
   or run a downstream step. Contract: `_shared/references/workflow-contract.md`.
 - **Repo settings** (ADR 0006 decision 7) — lazy prose `docs/agents/{commit,review,merge,remote,gate,cleanup}.md`

@@ -1,14 +1,14 @@
 ---
-name: concise
+name: shorten
 description: >-
   Rewrite text shorter and tighter under the user's concision rules (report, documentation, plan). Use it as
-  /mkit:concise [report|doc|plan] <text>, and also whenever the user asks to shorten, tighten, condense,
+  /mkit:shorten [report|doc|plan] <text>, and also whenever the user asks to shorten, tighten, condense,
   trim, make concise or brief, "rewrite my way" or "improve the wording", or pastes a status update, doc
   section, README, commit/PR text or plan to clean up, even without saying "concise". Output is only the
   revised text.
 ---
 
-# Concise rewrite
+# Shorten
 
 Part of the **mkit** bundle, outside the edit → commit → review → finish/pr line, like `explain`. Runs
 nothing, opens no run directory, works outside a repository. Cut words, never facts.
