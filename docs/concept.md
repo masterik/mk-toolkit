@@ -63,8 +63,9 @@ many tool calls into two small, tested scripts.
 | `sandbox-audit` | Turn sandbox and permission-gate events into a proposed settings diff. Report-only; needs the binary. |
 | `explain` | Re-explain the last answer or one session item in plain English. |
 | `recap` | Branch status in plain English: done, changed, left, waiting on you. |
+| `shorten` | Rewrite text shorter under report/doc/plan concision rules; returns only the revised text. |
 
-All skills share one reference bundle, [`_shared/`](../plugin/skills/_shared/README.md). It covers git
+Every skill but `shorten` shares one reference bundle, [`_shared/`](../plugin/skills/_shared/README.md). It covers git
 safety, Conventional Commits, gate detection, worktrees, review severity and lenses, triage, agent
 delegation, output discipline and plain-English writing.
 
@@ -95,7 +96,7 @@ delegation, output discipline and plain-English writing.
 Each repo-scoped skill starts with the bundled `facts.sh <skill>`. The exceptions:
 
 - `sandbox-audit` starts with `mkit audit sandbox`.
-- `explain` runs nothing.
+- `explain` and `shorten` run nothing.
 - `setup` explores with plain `git` calls and the repo's files.
 
 No skill checks for the binary but `sandbox-audit`, which stops with a `brew` remedy when

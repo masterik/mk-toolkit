@@ -24,6 +24,7 @@ Skills orchestrate `git`, `gh`, CodeRabbit, Codex and, if installed, [Worktrunk]
 | `sandbox-audit` | Turn sandbox blocks and permission denials into a proposed settings diff. Report-only. Needs the binary. |
 | `explain` | Re-explain the last answer or one session item in plain English (`simpler`, `eli5`, `deeper`). |
 | `recap` | Branch status in plain English: done, changed, left, and waiting on you. |
+| `shorten` | Rewrite text shorter under report/doc/plan concision rules; returns only the revised text. |
 
 Each skill runs alone, in any order.
 
