@@ -122,7 +122,7 @@ your files or in `~/.claude`, which is sandbox-protected, so no allowlist entry 
 commit → review → pr ──┐
                         ├─→ merged
                finish ──┘
-setup · cleanup · sandbox-audit · explain · recap   (outside the line)
+setup · cleanup · sandbox-audit · explain · recap · concise   (outside the line)
 ```
 
 This is the common path, not a required one. Someone else's branch starts at `review`, and most changes are just `commit`. A step learns what came before from the branch's
