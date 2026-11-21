@@ -50,7 +50,7 @@ reference lists.
 | A35 | Never assemble a program at runtime | `_shared/references/git-safety.md` · "Never assemble a program at runtime" |
 | A36 | `sandbox-audit` never writes a settings file | `sandbox-audit/SKILL.md` · "**Never writes a settings file**" |
 | A37 | `sandbox-audit`'s query file keeps its name (not re-counted) | `sandbox-audit/SKILL.md` · "Keep the `sandbox-audit.` name" |
-| A38 | `explain` runs nothing, `shorten` runs no commands (edits only the file named); `recap` writes nothing | `recap/SKILL.md` · "No `--run`: recap writes nothing."; `shorten/SKILL.md` · "Runs no commands, opens no run directory, works outside a repository"; "Touch only that file" |
+| A38 | `explain` runs nothing, `shorten` runs no commands (edits only the file named); `recap` writes nothing | `recap/SKILL.md` · "No `--run`: recap writes nothing."; `shorten/SKILL.md` · "Runs no commands, opens no run directory, works outside a repository"; "Touch only" |
 | A39 | No AI attribution anywhere | `_shared/references/git-safety.md` · "add AI/Claude co-authorship" |
 
 ## Edge cases

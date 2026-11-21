@@ -139,8 +139,8 @@ apply both ways:
   is its first call and dependency check), `explain` and `recap` (plain English, share
   `_shared/references/plain-english.md`; `explain` runs nothing; `recap` read-only,
   `facts.sh recap --gh` + `git log <base>..HEAD` bodies + the PR, records nothing), `setup` (user-only;
-  writes the repo-settings files below), `shorten` (rewrites given text, returned, or a given doc file, edited
-  in place, per the user's concision rules; runs no commands). **Ten exist**: `commit`, `review`, `pr`, `finish`,
+  writes the repo-settings files below), `shorten` (rewrites pasted text, returning it, or a named doc file, editing it
+  in place; runs no commands). **Ten exist**: `commit`, `review`, `pr`, `finish`,
   `cleanup`, `sandbox-audit`, `explain`, `recap`, `shorten`, `setup`. Steps **composable, not sequential**:
   entry-capable, any order/subset, derive a thin version of what's missing, name assumptions. Never tell the user to run another skill first
   or run a downstream step. Contract: `_shared/references/workflow-contract.md`.

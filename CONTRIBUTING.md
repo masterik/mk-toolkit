@@ -61,7 +61,7 @@ These are the ones changes break most often. The full list is the
   `key=value` output (`plugin/skills/_shared/scripts/`, tested by `tests/*.bats`); change a key there and
   in every skill that reads it, in one commit.
 - **Commands report and run.** They never stage, merge, push, or edit your files.
-- **Nothing writes into the work tree.** Skills keep per-run files in `$TMPDIR` (`facts.sh --run`);
+- **Nothing writes state into the work tree.** Skills keep per-run files in `$TMPDIR` (`facts.sh --run`);
   `~/.mkit/` holds the `sandbox-audit` ledger; `shorten` edits only the file you name; `branch-status.sh` runs `git fetch --prune`. The
   binary's only persistent write is `cache prune --apply` deleting stale Claude Code / Codex storage;
   its write probes (`~/.mkit`, `$TMPDIR`) are net-zero.

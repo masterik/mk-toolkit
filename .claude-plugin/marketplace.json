@@ -7,7 +7,7 @@
     {
       "name": "mkit",
       "source": "./plugin",
-      "description": "Coding-workflow skills for Claude Code: commit, review, pr, finish, cleanup, setup, sandbox-audit, explain, recap and shorten, over a shared git-safety + Conventional Commits reference bundle. Standalone; only sandbox-audit needs the optional mkit binary (brew install masterik/tap/mkit)."
+      "description": "Coding-workflow skills for Claude Code: commit, review, pr, finish, cleanup, setup, sandbox-audit, explain and recap, over a shared git-safety + Conventional Commits reference bundle, plus shorten for tightening text. Standalone; only sandbox-audit needs the optional mkit binary (brew install masterik/tap/mkit)."
     }
   ]
 }
