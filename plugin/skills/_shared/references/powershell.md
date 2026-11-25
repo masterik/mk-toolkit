@@ -10,7 +10,7 @@ quoted and in forward slashes.
 Windows puts only `Git\cmd` on `PATH`) or WSL's, which runs the script against Linux `git` and `/mnt/c`
 paths — wrong output that reads right. So never a bare `bash`; resolve Git's own once per session:
 
-1. `git --exec-path` prints `<git-root>/<arch>/libexec/git-core` (e.g. `C:/Program Files/Git/mingw64/libexec/git-core`).
+1. `<git>` is the `Source` of `Get-Command git`. `& "<git>" --exec-path` — the same git, so the same install — prints `<git-root>/<arch>/libexec/git-core` (e.g. `C:/Program Files/Git/mingw64/libexec/git-core`).
    `<bash>` is `<git-root>/bin/bash.exe`: drop the last three parts, add `bin/bash.exe`.
 2. Run every script as `& "<bash>" "<script>" <args>` — the `&` and both quotes are required.
 3. **`<bash>` does not exist** (MinGit, a `git` not from Git for Windows) → stop, and tell the user: the
@@ -22,9 +22,9 @@ The scripts print Windows paths (`C:/…`); use them as given.
 ## Commands
 
 - **A quoted path that starts a command needs `&`**: `& "<git>" -C "<toplevel>" status --porcelain`.
-  `<git>` is the `Source` of `Get-Command git` (there is no `command -v`).
-- **Single-quote an argument holding `@` `{` `}` `$` or `` ` ``**: `'@{upstream}'` — unquoted, `@{…}` is a
-  hashtable and the command does not parse.
+  There is no `command -v`.
+- **Single-quote every data argument** (a ref, path, message): `'@{upstream}'` — unquoted, `@{…}` is a
+  hashtable, and `;` `|` `&` `(` `$` `` ` `` are PowerShell syntax; a branch name may hold any of them.
 - **Never redirect a command's output into a file the next command reads** (`>`): Windows PowerShell 5.1
   writes UTF-16, which `git apply` rejects. Let the tool write it (`git diff --output="<file>"`), or write it
   with your file tool.

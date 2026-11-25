@@ -54,7 +54,7 @@ reference lists.
 | A39 | No AI attribution anywhere | `_shared/references/git-safety.md` · "add AI/Claude co-authorship" |
 | A40 | A host-only tool or model is a tip with a fallback, never a requirement (outside `sandbox-audit`) | `_shared/references/summary-format.md` · "**No such tool** (Codex outside Plan mode"; `_shared/references/worktree.md` · "no such tool (another host) → `git-worktree`"; `_shared/references/agent-delegation.md` · "| the strongest available |" |
 | A41 | From PowerShell, scripts run under Git's own `bash.exe` by path, never a bare or WSL `bash`; no Git Bash → stop with the install remedy | `_shared/references/powershell.md` · "never a bare `bash`" |
-| A42 | PowerShell: `&` before a quoted command path, single quotes around `@` `{}` `$` arguments, no `>` into a file a tool reads | `_shared/references/powershell.md` · "A quoted path that starts a command needs `&`" |
+| A42 | PowerShell: `&` before a quoted command path, every data argument single-quoted, no `>` into a file a tool reads | `_shared/references/powershell.md` · "A quoted path that starts a command needs `&`" |
 
 ## Edge cases
 
@@ -62,7 +62,7 @@ reference lists.
 | --- | --- | --- |
 | C1 | A staged diff is read file by file, never truncated | `commit/SKILL.md` · "**file by file, skipping none, never truncated**" |
 | C2 | No interactive `add -p`; no `-F -` heredoc | `commit/SKILL.md` · "never `-v`, never `-F -` with a heredoc" |
-| C3 | Patch and message files are fresh (numbered, never reused), never named after the source | `commit/patch-staging.md` · "never named after the source file" |
+| C3 | Patch and message files are fresh (numbered, never reused), never named after the source | `commit/patch-staging.md` · "never named after the source file"; `commit/SKILL.md` · "A fresh file per commit, never one reused" |
 | C4 | Hunks sharing lines are not split; say so | `commit/patch-staging.md` · "**Hunks that share lines are not split.**" |
 | C5 | Delegated plan: coverage contract, checked by set comparison | `commit/SKILL.md` · "**Verify the plan by set comparison**" |
 | C6 | A gap goes back to the same subagent | `_shared/references/agent-delegation.md` · "**On a gap, send the missing paths back to the same subagent**" |
