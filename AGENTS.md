@@ -6,13 +6,13 @@ This file provides guidance to agents when working with code in this repository.
 of standalone skills + `_shared/` (references, two bash 3.2 scripts `facts.sh`/`branch-status.sh`),
 plus an **optional Go binary** (`mkit`, Homebrew `masterik/tap/mkit`): a macOS + Claude Code power tool
 (`doctor`, `audit sandbox`, `cache prune`), released in lockstep. Skills orchestrate `git`, `gh`, review
-tools — no new git logic; `wt` optional. Targets Claude Code, Codex, Copilot; Windows via Git Bash.
+tools — no new git logic; `wt` optional. Targets Claude Code, Codex, Copilot; Windows: PowerShell hosts, scripts via Git Bash.
 
 **Plugin = product, binary = optional tools** ([ADR 0006](docs/adr/0006-standalone-skills-optional-binary.md),
 epic #59): **no skill needs `mkit` but `sandbox-audit`** (it stops with a `brew` remedy; absent ≡ too
 old). No `.mkit/`, no gate ledger/worklog/findings pipeline, no `mkit init` or pinning; config is prose
 in lazy `docs/agents/*.md`, written by `setup`. Still open in #59:
-`review` inline (#57), Windows (#58). **Next:** #57. Milestones:
+Windows (#58). **Next:** #58. `review` inline (#57): standalone, outside #59. Milestones:
 [`backlog.md`](docs/backlog.md); the *why*: [`concept.md`](docs/concept.md).
 
 ## Rules
@@ -160,7 +160,10 @@ apply both ways:
   [`docs/skill-invariants.md`](docs/skill-invariants.md) — cutting or moving a rule updates its row.
 - `plugin/skills/_shared/` — references and `scripts/`, no `SKILL.md`; **keep `../_shared/…` paths
   relative**. Skills run `bash ../_shared/scripts/<name>.sh`, resolved against their own `SKILL.md`
-  directory (no agent sets a skill-root env var in a skill body).
+  directory (no agent sets a skill-root env var in a skill body). From PowerShell (Codex, Copilot, Claude
+  Code without Git Bash): Git's own `bash.exe` by path, never a bare/WSL `bash`; no Git Bash → stop with the
+  install remedy — `_shared/references/powershell.md`, linked at each skill's script call. Scripts print
+  `C:/…` paths under Git Bash (`native()` = `cygpath -m`, the one OS branch).
 - `facts.sh <skill> [--run] [--gh] [--base] [--range] [--remote] [--worktrees]` — every starting fact, one call;
   **never reads config**. `--run` → `run_dir=` under `$TMPDIR`. `cd` toplevel first (pathspec lists and
   `--shortstat` agree). **Both** `unstaged_stat` and `staged_stat` (fully-staged looks clean otherwise);
