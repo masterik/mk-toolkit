@@ -53,7 +53,7 @@ the same result another way (named).
   var**: `${CLAUDE_PLUGIN_ROOT}` is expanded only in hooks and MCP config. Workaround: relative
   paths. Source: Codex source, `codex-rs/ext/skills/src/catalog_prompt.rs`.
 - **Plugins: yes.** Manifest `.codex-plugin/plugin.json` (`"skills": "./skills/"`); marketplace at
-  `.agents/plugins/marketplace.json`, entries `{"source": "local", "path": "./plugin"}`. Verified
+  `.agents/plugins/marketplace.json`, entries `"source": {"source": "local", "path": "./plugin"}`. Verified
   with codex-cli 0.169.0 (#56): `codex plugin marketplace add <path|owner/repo>`, then
   `codex plugin add mkit@masterik`; the install copies the whole tree, `_shared/` included.
   [build plugins](https://developers.openai.com/codex/plugins/build)
@@ -122,10 +122,11 @@ Follows from the table, for whoever ports a skill:
 Documented, not fixed (#56). Per host, on top of the table above:
 
 - **All other hosts:** `sandbox-audit` is Claude Code only (it reads Claude Code transcripts and
-  needs the macOS binary). Claude Code frontmatter (`model:`, `disable-model-invocation:`,
-  `argument-hint:`) is ignored, so `setup` and `cleanup` may trigger on a plain request instead of
-  only by name, and `commit`/`pr`/`finish` run on the session's model. Skill arguments
-  (`review quick`, `explain eli5`) are read from the request text.
+  needs the macOS binary). `model:` is ignored, so `commit`/`pr`/`finish` run on the session's
+  model. Skill arguments (`review quick`, `explain eli5`) are read from the request text.
+- **Codex and Copilot CLI:** `disable-model-invocation:` and `argument-hint:` are ignored too, so
+  `setup` and `cleanup` may trigger on a plain request instead of only by name. Copilot VS Code
+  honours both.
 - **Codex:** default `workspace-write` sandbox — every `git commit`, `git push`, `git fetch` and `gh`
   call asks for approval (`.git` read-only, network off). Structured questions only in Plan mode,
   so skills ask with a numbered list. `review`'s Claude subagent reviewers are #57.

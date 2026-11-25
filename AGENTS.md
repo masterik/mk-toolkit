@@ -132,7 +132,7 @@ apply both ways:
   (`source: "./plugin"`) at **repo-root** `.claude-plugin/`: `/plugin marketplace add owner/repo`
   looks only there. **Copilot CLI reads these same two** (legacy path, no third manifest).
   **Codex**: `plugin/.codex-plugin/plugin.json` (`"skills": "./skills/"`) + repo-root
-  `.agents/plugins/marketplace.json` (`{"source": "local", "path": "./plugin"}`). One version in
+  `.agents/plugins/marketplace.json` (entry `"source": {"source": "local", "path": "./plugin"}`). One version in
   every `plugin.json` (`release.sh`); gaps per host in `docs/ideas/other-agents.md#known-gaps`.
 - **No hooks**, no `hooks` key (removed 0.15.0). **No `Stop`/`SubagentStop` hook** — its
   `additionalContext` renders in the transcript every turn (`concept.md`). If ever reintroduced:
