@@ -54,7 +54,7 @@ reference lists.
 | A39 | No AI attribution anywhere | `_shared/references/git-safety.md` · "add AI/Claude co-authorship" |
 | A40 | A host-only tool or model is a tip with a fallback, never a requirement (outside `sandbox-audit`) | `_shared/references/summary-format.md` · "**No such tool** (Codex outside Plan mode"; `_shared/references/worktree.md` · "no such tool (another host) → `git-worktree`"; `_shared/references/agent-delegation.md` · "| the strongest available |" |
 | A41 | From PowerShell, scripts run under Git's own `bash.exe` by path, never a bare or WSL `bash`; no Git Bash → stop with the install remedy | `_shared/references/powershell.md` · "never a bare `bash`" |
-| A42 | PowerShell: `&` before a quoted command path, every data argument single-quoted, no `>` into a file a tool reads | `_shared/references/powershell.md` · "A quoted path that starts a command needs `&`" |
+| A42 | PowerShell: `&` before a quoted command path, every data argument single-quoted, no `>` into a file a tool reads | `_shared/references/powershell.md` · "A quoted path that starts a command needs `&`"; "Single-quote every data argument"; "Never redirect a command's output into a file the next command reads" |
 
 ## Edge cases
 
