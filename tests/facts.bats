@@ -566,6 +566,8 @@ teardown() { mkit_teardown_repo; }
 }
 
 @test "an unwritable user dir is a named fact with a remedy that works" {
+	# The next test covers the unwritable path there (a dir under a file).
+	! command -v cygpath >/dev/null || skip 'Git Bash: chmod cannot make an NTFS directory unwritable'
 	mkdir -p "$MKIT_HOME"
 	chmod 500 "$MKIT_HOME"
 	run facts commit

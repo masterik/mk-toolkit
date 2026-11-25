@@ -14,6 +14,10 @@ mkit_setup_repo() {
 	# Canonical: TMPDIR is a symlink on macOS, and git reports paths resolved.
 	REPO="$(cd "$REPO" && pwd -P)"
 	TEST_TMP="$(cd "$BATS_TEST_TMPDIR" && pwd -P)"
+	# Git Bash: git and the scripts print `C:/x`, the shell `/c/x` (#58).
+	if command -v cygpath >/dev/null 2>&1; then
+		REPO="$(cygpath -m "$REPO")" TEST_TMP="$(cygpath -m "$TEST_TMP")"
+	fi
 	export MKIT_HOME="$REPO/.mkit-home"
 	# The developer's git config must not reach the test (hooks, signing, templates).
 	export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
@@ -62,7 +66,10 @@ fake_path() {
 	for tool in bash git sed grep awk head cut paste tr mktemp mkdir rm rmdir dirname cat jq gh; do
 		case "$excluded" in *" $tool "*) continue ;; esac
 		p="$(command -v "$tool" 2>/dev/null)" || continue
-		ln -sf "$p" "$dir/$tool"
+		# A wrapper, not a symlink: Git Bash's `ln -s` copies the .exe away from the
+		# msys DLL beside it, and the copy does not start (#58).
+		printf '#!/bin/sh\nexec "%s" "$@"\n' "$p" >"$dir/$tool"
+		chmod +x "$dir/$tool"
 	done
 	printf '%s\n' "$dir"
 }
