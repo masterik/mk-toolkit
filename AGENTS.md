@@ -11,8 +11,8 @@ tools — no new git logic; `wt` optional. Targets Claude Code, Codex, Copilot; 
 **Plugin = product, binary = optional tools** ([ADR 0006](docs/adr/0006-standalone-skills-optional-binary.md),
 epic #59): **no skill needs `mkit` but `sandbox-audit`** (it stops with a `brew` remedy; absent ≡ too
 old). No `.mkit/`, no gate ledger/worklog/findings pipeline, no `mkit init` or pinning; config is prose
-in lazy `docs/agents/*.md`, written by `setup`. Still open in #59: Codex/Copilot
-smoke-runs (#56; manifests shipped), `review` inline (#57), Windows (#58). **Next:** #56. Milestones:
+in lazy `docs/agents/*.md`, written by `setup`. Still open in #59:
+`review` inline (#57), Windows (#58). **Next:** #57. Milestones:
 [`backlog.md`](docs/backlog.md); the *why*: [`concept.md`](docs/concept.md).
 
 ## Rules
