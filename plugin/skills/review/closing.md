@@ -37,7 +37,7 @@ End on the decision the user has to make, or "nothing needed from you", as its o
 
 ## The ask
 
-After the message is printed, never instead of it. **`AskUserQuestion`** → one question per finding needing a
+After the message is printed, never instead of it. **A question tool** → one question per finding needing a
 decision (up to four per call): header = the finding id; options = the proposed fix (recommended, first), the
 alternative, `leave as is`, each with a one-line consequence; the fix's diff in `preview` where it fits; the
 question text names the finding and file. **No such tool** → the same choices as a numbered list per finding,

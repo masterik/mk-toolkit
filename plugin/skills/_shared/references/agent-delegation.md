@@ -52,8 +52,8 @@ For any plan over a file set (the commit plan):
 
 | stage shape | model |
 | --- | --- |
-| judgement — reviewing, verifying, materiality | the strongest available (Opus) |
-| mechanical text work, or a bounded search with a precise brief | a cheaper tier (Sonnet) |
+| judgement — reviewing, verifying, materiality | the strongest available |
+| mechanical text work, or a bounded search with a precise brief | a cheaper tier |
 | bookkeeping over a stage's output — dedupe by a written rule, counts, batching | no subagent: the main session |
 
-The Workflow tool needs the user's explicit opt-in: offer it for a large run, never reach for it unasked.
+Claude Code's Workflow tool needs the user's explicit opt-in: offer it for a large run, never reach for it unasked.

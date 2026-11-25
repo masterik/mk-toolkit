@@ -60,7 +60,7 @@ Read whatever exists, from the repo root (`git rev-parse --show-toplevel`):
 ### 2. Present findings and ask
 
 Summarise what's present and missing in a few lines. Then the sections in order: **one section, one answer,
-then the next**, each led by the recommended answer — `AskUserQuestion`, else a numbered list
+then the next**, each led by the recommended answer — the host's question tool, else a numbered list
 (`../_shared/references/summary-format.md`). Skip a section exploration already settled.
 
 An existing file's value (re-run) or a migrated value is the recommended answer for its section. "Keep the

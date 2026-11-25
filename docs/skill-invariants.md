@@ -52,6 +52,7 @@ reference lists.
 | A37 | `sandbox-audit`'s query file keeps its name (not re-counted) | `sandbox-audit/SKILL.md` · "Keep the `sandbox-audit.` name" |
 | A38 | `explain` runs nothing, `shorten` runs no commands (edits only the file named); `recap` writes nothing | `recap/SKILL.md` · "No `--run`: recap writes nothing."; `shorten/SKILL.md` · "Runs no commands, opens no run directory, works outside a repository"; "Touch only" |
 | A39 | No AI attribution anywhere | `_shared/references/git-safety.md` · "add AI/Claude co-authorship" |
+| A40 | A host-only tool or model is a tip with a fallback, never a requirement (outside `sandbox-audit`) | `_shared/references/summary-format.md` · "**No such tool** (Codex outside Plan mode"; `_shared/references/worktree.md` · "no such tool (another host) → `git-worktree`"; `_shared/references/agent-delegation.md` · "| the strongest available |" |
 
 ## Edge cases
 
@@ -83,7 +84,7 @@ reference lists.
 | C24 | PR refusal → never a local-merge fallback | `finish/pr-merge.md` · "never fall back to a local merge" |
 | C25 | Only `state=MERGED` licenses deletion | `finish/pr-merge.md` · "Only `state=MERGED` proceeds." |
 | C26 | `--delete-branch` may already have removed the local branch | `finish/pr-merge.md` · "\"already gone\" is not a failure" |
-| C27 | Harness worktree: ExitWorktree, `discard_changes: true` | `finish/pr-merge.md` · "`discard_changes: true`" |
+| C27 | Claude Code worktree: ExitWorktree (other hosts: `git-worktree`), `discard_changes: true` | `finish/pr-merge.md` · "`discard_changes: true`"; "No such tool (another host): as `git-worktree`." |
 | C28 | Stack: `gh stack merge`, never `gh pr merge` | `finish/pr-merge.md` · "**`gh stack merge`, never `gh pr merge`**" |
 | C29 | Stack: signed commits required → stop | `finish/pr-merge.md` · "Base requires signed commits" |
 | C30 | Stack: delete every merged layer after its own check | `finish/pr-merge.md` · "**for every PR the merge carried**" |
@@ -155,6 +156,10 @@ reference lists.
   ancestor of `develop` while you stand on `main`; a `merged-pr` branch is by definition not a local ancestor.
 - **Protected paths (A24, C50).** `~/.claude` is a protected region: an allowlist entry there looked right and
   did nothing.
+- **Host-neutral wording (A40, #55).** Codex and Copilot read SKILL.md but have no `AskUserQuestion` (Codex:
+  Plan mode only), no `ExitWorktree`, no `$ARGUMENTS`, no skill-root env var, and other model names
+  (`docs/ideas/other-agents.md`). A skill that names one as required stalls there; name the capability,
+  mark the Claude Code tool as one way to get it, and give the fallback.
 - **Bundle design.** Nothing project-specific is hardcoded; compose `git`/`gh`/`wt`, never re-encode git
   logic; a missing review tool's lenses go to a Claude subagent; the main session holds decisions, evidence
   lives in the run directory; a script only for a mechanical invariant.

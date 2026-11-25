@@ -12,7 +12,7 @@ gets a self-contained line — what, where, why.
 Order: the **verdict** first, then the detail, then the ask **last**. Print "none" for an empty section a
 reader might wonder about (open questions, left alone).
 
-## Form (Claude app and terminal alike)
+## Form (app and terminal alike)
 
 - Open with the verdict as one bold line, no heading: `**Verdict:** 2 commits made, tree clean.`
 - One `##` heading per section, blank line around it; skip headings for a short report.
@@ -28,12 +28,13 @@ reader might wonder about (open questions, left alone).
 
 Write the decision into the summary first; the prompt only collects answers.
 
-- **Host has `AskUserQuestion`** → one question per decision, up to four per call. Header ≤12 characters
-  (an id or truncated name; the full name goes in the question text). Options: the recommended action first
+- **Host has a structured-question tool** (Claude Code `AskUserQuestion`, Copilot `ask_user` or
+  `#vscode/askQuestions`) → one question per decision, up to four per call. Header ≤12 characters
+  (an id or truncated name; the full name goes in the question text), where the tool has headers. Options: the recommended action first
   and marked, then the alternative, then do-nothing, each with a one-line consequence. A skill may define its
-  own choice set; with no recommendation, do-nothing goes first. A diff or config snippet goes in `preview`.
-- **No such tool** → end with the same choices as a numbered list per decision, recommended first; ask for
+  own choice set; with no recommendation, do-nothing goes first. A diff or config snippet goes in `preview` where the tool has one.
+- **No such tool** (Codex outside Plan mode) → end with the same choices as a numbered list per decision, recommended first; ask for
   the numbers.
 - **No answer, or an unclear one, is "do nothing"** — never the destructive or outward-facing option. Name
-  what was left alone.
+  what was left alone. An unattended host (Copilot coding agent) asks nothing and takes this default.
 - A go-ahead for a plan already on screen is two options; do not invent a third.

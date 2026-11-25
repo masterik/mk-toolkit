@@ -153,7 +153,7 @@ fi
 
 # --- worktree origin: the lookup table in worktree.md ----------------------------------
 #   primary checkout          -> nothing to tear down
-#   the harness's worktree    -> hand back with ExitWorktree, never rm it
+#   Claude Code's worktree    -> hand back with ExitWorktree, never rm it
 #   any other linked worktree -> git worktree remove (or `wt`, when the skill has it)
 # The one classifier: `--worktrees` applies it to every worktree for branch-status.sh.
 origin_of() { # <path> <is-linked: yes|no>
