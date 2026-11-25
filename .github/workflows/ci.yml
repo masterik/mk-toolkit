@@ -59,9 +59,12 @@ jobs:
       - name: scripts from PowerShell
         shell: pwsh
         run: |
+          # A PR checkout is a detached HEAD with no local default branch: give
+          # branch-status.sh one to classify against.
+          git switch -q -c ci-smoke
           $gitRoot = (git --exec-path) -replace '/[^/]+/libexec/git-core$', ''
           $bash = "$gitRoot/bin/bash.exe"
           & $bash "$PWD/plugin/skills/_shared/scripts/facts.sh" commit --run
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          & $bash "$PWD/plugin/skills/_shared/scripts/branch-status.sh" --no-fetch --no-gh
+          & $bash "$PWD/plugin/skills/_shared/scripts/branch-status.sh" --default ci-smoke --no-fetch --no-gh
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
