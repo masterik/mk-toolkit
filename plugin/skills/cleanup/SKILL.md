@@ -28,6 +28,7 @@ Two calls; paths are relative to this skill's directory — resolve and run them
 bash ../_shared/scripts/facts.sh cleanup
 bash ../_shared/scripts/branch-status.sh --default <default_branch> [--develop <name>] [--keep <name>]...
 ```
+PowerShell (Windows): run it as `../_shared/references/powershell.md` says.
 
 **Kept branches** (`../_shared/references/repo-settings.md`): if `docs/agents/cleanup.md` exists, each
 branch it keeps goes to the second call as one `--keep <name>` (names, not patterns; added to what is

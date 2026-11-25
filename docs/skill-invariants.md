@@ -53,6 +53,8 @@ reference lists.
 | A38 | `explain` runs nothing, `shorten` runs no commands (edits only the file named); `recap` writes nothing | `recap/SKILL.md` · "No `--run`: recap writes nothing."; `shorten/SKILL.md` · "Runs no commands, opens no run directory, works outside a repository"; "Touch only" |
 | A39 | No AI attribution anywhere | `_shared/references/git-safety.md` · "add AI/Claude co-authorship" |
 | A40 | A host-only tool or model is a tip with a fallback, never a requirement (outside `sandbox-audit`) | `_shared/references/summary-format.md` · "**No such tool** (Codex outside Plan mode"; `_shared/references/worktree.md` · "no such tool (another host) → `git-worktree`"; `_shared/references/agent-delegation.md` · "| the strongest available |" |
+| A41 | From PowerShell, scripts run under Git's own `bash.exe` by path, never a bare or WSL `bash`; no Git Bash → stop with the install remedy | `_shared/references/powershell.md` · "never a bare `bash`" |
+| A42 | PowerShell: `&` before a quoted command path, single quotes around `@` `{}` `$` arguments, no `>` into a file a tool reads | `_shared/references/powershell.md` · "A quoted path that starts a command needs `&`" |
 
 ## Edge cases
 
@@ -60,7 +62,7 @@ reference lists.
 | --- | --- | --- |
 | C1 | A staged diff is read file by file, never truncated | `commit/SKILL.md` · "**file by file, skipping none, never truncated**" |
 | C2 | No interactive `add -p`; no `-F -` heredoc | `commit/SKILL.md` · "never `-v`, never `-F -` with a heredoc" |
-| C3 | Patch and message files are allocated fresh, never named after the source | `commit/patch-staging.md` · "never named after the source file" |
+| C3 | Patch and message files are fresh (numbered, never reused), never named after the source | `commit/patch-staging.md` · "never named after the source file" |
 | C4 | Hunks sharing lines are not split; say so | `commit/patch-staging.md` · "**Hunks that share lines are not split.**" |
 | C5 | Delegated plan: coverage contract, checked by set comparison | `commit/SKILL.md` · "**Verify the plan by set comparison**" |
 | C6 | A gap goes back to the same subagent | `_shared/references/agent-delegation.md` · "**On a gap, send the missing paths back to the same subagent**" |
@@ -125,7 +127,11 @@ reference lists.
 - **Both stats (A14).** A bare `git diff --shortstat` is empty on a fully staged tree, which reads as clean.
 - **Fresh temp files (C3, A23).** A reused patch name staged another file's hunks; a reused message file
   committed the previous message. `mktemp` with no template resolves the Darwin per-user temp dir and
-  ignores `$TMPDIR`.
+  ignores `$TMPDIR`. Numbered, not `mktemp`: PowerShell has none (#58).
+- **PowerShell (A41, A42, #58).** Codex and Copilot run PowerShell on Windows. There `bash` is often not on
+  `PATH` (Git for Windows adds only `Git\cmd`) or is WSL's, which runs the script against Linux `git` and
+  `/mnt/c` paths: plausible, wrong. Unquoted `@{…}` is a hashtable (parse error), and Windows
+  PowerShell 5.1's `>` writes UTF-16, which `git apply` rejects (all measured on Windows 11 ARM64).
 - **Plan coverage (C5–C7).** A delegated commit plan once dropped a changed file; re-reading the diff in the
   main session paid for the delegation twice. Per-hunk assignment does not survive a 20-line budget.
 - **`pr=` sentinels (C9).** Every sentinel is non-empty; a non-empty test showed `none` as a PR. A failed

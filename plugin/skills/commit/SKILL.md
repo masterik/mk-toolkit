@@ -23,6 +23,7 @@ skill's directory: resolve it and run it absolute. A key or exit not named here:
 ```bash
 bash ../_shared/scripts/facts.sh commit --run
 ```
+PowerShell (Windows): run it as `../_shared/references/powershell.md` says.
 
 Keep the `run_dir=` literal as `<run-dir>` (no shell variable survives to the next call; re-running `--run`
 opens a second directory), `toplevel=` as `<toplevel>`, and `command -v git` as `<git>` — the absolute git
@@ -61,9 +62,9 @@ Then this repo's commit rules (rules for reading a setting: `../_shared/referenc
    Check for secrets or tokens, debug logging, unrelated formatting churn.
 5. **Describe the staged change in 1–2 sentences** (what, why). Can't do it cleanly → too big or mixed:
    back to step 2.
-6. **Write the message** (format below). Single line: `git commit -m "<subject>"`. Multi-line: run
-   `mktemp "<run-dir>/msg.XXXXXX"`, write the message to the path it prints, `git commit -F "<msgfile>"`.
-   A fresh file per commit; never `-v`, never `-F -` with a heredoc.
+6. **Write the message** (format below). Single line: `git commit -m "<subject>"`. Multi-line: write the
+   message with your file tool to `<run-dir>/msg-<n>.txt` (`<n>` = 1, 2, … per commit), then
+   `git commit -F "<msgfile>"`. A fresh file per commit, never one reused; never `-v`, never `-F -` with a heredoc.
 7. **Repeat** until the tree is clean.
 
 ## Message format
