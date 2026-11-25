@@ -130,6 +130,6 @@ Documented, not fixed (#56). Per host, on top of the table above:
 - **Codex:** default `workspace-write` sandbox — every `git commit`, `git push`, `git fetch` and `gh`
   call asks for approval (`.git` read-only, network off). Structured questions only in Plan mode,
   so skills ask with a numbered list. `review`'s Claude subagent reviewers are #57.
-- **Copilot CLI:** no known gap beyond the above; smoke-run not yet done (no local install).
+- **Copilot CLI:** no known gap beyond the above; not smoke-run (#56 closed without it), support rests on the docs.
 - **Copilot coding agent:** unattended — every ask takes the skill's do-nothing default.
 - **Windows:** PowerShell on both hosts; skills need Git Bash (#58).
