@@ -42,12 +42,30 @@ Skills discover gate commands, commit scopes, reviewers and the push remote from
 
 ## Install
 
+Claude Code:
+
 ```
 /plugin marketplace add masterik/mk-toolkit
 /plugin install mkit@masterik
 ```
 
-That is all the skills need. For optional tools, sandbox setup and a permission allowlist, see
+Codex:
+
+```bash
+codex plugin marketplace add masterik/mk-toolkit
+codex plugin add mkit@masterik
+```
+
+GitHub Copilot CLI (reads the Claude Code manifests):
+
+```bash
+copilot plugin marketplace add masterik/mk-toolkit
+copilot plugin install mkit@masterik
+```
+
+That is all the skills need. Outside Claude Code, call a skill by name ("use mkit's commit skill")
+or the host's skill syntax; `sandbox-audit` is Claude Code only. Known gaps per agent:
+[other agents](docs/ideas/other-agents.md#known-gaps). For optional tools, sandbox setup and a permission allowlist, see
 [Prerequisites](docs/prerequisites.md).
 
 ## The binary (optional)

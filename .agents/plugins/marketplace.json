@@ -1,0 +1,19 @@
+{
+  "name": "masterik",
+  "interface": {
+    "displayName": "masterik"
+  },
+  "plugins": [
+    {
+      "name": "mkit",
+      "source": {
+        "source": "local",
+        "path": "./plugin"
+      },
+      "policy": {
+        "installation": "AVAILABLE"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

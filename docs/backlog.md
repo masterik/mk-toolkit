@@ -56,7 +56,7 @@ Breaking one is a design error, not a trade-off.
 ## Next
 
 - **Rest of epic [#59](https://github.com/masterik/mk-toolkit/issues/59)**:
-  Codex and Copilot ports (#54–#57), Windows via Git Bash (#58).
+  Codex and Copilot smoke-runs (#56; manifests shipped), `review` inline mode (#57), Windows via Git Bash (#58).
 - **Signing and notarization**: [#28](https://github.com/masterik/mk-toolkit/issues/28). Until then,
   the cask strips the quarantine flag on install
   ([fallback](prerequisites.md#gatekeeper-blocks-the-binary)).

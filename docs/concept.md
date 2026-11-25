@@ -46,8 +46,8 @@ many tool calls into two small, tested scripts.
   the rest has a default. A repo changes one with a short prose file in `docs/agents/` (written by the
   `setup` skill or by hand); nothing requires it
   ([ADR 0006](adr/0006-standalone-skills-optional-binary.md) decision 7).
-- **Plugin first, portable next.** The skills target Claude Code today; Codex, Copilot and Windows
-  (Git Bash) are the next ports ([ADR 0006](adr/0006-standalone-skills-optional-binary.md) decision 9).
+- **Plugin first, portable next.** The skills install in Claude Code, Codex and Copilot; Windows
+  (Git Bash) is next ([ADR 0006](adr/0006-standalone-skills-optional-binary.md) decision 9).
   The binary stays macOS + Claude Code on purpose.
 
 ## Skills

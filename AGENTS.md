@@ -12,7 +12,7 @@ tools — no new git logic; `wt` optional. Targets Claude Code, Codex, Copilot; 
 epic #59): **no skill needs `mkit` but `sandbox-audit`** (it stops with a `brew` remedy; absent ≡ too
 old). No `.mkit/`, no gate ledger/worklog/findings pipeline, no `mkit init` or pinning; config is prose
 in lazy `docs/agents/*.md`, written by `setup`. Still open in #59: Codex/Copilot
-ports (#54–#57), Windows (#58). **Next:** the ports. Milestones:
+smoke-runs (#56; manifests shipped), `review` inline (#57), Windows (#58). **Next:** #56. Milestones:
 [`backlog.md`](docs/backlog.md); the *why*: [`concept.md`](docs/concept.md).
 
 ## Rules
@@ -130,7 +130,10 @@ apply both ways:
   ([ADR 0003](docs/adr/0003-two-distribution-channels.md)).
 - `plugin/.claude-plugin/plugin.json` — manifest, skills auto-discovered. `marketplace.json`
   (`source: "./plugin"`) at **repo-root** `.claude-plugin/`: `/plugin marketplace add owner/repo`
-  looks only there.
+  looks only there. **Copilot CLI reads these same two** (legacy path, no third manifest).
+  **Codex**: `plugin/.codex-plugin/plugin.json` (`"skills": "./skills/"`) + repo-root
+  `.agents/plugins/marketplace.json` (entry `"source": {"source": "local", "path": "./plugin"}`). One version in
+  every `plugin.json` (`release.sh`); gaps per host in `docs/ideas/other-agents.md#known-gaps`.
 - **No hooks**, no `hooks` key (removed 0.15.0). **No `Stop`/`SubagentStop` hook** — its
   `additionalContext` renders in the transcript every turn (`concept.md`). If ever reintroduced:
   plugin-root `hooks/hooks.json`, **no `matcher`** (mistyped = silently never runs).

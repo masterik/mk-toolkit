@@ -1,7 +1,7 @@
 ---
 title: "Other agents — Codex and Copilot support for mkit's skills"
 date_created: 2026-11-13
-last_updated: 2026-11-13
+last_updated: 2026-11-25
 description: >
   Whether OpenAI Codex and GitHub Copilot can run mkit's SKILL.md skills, and which of the
   capabilities the skills lean on (discovery, frontmatter, bundled scripts, plugins, subagents,
@@ -52,8 +52,10 @@ the same result another way (named).
 - **Bundled scripts: yes**, through paths relative to SKILL.md's directory. **No skill-body env
   var**: `${CLAUDE_PLUGIN_ROOT}` is expanded only in hooks and MCP config. Workaround: relative
   paths. Source: Codex source, `codex-rs/ext/skills/src/catalog_prompt.rs`.
-- **Plugins: yes.** Manifest `.codex-plugin/plugin.json`; marketplace at
-  `.agents/plugins/marketplace.json`. The `codex plugin marketplace add` syntax is **UNVERIFIED**.
+- **Plugins: yes.** Manifest `.codex-plugin/plugin.json` (`"skills": "./skills/"`); marketplace at
+  `.agents/plugins/marketplace.json`, entries `"source": {"source": "local", "path": "./plugin"}`. Verified
+  with codex-cli 0.169.0 (#56): `codex plugin marketplace add <path|owner/repo>`, then
+  `codex plugin add mkit@masterik`; the install copies the whole tree, `_shared/` included.
   [build plugins](https://developers.openai.com/codex/plugins/build)
 - **Subagents: yes**, parallel, on by default; spawned when a skill asks for them in prose (no
   structured briefing API). Custom agents are TOML files in `.codex/agents/` and inherit the
@@ -79,7 +81,11 @@ the same result another way (named).
   `PLUGIN_ROOT`/`CLAUDE_PLUGIN_ROOT`; **skill bodies get nothing documented**. Workaround: relative
   paths.
 - **Plugins: yes.** `plugin.json` plus `marketplace.json`, installed with
-  `copilot plugin marketplace add`.
+  `copilot plugin marketplace add`, then `copilot plugin install <name>@<marketplace>`. Legacy
+  (no Agent Plugins `$schema`) manifests are found at `.plugin/`, root, `.github/plugin/`, then
+  **`.claude-plugin/plugin.json`**; marketplaces likewise accept **`.claude-plugin/marketplace.json`**,
+  `source` a repo-relative path (`./plugin`). So Claude Code's files serve Copilot; no third
+  manifest (#56, docs checked 2026-11-25). Slash syntax for a plugin skill: UNVERIFIED (`/skills list`).
   [about CLI plugins](https://docs.github.com/en/copilot/concepts/agents/copilot-cli/about-cli-plugins)
 - **Subagents:** CLI **yes** — the `task` tool, and `/fleet` for parallel. VS Code **yes** —
   `runSubagent`/`task`; parallelism undocumented. Coding agent **UNVERIFIED**.
@@ -110,3 +116,20 @@ Follows from the table, for whoever ports a skill:
 - A skill that asks a structured question needs a plain-text fallback in Codex default mode; on the
   Copilot coding agent, which runs unattended, it takes the default instead.
 - A skill that takes arguments reads them from the free-text request, never `$ARGUMENTS`.
+
+## Known gaps
+
+Documented, not fixed (#56). Per host, on top of the table above:
+
+- **All other hosts:** `sandbox-audit` is Claude Code only (it reads Claude Code transcripts and
+  needs the macOS binary). `model:` is ignored, so `commit`/`pr`/`finish` run on the session's
+  model. Skill arguments (`review quick`, `explain eli5`) are read from the request text.
+- **Codex and Copilot CLI:** `disable-model-invocation:` and `argument-hint:` are ignored too, so
+  `setup` and `cleanup` may trigger on a plain request instead of only by name. Copilot VS Code
+  honours both.
+- **Codex:** default `workspace-write` sandbox — every `git commit`, `git push`, `git fetch` and `gh`
+  call asks for approval (`.git` read-only, network off). Structured questions only in Plan mode,
+  so skills ask with a numbered list. `review`'s Claude subagent reviewers are #57.
+- **Copilot CLI:** no known gap beyond the above; smoke-run not yet done (no local install).
+- **Copilot coding agent:** unattended — every ask takes the skill's do-nothing default.
+- **Windows:** PowerShell on both hosts; skills need Git Bash (#58).
