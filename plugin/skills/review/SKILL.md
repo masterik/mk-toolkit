@@ -28,9 +28,9 @@ Counts are always by tag.
 | stage | who | enters this session |
 | --- | --- | --- |
 | 1 scope | this session, one `facts.sh` call | run dir, stat, file list |
-| 2 find | 2 (quick) or 3 (full) subagents, parallel, Opus | ≤10 lines each: path written, counts by tag, lenses not covered |
+| 2 find | 2 (quick) or 3 (full) subagents, parallel, strongest model | ≤10 lines each: path written, counts by tag, lenses not covered |
 | 3 reconcile | this session, by `triage-reconcile.md` | the capped findings; out: `reconciled.md` |
-| 4 verify | 1 subagent per batch (Opus), or this session on a handful | one line per finding: id + verdict |
+| 4 verify | 1 subagent per batch (strongest model), or this session on a handful | one line per finding: id + verdict |
 | 5 fix | this session | the findings acted on, in full |
 | 6 report | this session | the summary |
 
@@ -40,7 +40,7 @@ Counts are always by tag.
 confirm which, or review both and note the split. Ask only if genuinely ambiguous.
 
 **Mode**: **full** (three reviewers, eight lenses — the default) or **quick** (CodeRabbit + Codex on
-`bugs`/`impl`; no Claude craft reviewer, no `adversarial`). In order: `$ARGUMENTS` (`quick`/`full`); an
+`bugs`/`impl`; no Claude craft reviewer, no `adversarial`). In order: the text after the skill name (`quick`/`full`); an
 explicit signal ("quick review", "fast pass", "just check for bugs"); `docs/agents/review.md` naming a mode
 (`../_shared/references/repo-settings.md` — a default, never a ceiling; say when it decided; a mode it names
 that `review` doesn't know is reported in one line, then the run carries on as without it); else full. Quick is
@@ -102,7 +102,7 @@ Read bodies from `reconciled.md` **only for findings being acted on**.
 - **Not worth fixing → skip**, one-line reason.
 
 Read `<refs>/fix-checks.md` before the first fix; **every fix passes its three checks**. The shape sweep is
-one `rg` call here when the shape greps; delegate to a Sonnet subagent (file:line list back) only when it
+one `rg` call here when the shape greps; delegate to a cheaper-model subagent (file:line list back) only when it
 needs judgement to recognise or spans the whole repo. Group related safe fixes, in the surrounding style.
 
 **Optional second round** over the fixes: a new run directory, `bugs` + `impl` only, nothing below `major`,

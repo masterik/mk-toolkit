@@ -11,7 +11,7 @@ primary=/path/to/primary/checkout
 
 | `cleanup_path` | Meaning | Teardown |
 | --- | --- | --- |
-| `exit-worktree` | the harness's own (`.claude/worktrees/`) | merge, then the **ExitWorktree** tool (`action: "remove"`) — never `git worktree remove` it from inside itself |
+| `exit-worktree` | Claude Code's own (`.claude/worktrees/`) | merge, then Claude Code's **ExitWorktree** tool (`action: "remove"`) — never `git worktree remove` it from inside itself; no such tool (another host) → `git-worktree` |
 | `git-worktree` | any other linked worktree | `wt merge` / `wt remove` when worktrunk is available; plain git otherwise |
 | `none` | the primary checkout | nothing to tear down |
 
@@ -44,7 +44,7 @@ user's config overrode it), say so in one line and leave it. A repo `.config/wt.
 contradicts `merge.md` → report the contradiction, let the user settle it.
 
 **`exit-worktree`** — merge into the base from `primary=` (below), then **ExitWorktree** (`action:
-"remove"`).
+"remove"`); a host without it takes the `git-worktree` steps.
 
 **`git-worktree`, no worktrunk:**
 

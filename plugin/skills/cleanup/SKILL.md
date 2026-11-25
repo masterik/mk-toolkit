@@ -89,7 +89,7 @@ Left alone:
   <branch>  origin=claude-code worktree — may still be in use
 ```
 
-Auto-delete needs no further confirmation. For **ask**: `AskUserQuestion`, one question per branch (or per
+Auto-delete needs no further confirmation. For **ask**: the host's question tool, one question per branch (or per
 cluster sharing a reason), header = the branch cut to 12 characters, options `keep` (first, recommended
 unless the reason is conclusive) and `delete`; more than four → further calls. Numbered-list fallback per
 `../_shared/references/summary-format.md`. No answer = keep, named in the report.
@@ -104,8 +104,9 @@ stop and say so — never force.
 
 Per approved branch:
 
-1. **Worktree**, if any: this session's own with `cleanup_path=exit-worktree` → only **ExitWorktree**
-   (`action: "remove"`, `discard_changes: true`). Any other: `wt remove <branch>` when `wt` is available, else `git worktree remove <path>`.
+1. **Worktree**, if any: this session's own with `cleanup_path=exit-worktree` → **ExitWorktree** (`action:
+   "remove"`, `discard_changes: true`), never a remove from inside it; a host without it: `git -C "<primary>" worktree
+   remove "<path>"`, then the rest from `<primary>`. Any other: `wt remove <branch>` when `wt` is available, else `git worktree remove <path>`.
    `--force` only for a `clean=no` worktree the user approved removing — say plainly it discards uncommitted
    work. Never an `origin=claude-code` worktree without explicit approval knowing what it is. `wt remove`
    deletes a merged branch itself: check `git show-ref --verify --quiet refs/heads/<branch>` before 4.2.

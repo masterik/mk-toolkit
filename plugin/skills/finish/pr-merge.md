@@ -52,8 +52,8 @@ below this one merges with it.
    may have deleted it; "already gone" is not a failure.
    - `git-worktree`, worktrunk available: `wt remove <feature-branch>`; add `-D` if it reports the branch
      unmerged.
-   - `exit-worktree`: the **ExitWorktree** tool, `action: "remove"`, `discard_changes: true`. Never
-     `git worktree remove` it from inside.
+   - `exit-worktree`: Claude Code's **ExitWorktree** tool, `action: "remove"`, `discard_changes: true`. Never
+     `git worktree remove` it from inside. No such tool (another host): as `git-worktree`.
    - `git-worktree`, no worktrunk, each call as `git -C "<primary>"` (the removal may delete the cwd):
      `worktree remove "<toplevel>"`, then `branch -D <feature-branch>` if `branch --list <feature-branch>`
      still shows it, then `worktree prune`.

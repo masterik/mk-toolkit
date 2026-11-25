@@ -67,7 +67,7 @@ Read `docs/agents/merge.md` if it exists (`../_shared/references/repo-settings.m
 
 PR path: first run `pr-merge.md` items 1–2 (push, pick the method) — [pr-merge.md](pr-merge.md). Then, unless
 the user already said "finish and clean up" or gave standing authorization, show one screen and get a
-go-ahead through `AskUserQuestion` — **merge and clean up** (recommended) / **stop here** — numbered-list
+go-ahead through the host's question tool — **merge and clean up** (recommended) / **stop here** — numbered-list
 fallback per `../_shared/references/summary-format.md`. If step 1 committed, re-read the log first
 (`"<git>" -C "<toplevel>" log --oneline <base>..HEAD`).
 
