@@ -23,8 +23,8 @@ below() {
 
 cd "$(git rev-parse --show-toplevel)"
 [[ -f plugin/.claude-plugin/plugin.json ]] || die "plugin/.claude-plugin/plugin.json is missing"
-# Every agent's plugin manifest that exists (Claude Code's always; Codex's and Copilot's once
-# they ship, #56) — one tree, one version, bumped together. Globbed after the cd: run from
+# Every agent's plugin manifest that exists (Claude Code's, also read by Copilot; Codex's,
+# #56) — one tree, one version, bumped together. Globbed after the cd: run from
 # tools/, the paths matched nothing.
 manifests=()
 for f in plugin/plugin.json plugin/.[!.]*/plugin.json plugin/.[!.]*/*/plugin.json; do
