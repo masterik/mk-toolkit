@@ -13,7 +13,7 @@
       "name": "catppuccin",
       "source": {
         "source": "git-subdir",
-        "url": "masterik/mkit-themes",
+        "url": "https://github.com/masterik/mkit-themes.git",
         "path": "catppuccin"
       },
       "description": "Catppuccin colors for the Claude desktop and mobile apps: Latte in light mode, Frappé, Macchiato or Mocha in dark, any of 14 accents. A theme mod from masterik/mkit-themes, released on its own; /catppuccin switches."
