@@ -195,6 +195,13 @@ apply both ways:
   region, allowlists inert; here one `permissions.additionalDirectories` entry works.
 - `$TMPDIR` — dies with the command. Go honours it; the Darwin per-user temp dir fails under sandbox.
 
+### Other plugins in the marketplace
+- `catppuccin` — a theme mod, **not in this repo**: `.claude-plugin/marketplace.json` lists it as a
+  `git-subdir` source (`masterik/mkit-themes`, `path: catppuccin`) ([ADR 0007](docs/adr/0007-themes-in-their-own-repo.md)).
+  Own repo, CI, one repo-wide version and `v*` tags there; nothing here builds, tests or releases it. A new theme there
+  = one more `git-subdir` entry here. The plugin payload rules (no hooks, two scripts) apply to
+  `plugin/` only; the theme is outside them. Copilot CLI lists it too (same file) but runs no mods.
+
 ### Docs and tests
 - `README.md` (users) and `CONTRIBUTING.md` (contributors) — short, pointing here.
 - `docs/` (not shipped) — `concept.md` (direction), `backlog.md` (work + invariants), `skill-invariants.md` (skill rules → enforcing line, and their why),

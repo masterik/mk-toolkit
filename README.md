@@ -68,6 +68,15 @@ or the host's skill syntax; `sandbox-audit` is Claude Code only. Known gaps per 
 [other agents](docs/ideas/other-agents.md#known-gaps). For optional tools, sandbox setup and a permission allowlist, see
 [Prerequisites](docs/prerequisites.md).
 
+## Themes (separate plugins)
+
+The same marketplace lists theme mods for the desktop and mobile apps from
+[masterik/mkit-themes](https://github.com/masterik/mkit-themes), released on their own:
+
+```
+/plugin install catppuccin@masterik
+```
+
 ## The binary (optional)
 
 macOS only, for Claude Code users:
