@@ -8,6 +8,11 @@
       "name": "mkit",
       "source": "./plugin",
       "description": "Coding-workflow skills for Claude Code: commit, review, pr, finish, cleanup, setup, sandbox-audit, explain and recap, over a shared git-safety + Conventional Commits reference bundle, plus shorten for tightening text. Standalone; only sandbox-audit needs the optional mkit binary (brew install masterik/tap/mkit)."
+    },
+    {
+      "name": "catppuccin",
+      "source": "./catppuccin",
+      "description": "Catppuccin colors for the Claude desktop and mobile apps: Latte in light mode, Frappé, Macchiato or Mocha in dark, any of 14 accents. A theme mod, separate from mkit; /catppuccin switches."
     }
   ]
 }

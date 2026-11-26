@@ -9,3 +9,6 @@
 .claude/*
 !.claude/skills
 !.claude/settings.json
+
+# Types the Claude Code engine lays beside a loaded mod
+/catppuccin/.claude-plugin/types/

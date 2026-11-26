@@ -195,6 +195,13 @@ apply both ways:
   region, allowlists inert; here one `permissions.additionalDirectories` entry works.
 - `$TMPDIR` — dies with the command. Go honours it; the Darwin per-user temp dir fails under sandbox.
 
+### The theme plugin
+- `catppuccin/` — a **second, unrelated plugin** in the same marketplace ([ADR 0007](docs/adr/0007-second-plugin-catppuccin.md)):
+  a Claude Code mod (hooks module `hooks/register.ts` → `$.theme.set`) giving the desktop/mobile apps
+  Catppuccin colors; `/catppuccin [flavor] [accent]`. Claude Code only, own hand-bumped version, not in
+  `release.sh` or `just ci`; check with `claude plugin validate catppuccin` / `claude plugin test catppuccin`.
+  `hooks/make-colors.js` is vendored verbatim. mkit's no-hooks/two-scripts rules apply to `plugin/` only.
+
 ### Docs and tests
 - `README.md` (users) and `CONTRIBUTING.md` (contributors) — short, pointing here.
 - `docs/` (not shipped) — `concept.md` (direction), `backlog.md` (work + invariants), `skill-invariants.md` (skill rules → enforcing line, and their why),

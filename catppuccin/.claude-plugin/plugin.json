@@ -1,0 +1,22 @@
+{
+  "name": "catppuccin",
+  "version": "0.1.0",
+  "license": "MIT",
+  "description": "Soothing pastel Catppuccin colors for the desktop app: Latte by day, Frappé, Macchiato or Mocha by night, with your pick of accent. /catppuccin switches.",
+  "userConfig": {
+    "flavor": {
+      "type": "string",
+      "title": "Dark flavor",
+      "description": "Catppuccin flavor for dark mode (light mode is always Latte)",
+      "default": "mocha",
+      "options": ["frappe", "macchiato", "mocha"]
+    },
+    "accent": {
+      "type": "string",
+      "title": "Accent",
+      "description": "Catppuccin accent color",
+      "default": "mauve",
+      "options": ["rosewater", "flamingo", "pink", "mauve", "red", "maroon", "peach", "yellow", "green", "teal", "sky", "sapphire", "blue", "lavender"]
+    }
+  }
+}

@@ -68,6 +68,17 @@ or the host's skill syntax; `sandbox-audit` is Claude Code only. Known gaps per 
 [other agents](docs/ideas/other-agents.md#known-gaps). For optional tools, sandbox setup and a permission allowlist, see
 [Prerequisites](docs/prerequisites.md).
 
+## Catppuccin theme (separate plugin)
+
+The same marketplace carries an unrelated Claude Code theme: [Catppuccin](https://catppuccin.com) for
+the desktop and mobile apps (Latte light; Frappé, Macchiato or Mocha dark; 14 accents).
+
+```
+/plugin install catppuccin@masterik
+```
+
+Switch with `/catppuccin mocha blue`; see [catppuccin/README.md](catppuccin/README.md).
+
 ## The binary (optional)
 
 macOS only, for Claude Code users:
