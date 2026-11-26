@@ -16,10 +16,12 @@ key (0.15.0), payload = Markdown + two scripts (ADR 0006), and a theme is unrela
    mkit's invariants (no hooks, two scripts, skills only) are untouched and keep applying to `plugin/` alone.
 2. **Claude Code only.** No `.codex-plugin/`, no `.agents/plugins/marketplace.json` entry: Codex and
    Copilot run no hooks modules.
-3. **Own version, outside the release.** `tools/release.sh` bumps `plugin/` only; `catppuccin`'s
-   `plugin.json` version is bumped by hand. Tags stay mkit's (plugin + binary lockstep).
-4. **Own tests, not in `just ci`.** `catppuccin/tests/*.test.ts` run with `claude plugin test catppuccin`
-   (needs the `claude` CLI); `claude plugin validate catppuccin` checks the module. CI stays Go + bats.
+3. **Same release.** `tools/release.sh` bumps `catppuccin/.claude-plugin/plugin.json` with mkit's
+   manifests: one tag, one version across the marketplace (a theme-only change still gets a tag).
+4. **Tested in CI.** `just theme` (part of `just ci`) and CI's `theme` job run
+   `claude plugin validate catppuccin` and `claude plugin test catppuccin`; CI installs the CLI from
+   npm (`@anthropic-ai/claude-code`, latest — the mod API is early access, so a CLI update can fail
+   the job before it fails a user). No auth needed.
 5. **`make-colors.js` is vendored verbatim** from Claude Code's plugin-authoring kit; re-copy it when
    the build updates, then rerun the tests (contrast rules move with the design system).
 

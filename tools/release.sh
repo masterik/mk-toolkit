@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cut a release: bump every agent's plugin.json, commit `chore(release): X.Y.Z`, tag vX.Y.Z, push both.
+# Cut a release: bump every agent's plugin.json (mkit's and catppuccin's), commit `chore(release): X.Y.Z`, tag vX.Y.Z, push both.
 # The tag starts GoReleaser, which builds the cask and writes the GitHub Release notes.
 #
 #   tools/release.sh [auto|patch|minor|major|X.Y.Z]    (default: auto)
@@ -27,7 +27,8 @@ cd "$(git rev-parse --show-toplevel)"
 # #56) — one tree, one version, bumped together. Globbed after the cd: run from
 # tools/, the paths matched nothing.
 manifests=()
-for f in plugin/plugin.json plugin/.[!.]*/plugin.json plugin/.[!.]*/*/plugin.json; do
+# catppuccin/ (ADR 0007) rides the same tag: one marketplace, one version.
+for f in plugin/plugin.json plugin/.[!.]*/plugin.json plugin/.[!.]*/*/plugin.json catppuccin/.claude-plugin/plugin.json; do
   if [[ -f $f ]]; then manifests+=("$f"); fi
 done
 [[ -t 0 ]] || die "needs a terminal to confirm on"

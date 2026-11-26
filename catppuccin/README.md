@@ -6,6 +6,9 @@ in the spirit of the Catppuccin VS Code theme: **Latte** in light mode, **Frapp√
 buttons, focus and code keywords. Strings are green, numbers peach, errors red, warnings yellow; git
 added/removed/modified/merged use green/red/yellow/mauve, as in the VS Code port.
 
+The conversation sits on the flavor's `base` (the VS Code editor color), drawn as the backdrop behind it;
+panels and menus step up toward `surface0`, so they read lighter than the chat.
+
 ## Install
 
 ```

@@ -32,7 +32,8 @@ in lazy `docs/agents/*.md`, written by `setup`. Still open in #59:
 `just` wraps these (`just --list`).
 
 ```bash
-just ci                          # build, vet, test, lint, bats — what CI runs
+just ci                          # build, vet, test, lint, bats, theme — what CI runs
+just theme                       # claude plugin validate|test catppuccin (needs `claude`)
 just build / vet / test          # go build|vet|test ./...
 just lint                        # golangci-lint (CI pins v2.12)
 just bats                        # bats tests/ — the bundled scripts
@@ -46,7 +47,7 @@ bash plugin/skills/_shared/scripts/branch-status.sh --no-fetch   # cleanup's cla
 
 **Release**: `just release` (`tools/release.sh`), needs a terminal. Picks version (auto: breaking/`feat` → minor pre-1.0, else patch; or `patch|minor|major|X.Y.Z`), shows PRs
 since last tag, **asks before pushing**, bumps every agent's `plugin.json` under `plugin/` that exists
-(Claude's required), commits `chore(release): X.Y.Z`, tags,
+(Claude's required) and `catppuccin/`'s, commits `chore(release): X.Y.Z`, tags,
 pushes. Tag → GoReleaser: darwin amd64/arm64, notes from PR titles (**the Release is the
 changelog**; `CHANGELOG.md` frozen at 0.19.0), cask to `masterik/homebrew-tap`
 (`homebrew_casks`, not deprecated `brews`). Lockstep: plugin-only changes still get a tag.
@@ -198,8 +199,8 @@ apply both ways:
 ### The theme plugin
 - `catppuccin/` — a **second, unrelated plugin** in the same marketplace ([ADR 0007](docs/adr/0007-second-plugin-catppuccin.md)):
   a Claude Code mod (hooks module `hooks/register.ts` → `$.theme.set`) giving the desktop/mobile apps
-  Catppuccin colors; `/catppuccin [flavor] [accent]`. Claude Code only, own hand-bumped version, not in
-  `release.sh` or `just ci`; check with `claude plugin validate catppuccin` / `claude plugin test catppuccin`.
+  Catppuccin colors; `/catppuccin [flavor] [accent]`. Claude Code only. Same tag as mkit (`release.sh`
+  bumps its `plugin.json`); `just theme` (in `just ci`, CI job `theme`) = `claude plugin validate` + `test`.
   `hooks/make-colors.js` is vendored verbatim. mkit's no-hooks/two-scripts rules apply to `plugin/` only.
 
 ### Docs and tests

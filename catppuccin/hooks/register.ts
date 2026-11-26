@@ -4,6 +4,8 @@ import { makeColors } from './make-colors.js'
 import { ACCENTS, DARK_FLAVORS, FLAVORS, mix } from './palette'
 import type { Accent, DarkFlavor, Palette } from './palette'
 
+const [S1, S2, S3] = [0.5, 0.8, 0.9]
+
 const LABELS: Record<DarkFlavor, string> = { frappe: 'Frappé', macchiato: 'Macchiato', mocha: 'Mocha' }
 
 /** The whole look for Latte (light) plus one dark flavor, in one accent. */
@@ -15,11 +17,12 @@ export function buildLook(flavor: DarkFlavor, accent: Accent): { look: ThemeSetA
     gray: {
       anchors: isDark
         ? {
-            // VS Code's editor ground is `base`; cards and menus step toward `surface0`.
+            // The conversation sits on `base`, as VS Code's editor does; panels and menus
+            // step up toward `surface0` so they read lighter than the chat.
             'surface-0': p.base,
-            'surface-1': mix(p.base, p.surface0, 0.25),
-            'surface-2': mix(p.base, p.surface0, 0.45),
-            'surface-3': mix(p.base, p.surface0, 0.65),
+            'surface-1': mix(p.base, p.surface0, S1),
+            'surface-2': mix(p.base, p.surface0, S2),
+            'surface-3': mix(p.base, p.surface0, S3),
             'text-primary': p.text,
             'text-secondary': p.subtext1,
             'text-muted': p.subtext0,
@@ -68,7 +71,9 @@ export function buildLook(flavor: DarkFlavor, accent: Accent): { look: ThemeSetA
     inputs.dark['text-user-message'] = dark.text
   }
 
-  return { look: { colors: theme }, problems }
+  // The ground behind the conversation is the page color (`base` dark, Latte `base` light), so the
+  // chat column reads as the darkest surface and the frosted panels over it as lighter.
+  return { look: { colors: theme, backdrop: { color: 'surface-0' } }, problems }
 }
 
 function isFlavor(v: unknown): v is DarkFlavor {
@@ -96,7 +101,14 @@ async function apply($: EngineInterface, choice: Choice): Promise<void> {
   if (unpainted !== undefined) {
     $.ui.toast(unpainted)
   }
-  const set = await $.theme.set(look)
+  let set
+  try {
+    set = await $.theme.set(look)
+  } catch (error) {
+    // A build that takes no backdrop: the colors alone.
+    $.ui.log(String(error))
+    set = await $.theme.set({ colors: look.colors })
+  }
   if (!set.isDrawn) {
     $.ui.status(set.reason)
   }
