@@ -198,7 +198,7 @@ apply both ways:
 ### Other plugins in the marketplace
 - `catppuccin` — a theme mod, **not in this repo**: `.claude-plugin/marketplace.json` lists it as a
   `git-subdir` source (`masterik/mkit-themes`, `path: catppuccin`) ([ADR 0007](docs/adr/0007-themes-in-their-own-repo.md)).
-  Own repo, CI, version and tags there; nothing here builds, tests or releases it. A new theme there
+  Own repo, CI, one repo-wide version and `v*` tags there; nothing here builds, tests or releases it. A new theme there
   = one more `git-subdir` entry here. mkit's rules apply to `plugin/` only.
 
 ### Docs and tests

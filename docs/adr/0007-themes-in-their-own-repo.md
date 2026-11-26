@@ -13,13 +13,14 @@ and a theme version jump to mkit's.
 ## Decision
 
 1. **Own repo: `masterik/mkit-themes`**, one plugin per top-level folder (`catppuccin/`), its own CI
-   (`claude plugin validate` + `test` per theme), per-theme versions and tags (`<theme>-vX.Y.Z`) and
-   GitHub Releases. Its `AGENTS.md` holds its rules.
+   (`claude plugin validate` + `test` per theme), and one version for the whole repo (every theme's
+   `plugin.json`, tag `vX.Y.Z`, independent of mkit's) with its own GitHub Releases. Its `AGENTS.md`
+   holds its rules.
 2. **Same marketplace.** This repo's `.claude-plugin/marketplace.json` lists each theme as a
    `git-subdir` source: `{"source": "git-subdir", "url": "masterik/mkit-themes", "path": "<theme>"}`.
    Install stays `/plugin install catppuccin@masterik`. No `ref`: users get `mkit-themes`' default
-   branch, and a theme's `plugin.json` version bump triggers their update. Pinning a `ref` to a tag
-   would gate delivery on releases but cost an mk-toolkit commit per theme release; not taken.
+   branch, and a `plugin.json` version bump (a mkit-themes release) triggers their update. Pinning a `ref`
+   to a tag would gate delivery on releases but cost an mk-toolkit commit per release; not taken.
 3. **Nothing here builds, tests or releases a theme.** `release.sh`, `just ci` and CI cover mkit only.
 4. **Claude Code only.** No Codex/Copilot entry: they run no hooks modules.
 
