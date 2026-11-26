@@ -1,6 +1,6 @@
 {
   "name": "mkit",
-  "version": "0.27.0",
+  "version": "0.27.1",
   "description": "Coding-workflow skills: commit, review, pr, finish, cleanup, setup, explain, recap and shorten, over a shared git-safety + Conventional Commits reference bundle. Standalone Markdown plus two bash scripts; sandbox-audit is Claude Code only.",
   "author": {
     "name": "Malik Amurlayev",
