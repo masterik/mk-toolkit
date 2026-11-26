@@ -22,7 +22,9 @@ and a theme version jump to mkit's.
    branch, and a `plugin.json` version bump (a mkit-themes release) triggers their update. Pinning a `ref`
    to a tag would gate delivery on releases but cost an mk-toolkit commit per release; not taken.
 3. **Nothing here builds, tests or releases a theme.** `release.sh`, `just ci` and CI cover mkit only.
-4. **Claude Code only.** No Codex/Copilot entry: they run no hooks modules.
+4. **Claude Code only.** No Codex entry (`.agents/plugins/marketplace.json` stays mkit-only). Copilot CLI
+   reads the same `.claude-plugin/marketplace.json`, so it lists `catppuccin` too; it runs no hooks
+   modules, so the theme does nothing there. Accepted: the listing is harmless, a Copilot-only file isn't worth it.
 
 ## Consequences
 
