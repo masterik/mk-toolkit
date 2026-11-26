@@ -52,6 +52,7 @@ Then one call; the path is relative to this skill's directory — resolve it and
 ```bash
 bash ../_shared/scripts/facts.sh review --run --range <range>
 ```
+PowerShell (Windows): run it as `../_shared/references/powershell.md` says.
 
 Omit `--range` for a dirty tree. Keep `run_dir=` as `<run-dir>` and `<refs>` for every later step and brief
 (re-running `--run` opens a second directory).

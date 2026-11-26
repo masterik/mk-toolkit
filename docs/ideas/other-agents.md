@@ -40,7 +40,7 @@ the same result another way (named).
 | Worktree/session (`ExitWorktree`) | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED |
 | Sandbox lets `git commit` | **no** without approval (`.git` read-only) | yes (opt-in sandbox, `.git` r/w) | UNVERIFIED | UNVERIFIED |
 | Sandbox lets `gh` (network) | **no** without approval (network off) | yes (network on) | UNVERIFIED | UNVERIFIED |
-| Windows shell | PowerShell | PowerShell or WSL | PowerShell or WSL | PowerShell or WSL |
+| Windows shell | PowerShell (hardcoded) or WSL | PowerShell (`pwsh` 6+) or WSL | PowerShell or WSL | PowerShell or WSL |
 
 "—" = not researched for that surface.
 
@@ -68,7 +68,11 @@ the same result another way (named).
 - **Sandbox:** `workspace-write` allows cwd and temp dirs. **Network is off** by default (`gh`
   needs approval) and **`.git` is read-only** (`git commit` needs approval).
   [approvals and security](https://learn.chatgpt.com/docs/agent-approvals-security)
-- **Windows:** runs natively in **PowerShell**; Git Bash isn't mentioned.
+- **Windows:** runs natively in **PowerShell**, inside the native Windows sandbox (default); WSL is
+  the documented alternative. The agent shell is hardcoded: no setting picks Git Bash (an
+  `[windows] agent_shell` proposal, [openai/codex#16717](https://github.com/openai/codex/issues/16717),
+  closed unimplemented). Whether the sandbox lets it run Git's `bash.exe`: UNVERIFIED (#58).
+  [Windows](https://learn.chatgpt.com/docs/windows/windows-sandbox.md)
 
 ## Copilot (CLI, VS Code, coding agent)
 
@@ -96,7 +100,8 @@ the same result another way (named).
 - **Worktree/session features: UNVERIFIED** — not covered by the research.
 - **Sandbox:** the CLI sandbox is **opt-in**, with `.git` read/write and outbound network on. VS
   Code and coding-agent sandboxes: UNVERIFIED.
-- **Windows:** PowerShell (or WSL); Git Bash isn't mentioned.
+- **Windows:** PowerShell (or WSL); the CLI needs `pwsh` 6+. Git Bash isn't mentioned.
+  [install](https://docs.github.com/en/copilot/how-tos/copilot-cli/install-copilot-cli)
 
 ## Implications
 
@@ -106,7 +111,12 @@ Already decided in #59:
 - **One plugin tree, a manifest per agent** (#56) — Codex wants `.codex-plugin/plugin.json`,
   Copilot and Claude Code their own.
 - **Dedupe in prose** (#51).
-- **Skills call `bash <script>` on Windows** (#58) — both agents default to PowerShell.
+- **From PowerShell, skills run the scripts with Git's own `bash.exe` by path** (#58,
+  `_shared/references/powershell.md`) — both agents run PowerShell, and so does Claude Code without
+  Git Bash (optional since v2.1.120). A bare `bash` is missing (Git for Windows puts only `Git\cmd` on
+  `PATH`; verified) or WSL's (Linux `git`/`gh`, `/mnt/c` paths). `<git-root>` comes from
+  `git --exec-path` (`…/mingw64/…` on x64, `…/clangarm64/…` on ARM64). No Git Bash → stop with the
+  install remedy. WSL detection: postponed.
 
 Follows from the table, for whoever ports a skill:
 
@@ -129,7 +139,11 @@ Documented, not fixed (#56). Per host, on top of the table above:
   honours both.
 - **Codex:** default `workspace-write` sandbox — every `git commit`, `git push`, `git fetch` and `gh`
   call asks for approval (`.git` read-only, network off). Structured questions only in Plan mode,
-  so skills ask with a numbered list. `review`'s Claude subagent reviewers are #57.
+  so skills ask with a numbered list. `review`'s Claude subagent reviewers are #57 (standalone, outside #59).
 - **Copilot CLI:** no known gap beyond the above; not smoke-run (#56 closed without it), support rests on the docs.
 - **Copilot coding agent:** unattended — every ask takes the skill's do-nothing default.
-- **Windows:** PowerShell on both hosts; skills need Git Bash (#58).
+- **Windows:** PowerShell on both hosts (and Claude Code without Git Bash); the scripts run under Git's
+  `bash.exe`, reached by path (#58). Verified on Windows 11 ARM64 (UTM), Windows PowerShell 5.1 and
+  pwsh 7: scripts and bats pass under Git Bash. Windows PowerShell 5.1's `>` writes UTF-16, so skills
+  never redirect into a file a tool reads. The default `Restricted` execution policy blocks npm's
+  `codex.ps1` shim (install note, not a skill gap). Not handled yet: a WSL `bash`. Agent smoke-runs: pending.

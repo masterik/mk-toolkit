@@ -25,6 +25,7 @@ How the answer reads (levels, writing rules, visuals, words used, the closing li
 ```bash
 bash ../_shared/scripts/facts.sh recap --gh
 ```
+PowerShell (Windows): run it as `../_shared/references/powershell.md` says.
 
 The path is relative to this skill's directory (`../_shared/references/output-discipline.md` says how to
 resolve it). No `--run`: recap writes nothing.

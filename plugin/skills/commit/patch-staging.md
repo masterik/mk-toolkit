@@ -1,12 +1,11 @@
 # commit: patch staging, non-interactively
 
-For a file whose changes belong in more than one commit. Per mixed file, in `<run-dir>` (carry each printed
-path as a literal):
+For a file whose changes belong in more than one commit. Per mixed file, in `<run-dir>`:
 
 ```bash
-# 1. allocate a fresh patch file (never named after the source file), then cut the file's unstaged diff
-mktemp "<run-dir>/patch.XXXXXX"
-"<git>" -C "<toplevel>" diff -- "<path>" > "<patch>"
+# 1. cut the file's unstaged diff into a fresh <patch> = <run-dir>/patch-<n>.diff (<n> = 1, 2, …; never
+#    reused, never named after the source file). git writes it: a shell `>` breaks it under PowerShell
+"<git>" -C "<toplevel>" diff --output="<patch>" -- "<path>"
 
 # 2. edit <patch>: delete whole `@@ … @@` blocks that belong in a later commit; keep the header lines;
 #    never renumber or hand-edit a `@@` line

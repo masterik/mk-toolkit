@@ -1,0 +1,5 @@
+# Bash reads `\r` as part of a word: a CRLF checkout (Git for Windows' default
+# core.autocrlf=true) breaks every script. LF always (#58).
+*.sh    text eol=lf
+*.bash  text eol=lf
+*.bats  text eol=lf

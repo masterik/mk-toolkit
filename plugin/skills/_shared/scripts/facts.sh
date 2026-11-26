@@ -64,6 +64,18 @@ while [ $# -gt 0 ]; do
 	esac
 done
 
+# Paths are printed the way git prints them. Under Git Bash (MSYS) git says `C:/x` while
+# the shell's own `pwd`/`mktemp`/`$HOME` say `/c/x`: a path PowerShell cannot open, and
+# one that never compares equal to git's. Every shell-made path goes through
+# `cygpath -m` (#58) — the one OS branch, forced by Git Bash; elsewhere paths pass as is.
+if command -v cygpath >/dev/null 2>&1; then
+	# cygpath refuses a path it cannot resolve (one under a file): keep it as given, or
+	# an unwritable MKIT_HOME reads as no user dir at all.
+	native() { cygpath -m "$1" 2>/dev/null || printf '%s' "$1"; }
+else
+	native() { printf '%s' "$1"; }
+fi
+
 status_max=60
 files_max=200
 # One entry per cause: `- <key>=<value> — <cause and remedy>`, on one line, so a caller
@@ -79,9 +91,9 @@ note() {
 toplevel="$(git rev-parse --show-toplevel 2>/dev/null)" || die 'not inside a git work tree' 1
 [ -n "$toplevel" ] || die 'not inside a git work tree' 1
 # A relative $TMPDIR is relative to the caller, so it is resolved before the cd: after
-# it, the run dir would land inside the checkout.
+# it, the run dir would land inside the checkout. `C:\x` and `C:/x` are absolute (#58).
 case "${TMPDIR:-}" in
-'' | /*) ;;
+'' | /* | [A-Za-z]:[\\/]*) ;;
 *) tmp_abs="$(cd "$TMPDIR" 2>/dev/null && pwd)" || tmp_abs="$PWD/$TMPDIR"
 	TMPDIR="$tmp_abs" ;;
 esac
@@ -95,11 +107,13 @@ if [ "$want_run" = yes ]; then
 	else
 		run_dir="$(mktemp -d)" || die 'cannot create a run dir: TMPDIR is unset and mktemp -d failed' 1
 	fi
+	run_dir="$(native "$run_dir")"
 	printf 'run_dir=%s\n' "$run_dir"
 fi
 
 git_dir="$(git rev-parse --absolute-git-dir)" || die 'git rev-parse --absolute-git-dir failed' 1
 common_dir="$(cd "$(git rev-parse --git-common-dir)" && pwd -P)" || die 'cannot resolve the common git dir' 1
+common_dir="$(native "$common_dir")"
 wt_list="$(git worktree list --porcelain)" || die 'git worktree list failed' 1
 # The primary worktree is always listed first, from whichever worktree this runs.
 primary="$(printf '%s\n' "$wt_list" | sed -n 's/^worktree //p' | head -1)"
@@ -115,6 +129,7 @@ printf 'linked=%s\nworktrees=%s\n' "$linked" "$worktrees"
 # deepest first, stopping at the first that gained content since.
 user_dir="${MKIT_HOME:-}"
 [ -z "$user_dir" ] && [ -n "${HOME:-}" ] && user_dir="$HOME/.mkit"
+[ -n "$user_dir" ] && user_dir="$(native "$user_dir")"
 user_dir_writable=no
 if [ -n "$user_dir" ]; then
 	created='' d="$user_dir"

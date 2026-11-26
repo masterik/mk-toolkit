@@ -8,7 +8,7 @@ the run directory as transport between stages.
 A repo-scoped skill's first act is `bash ../_shared/scripts/facts.sh <skill> …`. **Resolve that path
 against the directory of the `SKILL.md` you loaded** and run the absolute path — the shell's working
 directory is the user's repo, and no agent sets a skill-location variable. Always `bash <path>`, never the
-bare path (it also runs under Git Bash).
+bare path; from PowerShell, `powershell.md` says how (Git Bash, never WSL).
 
 It prints `key=value` lines, then `<name>:` blocks, then a trailing `notes:` block:
 

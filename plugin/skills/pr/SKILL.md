@@ -23,6 +23,7 @@ it and run it absolute. A key or exit not named here: `../_shared/references/out
 ```bash
 bash ../_shared/scripts/facts.sh pr --run --base <base> --gh
 ```
+PowerShell (Windows): run it as `../_shared/references/powershell.md` says.
 
 Keep `run_dir=` as `<run-dir>` (no shell variable survives; re-running `--run` opens a second directory),
 `toplevel=` as `<toplevel>`, and `command -v git` as `<git>` for calls whose output you parse

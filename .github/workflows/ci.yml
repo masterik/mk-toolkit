@@ -44,3 +44,27 @@ jobs:
       - if: runner.os == 'macOS'
         run: brew install bats-core
       - run: bats tests/
+
+  # Windows (#58): the bats suite under Git Bash, then the scripts called the way a skill
+  # does from PowerShell — Git's own bash.exe by path (powershell.md), never a bare `bash`.
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: bats under Git Bash
+        shell: bash
+        run: |
+          git clone -q --depth 1 --branch v1.11.1 https://github.com/bats-core/bats-core.git "$RUNNER_TEMP/bats"
+          "$RUNNER_TEMP/bats/bin/bats" tests/
+      - name: scripts from PowerShell
+        shell: pwsh
+        run: |
+          # A PR checkout is a detached HEAD with no local default branch: give
+          # branch-status.sh one to classify against.
+          git switch -q -c ci-smoke
+          $gitRoot = (git --exec-path) -replace '/[^/]+/libexec/git-core$', ''
+          $bash = "$gitRoot/bin/bash.exe"
+          & $bash "$PWD/plugin/skills/_shared/scripts/facts.sh" commit --run
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & $bash "$PWD/plugin/skills/_shared/scripts/branch-status.sh" --default ci-smoke --no-fetch --no-gh
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }

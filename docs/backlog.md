@@ -56,7 +56,9 @@ Breaking one is a design error, not a trade-off.
 ## Next
 
 - **Rest of epic [#59](https://github.com/masterik/mk-toolkit/issues/59)**:
-  `review` inline mode (#57), Windows via Git Bash (#58).
+  Windows: PowerShell hosts, scripts via Git Bash, and without it (#58).
+- **`review` inline mode** ([#57](https://github.com/masterik/mk-toolkit/issues/57)): standalone,
+  moved out of #59 (2026-11-25).
 - **Signing and notarization**: [#28](https://github.com/masterik/mk-toolkit/issues/28). Until then,
   the cask strips the quarantine flag on install
   ([fallback](prerequisites.md#gatekeeper-blocks-the-binary)).
