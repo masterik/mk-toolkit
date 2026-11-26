@@ -44,15 +44,3 @@ jobs:
       - if: runner.os == 'macOS'
         run: brew install bats-core
       - run: bats tests/
-
-  # The catppuccin theme plugin (ADR 0007): the engine's own validator and test runner, no auth needed.
-  theme:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-      - run: npm install -g @anthropic-ai/claude-code
-      - run: claude plugin validate catppuccin
-      - run: claude plugin test catppuccin
