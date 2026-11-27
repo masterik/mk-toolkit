@@ -200,7 +200,7 @@ apply both ways:
 
 ### Other plugins in the marketplace
 - `catppuccin` — a theme mod, **not in this repo**: `.claude-plugin/marketplace.json` lists it as a
-  `git-subdir` source (`masterik/mkit-themes`, `path: catppuccin`) ([ADR 0007](docs/adr/0007-themes-in-their-own-repo.md)).
+  `git-subdir` source (`masterik/mk-mods`, `path: catppuccin`) ([ADR 0007](docs/adr/0007-themes-in-their-own-repo.md)).
   Own repo, CI, one repo-wide version and `v*` tags there; nothing here builds, tests or releases it. A new theme there
   = one more `git-subdir` entry here. The plugin payload rules (no hooks, two scripts) apply to
   `plugin/` only; the theme is outside them. Copilot CLI lists it too (same file) but runs no mods.

@@ -71,7 +71,7 @@ or the host's skill syntax; `sandbox-audit` is Claude Code only. Known gaps per 
 ## Themes (separate plugins)
 
 The same marketplace lists theme mods for the desktop and mobile apps from
-[masterik/mkit-themes](https://github.com/masterik/mkit-themes), released on their own:
+[masterik/mk-mods](https://github.com/masterik/mk-mods), released on their own:
 
 ```
 /plugin install catppuccin@masterik
