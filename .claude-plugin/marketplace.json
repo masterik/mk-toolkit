@@ -17,6 +17,15 @@
         "path": "catppuccin"
       },
       "description": "Catppuccin colors for the Claude desktop and mobile apps: Latte in light mode, Frappé, Macchiato or Mocha in dark, any of 14 accents. A theme mod from masterik/mk-mods, released on its own; /catppuccin switches."
+    },
+    {
+      "name": "vscode",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/masterik/mk-mods.git",
+        "path": "vscode"
+      },
+      "description": "VS Code's default 2026 colors for the Claude desktop and mobile apps: Light 2026 in light mode, Dark 2026 in dark. A theme mod from masterik/mk-mods, released on its own."
     }
   ]
 }
